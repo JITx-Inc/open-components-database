@@ -1,0 +1,72 @@
+#use-added-syntax(esir)
+defpackage demo :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import repl-lib
+
+  import bundles
+  import demo-lib
+  import env-params
+
+
+; Board dimensions in mm 
+; val w = 100.0
+; val h = 75.0
+; val brd-outline = Rectangle(w, h) 
+; DESIGN-TEMPERATURE = 80.0
+
+pcb-module demo :
+  ; Design goes here
+  inst fmc : {samtec/ASP-134488-01}
+  net gnd (fmc.gnd)
+
+  properties(fmc.v12p0):
+    voltage => [11.95 12.0 12.05]
+
+  val [rail rail-en] = make-voltage-regulator(fmc.v12p0, [2.95  3.0  3.05], analog-devices/ADM7154(3.0))
+
+  val num-rails = 5
+  val rails = Array<Ref>(num-rails)
+  val rails-en = Array<Ref>(num-rails)
+  for i in 0 to num-rails do :
+    val [rail rail-en] = make-voltage-regulator(fmc.v12p0, [2.95  3.0  3.05], analog-devices/ADM7154(3.0))
+    rails[i] = rail
+    rails-en[i] = rail-en
+
+  val board-controller = make-board-controller(to-tuple(rails))
+
+  require sys-i2c:i2c from fmc
+  connect isolate (sys-i2c, {board-controller.sys-i2c[0]})
+
+  ; require en:gpio[9] from {board-controller}
+  ;  for i in 0 to 9 do : net (en[i].gpio, {rails-en}[i])
+
+  ; require NG-bus:lvds[20] from fmc
+  ; require NG-bus-cr:lvds[20] from {board-controller}
+  ; net (NG-bus, NG-bus-cr)
+
+  ; inst backplane : vpx-6u
+
+  ; require NG-bus-2:lvds[10] from backplane
+  ; require NG-bus-cr-2:lvds[10] from {board-controller}
+  ; net (NG-bus-2, NG-bus-cr-2)
+
+
+; pcb-board B :
+;   stackup = sierra-circuits-6-layer-62-mil
+;   boundary = brd-outline 
+;   signal-boundary = brd-outline
+
+; pcb-design main-design :
+;   module = demo
+;   board = B
+;   rules = sierra-adv-rules
+
+; visualize(main-design)
+
+print-esir("input.esir")

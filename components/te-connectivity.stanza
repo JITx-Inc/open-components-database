@@ -1,0 +1,97 @@
+#use-added-syntax(esir)
+defpackage te-connectivity:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import pinspec
+  import land-patterns
+  import bundles
+
+defn gen-symbol-map (ps:PinSpec, pkg:Ref) :
+  inside pcb-component :
+    make-pins(ps)
+    assign-package(pkg, ps)
+
+public pcb-component te-2102771-1 :
+  manufacturer = "TE"
+  mpn = "2102771-1"
+
+  defn pin-name (r:Int, c:Int) :
+    val letter = red-alph-letter(r)
+    Ref(letter)[c + 1]
+  val ps = PinSpec $ #TABLE :
+    [Ref | Ref ...   | Dir | Int ]
+    for c in 0 to 16 do :
+      for r in 0 to 7 do :
+        [{pin-name(r,c)} | {pin-name(r,c)} | Right | c]
+  reference-prefix = "P"
+  gen-symbol-map(ps, te-2102771-1-pkg)
+
+public pcb-component te-2102772-1 :
+  manufacturer = "TE"
+  mpn = "2102772-1"
+
+  defn pin-name (r:Int, c:Int) :
+    val letter = red-alph-letter(r)
+    Ref(letter)[c + 1]
+  val ps = PinSpec $ #TABLE :
+    [Ref | Ref ...   | Dir | Int ]
+    for c in 0 to 8 do :
+      for r in 0 to 7 do :
+        [{pin-name(r,c)} | {pin-name(r,c)} | Right | c]
+  reference-prefix = "P"
+  gen-symbol-map(ps, te-2102772-1-pkg)
+
+pcb-package te-2102771-1-pkg :
+
+  defn make-pad (r:Int, c:Int) :
+    val x = ((to-double(16) - 1.0) / -2.0 + to-double(c)) * -1.8
+    val y = ((to-double(7) - 1.0) / 2.0 - to-double(r)) * -1.35
+    val letter = red-alph-letter(r)
+    val name = Ref(letter)[c + 1]
+  
+    ;fab-note : "PLATED THROUGH HOLE PER TE 114-13056, FIGURE 4"
+    pad {name} : {pth-pad(0.55 / 2.0, 0.92 / 2.0)} at loc(x,y)
+
+  for c in 0 to 16 do :
+    for r in 0 to 7 do :
+      make-pad(r,c)
+
+  val post = Circle(0.56 / 2.0)
+  layer(Cutout()) = loc(7.5 * 1.8, 4.0 * 1.35) * post
+  layer(Cutout()) = loc(3.5 * 1.8, 4.0 * 1.35) * post
+  layer(Cutout()) = loc(-0.5 * 1.8, 4.0 * 1.35) * post
+  layer(Cutout()) = loc(-4.5 * 1.8, 4.0 * 1.35) * post
+
+  layer(Courtyard(Top)) = Rectangle(28.68, 11.81)
+  layer(Silkscreen("f-silk", Top)) = LineRectangle(28.68, 11.81)
+  layer(BoardEdge()) = Line(0.0, [Point(1.0, -3.0 * 1.35 - 1.5), Point(-1.0, -3.0 * 1.35 - 1.5)])
+  ref-label()
+
+pcb-package te-2102772-1-pkg :
+
+  defn make-pad (r:Int, c:Int) :
+    val x = ((to-double(8) - 1.0) / -2.0 + to-double(c)) * -1.8
+    val y = ((to-double(7) - 1.0) / 2.0 - to-double(r)) * -1.35
+    val letter = red-alph-letter(r)
+    val name = Ref(letter)[c + 1]
+
+    ;fab-note : "PLATED THROUGH HOLE PER TE 114-13056, FIGURE 4"
+    pad {name} : {pth-pad(0.55 / 2.0, 0.92 / 2.0)} at loc(x,y)
+
+  for c in 0 to 8 do :
+    for r in 0 to 7 do :
+      make-pad(r,c)
+
+  val post = Circle(0.56 / 2.0)
+  layer(Cutout()) = loc(3.5 * 1.8, 4.0 * 1.35) * post
+  layer(Cutout()) = loc(-0.5 * 1.8, 4.0 * 1.35) * post
+
+  layer(Courtyard(Top)) = Rectangle(16.08, 11.81, loc(0.9, 0.0))
+  layer(Silkscreen("f-silk", Top)) = LineRectangle(16.08, 11.81, 0.9, 0.0)
+  layer(BoardEdge()) = Line(0.0, [Point(1.0, -3.0 * 1.35 - 1.5), Point(-1.0, -3.0 * 1.35 - 1.5)])
+  ref-label()

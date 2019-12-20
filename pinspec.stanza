@@ -1,0 +1,57 @@
+#use-added-syntax(esir)
+defpackage pinspec :
+  import core
+  import collections
+  import esir
+  import lang-utils
+
+;============================================================
+;===================== Constructors =========================
+;============================================================
+
+public defstruct PinSpec :
+  entries: Tuple<PinEntry>
+
+public defstruct PinEntry :
+  ref: Ref
+  pads: Tuple<Ref>
+  dir: Dir
+  bank: Ref|Int
+  
+public defn PinSpec (table:Tuple<[Ref, Tuple<Int|Ref>, Dir, Ref|Int]>) :
+  PinSpec $ for [ref, pads, dir, bank] in table map :
+    PinEntry(ref, map(to-pad, pads), dir, bank)
+
+public defn PinSpec (table:Tuple<[Ref, Tuple<Int|Ref>, Dir]>) :
+  PinSpec $ for [ref, pads, dir] in table map :
+    PinEntry(ref, map(to-pad, pads), dir, 0)
+  
+public defn PinSpec (table:Tuple<[Ref, Tuple<Int|Ref>]>) :
+  PinSpec $ for [ref, pads] in table map :
+    PinEntry(ref, map(to-pad, pads), Left, 0)
+
+defn to-pad (p:Int|Ref) :
+  match(p) :
+    (i:Int) : #R(p[i])
+    (p:Ref) : p
+
+;============================================================
+;======================= Algorithms =========================
+;============================================================
+
+public defn make-pins (ps:PinSpec) :
+  inside pcb-component :
+    for e in entries(ps) do :
+      pin {ref(e)}
+
+public defn assign-package (package-name:Ref, ps:PinSpec) :
+  inside pcb-component :
+    package = {package-name}(
+      for e in entries(ps) do :
+        for pad in pads(e) do :
+          {ref(e)} => {pad})
+
+    
+
+
+

@@ -1,0 +1,57 @@
+#use-added-syntax(esir)
+defpackage texas-instruments:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import pinspec
+  import land-patterns
+  import bundles
+
+defn gen-symbol-map (ps:PinSpec, pkg:Ref) :
+  inside pcb-component :
+    make-pins(ps)
+    assign-package(pkg, ps)
+
+public pcb-component ISO1540 :
+  manufacturer = "Texas Instruments"
+  mpn = "ISO1540DR"
+  description = "2.5-kVrms isolated bidirectional clock, bidirectional I2C isolator"
+  val ps = PinSpec $ #TABLE :
+    [Ref     | Int ...   | Dir]
+    [GND1 | 4 | Down]
+    [GND2 | 5 | Down]
+    [SCL1 | 3 | Left]
+    [SDA1 | 2 | Left]
+    [SCL2 | 6 | Right]
+    [SDA2 | 7 | Right]
+    [VCC1 | 1 | Up]
+    [VCC2 | 8 | Up]
+  gen-symbol-map(ps, soic127p-package(8))
+
+public pcb-component TLV74325P-cmp :
+  pin en
+  pin gnd
+  pin in
+  pin out
+  pin nc
+  manufacturer = "Texas Instruments"
+  mpn = "TLV74325P"
+  description = "LDO"
+  ; TODO: Make this real.  
+  val ps = PinSpec $ #TABLE :
+    [Ref     | Int ...   | Dir]
+    [gnd | 1 | Down]
+    [en  | 2 | Right]
+    [out | 3 | Up]
+    [in  | 4 | Up]
+    [nc  | 5 6 | Up]
+  ; gen-symbol-map(ps, soic127p-package(6))
+  assign-package(soic127p-package(6), ps)
+
+
+  spice:
+    "[X] {en} {gnd} {in} {out} {nc} TLV74325P"

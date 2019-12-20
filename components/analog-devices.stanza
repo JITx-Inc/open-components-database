@@ -1,0 +1,231 @@
+#use-added-syntax(esir)
+defpackage analog-devices:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import pinspec
+  import land-patterns
+
+  import generic-components
+
+defn gen-symbol-map (ps:PinSpec, pkg:Ref) :
+  inside pcb-component :
+    make-pins(ps)
+    assign-package(pkg, ps)
+
+; Linear regulators
+public pcb-component ADM7150-cmp (v-out:Double) :
+  manufacturer = "Analog Devices"
+  description = "800 mA Ultralow Noise, High PSRR, RF Linear Regulator"
+  val a-code = switch(v-out) :
+    3.0 : "3.0"
+    3.3 : "3.3"
+    5.0 : "5.0"
+    else : fatal("Incorrect current rating for ADM7150 %_" % [v-out])
+  mpn = to-string("ADM7150ARDZ-%_-R7" % [a-code])
+  val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [vin  | 8 | Left]
+    [en   | 7 | Left]
+    [vreg | 1 | Left]
+    [byp  | 3 | Left]
+    [vout      | 2 | Right] 
+    [ref       | 6 | Right] 
+    [ref-sense | 5 | Right]
+    [gnd | 4 9 | Down]
+  gen-symbol-map(ps, soic127p-package(8, [2.3 3.0]))
+
+public pcb-component ADM7154-cmp (v-out:Double) :
+  description = "600 mA, Ultralow Noise, High PSRR, RF Linear Regulator"
+  manufacturer = "Analog Devices"
+  val a-code = switch(v-out) :
+    1.2 : "1.2"
+    1.8 : "1.8"
+    2.5 : "2.5"
+    2.8 : "2.8"
+    3.0 : "3.0"
+    3.3 : "3.3"
+    else : fatal("Incorrect current rating for ADM7154 %_" % [v-out])
+  mpn = to-string("ADM7154ARDZ-%_-R7" % [a-code])
+  val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [vin    | 8 | Left]
+    [en     | 7 | Left]
+    [vreg   | 1 | Left]
+    [byp    | 3 | Left]
+    [vout   | 2 | Right]
+    [ref    | 6 | Right]
+    [ref-sense | 5 | Right]
+    [gnd | 4 9 | Down]
+  gen-symbol-map(ps, soic127p-package(8, [2.3 2.3]))
+  properties(vin):
+    power-pin => true
+    rated-voltage => [2.3 5.5]
+  properties(vout):
+    supply-pin => true
+    voltage => v-out
+ 
+public pcb-component LT3093-cmp :
+  manufacturer = "Analog Devices"
+  mpn = "LT3093EDD"
+  description = "–20V, 200mA, Ultralow Noise, Ultrahigh PSRR Negative Linear Regulator"
+  val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [in   | 1 2 13 | Left] 
+    [en   | 3 | Left]
+    [pg   | 4 | Left]
+    [set  | 8 | Left]
+    [vioc | 7 | Left]
+    [ilim | 6 | Left]
+    [out  | 11 12 | Right] 
+    [outs | 10 | Right]
+    [pgfb | 5 | Right]
+    [gnd  | 9 | Down]
+  gen-symbol-map(ps, dfn-package(12, 0.45, [0.25, 0.7], -1.4, [3.5, 3.0], [1.65, 2.38]))
+
+public pcb-component LT3045-cmp :
+  manufacturer = "Analog Devices"
+  mpn = "LT3045EDD-1"
+  description = "20V, 500mA, Ultralow Noise, Ultrahigh PSRR Linear Regulator with VIOC Control"
+  val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [in | 1 2  | Left]
+    [en | 4  | Left]
+    [pg | 5  | Left]
+    [set  | 8  | Left]
+    [vioc | 3  | Left]
+    [ilim | 6 | Left]
+    [out  | 11 12 | Right]
+    [outs | 10  | Right]
+    [pgfb | 7  | Right]
+    [gnd  | 9 13 | Down]
+  gen-symbol-map(ps, dfn-package(12, 0.45, [0.25, 0.7], -1.4, [3.5, 3.0], [1.65, 2.38]))
+
+; Amplifiers
+public pcb-component AD8429-cmp :
+  manufacturer = "Analog Devices"
+  mpn = "AD8429BRZ-R7"
+  description = "SP Amp INSTR Amp Single ±18V 8-Pin SOIC N T/R"
+  val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [in- | 1 | Left]
+    [rg0 | 2 | Left]
+    [rg1 | 3 | Left]
+    [in+ | 4 | Left]
+    [vout | 7 | Right]
+    [ref | 6 | Right]
+    [vs- | 5 | Down]
+    [vs+ | 8 | Up]
+  gen-symbol-map(ps, soic127p-package(8))
+
+; Modules
+
+; Linear regulators
+public pcb-module ADM7154 (v-out) :
+  pin vin
+  pin vout
+  pin gnd
+  pin en
+  inst ps : {ADM7154-cmp(v-out)}
+  val c0 = cap-strap(ps.vin, gnd, 10.0, "1206")
+  val c1 = cap-strap(ps.vout, gnd, 10.0, "1206")
+  val c2 = cap-strap(ps.vreg, gnd, 10.0, "1206")
+  val c3 = cap-strap(ps.byp, gnd, 1.0)
+  inst c : {gen-tant-cap-cmp(100.0, "1206")}
+  net (c.a, ps.byp)
+  net (c.c, gnd)
+  net (ps.ref, ps.ref-sense)
+  cap-strap(ps.ref, gnd, 1.0)
+  net (ps.en, en)
+  net (ps.vin, vin)
+  net (ps.vout, vout)
+  net (ps.gnd gnd)
+
+public pcb-module ADM7150 (v-out) :
+  pin vin
+  pin vout
+  pin gnd
+  pin en
+  inst ps : {ADM7150-cmp(v-out)}
+  cap-strap(ps.vin, gnd, 10.0, "1206")
+  cap-strap(ps.vout, gnd, 10.0, "1206")
+  cap-strap(ps.vreg, gnd, 10.0, "1206")
+  cap-strap(ps.byp, gnd, 1.0)
+  cap-strap(ps.ref, gnd, 1.0)
+  inst c : {gen-tant-cap-cmp(100.0, "1206")} ; Tantalum cap
+  net (c.a, ps.byp)
+  net (c.c, gnd)
+  net (ps.ref, ps.ref-sense)
+  net (ps.en, en)
+  net (ps.vin, vin)
+  net (ps.vout, vout)
+  net (ps.gnd gnd)
+
+public pcb-module LT3093 (v-out) :
+  pin vin
+  pin vout
+  pin gnd
+  pin en
+  inst ps : LT3093-cmp
+  val r-set = v-out / -100.0e-6
+  val r-fb = res-strap(ps.set, gnd, r-set, 0.2, "0402")
+  val c0 = cap-strap(ps.set, gnd, 10.0e-3)
+  val c1 = cap-strap(ps.in, gnd, 4.7, "1206")
+  val c2 = cap-strap(ps.out, gnd, 4.7, "1206")
+  ; short-trace(r-fb.p[1], ps.set)
+  ; short-trace(r-fb.p[1], c0.p[1])
+  ; short-trace(c1.p[1], ps.in)
+  ; short-trace(c2.p[1], ps.out)
+  net (ps.en, en) 
+  net (ps.in, ps.pgfb, vin)
+  net (ps.out, ps.outs, vout)
+  net (ps.gnd, ps.ilim, gnd)
+
+public pcb-module LT3045 (v-out) :
+  pin vin
+  pin vout
+  pin gnd
+  pin en
+  inst ps : LT3045-cmp
+  val r-set = v-out / 100.0e-6
+  val r-fb = res-strap(ps.set, gnd, r-set, 0.2, "0402")
+  val c0 = cap-strap(ps.set, gnd, 10.0e-3)
+  val c1 = cap-strap(ps.in, gnd, 4.7, "1206")
+  val c2 = cap-strap(ps.out, gnd, 4.7, "1206")
+  ; short-trace(r-fb.p[1], ps.set)
+  ; short-trace(r-fb.p[1], c0.p[1])
+  ; short-trace(c1.p[1], ps.in)
+  ; short-trace(c2.p[1], ps.out)
+  net (ps.en, en)
+  net (ps.in, ps.pgfb, vin)
+  net (ps.out, ps.outs, vout)
+  net (ps.gnd, ps.ilim, gnd)
+
+public pcb-module AD8429 (gain:Double) :
+  pin vs+
+  pin vs-
+  pin in+
+  pin in-
+  pin vout
+  pin ref
+  inst opa : AD8429-cmp
+  if gain < 1.0 :
+    fatal("Unsupported gain %_ for AD8429" % [gain])
+  else if gain != 1.0 :
+    val rg-val = 6.0e3 / (gain - 1.0)
+    inst rg : {gen-res-cmp(rg-val, 0.1, "0603")}
+    net (opa.rg0, rg.p[1])
+    net (opa.rg1, rg.p[2])
+  bypass-caps(vs+, ref, 35.0, [10.0 0.1e-3], `vs+)
+  bypass-caps(vs-, ref, 35.0, [10.0 0.1e-3], `vs-)
+  net (opa.in+, in+)
+  net (opa.in-, in-)
+  net (opa.vs+, vs+)
+  net (opa.vs-, vs-)
+  net (opa.vout, vout)
+  net (opa.in+, in+)
+  net (opa.ref, ref)

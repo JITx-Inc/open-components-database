@@ -1,0 +1,58 @@
+#use-added-syntax(esir)
+defpackage symbol-utils :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/gen
+  import esir/fonts
+  import esir/utils
+; ====== Unit Conversion Functions =======
+; The following functions expect sizes and coordinates in "Symbol Units" which 
+; is the expected grid size in schematics. For Kicad this is 50 mil, or 1.27 mm
+
+public val UNIT-TO-MM = 2.54
+
+public defn unit-point (x:Double, y:Double, scale:Double) :
+  Point(scale * x, scale * y)
+
+public defn unit-point (x:Double, y:Double) :
+  unit-point(x, y, UNIT-TO-MM)
+  
+defn point-coords (p:Point|[Double,Double]) :
+  match(p) :
+    (pp:Point) : [x(pp), y(pp)]
+    (dd:[Double,Double]) : dd
+  
+public defn unit-point (p:Point|[Double,Double], scale:Double) :
+  val [x,y] = point-coords(p)
+  unit-point(x, y, scale)
+
+public defn unit-point (p:Point|[Double,Double]) :
+  unit-point(p, UNIT-TO-MM)
+
+public defn unit-points (ps:Collection<Point|[Double,Double]>, scale:Double) :
+  to-list(seq({unit-point(_,scale)}, ps))
+
+public defn unit-points (ps:Collection<Point|[Double,Double]>) :
+  unit-points(ps, UNIT-TO-MM)
+
+public defn unit-loc (p:Pose, scale:Double) :
+  sub-center(p, unit-point(center(p), scale))
+
+public defn unit-loc (p:Pose) :
+  unit-loc(p, UNIT-TO-MM)
+
+public defn unit-loc (p:Point|[Double,Double], a:Double, flip-x?:Flip, scale:Double) :
+  val [x,y] = point-coords(p)
+  unit-loc(loc(x,y,a,flip-x?), scale)
+
+public defn unit-loc (p:Point|[Double,Double], a:Double, flip-x?:Flip) :
+  unit-loc(p, a, flip-x?, UNIT-TO-MM)
+
+public defn unit-loc (p:Point|[Double,Double], scale:Double) :
+  unit-loc(p, 0.0, NoFlip, scale)
+
+public defn unit-loc (p:Point|[Double,Double]) :
+  unit-loc(p, UNIT-TO-MM)
+

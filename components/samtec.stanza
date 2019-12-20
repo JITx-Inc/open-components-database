@@ -1,0 +1,141 @@
+#use-added-syntax(esir)
+defpackage samtec:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import bundles
+  import pinspec
+  import land-patterns
+
+defn gen-symbol-map (ps:PinSpec, pkg:Ref) :
+  inside pcb-component :
+    make-pins(ps)
+    assign-package(pkg, ps)
+
+; Land Patterns
+public defn samtec-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>) :
+  inside pcb-package :
+    pcb-pad pin-pad :
+      type = SMD
+      shape = Circle(pad-diam / 2.0)
+      layer(Paste(Top)) = Circle(pad-diam / 2.0)
+      layer(SolderMask(Top)) = Circle(pad-diam / 2.0)
+
+    defn make-pad (r:Int, c:Int) :
+      val x = ((to-double(n-pads[0]) - 1.0) / -2.0 + to-double(c)) * pitch
+      val y = ((to-double(n-pads[1]) - 1.0) / 2.0 - to-double(r)) * pitch
+      ; I IS MISSING DELIBERATELY BECAUSE OF SAMTEC's ANNOYING LETTER SCHEME, but O is present.
+      val letter = ["A" "B" "C" "D" "E" "F" "G" "H" "J" "K" "L" "M" "N" "O" "P" "Q" "R" "S" "T" "U" "V" "W" "X" "Y" "Z"][r]
+      val name = Ref(letter)[c + 1]
+
+      if not contains?(omit-pads, name) :
+        pad {name} : pin-pad at loc(x,y)
+
+    for c in 0 to n-pads[0] do :
+      for r in 0 to n-pads[1] do :
+        make-pad(r,c)
+
+    layer(Courtyard(Top)) = Rectangle(courtyard[0], courtyard[1])
+    layer(Silkscreen("f-silk", Top)) = LineRectangle(courtyard[0], courtyard[1])
+    layer(Silkscreen("pol", Top)) = Circle(-0.3 - courtyard[0] / 2.0, courtyard[1] / 2.0, 0.127)
+    ref-label()
+
+pcb-package ASP-134488-01-pkg :
+  samtec-bga-pkg(1.27, 0.64, [40 10], [55.78 14.68], [])
+  ; Alignment holes
+  let:
+    val xdim =  27.19
+    val yoff = -3.05
+    val align-hole-diam = 1.27
+    ; Aligment hole on the right is centered vertically
+    ; Aligment hole on the left is offset vertically
+    layer(Cutout()) = Circle(        xdim,  0.0, align-hole-diam / 2.0)
+    layer(Cutout()) = Circle( -1.0 * xdim, yoff, align-hole-diam / 2.0)
+  let:
+    val xdim = 31.49695
+    val yoff = 2.006
+    val standoff-hole-diam = 3.2
+    ; Standoff holes
+    layer(Cutout()) = Circle(        xdim, yoff, standoff-hole-diam / 2.0)
+    layer(Cutout()) = Circle( -1.0 * xdim, yoff, standoff-hole-diam / 2.0)
+  ref-label()
+
+
+; Components
+
+public pcb-component ASP-134488-01 :
+  description = "Vita 57.1 HPC FMC connector"
+  manufacturer = "Samtec"
+  mpn = "ASP-134488-01"
+
+  val ps = PinSpec $ #TABLE :
+    [Ref | Ref ...   | Dir | Int ]
+    [dp0-c2m-n | C[3]  | Right | 0] [dp0-c2m-p | C[2]  | Right | 0] [dp0-m2c-n | C[7]  | Right | 0] [dp0-m2c-p | C[6]  | Right | 0]
+    [dp1-c2m-n | A[23] | Right | 0] [dp1-c2m-p | A[22] | Right | 0] [dp1-m2c-n | A[3]  | Right | 0] [dp1-m2c-p | A[2]  | Right | 0]
+    [dp2-c2m-n | A[27] | Right | 0] [dp2-c2m-p | A[26] | Right | 0] [dp2-m2c-n | A[7]  | Right | 0] [dp2-m2c-p | A[6]  | Right | 0]
+    [dp3-c2m-n | A[31] | Right | 0] [dp3-c2m-p | A[30] | Right | 0] [dp3-m2c-n | A[11] | Right | 0] [dp3-m2c-p | A[10] | Right | 0]
+    [dp4-c2m-n | A[35] | Right | 0] [dp4-c2m-p | A[34] | Right | 0] [dp4-m2c-n | A[15] | Right | 0] [dp4-m2c-p | A[14] | Right | 0]
+    [dp5-c2m-n | A[39] | Right | 0] [dp5-c2m-p | A[38] | Right | 0] [dp5-m2c-n | A[19] | Right | 0] [dp5-m2c-p | A[18] | Right | 0]
+    [dp6-c2m-n | B[37] | Right | 0] [dp6-c2m-p | B[36] | Right | 0] [dp6-m2c-n | B[17] | Right | 0] [dp6-m2c-p | B[16] | Right | 0]
+    [dp7-c2m-n | B[33] | Right | 0] [dp7-c2m-p | B[32] | Right | 0] [dp7-m2c-n | B[13] | Right | 0] [dp7-m2c-p | B[12] | Right | 0]
+    [la00-n-cc | G[7]  | Right | 1] [la00-p-cc | G[6]  | Right | 1] [la01-n-cc | D[9]  | Right | 1] [la01-p-cc | D[8]  | Right | 1]
+    [la02-n    | H[8]  | Right | 1] [la02-p    | H[7]  | Right | 1] [la03-n    | G[10] | Right | 1] [la03-p    | G[9]  | Right | 1]
+    [la04-n    | H[11] | Right | 1] [la04-p    | H[10] | Right | 1] [la05-n    | D[12] | Right | 1] [la05-p    | D[11] | Right | 1]
+    [la06-n    | C[11] | Right | 1] [la06-p    | C[10] | Right | 1] [la07-n    | H[14] | Right | 1] [la07-p    | H[13] | Right | 1]
+    [la08-n    | G[13] | Right | 1] [la08-p    | G[12] | Right | 1] [la09-n    | D[15] | Right | 1] [la09-p    | D[14] | Right | 1]
+    [la10-n    | C[15] | Right | 1] [la10-p    | C[14] | Right | 1] [la11-n    | H[17] | Right | 1] [la11-p    | H[16] | Right | 1]
+    [la12-n    | G[16] | Right | 1] [la12-p    | G[15] | Right | 1] [la13-n    | D[18] | Right | 1] [la13-p    | D[17] | Right | 1]
+    [la14-n    | C[19] | Right | 1] [la14-p    | C[18] | Right | 1] [la15-n    | H[20] | Right | 1] [la15-p    | H[19] | Right | 1]
+    [la16-n    | G[19] | Right | 1] [la16-p    | G[18] | Right | 1] [la17-n-cc | D[21] | Right | 1] [la17-p-cc | D[20] | Right | 1]
+    [la18-n-cc | C[23] | Right | 1] [la18-p-cc | C[22] | Right | 1] [la19-n    | H[23] | Right | 1] [la19-p    | H[22] | Right | 1]
+    [la20-n    | G[22] | Right | 1] [la20-p    | G[21] | Right | 1] [la21-n    | H[26] | Right | 1] [la21-p    | H[25] | Right | 1]
+    [la22-n    | G[25] | Right | 1] [la22-p    | G[24] | Right | 1] [la23-n    | D[24] | Right | 1] [la23-p    | D[23] | Right | 1]
+    [la24-n    | H[29] | Right | 1] [la24-p    | H[28] | Right | 1] [la25-n    | G[28] | Right | 1] [la25-p    | G[27] | Right | 1]
+    [la26-n    | D[27] | Right | 1] [la26-p    | D[26] | Right | 1] [la27-n    | C[27] | Right | 1] [la27-p    | C[26] | Right | 1]
+    [la28-n    | H[32] | Right | 1] [la28-p    | H[31] | Right | 1] [la29-n    | G[31] | Right | 1] [la29-p    | G[30] | Right | 1]
+    [la30-n    | H[35] | Right | 1] [la30-p    | H[34] | Right | 1] [la31-n    | G[34] | Right | 1] [la31-p    | G[33] | Right | 1]
+    [la32-n    | H[38] | Right | 1] [la32-p    | H[37] | Right | 1] [la33-n    | G[37] | Right | 1] [la33-p    | G[36] | Right | 1]
+    [clk0-m2c-n    | H[5]  | Right | 2] [clk0-m2c-p    | H[4]  | Right | 2] [clk1-m2c-n    | G[3]  | Right | 2] [clk1-m2c-p    | G[2]  | Right | 2]
+    [ga0           | C[34] | Right | 2] [ga1           | D[35] | Right | 2] [gbtclk0-m2c-n | D[5]  | Right | 2] [gbtclk0-m2c-p | D[4]  | Right | 2]
+    [gbtclk1-m2c-n | B[21] | Right | 2] [gbtclk1-m2c-p | B[20] | Right | 2] [pg-c2m        | D[1]  | Right | 2] [pg-m2c        | F[1]  | Right | 2]
+    [prsnt-m2c-l   | H[2]  | Right | 2] [scl           | C[30] | Right | 2] [sda           | C[31] | Right | 2] [tck           | D[29] | Right | 2]
+    [tdi           | D[30] | Right | 2] [tdo           | D[31] | Right | 2] [tms           | D[33] | Right | 2] 
+    [gnd  | E[11] C[36] A[25] A[40] D[2] G[14] K[39] A[12] G[23] A[5] A[20]
+            G[35] E[32] D[13] K[18] C[12] C[20] F[15] D[22] C[32] C[17] E[23] H[3]B[15]
+            H[15] K[15] D[39] H[18] K[27] C[25] B[23] D[37] F[39] H[12] F[33] A[24] B[10]
+            B[3] G[26] F[6]E[35] G[20] H[9] J[1] B[18] J[35] J[11] D[28] E[8] D[6] F[21]
+            F[3] F[2] K[6] D[16] D[3] G[17] J[20] C[28] B[7] B[26] E[1] G[1] A[16] B[34]
+            G[29] A[17] B[11] F[18] F[30] C[38] A[37] H[36] B[38] C[40] A[21] K[33] E[26]
+            A[29] G[32] B[14] J[23] B[27] G[38] A[4] C[33] K[36] H[21] H[39] E[5] J[32]
+            H[33] J[40] K[3] D[25] A[9] E[40] B[22] F[24] G[40] F[12] F[9] E[14] E[20]
+            C[24] C[5] D[10] K[9] H[24] A[8] G[8] A[1] K[24] E[29] A[28] D[7] J[17] J[8]
+            C[21] G[5] C[13] H[27] J[38] C[4] E[17] A[36] B[35] F[36] B[30] B[31] J[5]
+            C[29] D[19] B[19] H[30] F[27] B[2] J[4] K[21] B[39] E[4] C[9] G[11] G[4] J[14]
+            K[12] A[33] H[6] J[26] C[16] K[30] E[38] C[1] A[32] J[29] A[13] C[8] K[2] B[6] | Down | 3]  
+    [v12p0 |  C[37] C[35] | Up | 3]
+    [v3p3 |  D[38] D[36] C[39] D[40] | Up | 3]
+    [v3p3vaux | D[32] | Up | 3]
+    [vadj |  E[39] G[39] F[40] H[40] |  Up | 3]
+
+  gen-symbol-map(ps, ASP-134488-01-pkg)
+
+  ;Create LVDS supports between all things *-p* and *-n*
+  for apin in ports(self) do :
+    val pin-name = to-string(apin)
+    if substring?(pin-name, "-p") :
+      val n-name = replace(pin-name, "-p", "-n")
+      val n-ref = Ref(n-name)
+      supports gpio :
+        gpio => {apin}
+      supports gpio :
+        gpio => {n-ref}
+      supports lvds :
+        N => {n-ref}
+        P => {apin}
+  supports i2c :
+    sda => sda
+    scl => scl

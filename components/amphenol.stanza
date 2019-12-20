@@ -1,0 +1,42 @@
+#use-added-syntax(esir)
+defpackage amphenol:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import pinspec
+  import land-patterns
+  import bundles
+
+defn gen-symbol-map (ps:PinSpec, pkg:Ref) :
+  inside pcb-component :
+    make-pins(ps)
+    assign-package(pkg, ps)
+
+public pcb-component amphenol-112640 :
+  manufacturer = "Amphenol RF"
+  mpn = "112640"
+  description = "CONN BNC JACK STR 50OHM EDGE MNT"
+  val ps = PinSpec $ #TABLE :
+    [Ref     | Int ...   | Dir]
+    [sig | 1 | Left]
+    [gnd | 2 3 4 5 | Down]
+  gen-symbol-map(ps, amphenol-112640-pkg)
+  reference-prefix = "J"
+
+pcb-package amphenol-112640-pkg :
+
+  pad p[1] : {smd-pad(S, 0.86, 4.72)} at loc(0.0, 0.127)
+  pad p[2] : {smd-pad(S, 1.35, 4.72)} at loc(4.925, 0.127)
+  pad p[3] : {smd-pad(S, 1.35, 4.72)} at loc(-4.925, 0.127)
+  pad p[4] : {smd-pad(S, 1.7, 4.72)} at loc(-4.46, 0.127) on Bottom
+  pad p[5] : {smd-pad(S, 1.7, 4.72)} at loc(4.46, 0.127) on Bottom
+
+  layer(Courtyard(Top)) = Rectangle(11.2, 5.0, loc(0.0, 2.36))
+  layer(Courtyard(Bottom)) = Rectangle(11.2, 5.0, loc(0.0, 2.36))
+  layer(BoardEdge())= Line(0.0, [Point(11.2 / -2.0, 0.0), Point(11.2 / 2.0, 0.0)])
+
+  ref-label()
