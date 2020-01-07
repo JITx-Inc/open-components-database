@@ -1,0 +1,56 @@
+#use-added-syntax(esir)
+defpackage analog-devices/AD8429:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import pinspec
+  import land-patterns
+  import generic-components
+  import generator-utils
+
+; Amplifiers
+public pcb-component component :
+  name = "AD8429"
+  manufacturer = "Analog Devices"
+  mpn = "AD8429BRZ-R7"
+  description = "SP Amp INSTR Amp Single ±18V 8-Pin SOIC N T/R"
+  val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [in- | 1 | Left]
+    [rg0 | 2 | Left]
+    [rg1 | 3 | Left]
+    [in+ | 4 | Left]
+    [vout | 7 | Right]
+    [ref | 6 | Right]
+    [vs- | 5 | Down]
+    [vs+ | 8 | Up]
+  gen-symbol-map(ps, soic127p-package(8))
+
+public pcb-module module (gain:Double) :
+  pin vs+
+  pin vs-
+  pin in+
+  pin in-
+  pin vout
+  pin ref
+  inst opa : {analog-devices/AD8429/component}
+  if gain < 1.0 :
+    fatal("Unsupported gain %_ for AD8429" % [gain])
+  else if gain != 1.0 :
+    val rg-val = 6.0e3 / (gain - 1.0)
+    inst rg : {gen-res-cmp(rg-val, 0.1, "0603")}
+    net (opa.rg0, rg.p[1])
+    net (opa.rg1, rg.p[2])
+  bypass-caps(vs+, ref, 35.0, [10.0 0.1e-3], `vs+)
+  bypass-caps(vs-, ref, 35.0, [10.0 0.1e-3], `vs-)
+  net (opa.in+, in+)
+  net (opa.in-, in-)
+  net (opa.vs+, vs+)
+  net (opa.vs-, vs-)
+  net (opa.vout, vout)
+  net (opa.in+, in+)
+  net (opa.ref, ref)

@@ -1,0 +1,66 @@
+#use-added-syntax(esir)
+defpackage demo :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import repl-lib
+  import checks
+
+  import bundles
+  import land-patterns
+  import generator-utils
+  import generic-components
+
+DESIGN-TEMPERATURE = 25.0
+
+pcb-module class-a-amplifier (r-set:Double) :
+  port vin:power
+  pin in
+  pin out
+  inst r1 : {gen-res-cmp(110.0e3)}
+  inst r2 : {gen-res-cmp(10.0e3)}
+  inst r3 : {gen-res-cmp(10.0e3)}
+  inst r4 : {gen-res-cmp(r-set)}
+
+  inst c : {gen-cap-cmp(0.1)}
+
+  inst bjt : {nxp/PMBT3904/component}
+
+  net (vin.vdd r1.p[1] r3.p[1])
+  net (bjt.c r3.p[2])
+  net (bjt.b r1.p[2] c.p[2] r2.p[1])
+  net (bjt.e r4.p[1])
+  net (in c.p[1])
+  net (vin.gnd r2.p[2] r4.p[2])
+
+pcb-component power-connector (v-out:Double) :
+  port src:power
+  spice: 
+    "[V] {src.vdd} {src.gnd} {v-out}"
+
+pcb-module demo :
+
+  inst power : {power-connector(20.0)}
+  inst amp : {class-a-amplifier(2.0e3)}
+
+  net gnd (power.src.gnd)
+  net (power.src, amp.vin)
+
+  spice:
+    "[Vi] {amp.in} {power.src.gnd} SIN(0 1 1k 0 0)"
+
+  spice:
+    ".inc PMBT3904.lib"
+    ".tran 0.01ms 5m"
+
+  check-design()
+
+pcb-design main-design :
+  module = demo
+
+print-esir("input.esir")
+export-xml("class-a.xml" [`lowered => true `ground-reference => demo.gnd `check-log => "checks-2.txt"])

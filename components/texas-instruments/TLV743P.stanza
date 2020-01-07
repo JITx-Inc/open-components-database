@@ -1,0 +1,60 @@
+#use-added-syntax(esir)
+defpackage texas-instruments/TLV743P:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import pinspec
+  import land-patterns
+  import generator-utils
+  import generic-components
+  import bundles
+
+public pcb-component component (v-out:Double) :
+  pin en
+  pin gnd
+  pin in
+  pin out
+  pin nc
+  name = "TLV743P"
+  manufacturer = "Texas Instruments"
+  description = "TLV743P 300-mA, Low-Dropout Regulator"
+  val [code spice-code] = switch(v-out) :
+    1.5 : ["15" "TLV74315P"]
+    2.5 : ["25" "TLV74325P"]
+    3.3 : ["33" "TLV74333P"]
+  mpn = to-string("TLV743%_P" % [code])
+  val ps = PinSpec $ #TABLE :
+    [Ref     | Int ...   | Dir]
+    [gnd | 1 | Down]
+    [en  | 2 | Right]
+    [out | 3 | Up]
+    [in  | 4 | Up]
+    [nc  | 5 | Up]
+  assign-package(SOT95P280X145-5N, ps)
+
+  properties(in):
+    power-pin => true
+    rated-voltage => [1.4 5.5]
+  properties(out):
+    supply-pin => true
+    voltage => v-out
+
+  spice:
+    "[X] {en} {gnd} {in} {out} {nc} {spice-code}"
+
+public pcb-module module (v-out:Double) :
+  pin vin
+  pin vout
+  pin gnd
+  pin en
+  inst ps : {texas-instruments/TLV743P/component(v-out)}
+  cap-strap(gnd, ps.in, 1.0)
+  cap-strap(gnd, ps.out, 1.0)
+  net (vin, ps.in)
+  net (vout, ps.out)
+  net (gnd, ps.gnd)
+  net (en, ps.en)

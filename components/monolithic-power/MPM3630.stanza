@@ -1,0 +1,94 @@
+#use-added-syntax(esir)
+defpackage monolithic-power/MPM3630:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import pinspec
+  import land-patterns
+  import generator-utils
+  import generic-components
+  import bundles
+
+pcb-package mps-MPM3630-pkg :
+
+  pad p[1] : {smd-pad(S, 0.25, 0.7)} at loc(-1.8, 1.55, -90.0)
+  pad p[2] : {smd-pad(S, 0.25, 1.1)} at loc(-1.8, 0.9, -90.0)
+  pad p[3] : {smd-pad(S, 0.25, 1.1)} at loc(-1.8, 0.25, -90.0)
+
+  for i in 0 to 3 do :
+    pad p[4 + i] : {smd-pad(S, 0.25, 1.1)} at loc(-1.8, -0.4 - to-double(i) * 0.85, -90.0)
+  
+  for i in 0 to 3 do :
+    pad p[7 + i] : {smd-pad(S, 0.25, 1.1)} at loc(1.8, -2.1 + to-double(i) * 0.85, 90.0)
+
+  pad p[10] : {smd-pad(S, 0.25, 1.1)} at loc(1.8, 0.25, 90.0)
+  pad p[11] : {smd-pad(S, 0.25, 1.1)} at loc(1.8, 0.9, 90.0)
+  pad p[12] : {smd-pad(S, 0.25, 0.7)} at loc(1.8, 1.55, 90.0)
+
+  for i in 0 to 6 do :
+    val pad-type = if i == 2 or i == 3 : smd-pad(S, 0.25, 1.1) else : smd-pad(S, 0.25, 0.7)
+    pad p[13 + i] : {pad-type} at loc(1.25 - to-double(i) * 0.5, 2.8, 180.0)
+
+  layer(ForbidVia()) = Rectangle(1.15, 0.79, loc(0.0, 0.575))
+  layer(Courtyard(Top)) = Rectangle(3.6, 5.6)
+  layer(Silkscreen("f-silk", Top)) = LineRectangle(3.8, 5.8)
+  layer(Silkscreen("f-silk", Top)) = Circle(-2.2, 1.55, 0.25)
+
+  ref-label()
+
+public unique pcb-component component:
+  name = "MPM3630"
+  manufacturer = "Monolithic Power Systems Inc."
+  mpn = "MPM3630GQV-P"
+  val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [vin | 16 | Left]
+    [en  | 17 | Left]
+    [vcc | 2  | Left]
+    [pg  | 18 | Left]
+    [out | 7 8 9 | Right]
+    [fb | 1 | Right]
+    [bst | 11 | Right]
+    [sw | 4 5 6 | Right]
+    [pgnd | 12 13 14 | Down]
+    [agnd | 3 | Down]
+
+  gen-symbol-map(ps, mps-MPM3630-pkg)
+
+; TODO: Merge with MPM3620A module
+public pcb-module module (v-out:Double) :
+  pin vin
+  pin vout
+  pin gnd
+  pin en
+  inst mpm : {monolithic-power/MPM3630/component}
+
+  inst c-fb : {gen-cap-cmp(22.0e-6)}
+
+  inst c-in : {gen-cap-cmp(22.0, 20.0, 25.0,false,"0805")}
+
+  inst c-out-0 : {gen-cap-cmp(22.0, 20.0, 25.0,false,"0805")}
+  
+  inst c-out-1 : {gen-cap-cmp(22.0, 20.0, 25.0,false,"0805")}
+
+  inst en-r : {gen-res-cmp(100000.0)}
+
+  net v-in (vin, c-in.p[2], mpm.vin, en-r.p[2])
+  net (en-r.p[1], mpm.en, en)
+
+  net vss (gnd, c-in.p[1], mpm.pgnd, c-out-0.p[1], c-out-1.p[1])
+
+  net out (vout, mpm.out,  c-fb.p[2], c-out-0.p[2], c-out-1.p[2])
+
+  net (mpm.fb, c-fb.p[1])
+  net agnd (mpm.agnd, gnd)
+
+  val mpm-vref = 0.6 ; NOTE: this is different than MPM3620A
+  properties(vout):
+    voltage => [(v-out - 0.03) v-out (v-out + 0.03)]
+  passive-circuits/make-voltage-divider(vout, mpm.fb, agnd, [0.55 0.6 0.65], 1.0e-4)
+    

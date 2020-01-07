@@ -1,0 +1,80 @@
+#use-added-syntax(esir)
+defpackage qorvo/QPL9065SR :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import pinspec
+  import land-patterns
+  import generator-utils
+  import generic-components
+  import bundles
+
+public unique pcb-component component :
+  name = "QPL9065SR"
+  manufacturer = "Qorvo"
+  mpn = "QPL9065SR"
+  description = "RF Amplifier .45-3.8GHz NF .55dB Gain 37.5dB"
+  val ps = PinSpec $ #TABLE :
+    [Ref     | Int ...   | Dir]
+    [rfin | 2 | Left]
+    [rfout | 11 | Right]
+    [gnd | 1 3 4 7 10 12 14 15 17 | Down]
+    [nc | 6 | Down]
+    [vpd | 5 | Up]
+    [vbyp | 8 | Up]
+    [vdd1 | 16 | Up]
+    [vdd2 | 13 | Up]
+  gen-symbol-map(ps, qfn-package(0.5, 3.5, 16, 0.25, 0.35, [2.2, 2.2]))
+
+  properties(vpd) :
+    digital-in => true
+    vi => [0.63 1.17]
+    rated-voltage => [0.0 3.0]
+  properties(vbyp) :
+    digital-in => true
+    vi => [0.63 1.17]
+    rated-voltage => [0.0 3.0]
+  properties(vdd1) :
+    power-pin => true
+    vdd => 5.0
+    rated-voltage => [3.3 5.25]
+  properties(vdd2) :
+    power-pin => true
+    vdd => 5.0
+    rated-voltage => [3.3 5.25]
+
+  properties:
+    rated-temperature => [-40.0 105.0]
+
+public unique pcb-module module :
+  pin gnd
+  pin vdd
+  pin rfin
+  pin rfout
+  inst lna : {qorvo/QPL9065SR/component}
+
+  inst l2 : {gen-ind-cmp(2.2e-3)}
+  net (l2.p[1], lna.vdd1)
+  cap-strap(l2.p[2], gnd, 100.0e-6)
+  cap-strap(l2.p[2], gnd, 0.1)
+
+  inst l5 : {gen-ind-cmp(18.0e-3)}
+  net (l5.p[1], lna.vdd2)
+  cap-strap(l5.p[2], gnd, 100.0e-6)
+  cap-strap(l5.p[2], gnd, 0.1)
+  cap-strap(vdd, gnd, 4.7, "0603")
+  net (l5.p[2], l2.p[2], vdd)
+
+  block-cap(lna.rfout, rfout, 100.0e-6)
+  inst l1 : {gen-ind-cmp(1.5e-3)}
+  inst l4 : {gen-ind-cmp(1.5e-3)}
+  cap-strap(l1.p[1], gnd, 0.5e-6)
+  net (l1.p[1], rfin)
+  net (l1.p[2], l4.p[1])
+  block-cap(lna.rfin, l4.p[1], 10.0e-6)
+  net (gnd, l4.p[2], lna.gnd)
+  dip-pull([lna.vbyp, lna.vpd], vdd, gnd)

@@ -1,0 +1,51 @@
+#use-added-syntax(esir)
+defpackage cts/219:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import pinspec
+  import land-patterns
+  import generator-utils
+  import generic-components
+  import bundles
+
+public pcb-component component (n-sw:Int):
+  manufacturer = "CTS Electrocomponents"
+  mpn = to-string("219-%_MSTR"%[n-sw])
+  description = "SWITCH SLIDE DIP SPST 100MA 20V"
+  val ps = PinSpec $ #TABLE :
+    [Ref     | Int ...   | Dir]
+    for i in 0 to n-sw do :
+      [sw[i][0] | (2 * i + 1) | Left]
+      [sw[i][1] | (2 * i + 2) | Right]
+
+  gen-symbol-map(ps, cts-219-pkg(n-sw))
+
+  for i in 0 to n-sw do :
+    supports SPST :
+      p => sw[i][0]
+      t => sw[i][1]
+  reference-prefix = "SW"
+
+pcb-package cts-219-pkg (n-sw:Int) : 
+
+  val n-col = n-sw
+  val n-row = 2
+  val row-pitch = 8.6
+  val pin-pitch = 2.54
+
+  val l0 = loc((to-double(n-row - 1) * row-pitch) / -2.0, (to-double(n-col - 1) * pin-pitch) / 2.0)
+  
+  for i in 0 to n-col do :
+    for j in 0 to n-row do :
+      pad p[n-row * i + j + 1] : {smd-pad(2.44, 1.13)} at l0 * loc(to-double(j) * row-pitch, (- to-double(i) * pin-pitch))
+
+  val c-w = 11.04
+  val c-h = to-double(n-col - 1) * 2.54 + 1.13 + 5.14
+  layer(Silkscreen("f-silk", Top)) = LineRectangle(c-w, c-h)
+  layer(Courtyard(Top)) = Rectangle(c-w, c-h)
+  ref-label()  

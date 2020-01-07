@@ -1,0 +1,150 @@
+#use-added-syntax(esir)
+defpackage checks:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import space-derating
+  import generator-utils
+
+; Checks a single-ended digital logic connection between a single driver and receiver.
+; public pcb-check digital-se (n:Ref) :
+;Basic checks would be to determine Voh/Vol for a device is within the range
+;of Vih/Vil of the load(s) based on load input currents, pullup/pulldown
+;current and VCCs of the two parts.  If there are multiple drivers and/or
+;receivers, all combinations must be checked. 
+
+;For the multiple driver case, it can be assumed operational protocol ensures
+;only one driver would be in a low impedance (driving) state at a time, while
+;the remainder are tristated (Hi impedance, or Hi-Z). 
+
+;If pullup or pulldown resistors are on a signal, the voltage of that signal
+;must also be calculated for the LIGHTEST possible load conditions.  As an
+;example, if a 3.3V driver is connected to a 3.3V receiver, but there is a
+;pullup resistor that is connected to 5V on the signal, then the lightest load
+;condition is usually ~0A, so the highest voltage on the signal could be 5V. 
+;If the Vo of the driver is tolerant of 5V and the Vi of the receiver is
+;tolerant of 5V, then no change is needed.  If either is not tolerant (or Vo
+;or Vi are not specified), then assumption is just what VCC is (3.3V in this
+;example) for the maximum tolerable.
+
+
+public pcb-check io () :
+  for n in nets(self) do :
+    ; Check compatibility between two single-ended logic pins (bi directional checks)
+    if (length(refs(n))  == 2) and all?(has-property?{_.digital-io}, refs(n)) : 
+      val p = refs(n)
+      #CHECK(property(p[0].voh) >= property(p[1].vih))
+      #CHECK(property(p[0].voh) <= property(p[1].rated-voltage)[1])
+      #CHECK(property(p[0].vol) <= property(p[1].vil))
+      #CHECK(property(p[0].vol) >= property(p[1].rated-voltage)[0])
+      #CHECK(property(p[1].voh) >= property(p[0].vih))
+      #CHECK(property(p[1].voh) <= property(p[0].rated-voltage)[1])
+      #CHECK(property(p[1].vol) <= property(p[0].vil))
+      #CHECK(property(p[1].vol) >= property(p[0].rated-voltage)[0])
+    ; Check compatibility between lvds pairs (bi directional checks)
+    if (length(refs(n))  == 2) and all?(has-property?{_.lvds}, refs(n)) : 
+      val p = refs(n)
+      #CHECK(property(p[0].vo-cm)[2]   <= property(p[1].vi-cm)[2])
+      #CHECK(property(p[0].vo-diff)[0] >= property(p[1].vi-diff)[0])
+      #CHECK(property(p[1].vo-cm)[2]   <= property(p[0].vi-cm)[2])
+      #CHECK(property(p[1].vo-diff)[0] >= property(p[0].vi-diff)[0])
+
+; Checks a power pin located on a component
+public pcb-check power-pin (p:Ref) :
+  #CHECK(has-property?(p.power-pin))
+  #CHECK(has-property?(p.voltage))
+  if has-property?(p.voltage):
+    check-rated-voltage(p)
+
+defn check-rated-voltage (p:Ref) :
+  val rating = property(p.rated-voltage)
+  val v = property(p.voltage)
+  match(rating, v):
+    (r:Double, v:Double) : #CHECK(property(p.rated-voltage) >= v)
+    (r:[Double,Double], v:Double) : 
+      #CHECK(property(p.rated-voltage)[1] >= v)
+      #CHECK(property(p.rated-voltage)[0] <= v)
+    (r:[Double,Double], v:[Double|Double|Double]) : 
+      #CHECK(property(p.rated-voltage)[1] >= v[2])
+      #CHECK(property(p.rated-voltage)[0] <= v[0])
+    (r, v) : false
+
+; Checks if voltage on a pin is within acceptable limits
+public pcb-check voltage-levels (p:Ref, range:[Double,Double,Double]) :
+  #CHECK(has-property?(p.voltage))
+  #CHECK(property(p.voltage)[0] >= range[0])
+  #CHECK(property(p.voltage)[2] <= range[2])
+
+; Checks resistors agains operating point and environment
+public pcb-check resistor (r:Ref) :
+  #CHECK(has-property?(r.resistor))
+  #CHECK(has-property?(r.operating-point))
+  val [vpk i temp] = [lookup(property(r.operating-point), `voltage-pk) lookup(property(r.operating-point), `current-rms) property(r.temperature)]
+  val power = property(r.resistance) * pow(i, 2.0)
+  #CHECK(abs(vpk[0]) <= property(r.rated-voltage))
+  #CHECK(abs(vpk[1]) <= property(r.rated-voltage))
+  if has-property?(r.derating) :
+    ; Derate the power based on the piecewise linear curve from MFG
+    val derating = PWL(property(r.derating))[temp]
+    val pwr = derating * property(r.rated-power)
+    #CHECK(pwr * DERATE-RESISTOR-POWER > power)
+  else :
+    #CHECK(property(r.rated-power) * DERATE-RESISTOR-POWER > power)
+
+public pcb-check capacitor (c:Ref) :
+  #CHECK(has-property?(c.capacitor))
+  #CHECK(has-property?(c.operating-point))
+  val [vpk temp] = [lookup(property(c.operating-point), `voltage-pk) property(c.temperature)]
+  switch(property(c.type)) :
+
+    "ceramic" :
+      val vpk-derate-wc = PWL(DERATE-CAPACITOR-MLCC-VPK-WC)[temp]
+      #CHECK(vpk[0] <= (vpk-derate-wc * property(c.rated-voltage)))
+      #CHECK(vpk[1] <= (vpk-derate-wc * property(c.rated-voltage)))
+      val vpk-derate-nom = PWL(DERATE-CAPACITOR-MLCC-VPK-NOM)[temp]
+      #CHECK(vpk[0] <= (vpk-derate-nom * property(c.rated-voltage)))
+      #CHECK(vpk[1] <= (vpk-derate-nom * property(c.rated-voltage)))
+      #CHECK(temp <= min(DERATE-CAPACITOR-MLCC-TEMP, property(c.rated-temperature)[1]))
+
+    "electrolytic" :
+      #CHECK(has-property?(c.anode))
+      #CHECK(has-property?(c.electrolyte))
+      val [i-pk i-rms] = [lookup(property(c.operating-point), `current-pk) lookup(property(c.operating-point), `current-rms)]
+
+      if (property(c.anode) == "tantalum" and property(c.electrolyte) == "polymer") :
+        #CHECK(vpk[1]   <= (DERATE-CAPACITOR-ETANTPOLY-VPK * property(c.rated-voltage)))
+        #CHECK(temp  <= min(DERATE-CAPACITOR-ETANTPOLY-TEMP, property(c.rated-temperature)[1]))
+        #CHECK(i-pk  <= property(c.rated-current-pk))
+        #CHECK(i-rms <= PWL(property(c.rated-current-rms))[temp])
+        #CHECK(vpk[0]  >= 0.0)
+
+      else if (property(c.anode) == "tantalum" and property(c.electrolyte) == "manganese-dioxide") :
+        #CHECK(i-pk <= property(c.rated-current-pk))
+        #CHECK(i-rms <= PWL(property(c.rated-current-rms))[temp])
+        #CHECK(vpk[0]  >= 0.0)
+        if i-pk <= 2.0 :
+          val vpk-derate-wc = PWL(DERATE-CAPACITOR-ETANTMNO2-VPK-WC)[temp]
+          val vpk-derate-nom = PWL(DERATE-CAPACITOR-ETANTMNO2-VPK-NOM)[temp]
+          #CHECK(vpk[1]  <= (vpk-derate-wc * property(c.rated-voltage)))
+          #CHECK(vpk[1]  <= (vpk-derate-nom * property(c.rated-voltage)))
+          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, property(c.rated-temperature)[1]))
+          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, property(c.rated-temperature)[1]))
+        else if i-pk > 2.0 :
+          #CHECK(vpk[1]  <= (DERATE-CAPACITOR-ETANTMNO2-VPK * property(c.rated-voltage)))
+          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, property(c.rated-temperature)[1]))
+
+      else :
+        println("Unhandled electrolytic type for capacitor check on %_" % [c])
+
+    "mica" :
+      #CHECK(vpk[0] <= (DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage)))
+      #CHECK(vpk[1] <= (DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage)))
+      #CHECK(temp <= min(DERATE-CAPACITOR-MICA-TEMP, property(c.rated-temperature)[1]))
+
+    else : println("Unhandled type for capacitor check on %_" % [c])
+
+  #CHECK(temp >= property(c.rated-temperature)[0])

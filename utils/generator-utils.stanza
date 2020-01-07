@@ -1,0 +1,230 @@
+#use-added-syntax(esir)
+defpackage generator-utils:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import esir/fonts
+  import repl-lib
+  import tests/default-harness
+
+  import checks
+  import bundles
+  import pinspec
+  import land-patterns
+  import generic-components
+
+
+public var DESIGN-TEMPERATURE = 0.0
+
+public pcb-connection isolate (a:Ref, b:Ref) :
+  unique inst buf : {texas-instruments/ISO1540/component}
+  net ({a}.sda, {buf}.SDA1)
+  net ({a}.scl, {buf}.SCL1)
+  net ({b}.sda, {buf}.SDA2)
+  net ({b}.scl, {buf}.SCL2)
+when :
+  port-type(a) == #PT(i2c) and
+  port-type(b) == #PT(i2c) 
+  
+public pcb-component example-resistor :
+  manufacturer = "Yageo"
+  mpn = "RC0402FR-071KL"
+  description = "RES SMD 1K OHM 1% 1/16W 0402"
+
+  port p : pin[{1 2}]
+  package = {ipc-two-pin-package("0402")}(p[1] => p[1], p[2] => p[2])
+  reference-prefix = "R"
+
+public defn make-voltage-regulator (input:Ref, gnd:Ref, v-out:[Double Double Double]|Double, reg:Ref) -> [Ref, Ref] :
+  inside pcb-module :
+    val vin = property(input.voltage)
+    unique inst vrm : {reg}
+    net ({input}, {vrm}.vin)
+    properties({vrm}.vout):
+      voltage => v-out
+    [vrm.vout, vrm.en]
+
+public defn make-board-controller (rails:Tuple<Ref>) :
+  inside pcb-module :
+    val vm = make-voltage-monitor(rails)
+    unique inst board-controller : {microsemi/A2F200M3F-FGG256I/module}
+
+    val n = length(rails)
+    require mon:gpio[n] from {board-controller}
+    for i in 0 to n do : net (mon[i].gpio, {vm}.out[i])
+
+    board-controller
+
+public pcb-module voltage-monitor (rail-voltages:Tuple<[Double,Double,Double]>) :
+  port src : power 
+  val n = length(rail-voltages)
+  port out : pin[n]
+  port rails : pin[n]
+
+  ; Each monitor has 6 ports so create enough of them
+  var num-mon = (n + 6 - 1) / 6
+
+  ; Instatiate a group of MAX1606X voltage monitors
+  inst mon : {maxim/MAX1606x/component}[num-mon]
+
+  for i in 0 to n do :
+    properties(rails[i]):
+      voltage => rail-voltages[i]
+    val [chip-idx, chip-ref, mon-idx] = [i / 6, mon[i / 6], i % 6]
+
+  ; Divide input to match voltage of MAX16061E
+    passive-circuits/make-voltage-divider(rails[i], chip-ref.in[mon-idx], src.gnd, [0.3 0.373 0.4], 1.0e-3)
+
+    net (out[i], {chip-ref}.out[mon-idx])
+    net (src.gnd, {chip-ref}.GND, {chip-ref}.PAD, {chip-ref}.TOL)
+    net (src.vdd, {chip-ref}.VCC)
+
+public defn make-voltage-monitor (rails:Tuple<Ref>):
+  inside pcb-module :
+    ; Extract voltage property to tuple of voltages.
+    val rail-voltages = for r in rails map :
+      property(r.voltage)
+    unique inst voltage-monitor : {voltage-monitor(rail-voltages)}
+    val n = length(rails)
+    for i in 0 to n do :
+      net ({voltage-monitor}.rails[i], {rails}[i])
+    voltage-monitor
+
+
+; Piecewise linear function
+public deftype PWL
+public defmulti get (f:PWL, x:Double) -> Double
+public defn PWL (ps:Tuple<[Double,Double]>) -> PWL :
+  new PWL :
+    defmethod get (this, x:Double) :
+      val n = length(ps)
+      if x < ps[0][0] :
+        ; println("Warning: PWL is extrapolating with zero-order hold")
+        ps[0][1]
+      else if x >= ps[0][0] and x <= ps[n - 1][0] :
+        val i = for i in 0 to n find! :
+          ps[i][0] >= x
+        val j = for i in reverse(0 to n) find! :
+          ps[i][0] <= x
+        if i == j :
+          ps[i][1]
+        else :
+          val dydx = (ps[i][1] - ps[j][1]) / (ps[i][0] - ps[j][0])
+          dydx * (x - ps[j][0]) + ps[j][1]
+      else if x > ps[n - 1][0] :
+        ; println("Warning: PWL is extrapolating with zero-order hold")
+        ps[n - 1][1]
+      else  :
+        fatal("Something is wrong in PWL with x = %_" % [x])
+
+
+; This function is used to create a package mapping from a PinSpec
+public defn gen-symbol-map (ps:PinSpec, pkg:Ref) :
+  inside pcb-component :
+    make-pins(ps)
+    assign-package(pkg, ps)
+
+public defn board-mounting-holes (w:Double, h:Double, s:Symbol|Double) :
+  inside pcb-module :
+    val r = match(s) :
+      (screw:Symbol) :
+        switch(screw) :
+          ;Loose Fit https://blogs.mentor.com/tom-hausherr/blog/tag/pcb-mounting-holes/
+          `M2 : 2.3 / 2.0
+          `M2p5 : 2.85 / 2.0
+          `M3 : 3.5 / 2.0
+          `M3p5 : 3.9 / 2.0
+          else : fatal("Unsupported Screw size %_ for mounting hole" % [screw])
+      (diameter:Double) : diameter / 2.0
+      (f) : fatal("Unsupported call to mounting hole")
+    inst holes : {mounting-hole-cmp(r)}[4]
+    val offs = r * 6.0 ;1.5X bolt diameter * 2
+    for (l in grid-locs(2, 2, w - offs, h - offs), i in 0 to 4) do :
+      package(holes[i]) at l on Top
+
+public defn apply-power-pin-params (vdd:Double, rated-voltage:Tuple<Double>) :
+  inside properties:
+    power-pin => true
+    rated-voltage => rated-voltage
+    vdd => vdd
+
+public defn apply-digital-io-params (rated-voltage:[Double,Double], vil:Double vih:Double vol:Double voh:Double) :
+  inside properties:
+    digital-io => true
+    rated-voltage => rated-voltage
+    vil => vil
+    vih => vih
+    vol => vol
+    voh => voh
+
+public defn apply-lvds-params (rated-voltage:[Double,Double], vol:Double, voh:Double, vo-diff:[Double,Double,Double] vo-cm:[Double,Double,Double] vi-diff:[Double,Double,Double] vi-cm:[Double,Double,Double]) :
+  inside properties:
+    lvds => true
+    rated-voltage => rated-voltage 
+    voh => voh 
+    vol => vol 
+    vo-diff => vo-diff 
+    vo-cm   => vo-cm   
+    vi-diff => vi-diff 
+    vi-cm   => vi-cm   
+
+
+;================
+; Check utilities
+;================
+
+public defn check-design () :
+  inside pcb-module:
+    check final-pass()
+
+    for (instance in all-component-instances(self)) do :
+      properties({instance}):
+        temperature => DESIGN-TEMPERATURE
+      ; Check components
+      if has-property?(instance.resistor) :
+        check resistor(instance)
+      if has-property?(instance.capacitor) :
+        check capacitor(instance)
+
+    ; Check pins
+      for p in ports(instance) do :
+        if has-property?(p.power-pin) :
+          check power-pin(p)
+
+    check io()
+
+
+
+
+
+
+
+
+
+
+
+
+
+; User defined pass that gets run at end of design pipeline
+public pcb-check final-pass ():
+  ; println("Final pass")
+  defn propogate-voltage (n:NetStmt) :
+    val supply-pin  = for p in refs(n) find : has-property?(p.voltage)
+    if supply-pin is Ref :
+      val sp = supply-pin as Ref
+      if has-property?(sp.voltage) : 
+        val v = property(sp.voltage)
+        for p in refs(n) do :
+          if has-property?(p.supply-pin) :
+            if property(p.voltage) != v :
+              println("Incompatible supply voltages on same net.")
+          else :
+            inside pcb-module:
+              properties({p}):
+                voltage => v
+  for n in nets(self) do :
+    propogate-voltage(n)
+

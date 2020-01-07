@@ -1,0 +1,52 @@
+#use-added-syntax(esir)
+defpackage analog-devices/LT3045:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import pinspec
+  import land-patterns
+  import generic-components
+  import generator-utils
+
+public unique pcb-component component :
+  name = "LT3045"
+  manufacturer = "Analog Devices"
+  mpn = "LT3045EDD-1"
+  description = "20V, 500mA, Ultralow Noise, Ultrahigh PSRR Linear Regulator with VIOC Control"
+  val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [in | 1 2  | Left]
+    [en | 4  | Left]
+    [pg | 5  | Left]
+    [set  | 8  | Left]
+    [vioc | 3  | Left]
+    [ilim | 6 | Left]
+    [out  | 11 12 | Right]
+    [outs | 10  | Right]
+    [pgfb | 7  | Right]
+    [gnd  | 9 13 | Down]
+  gen-symbol-map(ps, dfn-package(12, 0.45, [0.25, 0.7], -1.4, [3.5, 3.0], [1.65, 2.38]))
+
+public pcb-module module (v-out) :
+  pin vin
+  pin vout
+  pin gnd
+  pin en
+  inst ps : {analog-devices/LT3045/component}
+  val r-set = v-out / 100.0e-6
+  val r-fb = res-strap(ps.set, gnd, r-set, 0.2, "0402")
+  val c0 = cap-strap(ps.set, gnd, 10.0e-3)
+  val c1 = cap-strap(ps.in, gnd, 4.7, "1206")
+  val c2 = cap-strap(ps.out, gnd, 4.7, "1206")
+  ; short-trace(r-fb.p[1], ps.set)
+  ; short-trace(r-fb.p[1], c0.p[1])
+  ; short-trace(c1.p[1], ps.in)
+  ; short-trace(c2.p[1], ps.out)
+  net (ps.en, en)
+  net (ps.in, ps.pgfb, vin)
+  net (ps.out, ps.outs, vout)
+  net (ps.gnd, ps.ilim, gnd)
