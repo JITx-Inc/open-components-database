@@ -29,7 +29,7 @@ public pcb-pad smd-pad (anchor:Anchor, w:Double, h:Double) :
   layer(Paste(Top)) = Rectangle(anchor, w, h)
   layer(SolderMask(Top)) = Rectangle(anchor, w, h)
 
-pcb-pad bga-pad (d:Double) :
+public pcb-pad bga-pad (d:Double) :
   name = to-string("%_ BGA Pad" % [d])
   type = SMD
   shape = Circle(d / 2.0)
@@ -88,6 +88,25 @@ public defn PlusSymbol (x:Double, y:Double) :
     Line(0.254, [ Point(x - 0.5, y), Point(x + 0.5, y) ])
     Line(0.254, [ Point(x, y - 0.5), Point(x, y + 0.5) ])
   ])
+; ====== Pad Collection Helpers ================================================
+
+; 2D array of pads
+public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double, pad-ref) :
+  inside pcb-package:
+    
+    val n-col = to-int(ceil(to-double(n-pin) / to-double(n-row)))
+
+    val l0 = loc((to-double(n-row - 1) * row-pitch) / -2.0, (to-double(n-col - 1) * pin-pitch) / 2.0)
+    
+    for i in 0 to n-col do :
+      for j in 0 to n-row do :
+        pad p[n-row * i + j + 1] : {pad-ref} at l0 * loc(to-double(j) * row-pitch, (- to-double(i) * pin-pitch))
+    
+public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
+  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch, pth-pad(0.5))
+
+public defn make-pin-grid (n-pin:Int) :
+  make-pin-grid(n-pin, 1, 2.54, 2.54)
 
 ; ====== Package Family Generators ================================================
 ; TODO: Unify These.
@@ -96,34 +115,37 @@ public defn PlusSymbol (x:Double, y:Double) :
 ; Z - width between outer pad edges
 ; G - width between inner pad edges
 ; X - pad height
-; nr, nc - number of 0.5mm grid elements in rows and cols for courtyard
-public defn make-two-pin-package (Z:Double, G:Double, X:Double, nr:Int, nc:Int, courtyard?:True|False) :
+; w, h - width and height of courtyard in mm
+public defn make-two-pin-package (Z:Double, G:Double, X:Double, w:Double, h:Double, courtyard?:True|False) :
   inside pcb-package :
     val Y = (Z - G) / 2.0 ; width of pad
     val C2 = (G + Y) / 2.0 ; distance between pad center and package centerline
-    val cy-width = 0.5 * to-double(nc) ; courtyard width
-    val cy-height = 0.5 * to-double(nr) ; courtyard height
     pad p[1] : {smd-pad(Y,X)} at loc((- C2), 0.0)
     pad p[2] : {smd-pad(Y,X)} at loc(C2, 0.0)
-    if courtyard? :
-      layer(Courtyard(Top)) = Rectangle(cy-width, cy-height)
+    if courtyard? : 
+      layer(Courtyard(Top)) = Rectangle(w, h)
 
-public defn make-two-pin-package (Z:Double, G:Double, X:Double, nr:Int, nc:Int):
-  make-two-pin-package(Z,G,X,nr,nc,true)
+public defn make-two-pin-package (Z:Double, G:Double, X:Double, w:Double, h:Double):
+  make-two-pin-package(Z,G,X,w,h,true)
+
+public pcb-package two-pin-package (Z:Double, G:Double, X:Double, w:Double, h:Double):
+  make-two-pin-package(Z,G,X,w,h,true)
 
 public defn make-ipc-two-pin-package (part-name:String, courtyard?:True|False) :
   inside pcb-package :
     val [Z, G, X, nr, nc] = switch(part-name) :
-      "0402" : [1.829, 0.559, 0.61, 1, 4]
-      "0603" : [2.80, 0.60, 1.00, 4, 6]
-      "0805" : [3.20, 0.60, 1.50, 4, 8]
-      "1206" : [4.40, 1.20, 1.80, 4, 10]
-      "1210" : [4.40, 1.20, 2.70, 6, 10]
-      "2010" : [6.20, 2.60, 2.70, 6, 14]
-      "2512" : [7.40, 3.80, 3.80, 8, 16]
-      "2920" : [9.70, 5.10, 5.60, 12, 20]
+      "0201" : [1.12, 0.20, 0.42, 1.42, 0.92]
+      "0402" : [1.53, 0.39, 0.62, 1.84, 0.92]
+      "0603" : [2.55, 0.65, 1.00, 3.10, 1.50]
+      "0805" : [2.90, 0.90, 2.00, 3.40, 2.00]
+      "1206" : [4.05, 1.65, 1.80, 4.60, 2.30]
+      "2512" : [7.35, 4.85, 3.40, 3.90, 7.90]
+      "1210" : [4.40, 1.20, 2.70, 5.00, 3.00]
+      "2010" : [6.20, 2.60, 2.70, 7.00, 3.00]
+      "2920" : [9.70, 5.10, 5.60, 10.0, 6.00]
       else : fatal("Unrecognized two pin part name: '%_." % [part-name])
     make-two-pin-package(Z, G, X, nr, nc, courtyard?)
+    external-names = ([part-name])
     ref-label()
 
 public defn make-ipc-two-pin-package (part-name:String) :
@@ -341,42 +363,6 @@ public pcb-package INDC1005X55 :
   external-names = (["0402"])
   ref-label()
 
-public pcb-package RESC1005X35 :
-  make-ipc-two-pin-package("0402")
-  external-names = (["0402"])
-  
-public pcb-package RESC1608X45 :
-  make-ipc-two-pin-package("0603")
-  external-names = (["0603"])
-  
-public pcb-package RESC2012X50 :
-  make-ipc-two-pin-package("0805")
-  external-names = (["0805"])
-  
-public pcb-package RESC3216X55 :
-  make-ipc-two-pin-package("1206")
-  external-names = (["1206"])
-
-public pcb-package RESC6332X35 :
-  make-ipc-two-pin-package("2512")
-  external-names = (["2512"])
-
-public pcb-package CAPC1005X55 :
-  make-ipc-two-pin-package("0402")
-  external-names = (["0402"])
-
-public pcb-package CAPC1608X80 :
-  make-ipc-two-pin-package("0603")
-  external-names = (["0603"])
-
-public pcb-package CAPC2012X125 :
-  make-ipc-two-pin-package("0805")
-  external-names = (["0805"])
-
-public pcb-package CAPC3216X160 :
-  make-ipc-two-pin-package("1206")
-  external-names = (["1206"])
-
 public pcb-package CAPT1005X55 :
   make-ipc-two-pin-package("0402")
   layer(Silkscreen("pol", Top)) = PlusSymbol(-1.7, 0.0)
@@ -403,11 +389,11 @@ public pcb-package CAPT3216X160 :
 
 public pcb-package FUSC7330X390 :
   name = "FUSC7330X390"
-  make-two-pin-package(7.26, 2.48, 3.0, 6, 15)
+  make-two-pin-package(7.26, 2.48, 3.0, 7.5, 3.0)
 
 public pcb-package DIOM-4539X220 :
   name = "DIOM-4539X220"
-  make-two-pin-package(5.58, 2.15, 2.18, 8, 11)
+  make-two-pin-package(5.58, 2.15, 2.18, 5.5, 4.0)
   layer(Silkscreen("pol",Top)) = Line(0.25, [Point(3.0, -1.0), Point(3.0, 1.0)])
 
 ; QFNs
@@ -421,7 +407,6 @@ public pcb-package QFN50P400X400X85-24 :
   name = "QFN50P400X400X85-24"
   make-qfn-package(0.5, 4.0, 24, 0.25, 0.4)
   pad p[25] : {smd-pad(2.5,2.5)} at loc(0.0, 0.0)  
-
 
 public pcb-package SOT95P280X100-3N :
   
@@ -446,5 +431,19 @@ public pcb-package SOT95P280X145-5N :
 
   layer(Courtyard(Top)) = Rectangle(2.7, 3.95)  
   layer(Silkscreen("f-silk", Top)) = LineRectangle(2.7, 3.95)
+  
+  ref-label()
+
+public pcb-package pin-header-pkg (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
+  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch)
+
+  val n-col = to-int(ceil(to-double(n-pin) / to-double(n-row)))
+
+  val c-w = to-double(n-row) * row-pitch
+  val c-h = to-double(n-col) * pin-pitch
+
+  layer(Courtyard(Top)) = Rectangle(c-w, c-h)
+  layer(Courtyard(Bottom)) = Rectangle(c-w, c-h)
+  layer(Silkscreen("f-silk", Top)) = LineRectangle(c-w, c-h)
   
   ref-label()

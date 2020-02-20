@@ -1,0 +1,46 @@
+#use-added-syntax(esir)
+defpackage tests/test-user-checks :
+  import core
+  import collections
+  import esir
+  import esir/gen
+  import tests/default-harness
+
+pcb-component mycomponent :
+  port A : pin[10]
+  port B : pin[10]
+  for p in ports(A) do :
+    properties({p}) :
+      voltage => 1.0
+  for p in ports(B) do :
+    properties({p}) :
+      voltage => 2.0
+
+pcb-component mycomponent2 :
+  port A : pin[10]
+  port B : pin[10]
+  for p in ports(A) do :
+    properties({p}) :
+      voltage => 3.0
+  for p in ports(B) do :
+    properties({p}) :
+      voltage => 4.0
+
+  for i in 0 to 5 do :
+    check voltage-levels(A[i], 1.0, 5.0)
+  for i in 0 to 5 do :
+    check voltage-levels(B[i], 1.0, 5.0)
+
+pcb-check voltage-levels (p:Ref, min:Double, max:Double) :
+  #CHECK(has-property?(p.voltage))
+  #CHECK(property(p.voltage) >= min)
+  #CHECK(property(p.voltage) <= max)
+
+pcb-module main :
+  inst c1 : mycomponent2
+  inst c2 : mycomponent2
+  inst c3 : mycomponent2
+
+pcb-design main-design :
+  module = main
+  board = {default-board(4, 10.0, 10.0)}

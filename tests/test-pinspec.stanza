@@ -1,0 +1,136 @@
+#use-added-syntax(esir)
+defpackage tests/test-pinspec :
+  import core
+  import collections
+  import esir
+  import box-symbol
+  import pinspec
+  import tests/default-harness
+
+pcb-package mypackage :
+  unique pcb-pad square :
+    type = SMD
+    shape = Rectangle(0.1, 0.1, loc(0.0, 0.0))
+  for i in 1 through 10 do :
+    pad p[i] : {square} at loc(to-double(i) * 0.2, 0.0)
+
+pcb-component mycomponent :
+  val pinspec = PinSpec $
+    #TABLE :
+      [Ref | Int ...  ]
+      [a   | 1        ]
+      [b   | 2        ]
+      [c   | 3        ]
+      [gnd | 4 5 6 7 8]
+      [d+  | 9        ]
+      [d-  | 10       ]
+  make-pins(pinspec)
+  make-box-symbol(pinspec)
+  assign-package(mypackage, pinspec)
+
+pcb-package mypackage2 :
+  unique pcb-pad square :
+    type = SMD
+    shape = Rectangle(0.1, 0.1, loc(0.0, 0.0))
+  for i in 0 to 10 do :
+    pad a[i] : {square} at loc(to-double(i) * 0.2, 0.0)
+  for i in 0 to 10 do :
+    pad b[i] : {square} at loc(to-double(i) * 0.2, 2.0)
+
+pcb-component mymem1 :
+  val pinspec = PinSpec $
+    #TABLE :
+      [Ref | Ref ... | Dir]
+      [A[0] | a[0] | Left]
+      [A[1] | a[1] | Left]
+      [A[2] | a[2] | Left]
+      [A[3] | a[3] | Left]
+      [A[4] | a[4] | Left]
+      [A[5] | a[5] | Left]
+      [A[6] | a[6] | Left]
+      [A[7] | a[7] | Left]
+      [A[8] | a[8] | Left]
+      [A[9] | a[9] | Left]
+      [B[0] | b[0] | Right]
+      [B[1] | b[1] | Right]
+      [B[2] | b[2] | Right]
+      [B[3] | b[3] | Right]
+      [B[4] | b[4] | Right]
+      [B[5] | b[5] | Right]
+      [B[6] | b[6] | Right]
+      [B[7] | b[7] | Right]
+      [B[8] | b[8] | Right]
+      [B[9] | b[9] | Right]
+  make-pins(pinspec)
+  make-box-symbol(pinspec)
+  assign-package(mypackage2, pinspec)
+
+pcb-component mymem2 :
+  val pinspec = PinSpec $
+    #TABLE :
+      [Ref | Ref ... | Dir | Int]
+      [A[0] | a[0] | Left | 0]
+      [A[1] | a[1] | Left | 0]
+      [A[2] | a[2] | Left | 0]
+      [A[3] | a[3] | Left | 0]
+      [A[4] | a[4] | Left | 1]
+      [A[5] | a[5] | Left | 1]
+      [A[6] | a[6] | Left | 1]
+      [A[7] | a[7] | Left | 1]
+      [A[8] | a[8] | Left | 1]
+      [A[9] | a[9] | Left | 1]
+      [B[0] | b[0] | Right | 0]
+      [B[1] | b[1] | Right | 0]
+      [B[2] | b[2] | Right | 0]
+      [B[3] | b[3] | Right | 0]
+      [B[4] | b[4] | Right | 1]
+      [B[5] | b[5] | Right | 1]
+      [B[6] | b[6] | Right | 1]
+      [B[7] | b[7] | Right | 1]
+      [B[8] | b[8] | Right | 1]
+      [B[9] | b[9] | Right | 1]
+  make-pins(pinspec)
+  make-box-symbol(pinspec)
+  assign-package(mypackage2, pinspec)
+
+pcb-component mymem3 :
+  val pinspec = PinSpec $
+    #TABLE :
+      [Ref | Ref ... | Dir | Ref]
+      [A[0] | a[0] | Left | special]
+      [A[1] | a[1] | Left | b[0]]
+      [A[2] | a[2] | Left | b[0]]
+      [A[3] | a[3] | Left | b[0]]
+      [A[4] | a[4] | Left | b[1]]
+      [A[5] | a[5] | Left | b[1]]
+      [A[6] | a[6] | Left | b[1]]
+      [A[7] | a[7] | Left | b[1]]
+      [A[8] | a[8] | Left | b[1]]
+      [A[9] | a[9] | Left | special]
+      [B[0] | b[0] | Right | special]
+      [B[1] | b[1] | Right | b[0]]
+      [B[2] | b[2] | Right | b[0]]
+      [B[3] | b[3] | Right | b[0]]
+      [B[4] | b[4] | Right | b[1]]
+      [B[5] | b[5] | Right | b[1]]
+      [B[6] | b[6] | Right | b[1]]
+      [B[7] | b[7] | Right | b[1]]
+      [B[8] | b[8] | Right | b[1]]
+      [B[9] | b[9] | Right | special]
+  make-pins(pinspec)
+  make-box-symbol(pinspec)
+  assign-package(mypackage2, pinspec)
+
+pcb-module main :
+  inst c1 : mycomponent
+  package(c1) at loc(0.0, 0.0) on Top
+  inst c2 : mymem1
+  package(c2) at loc(0.0, 0.0) on Top
+  inst c3 : mymem2
+  package(c3) at loc(0.0, 0.0) on Top
+  inst c4 : mymem3
+  package(c4) at loc(0.0, 0.0) on Top
+
+pcb-design main-design :
+  module = main
+  board = {default-board(4, 10.0, 10.0)}

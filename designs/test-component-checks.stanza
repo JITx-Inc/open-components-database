@@ -1,0 +1,220 @@
+#use-added-syntax(esir)
+defpackage demo :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import esir/fonts
+  import repl-lib
+  import tests/default-harness
+  import pinspec
+  import checks
+  import generator-utils
+  import land-patterns
+
+  import bundles
+;[strip]
+  import visualizer
+  import stackups
+  import rules
+  import symbols
+  import box-symbol
+;[/strip]
+
+pcb-component test-res :
+  mpn = "ERJ-2RKF10R0X"
+  manufacturer = "Panasonic"
+  reference-prefix = "R"
+  port p : pin[{1 2}]
+;[strip]
+  symbol = {resistor-sym(false)}(p[1] => p[1], p[2] => p[2])
+;[/strip]
+  package = RESC1005X35(p[1] => p[1], p[2] => p[2])
+  properties :
+    resistor => true
+    type => "thick-film"
+    rated-voltage => 50.0
+    rated-power => 0.063
+    derating => [[-60.0 1.0] [70.0 1.0] [155.0 0.0]]
+    TCR => 100.0
+    rated-temperature => [-55.0 155.0]
+    resistance => 10.0
+    tolerance => 0.01
+
+
+  spice:
+    "[R] {p[1]} {p[2]} 10"
+
+pcb-component test-cap-ceramic :
+  mpn = "GRM155R70J105KA12D"
+  manufacturer = "Murata"
+  reference-prefix = "C"
+  port p : pin[{1 2}]
+
+;[strip]
+  symbol = {capacitor-sym(false)}(p[1] => p[1], p[2] => p[2])
+;[/strip]
+  package = CAPC1005X55(p[1] => p[1], p[2] => p[2])
+  properties :
+    capacitor => true
+    type => "ceramic"
+    capacitance => 1.0e-6
+    tolerance => 10.0
+    rated-voltage => 6.3
+    rated-temperature => [-55.0 125.0]
+
+
+  spice:
+    "[C] {p[1]} 1 100u"
+    "[R] 1 {p[2]} 0"
+
+pcb-component test-cap-tantalum-mno2 :
+  mpn = "T491A105M020AT"
+  manufacturer = "Kemet"
+  reference-prefix = "C"
+  pin a
+  pin c
+
+;[strip]
+  symbol = {capacitor-sym(true)}(a => p[1], c => p[2])
+;[/strip]
+  package = CAPC1005X55(a => p[1], c => p[2])
+  properties :
+    capacitor => true
+    type => "electrolytic"
+    anode => "tantalum"
+    electrolyte => "manganese-dioxide"
+    capacitance => 1.0e-6
+    tolerance => 20.0
+    rated-voltage => 20.0
+    rated-current-pk => 0.147
+    rated-current-rms => [[25.0 0.091] [85.0 0.082] [125.0 0.036]]
+    rated-temperature => [-55.0 125.0]
+
+
+  spice :  
+    "[C] {a} 1 100u"
+    "[R] 1 {c} 9"
+
+pcb-component test-cap-tantalum-polymer :
+  mpn = "TLJH107M010#0900"
+  manufacturer = "AVX"
+  pin a
+  pin c
+
+  reference-prefix = "C"
+;[strip]
+  symbol = {capacitor-sym(true)}(a => p[1], c => p[2])
+;[/strip]
+  package = CAPC1005X55(a => p[1], c => p[2])
+
+  properties :
+    capacitor => true
+    type => "electrolytic"
+    anode => "tantalum"
+    electrolyte => "polymer"
+    capacitance => 100.0e-6
+    rated-voltage => 10.0
+    tolerance => 20.0
+    rated-current-pk => 3.7
+    rated-current-rms => [[25.0 0.298] [85.0 0.268] [125.0 0.119]]
+    rated-temperature => [-55.0 125.0]
+
+  spice:
+   "[C] {a} 1 100u"
+   "[R] 1 {c} 0.9"
+
+; Do a buffer implementation of checks for variable voltage. Show how paramteres change as function of voltage.
+;
+; Board dimensions in mm 
+val w = 50.0
+val h = 50.0
+val brd-outline = Rectangle(w, h) 
+
+
+pcb-module checks :
+  ; Design goes here
+
+
+  inst r1 : test-res
+  inst r2 : test-res
+  inst r3 : test-res
+  inst r4 : test-res
+  inst ceramic : test-cap-ceramic
+  inst tant-mno : test-cap-tantalum-mno2
+  inst tant-poly : test-cap-tantalum-polymer
+
+  net (r1.p[2], ceramic.p[1], r2.p[1])
+  net (r2.p[2], tant-mno.a, r3.p[1])
+  net (r3.p[2], tant-poly.a)
+
+  inst ldo : {texas-instruments/TLV743P/component(2.5)}
+  inst fmc : {samtec/ASP-134488-01/component}
+
+  spice: 
+    "[V] {fmc.v3p3} {fmc.gnd} 3.3"
+  net gnd (ceramic.p[2] tant-poly.c tant-mno.c, ldo.gnd fmc.gnd)
+
+  net (fmc.v3p3 ldo.in ldo.en)
+  net (r4.p[1] ldo.out)
+
+  properties(fmc.v3p3):
+    supply-pin => true
+    voltage => [3.0 3.3 6.0]
+
+  require out:gpio[10] from fmc
+  require in:gpio[10] from fmc
+  net (in out)
+
+  require out-d:lvds[10] from fmc
+  require in-d:lvds[10] from fmc
+  net (in-d out-d)
+
+  spice:
+    ".tran 0.001ms 5m"
+    "[V] {r1.p[1]} {tant-mno.c} 5"
+    "[S] {r4.p[2]} {ldo.gnd} c {ldo.gnd} switch1"
+    ".model switch1 sw vt=0 vh=0.1 ron=0.1 roff=100k"
+    "[Vs] c {ldo.gnd} pulse(-1.0 1.0 1000u 100u 1000u 1000u 3000u)"
+
+  spice:
+    ".inc PMBT3904.lib"
+    ".inc TLV74315P_TRANS.LIB"
+    ".inc TLV74325P_TRANS.LIB"
+    ".inc TLV74333P_TRANS.LIB"
+    ".options gmin=1e-10"
+    ".options abstol=1e-7"
+    ".options reltol=0.003"
+    ".options cshunt=1e-15"
+
+  check-design()
+
+
+;[strip]
+pcb-board B :
+  stackup = sierra-circuits-6-layer-62-mil
+  boundary = brd-outline 
+  signal-boundary = brd-outline
+;[/strip]
+
+pcb-design main-design :
+  module = checks
+;[strip]
+  board = B
+  rules = sierra-adv-rules
+;[/strip]
+
+; visualize(main-design)
+
+print-esir("input.esir")
+
+;[strip]
+;Export design to Kicad
+; export-netlist(checks.gnd, "hello-world.cir")
+export-kicad("checks", [`gen-schematic => true `fresh => true `place => true 
+                        `param-configs => [`sketch] `gen-board => true 
+                        `check-log => "checks.txt" `ground-reference => checks.gnd])
+; export-kicad("test-card", [`gen-schematic => true `fresh => true])
+;[/strip]

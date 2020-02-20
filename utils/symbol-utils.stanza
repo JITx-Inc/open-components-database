@@ -1,0 +1,225 @@
+#use-added-syntax(esir)
+defpackage symbol-utils :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/gen
+  import esir/fonts
+  import esir/utils
+; ====== Unit Conversion Functions =======
+; The following functions expect sizes and coordinates in "Symbol Units" which 
+; is the expected grid size in schematics. For Kicad this is 50 mil, or 1.27 mm
+
+public val UNIT-TO-MM = 2.54
+
+public defn unit-point (x:Double, y:Double, scale:Double) :
+  Point(scale * x, scale * y)
+
+public defn unit-point (x:Double, y:Double) :
+  unit-point(x, y, UNIT-TO-MM)
+  
+defn point-coords (p:Point|[Double,Double]) :
+  match(p) :
+    (pp:Point) : [x(pp), y(pp)]
+    (dd:[Double,Double]) : dd
+  
+public defn unit-point (p:Point|[Double,Double], scale:Double) :
+  val [x,y] = point-coords(p)
+  unit-point(x, y, scale)
+
+public defn unit-point (p:Point|[Double,Double]) :
+  unit-point(p, UNIT-TO-MM)
+
+public defn unit-points (ps:Collection<Point|[Double,Double]>, scale:Double) :
+  to-list(seq({unit-point(_,scale)}, ps))
+
+public defn unit-points (ps:Collection<Point|[Double,Double]>) :
+  unit-points(ps, UNIT-TO-MM)
+
+public defn unit-loc (p:Pose, scale:Double) :
+  sub-center(p, unit-point(center(p), scale))
+
+public defn unit-loc (p:Pose) :
+  unit-loc(p, UNIT-TO-MM)
+
+public defn unit-loc (p:Point|[Double,Double], a:Double, flip-x?:Flip, scale:Double) :
+  val [x,y] = point-coords(p)
+  unit-loc(loc(x,y,a,flip-x?), scale)
+
+public defn unit-loc (p:Point|[Double,Double], a:Double, flip-x?:Flip) :
+  unit-loc(p, a, flip-x?, UNIT-TO-MM)
+
+public defn unit-loc (p:Point|[Double,Double], scale:Double) :
+  unit-loc(p, 0.0, NoFlip, scale)
+
+public defn unit-loc (p:Point|[Double,Double]) :
+  unit-loc(p, UNIT-TO-MM)
+
+;[strip]
+public defn unit-line (w:Double, ps:Collection<Point|[Double,Double]>, scale:Double) :
+  inside pcb-symbol :
+    layer("symbol") = Line(scale * w, unit-points(ps, scale))
+
+public defn unit-line (w:Double, ps:Collection<Point|[Double,Double]>) :
+  unit-line(w, ps, UNIT-TO-MM)
+
+public defn unit-line (ps:Collection<Point|[Double,Double]>) :
+  unit-line(0.05, ps)
+
+public defn unit-polygon (l:String, ps:Collection<Point|[Double,Double]>, scale:Double) :
+  inside pcb-symbol :
+    layer(l) = Polygon(unit-points(ps, scale))
+
+public defn unit-polygon (l:String, ps:Collection<Point|[Double,Double]>) :
+  unit-polygon(l, ps, UNIT-TO-MM)
+
+public defn unit-polygon (ps:Collection<Point|[Double,Double]>) :
+  unit-polygon("background", ps)
+
+public defn unit-circle (l:String, p:Point|[Double,Double], r:Double, scale:Double) :
+  val [x,y] = point-coords(p)
+  inside pcb-symbol :
+    layer(l) = Circle(scale * x, scale * y, scale * r)
+
+public defn unit-circle (l:String, p:Point|[Double,Double], r:Double) :
+  unit-circle(l, p, r, UNIT-TO-MM)
+
+public defn unit-circle (p:Point|[Double,Double], r:Double) :
+  unit-circle("foreground", p, r)
+
+public defn unit-circle (l:String, r:Double) :
+  unit-circle(l, [0.0,0.0], r)
+
+public defn unit-triangle (l:String, p0:Point|[Double,Double], p1:Point|[Double,Double], w:Double, scale:Double) :
+  val [x0, y0] = point-coords(p0)
+  val [x1, y1] = point-coords(p1)
+
+  val [dx, dy] = [x1 - x0, y1 - y0]
+  val len = pow(pow(dx, 2.0) + pow(dy, 2.0), 0.5)
+  val [ux, uy] = [dx / len, dy / len]
+
+  val w2 = w / 2.0
+  val p2 = [x0 - (w2 * uy), y0 + (w2 * ux)]
+  val p3 = [x0 + (w2 * uy), y0 - (w2 * ux)]
+  
+  unit-polygon(l, [p1, p2, p3], scale)
+
+public defn unit-triangle (l:String, p0:Point|[Double,Double], p1:Point|[Double,Double], w:Double) :
+  unit-triangle(l, p0, p1, w, UNIT-TO-MM)
+
+public defn unit-triangle (p0:Point|[Double,Double], p1:Point|[Double,Double], w:Double) :
+  unit-triangle("background", p0, p1, w)
+
+public defn unit-rectangle (l:String, w:Double, h:Double, p:Pose, scale:Double) :
+  inside pcb-symbol :
+    layer(l) = Rectangle(w * scale, h * scale, unit-loc(p, scale))
+
+public defn unit-rectangle (l:String, w:Double, h:Double, p:Pose) :
+  unit-rectangle(l, w, h, p, UNIT-TO-MM)
+
+public defn unit-rectangle (w:Double, h:Double, p:Pose) :
+  unit-rectangle("foreground", w, h, p)
+
+public defn unit-rectangle (l:String, w:Double, h:Double) :
+  unit-rectangle(l, w, h, loc(0.0,0.0))
+
+public defn unit-rectangle (w:Double, h:Double) :
+  unit-rectangle("foreground", w, h)
+
+public defn unit-rectangle (p0:Point|[Double,Double], p1:Point|[Double,Double]) :
+  val [x0, y0] = point-coords(p0)
+  val [x1, y1] = point-coords(p0)
+  val w = x1 - x0
+  val h = y1 - y0
+  val cx = x0 + w / 2.0
+  val cy = y0 + h / 2.0
+  unit-rectangle(w, h, loc(cx, cy))
+
+val MM-TO-POINT = 72.0 / 24.5
+
+public defn unit-text (l:String, p:Point|[Double,Double], txt, size:Double, a:Anchor, scale:Double) :
+  inside pcb-symbol :
+    ;val pt-size = to-int(ceil(size * scale * MM-TO-POINT)) [TODO: Fix this]
+    val pt-size = 0.7056 ;[Placeholder]
+    layer(l) = Text(to-string(txt), pt-size, a, unit-loc(p,scale))
+
+public defn unit-text (l:String, p:Point|[Double,Double], txt, size:Double, a:Anchor) :
+  unit-text(l, p, txt, size, a, UNIT-TO-MM)
+
+public defn unit-text (l:String, p:Point|[Double,Double], txt, size:Double) :
+  unit-text(l, p, txt, size, C)
+
+public defn unit-text (l:String, p:Point|[Double,Double], txt) :
+  unit-text(l, p, txt, 0.5)
+
+public defn unit-text (p:Point|[Double,Double], txt) :
+  unit-text("symbol", p, txt)
+
+public defn unit-text (p:Point|[Double,Double], txt, size:Double) :
+  unit-text("symbol", p, txt, size)
+
+public defn unit-ref (p:Point|[Double,Double], ref-prefix, size:Double, a:Anchor, scale:Double) :
+  unit-text("reference", p, ref-prefix, size, a, scale)
+
+public defn unit-ref (p:Point|[Double,Double], ref-prefix, size:Double, a:Anchor) :
+  unit-ref(p, ref-prefix, size, a, UNIT-TO-MM)
+
+public defn unit-ref (p:Point|[Double,Double], ref-prefix, size:Double) :
+  unit-ref(p, ref-prefix, size, W)
+
+public defn unit-ref (p:Point|[Double,Double], ref-prefix) :
+  match(ref-prefix) :
+    (f:False) : unit-ref(p, ">REF", 0.5)
+    (o) : unit-ref(p, ref-prefix, 0.5)
+
+public defn unit-ref (p:Point|[Double,Double]) :
+  unit-ref(p, ">REF")
+
+public defn unit-val (p:Point|[Double,Double], size:Double, a:Anchor, scale:Double) :
+  unit-text("value", p, ">VALUE", size, a, scale)
+
+public defn unit-val (p:Point|[Double,Double], size:Double, a:Anchor) :
+  unit-val(p, size, a, UNIT-TO-MM)
+
+public defn unit-val (p:Point|[Double,Double], size:Double) :
+  unit-val(p, size, W)
+
+public defn unit-val (p:Point|[Double,Double]) :
+  unit-val(p, 0.5)
+
+public defn unit-approx-arc (p:Point|[Double,Double], r:Double, a1:Double, a0:Double, w:Double, n:Int, scale:Double) :
+  val pts = Vector<[Double,Double]>()
+  val a-delta = (a1 - a0) / to-double(n)
+  val [x,y] = point-coords(p)
+
+  for i in 0 through n do :
+    val ai = a0 + to-double(i) * a-delta
+    add(pts, [x + r * cos(ai), y + r * sin(ai)])
+
+  unit-line(w, pts, scale)
+
+public defn unit-approx-arc (p:Point|[Double,Double], r:Double, a1:Double, a0:Double, w:Double, n:Int) :
+  unit-approx-arc(p, r, a1, a0, w, n, UNIT-TO-MM)
+
+public defn unit-approx-arc (p:Point|[Double,Double], r:Double, a1:Double, a0:Double, w:Double) :
+  unit-approx-arc(p, r, a1, a0, w, 10)
+
+public defn unit-approx-arc (p:Point|[Double,Double], r:Double, a1:Double, a0:Double) :
+  unit-approx-arc(p, r, a1, a0, 0.05)
+
+public defn unit-approx-arc (p:Point|[Double,Double], r:Double, a1:Double) :
+  unit-approx-arc(p, r, a1, 0.0)
+
+public defn draw-opto (dir:String) :
+  unit-circle("no-fill", 0.75)
+  unit-line([[0.5, 0.1], [0.9, -0.3]])
+  unit-line([[0.5, -0.2], [0.9, -0.6]])
+  switch(dir) :
+    "emitter" :
+      unit-line([[0.75, -0.3], [0.9, -0.3], [0.9, -0.15]])
+      unit-line([[0.75, -0.6], [0.9, -0.6], [0.9, -0.45]])
+    "detector" :
+      unit-line([[0.5, -0.05], [0.5, 0.1], [0.65, 0.1]])
+      unit-line([[0.5, -0.35], [0.5, -0.2], [0.65, -0.2]])
+    else : fatal("Incorrect opto type %_." % [dir])

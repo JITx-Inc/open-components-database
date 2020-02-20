@@ -10,6 +10,11 @@ defpackage generic-components:
   import bundles
   import pinspec
   import land-patterns
+  import generator-utils
+;[strip]
+  import symbols
+  import box-symbol
+;[/strip]
 
 ; ====== Standard Tolerances and Logarithmic Values ======
 
@@ -103,13 +108,11 @@ public defn closest-std-val (v:Double, tol:Double) :
 
 public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pol:True|False, pkg:String) :
   port p : pin[{1 2}]
+;[strip]
+  symbol = {capacitor-sym(pol)}(p[1] => p[1], p[2] => p[2])
+;[/strip]
   emodel = Capacitor(cap, tol, max-v)
-  switch(pkg) :
-    "0402" : package = CAPC1005X55(p[1] => p[1], p[2] => p[2])
-    "0603" : package = CAPC1608X80(p[1] => p[1], p[2] => p[2])
-    "0805" : package = CAPC2012X125(p[1] => p[1], p[2] => p[2])
-    "1206" : package = CAPC3216X160(p[1] => p[1], p[2] => p[2])
-    else : fatal("Incorrect capacitor package %_." % [pkg])
+  package = {ipc-two-pin-package(pkg)}(p[1] => p[1], p[2] => p[2])
   reference-prefix = "C"
   spice :
     "[C] {p[1]} tmp {cap}"
@@ -143,6 +146,9 @@ public defn gen-cap-cmp (cap:Double) :
 public pcb-component gen-tant-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg:String) :
   pin a 
   pin c
+;[strip]
+  symbol = {capacitor-sym(true)}(a => p[1] c => p[2])
+;[/strip]
   emodel = Capacitor(cap, tol, max-v)
   switch(pkg) :
     "0402" : package = CAPT1005X55(a => p[1] c => p[2])
@@ -180,18 +186,16 @@ public defn gen-tant-cap-cmp (cap:Double) :
   gen-tant-cap-cmp(cap, 20.0)
  
 
-public pcb-component gen-res-cmp (r-type:Symbol|False, res:Double, tol:Double, pwr:Double, pkg:String) :
+public pcb-component gen-res-cmp (r-type:String|False, res:Double, tol:Double, pwr:Double, pkg:String) :
   ; if r-type is Symbol and (r-type as Symbol) == `pot :
   ;   port p : pin[{1 2 3}]
   ; else :
   port p : pin[{1 2}]
+;[strip]
+  symbol = {resistor-sym(r-type)}(p[1] => p[1], p[2] => p[2])
+;[/strip]
   emodel = Resistor(res,tol,pwr)
-  switch(pkg) :
-    "0402" : package = RESC1005X35(p[1] => p[1], p[2] => p[2])
-    "0603" : package = RESC1608X45(p[1] => p[1], p[2] => p[2])
-    "0805" : package = RESC2012X50(p[1] => p[1], p[2] => p[2])
-    "1206" : package = RESC3216X55(p[1] => p[1], p[2] => p[2])
-    "1206" : package = RESC6332X35(p[1] => p[1], p[2] => p[2])
+  package = {ipc-two-pin-package(pkg)}(p[1] => p[1], p[2] => p[2])
   reference-prefix = "R"
   properties :
     resistor => true
@@ -224,6 +228,11 @@ public defn gen-res-cmp (res:Double) :
 
 public pcb-component gen-ind-cmp (ind:Double, tol:Double, max-i:Double) :
   port p : pin[{1 2}]
+  emodel = Inductor(ind,tol,max-i)
+
+;[strip]
+  symbol = inductor-sym(p[1] => p[1], p[2] => p[2])
+;[/strip]
   package = INDC1005X55(p[1] => p[1], p[2] => p[2]) ;TODO: all inductors 0402
   reference-prefix = "L"
 
@@ -259,35 +268,27 @@ public defn bypass-caps (power-pin:Ref|Symbol, gnd-pin:Ref|Symbol, voltage:Doubl
         (s:Symbol) :
           net {Ref(s)} ({c}.p[2])
 
-public defn res-strap (proc-pin:Ref, power-pin:Ref, res:Double, tol:Double, pkg:String ) :
+public defn res-strap (first-pin:Ref, second-pin:Ref, res:Double, tol:Double, pkg:String ) :
   inside pcb-module:
     unique inst rid : {gen-res-cmp(res, tol, pkg)}
-    net ({proc-pin}, {rid}.p[1])
-    net ({power-pin}, {rid}.p[2])
+    net ({first-pin}, {rid}.p[1])
+    net ({second-pin}, {rid}.p[2])
     {rid}
 
-public defn res-strap (proc-pin:Ref, power-pin:Ref, res:Double, pkg:String ) :
-  res-strap(proc-pin, power-pin, res, 2.0, pkg)
+public defn res-strap (first-pin:Ref, second-pin:Ref, res:Double, pkg:String ) :
+  res-strap(first-pin, second-pin, res, 2.0, pkg)
 
-public defn res-strap (proc-pin:Ref, power-pin:Ref, res:Double ) :
-  res-strap(proc-pin, power-pin, res, "0402")
+public defn res-strap (first-pin:Ref, second-pin:Ref, res:Double ) :
+  res-strap(first-pin, second-pin, res, "0402")
   
-public defn cap-strap ( proc-pin, power-pin, capacitance ) :
-  cap-strap( proc-pin, power-pin, capacitance, "0402" )
+public defn cap-strap (first-pin:Ref, second-pin:Ref, capacitance ) :
+  cap-strap( first-pin, second-pin, capacitance, "0402" )
 
-public defn cap-strap (proc-pin:Ref|Symbol, power-pin:Ref|Symbol, capacitance, pkg:String ) :
+public defn cap-strap (first-pin:Ref, second-pin:Ref, capacitance, pkg:String ) :
   inside pcb-module:
     unique inst cap : {gen-cap-cmp(capacitance, pkg)}
-    match(power-pin) :
-      (r:Ref) :
-        net ({r}, {cap}.p[1])
-      (s:Symbol) :
-        net {Ref(s)} ({cap}.p[1])
-    match(proc-pin) :
-      (r:Ref) :
-        net ({r}, {cap}.p[2])
-      (s:Symbol) :
-        net {Ref(s)} ({cap}.p[2])
+    net ({first-pin}, {cap}.p[1])
+    net ({second-pin}, {cap}.p[2])
     {cap}
 
 public defn default-bypass (cmp:Ref) :
@@ -315,18 +316,54 @@ public defn banana-plug (color:String) :
     unique inst b : {pomona/1581/component(color)}
     b
 
-public defn sma-connector (launch:String) :
+public pcb-component pin-header (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
+  description = "Generic pin-header"
+  mpn = to-string("%_X%_-pin-header" % [n-pin / 2 n-row])
+  val ps = 
+    if n-row == 1 :
+      PinSpec $ #TABLE :
+        [Ref     | Int ...   | Dir]
+        for i in 1 through n-pin do :
+          [p[i] | i | Left]
+    else :
+      PinSpec $ #TABLE :
+        [Ref     | Int ...   | Dir]
+        for i in 1 through n-pin by 2 do :
+          [p[i] | i | Left]
+          [p[i + 1] | (i + 1) | Right]
+
+  gen-symbol-map(ps, pin-header-pkg(n-pin, n-row, pin-pitch, row-pitch))
+
+  reference-prefix = "J"
+
+public defn pin-header (n-pin:Int) :
+  pin-header(n-pin, 1, 2.54)
+
+public defn pin-header (n-pin:Int, n-row:Int) :
+  pin-header(n-pin, n-row, 2.54)
+
+public defn pin-header (n-pin: Int, pin-pitch:Double) :
+  pin-header(n-pin, 1, pin-pitch)
+
+public defn pin-header (n-pin: Int, n-row: Int, pin-pitch:Double) :
+  pin-header(n-pin, n-row, pin-pitch, pin-pitch)
+
+public defn sma-connector (sig:Ref, launch:String) :
   inside pcb-module :
     if launch == "end-launch":
-      unique inst c : {johnson/142-0701-801/component}
+      unique inst c : {johnson/142-0761-881/component}
+      net ({c}.sig, {sig})
+      net ({c}.gnd, gnd)
       c
     else :
       fatal("Unsupported SMA Connector type")
 
-public defn bnc-connector (launch:String) :
+public defn bnc-connector (sig:Ref, launch:String) :
   inside pcb-module :
     if launch == "end-launch":
       unique inst c : {amphenol/112640/component}
+      net ({c}.sig, {sig})
+      net ({c}.gnd, gnd)
       c
     else :
       fatal("Unsupported SMA Connector type")
@@ -370,9 +407,30 @@ public defn dip-pull (pins:Tuple<Ref>, power-pin:Ref, gnd-pin:Ref) :
 public pcb-component mounting-hole-cmp (drill-r:Double, pad-r: Double, mask-r:Double) :
   package = {non-plated-hole-pkg(drill-r, mask-r)}()
   reference-prefix = "H"
+;[strip]
+  symbol = unplated-hole-sym()
+;[/strip]
 
 public defn mounting-hole-cmp (drill-r:Double, pad-r:Double) :
   mounting-hole-cmp(drill-r, pad-r, pad-r + 0.35)
 
 public defn mounting-hole-cmp (drill-r:Double) :
   mounting-hole-cmp(drill-r, drill-r + 0.35)
+
+public defn board-mounting-holes (w:Double, h:Double, s:String|Double) :
+  inside pcb-module :
+    val r = match(s) :
+      (screw:String) :
+        switch(screw) :
+          ;Loose Fit https://blogs.mentor.com/tom-hausherr/blog/tag/pcb-mounting-holes/
+          "M2"   : 2.3 / 2.0
+          "M2p5" : 2.85 / 2.0
+          "M3"   : 3.5 / 2.0
+          "M3p5" : 3.9 / 2.0
+          else : fatal("Unsupported Screw size %_ for mounting hole" % [screw])
+      (diameter:Double) : diameter / 2.0
+      (f) : fatal("Unsupported call to mounting hole")
+    inst holes : {mounting-hole-cmp(r)}[4]
+    val offs = r * 6.0 ;1.5X bolt diameter * 2
+    for (l in grid-locs(2, 2, w - offs, h - offs), i in 0 to 4) do :
+      package(holes[i]) at l on Top

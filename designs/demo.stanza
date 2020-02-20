@@ -1,0 +1,80 @@
+#use-added-syntax(esir)
+defpackage demo :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import repl-lib
+  import visualizer
+  import checks
+
+  import bundles
+  import land-patterns
+  import rules
+  import stackups
+  import demo-lib
+  import env-params
+
+
+; Board dimensions in mm 
+val w = 100.0
+val h = 75.0
+val brd-outline = Rectangle(w, h) 
+DESIGN-TEMPERATURE = 80.0
+
+pcb-module demo :
+  ; Design goes here
+
+
+  ; inst ldo : {analog-devices/ADM7154(1.8)}
+
+  inst fmc : {samtec/ASP-134488-01}
+  net gnd (fmc.gnd)
+
+  properties(fmc.v12p0):
+    voltage => [11.9 12.0 12.1]
+
+  ; Check example
+  ; passive-circuits/make-voltage-divider(fmc.v12p0, fmc.la03-n, gnd, [0.4925 0.5 0.5175])
+
+  val [P5V5 P5V5-en] = make-voltage-regulator(fmc.v12p0, [5.40 5.5 5.60],  monolithic-power/MPM3630(5.5))
+  val [P1V8 P1V8-en] = make-voltage-regulator(P5V5,      [1.79 1.8 1.81], analog-devices/ADM7154(1.8))
+  val [P3V0 P3V0-en] = make-voltage-regulator(P5V5,      [2.99 3.0 3.01], analog-devices/ADM7154(3.0))
+  val [P5V0 P5V0-en] = make-voltage-regulator(P5V5,      [4.99 5.0 5.01], analog-devices/ADM7150(5.0))
+
+  val board-controller = make-board-controller([P5V5 P1V8 P3V0 P5V0])
+
+  require en:gpio[3] from {board-controller}
+  net (en[0].gpio, {P1V8-en})
+  net (en[1].gpio, {P3V0-en})
+  net (en[2].gpio, {P5V0-en})
+
+  require sys-i2c:i2c from fmc
+  connect isolate (sys-i2c, {board-controller.sys-i2c[0]})
+
+  require io:lvds[20] from fmc
+  require sys-io:lvds[20] from {board-controller}
+  net (io, sys-io)
+
+  for (instance in instances(self), i in 0 to false) do :
+    schematic-group({instance}) = my-group[i]
+
+pcb-board B :
+  stackup = sierra-circuits-6-layer-62-mil
+  boundary = brd-outline 
+  signal-boundary = brd-outline
+
+pcb-design main-design :
+  module = demo
+  board = B
+  rules = sierra-adv-rules
+
+visualize(main-design)
+; print-esir("input.esir")
+
+; visualize(VITA57-1-FMC-single(demo))
+;Export design to Kicad
+export-kicad("pointcloud-demo", [`gen-schematic => true `fresh => true `place => true `gen-board => true `param-configs => [`sketch] `check-log => "pointcloud-checks.txt"])

@@ -1,0 +1,60 @@
+#use-added-syntax(esir)
+defpackage tests/test-box-symbol :
+  import core
+  import collections
+  import esir
+  import box-symbol
+  import tests/default-harness
+
+pcb-package mypackage :
+  unique pcb-pad square :
+    type = SMD
+    shape = Rectangle(0.1, 0.1, loc(0.0, 0.0))
+  for i in 1 through 11 do :
+    pad a[i] : {square} at loc(to-double(i) * 0.2, 0.0)
+  for i in 1 through 11 do :
+    pad b[i] : {square} at loc(to-double(i) * 0.2, 2.0)
+
+pcb-component mycomponent :
+  port A : pin[10]
+  port B : pin[10]
+  mpn = "Box-13V"
+  make-box-symbol $ [
+    Left => A[0 to 10]
+    Right => B[0 to 10]]
+  package = mypackage(
+    for i in 0 to 10 do :
+      A[i] => a[i + 1]
+    A[0] => a[11]
+    for i in 0 to 10 do :
+      B[i] => b[i + 1]
+    B[0] => b[11])
+
+pcb-component mycomponent2 :
+  port A : pin[10]
+  port B : pin[10]
+  mpn = "Box-13V2NXP"
+  package = mypackage(
+    for i in 0 to 10 do :
+      A[i] => a[i + 1]
+    for i in 0 to 10 do :
+      B[i] => b[i + 1])
+  make-box-symbol $ [
+    BoxBank $ [
+      Left => A[0 to 4]
+      Right => B[0 to 4]]
+    BoxBank $ [
+      Left => A[4 to 10]
+      Right => B[4 to 10]]]
+
+pcb-module main :
+  inst c1 : mycomponent
+  inst c2 : mycomponent2
+  package(c1) at loc(0.0, 0.0) on Top
+  ;package(c2) at loc(0.0, 0.0) on Top
+  net (c1.A[0], c2.A[1])
+
+pcb-design main-design :
+  module = main
+  rules = default-rules
+  board = {default-board(4, 10.0, 10.0)}

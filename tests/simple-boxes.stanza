@@ -1,0 +1,38 @@
+#use-added-syntax(esir)
+defpackage tests/test-simple-boxes :
+  import core
+  import collections
+  import esir
+  import esir/gen
+  import box-symbol
+  import tests/default-harness
+
+pcb-component box2 :
+  pin a
+  pin b
+  make-box-symbol $ [
+    Left => a
+    Right => b]
+
+pcb-component chip :
+  port p : pin[20]
+  make-box-symbol $ [
+    Left => p[0 to 5]
+    Right => p[5 to 10]
+    Up => p[10 to 15]
+    Down => p[15 to 20]]
+
+pcb-module main :
+  inst b1 : box2[4]
+  inst b2 : box2[4]
+  inst c : chip
+  for i in 0 to length(b1) do :
+    net (c.p[0], b1[i].a)
+    net (b1[i].b, c.p[1])
+  for i in 0 to length(b2) do :
+    net (c.p[6], b2[i].a)
+    net (b2[i].b, c.p[7])
+
+pcb-design main-design :
+  module = main
+  board = {default-board(4, 10.0, 10.0)}

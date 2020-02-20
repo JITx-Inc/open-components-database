@@ -11,6 +11,11 @@ defpackage analog-devices/ADM7150:
   import land-patterns
   import generator-utils
   import generic-components
+  import bundles
+;[strip]
+  import symbols
+  import box-symbol
+;[/strip]
 
 public pcb-component component (v-out:Double) :
   name = "ADM7150"
@@ -20,7 +25,7 @@ public pcb-component component (v-out:Double) :
     3.0 : "3.0"
     3.3 : "3.3"
     5.0 : "5.0"
-    else : fatal("Incorrect current rating for ADM7150 %_" % [v-out])
+    else : fatal("Invalid output voltage for ADM7150 %_" % [v-out])
   mpn = to-string("ADM7150ARDZ-%_-R7" % [a-code])
   val ps = PinSpec $ #TABLE :
     [Ref | Int ...   | Dir  ]
@@ -35,19 +40,25 @@ public pcb-component component (v-out:Double) :
   gen-symbol-map(ps, soic127p-package(8, [2.3 3.0]))
 
 public pcb-module module (v-out) :
+  port dst : power
+  port src : power
   pin vin
   pin vout
   pin gnd
   pin en
+  net (dst.gnd gnd)
+  net (dst.vdd vout)
+  net (src.gnd gnd)
+  net (src.vdd vout)
   inst ps : {analog-devices/ADM7150/component(v-out)}
-  cap-strap(ps.vin, gnd, 10.0, "1206")
+  cap-strap(ps.vin,  gnd, 10.0, "1206")
   cap-strap(ps.vout, gnd, 10.0, "1206")
   cap-strap(ps.vreg, gnd, 10.0, "1206")
-  cap-strap(ps.byp, gnd, 1.0)
-  cap-strap(ps.ref, gnd, 1.0)
-  inst c : {gen-tant-cap-cmp(100.0, "1206")} ; Tantalum cap
-  net (c.a, ps.byp)
-  net (c.c, gnd)
+  cap-strap(ps.byp,  gnd, 1.0)
+  cap-strap(ps.ref,  gnd, 1.0)
+  inst c : {gen-cap-cmp(100.0, "1206")} ;
+  net (c.p[1], ps.byp)
+  net (c.p[2], gnd)
   net (ps.ref, ps.ref-sense)
   net (ps.en, en)
   net (ps.vin, vin)

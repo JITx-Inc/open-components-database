@@ -12,54 +12,6 @@ defpackage passive-circuits:
   import generator-utils
   import checks
 
-; Generator function for voltage-divider module. This gets called at the top level
-; Parameters
-; ------------
-; in : input pin, with annotated voltage [min nom max] (V)
-; out : output pin. Gets annotated with [min nom max] (V)
-; lo : low side pin (usually gnd)
-; v-out : Allowable output voltage range [min nom max] (V)
-; current : desired dc current of voltage divider (A) assumes output is connected to high-impedance.
-; tol : desired tolerance of resistor
-public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref, 
-                                  v-out:[Double,Double,Double], 
-                                  current:Double, 
-                                  tol:Double) :
-  inside pcb-module :
-
-    ; Find best resistors matching output requirement 
-    val [r-hi-cmp, r-lo-cmp, vo-min, vo-nom, vo-max] = 
-        voltage-divider-calc(property(in.voltage), v-out, current, tol)
-
-    properties({out}) :
-      voltage => [vo-min vo-nom vo-max]
-
-    ; Instantiate resistors, create netlist
-    unique inst r-hi : {r-hi-cmp}
-    unique inst r-lo : {r-lo-cmp}
-    net ({r-hi}.p[1] {in})
-    net ({r-lo}.p[1] {r-hi}.p[2] {out})
-    net ({r-lo}.p[2] {lo})
-
-    ; Check true output against requirement
-    check voltage-levels(out, v-out)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-
 public defn voltage-divider-calc (v-in:[Double,Double,Double], 
                                   v-out:[Double,Double,Double], 
                                   current:Double, 
@@ -94,6 +46,37 @@ public defn voltage-divider-calc (v-in:[Double,Double,Double],
     ;Return computed achieved v-out
     [r-hi, r-lo, vo-min, vo-nom, vo-max]
 
+; Generator function for voltage-divider module. This gets called at the top level
+; Parameters
+; ------------
+; in : input pin, with annotated voltage [min nom max] (V)
+; out : output pin. Gets annotated with [min nom max] (V)
+; lo : low side pin (usually gnd)
+; v-out : Allowable output voltage range [min nom max] (V)
+; current : desired dc current of voltage divider (A) assumes output is connected to high-impedance.
+; tol : desired tolerance of resistor
+public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref, 
+                                  v-out:[Double,Double,Double], 
+                                  current:Double, 
+                                  tol:Double) :
+  inside pcb-module :
+
+    ; Find best resistors matching output requirement 
+    val [r-hi-cmp, r-lo-cmp, vo-min, vo-nom, vo-max] = 
+        voltage-divider-calc(property(in.voltage), v-out, current, tol)
+
+    properties({out}) :
+      voltage => [vo-min vo-nom vo-max]
+
+    ; Instantiate resistors, create netlist
+    unique inst r-hi : {r-hi-cmp}
+    unique inst r-lo : {r-lo-cmp}
+    net ({r-hi}.p[1] {in})
+    net ({r-lo}.p[1] {r-hi}.p[2] {out})
+    net ({r-lo}.p[2] {lo})
+
+    ; Check true output against requirement
+    check voltage-levels(out, v-out)
 
 public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref, 
                                   v-out:[Double,Double,Double], 
@@ -110,7 +93,7 @@ public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref,
   if tolerance is Double :
     val tol = tolerance as Double
     make-voltage-divider(in, out, lo, v-out, current, tol) 
-    println("Tolerance found to be: %_" % [tol])
+    ; println("Tolerance: %_" % [tol])
 
   else :
     fatal("Could not find acceptable tolerance for resistors in voltage divider.")

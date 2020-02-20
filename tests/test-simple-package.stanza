@@ -1,0 +1,36 @@
+#use-added-syntax(esir)
+defpackage tests/test-simple-package :
+  import core
+  import collections
+  import esir
+  import tests/default-harness
+  import box-symbol
+
+pcb-package mypackage :
+  unique pcb-pad square :
+    type = SMD
+    shape = Rectangle(0.1, 0.1)
+  for i in 1 through 10 do :
+    val x = to-double(i) * 0.2
+    if i % 2 == 0 :
+      pad a[i] : {square} at loc(x, 0.0)
+    else :
+      pad a[i] : {square} at loc(x, 0.0) on Bottom
+
+pcb-component mycomponent :
+  port A : pin[{1 through 10}]
+  package = mypackage(
+    for i in 1 through 10 do :
+      A[i] => a[i])
+  make-box-symbol $ [
+    Left => A[1 through 5]
+    Right => A[6 through 10]]
+
+pcb-module main :
+  inst c : mycomponent
+  package(c) at loc(0.0, 0.0) on Top
+
+pcb-design main-design :
+  module = main
+  rules = default-rules
+  board = {default-board(4, 10.0, 10.0)}

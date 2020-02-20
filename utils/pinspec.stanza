@@ -4,6 +4,9 @@ defpackage pinspec :
   import collections
   import esir
   import lang-utils
+;[strip]
+  import box-symbol
+;[/strip]
 
 ;============================================================
 ;===================== Constructors =========================
@@ -51,6 +54,33 @@ public defn assign-package (package-name:Ref, ps:PinSpec) :
         for pad in pads(e) do :
           {ref(e)} => {pad})
 
+;[strip]
+public defn make-box-symbol (ps:PinSpec) :
+  ;Compute number of unique banks
+  val unique-banks = qsort(unique(seq(bank, entries(ps))))
+
+  ;Single bank common case
+  if length(unique-banks) <= 1 :
+    ;Group by pin direction
+    val groups = group-by(dir, ref, entries(ps))
+    make-box-symbol $ for group in groups seq :
+      key(group) => reverse(value(group))
+
+  ;Multiple banks
+  else :
+    ;Compute banks
+    defn make-bank (b:Ref|Int) :
+      ;Retrieve all entries on this bank
+      val bentries = to-tuple(for e in entries(ps) filter : bank(e) == b)
+      
+      ;Group by pin direction
+      val groups = group-by(dir, ref, bentries)
+      BoxBank $ to-tuple $ for group in groups seq :
+        key(group) => reverse(value(group))
+
+    ;Make box symbol
+    make-box-symbol(seq(make-bank, unique-banks))
+;[/strip]
     
 
 

@@ -1,0 +1,96 @@
+defpackage standalone-generator :
+  import core
+  import collections
+  import math
+  import rtm/ir
+  import rtm/ir-gen
+  import rtm/ir-utils
+  import interfaces
+  import components
+  import modules
+  import stackups
+  import fonts
+  import rules
+  import peripherals
+  import footprints
+  import symbols
+  import parts
+
+#use-added-syntax(ir-gen)
+jitpcb/repl-lib/clear-user-statements()
+;==== Parts ===================================================================
+pcb-part multimap-prt :
+  manufacturer = "Somebody"
+  mpn = "one"
+  package = multimap-pkg
+;==== Packages ===================================================================
+pcb-package multimap-pkg :
+  make-soic127p-package(8)
+  ref-label()
+;==== Components ===================================================================
+pcb-component multimap-cmp :
+  val ps = PinSpec(
+    [`GND => [1,2,3,4] `A => [5,6,7] `B => 8]
+    []
+    []
+    [])
+  make-pins(ps)
+  part = multimap-prt
+  symbol = {generic-box-sym(ps, `multimap-test)}
+  package = multimap-pkg(cmp-pad-map(ps))
+  
+;==== Modules ===================================================================
+pcb-module submod :
+  port p : pin[3]
+
+  inst c1 : {gen-cap-cmp(1.0)}
+  inst c2 : {gen-cap-cmp(1.0)}
+  inst c3 : {gen-cap-cmp(1.0)}
+  inst c4 : {gen-cap-cmp(1.0)}
+  net - (c1.p[1], c2.p[1], c3.p[1], c4.p[1], p[0])
+  net mynet (c1.p[0], c2.p[0], p[1])
+  net myothernet (c3.p[0], c4.p[0], p[2])
+
+
+;==== Main Module ===================================================================
+val brd-outline = rectangle(100.0, 100.0) 
+pcb-module template :
+  inst my-submod : submod[2]
+  inst my-multi : multimap-cmp
+  net - (my-submod[0].p[0], my-submod[1].p[0], my-multi.GND)
+  net - (my-submod[0].p[1], my-submod[1].p[2], my-multi.A)
+  net - (my-submod[0].p[2], my-submod[1].p[1], my-multi.B)
+  sch-lay-grp([[my-submod, my-multi]])
+ 
+;==== Board ====================================================================
+
+defn make-template-board () :
+  
+  pcb-board B :
+    stackup = bay-area-circuits-4-layer-62-mil 
+    boundary = brd-outline
+    signal-boundary = brd-outline
+
+  make-board(template) :
+    board = B
+    rules = bay-area-circuits-conservative-rules
+
+;==== Schematic ================================================================
+
+defn make-template-schematic () :
+  make-schematic(template)
+
+;==== Project ==================================================================
+
+defn make-template-project () :
+  make-template-schematic()
+  make-template-board()
+
+make-template-project()
+  
+jitpcb/repl-lib/dump-place-esir("scratchpad")
+
+
+ 
+
+

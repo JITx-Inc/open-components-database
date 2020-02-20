@@ -1,0 +1,431 @@
+#use-added-syntax(esir)
+defpackage symbols :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/gen
+  import esir/utils
+
+  import symbol-utils
+
+; ====== Supply and Ground =====================================================
+
+pcb-symbol supply-sym :
+  pin p[0] at unit-point(0.0, 0.0)
+
+  unit-line([[0.0, 0.0], [0.0, 0.25]])
+  unit-triangle([0.0, 0.25], [0.0, 0.75], 0.5)
+
+  unit-val([-1.0, 1.5])
+
+pcb-symbol ground-sym :
+  pin p[0] at unit-point(0.0, 0.0)
+  
+  unit-line([[0.0, 0.0], [0.0, -0.5]])
+  unit-line(0.1, [[-0.5, -0.5], [0.5, -0.5]])
+  unit-line(0.1, [[-0.3, -0.7], [0.3, -0.7]])
+  unit-line(0.1, [[-0.1, -0.9], [0.1, -0.9]])
+
+  unit-val([-1.0, -1.5])
+
+; ====== Discrete Passives (Resistors, Capacitors, Inductors) ==================
+
+public pcb-symbol resistor-sym (r-type:String|False) :
+  pin p[1] at unit-point(0.0, -1.0)
+  pin p[2] at unit-point(0.0, 1.0)
+  
+  unit-line([[0.0, -1.0], [0.0, -0.625]])
+  unit-line(0.1, [
+    [0.0, -0.625]
+    [-0.3, -0.5]
+    [0.3, -0.25]
+    [-0.3, 0.0]
+    [0.3, 0.25]
+    [-0.3, 0.5]
+    [0.0, 0.625]
+  ])
+  unit-line([[0.0, 0.625], [0.0, 1.0]])
+
+  defn var-arrow () :
+    unit-line([[-0.6, -0.8], [0.6,0.8]])
+    unit-triangle([0.45, 0.6], [0.6, 0.8], 0.3)
+
+  match(r-type) :
+    (s:String) :
+      switch(s) :
+        "variable" :
+          var-arrow()
+        "pot" :
+          pin p[3] at unit-point(-1.0, 0.0)
+          unit-line([[-1.0, 0.0], [-0.6, 0.0]])
+          unit-triangle([-0.6, 0.0], [-0.3, 0.0], 0.3)
+        "photo" :
+          draw-opto("detector")
+        "therm" :
+          var-arrow()
+          unit-text([-0.75, 0.0],"T")
+        else : fatal("Incorrect resistor type %_." % [s])
+    (o) : false
+
+  unit-ref([1.0, 0.5])
+  unit-val([1.0, -0.5])
+
+public pcb-symbol capacitor-sym (pol?:True|False) :
+  pin p[1] at unit-point(0.0, 1.0)
+  pin p[2] at unit-point(0.0, -1.0)
+  
+  unit-line([[0.0, 1.0], [0.0, 0.2]])
+  unit-line(0.1, [[-0.5, 0.2], [0.5, 0.2]])
+  unit-line([[0.0, -0.2], [0.0, -1.0]])
+
+  if pol? :
+    unit-text([0.7, 0.7], "+")
+    val a = asin(0.5 / 0.8)
+    unit-approx-arc([0.0, -1.0], 0.8, PI / 2.0 + a, PI / 2.0 - a, 0.1)
+  else :
+    unit-line(0.1, [[-0.5, -0.2], [0.5, -0.2]])
+    
+  unit-ref([1.0, 0.5])
+  unit-val([1.0, -0.5])
+  
+public defn capacitor-sym () :
+  capacitor-sym(false)
+
+public pcb-symbol inductor-sym :
+  pin p[1] at unit-point(0.0, -1.0)
+  pin p[2] at unit-point(0.0, 1.0)
+
+  unit-line([[0.0, -1.0], [0.0, -0.75]])
+  unit-line([[0.0, 0.75], [0.0, 1.0]])
+  
+  for i in 0 to 3 do :
+    unit-approx-arc([0.0, 0.5 - 0.5 * to-double(i)], 0.25, 3.0 * PI / 2.0, PI / 2.0, 0.1)
+  
+  unit-ref([1.0, 0.5])
+  unit-val([1.0, -0.5])
+
+; ====== Fuses =================================================================
+
+pcb-symbol fuse-sym :
+  pin p[0] at unit-point(0.0, 1.0)
+  pin p[1] at unit-point(0.0, -1.0)
+
+  unit-line([[0.0, 1.0], [0.0, 0.75]])
+  unit-line([[0.0, -1.0], [0.0, -0.75]])
+
+  unit-rectangle(0.8, 1.5)
+
+  unit-line([[-0.4, 0.5], [0.4, 0.5]])
+  unit-line([[-0.4, -0.5], [0.4, -0.5]])
+
+  unit-approx-arc([0.0, 0.25], 0.25, 3.0 * PI / 2.0, PI / 2.0)
+  unit-approx-arc([0.0, -0.25], 0.25, (- PI) / 2.0, PI / 2.0)
+
+  unit-ref([1.0, 0.5])
+  unit-val([1.0, -0.5])
+
+; ====== Crystals, Oscillators =================================================
+
+public pcb-symbol crystal-sym (n-gnd:Int) :
+  pin p[0] at unit-point(0.0, -1.0)
+  pin p[1] at unit-point(0.0, 1.0)
+
+  unit-line([[0.0, -1.0], [0.0, -0.5]])
+  unit-line(0.1, [[-0.5, -0.5], [0.5, -0.5]])
+  unit-rectangle(1.0, 0.5)
+  unit-line(0.1, [[-0.5, 0.5], [0.5, 0.5]])
+  unit-line([[0.0, 0.5], [0.0, 1.0]])
+
+  val gnd-locs = [[-1.0, 0.0], [-1.0, -1.0]]
+
+  if n-gnd > length(gnd-locs) :
+    fatal("Too many gnd pins for crystal symbol %_." % [n-gnd])
+
+  for i in 0 to n-gnd do :
+    pin g[i] at unit-point(gnd-locs[i][0], gnd-locs[i][1])
+
+  unit-ref([1.0, 0.5])
+  unit-val([1.0, -0.5])
+
+; ====== Discrete Semiconductors (Diodes, Transistors) =========================
+
+; TODO: Factor diode shape to allow scaled translation and reuse
+
+public pcb-symbol diode-sym (d-type:Symbol|False) :
+  pin a at unit-point(0.0, 1.0)
+  pin c at unit-point(0.0, -1.0)
+
+  unit-line([[0.0, 1.0], [0.0, 0.4]])
+  unit-triangle([0.0, 0.4], [0.0, -0.4], 1.0)
+  unit-line([[0.0, -0.4], [0.0, -1.0]])
+  unit-line([[-0.5, -0.4], [0.5, -0.4]])  
+  
+  match(d-type) :
+    (s:Symbol) :
+      switch(s) :
+        `led : draw-opto("emitter")
+        `photo : draw-opto("detector")
+        `zener :
+          unit-line([[-0.7, -0.2], [-0.5, -0.4]])
+          unit-line([[0.5, -0.4], [0.7, -0.6]])
+        `schottky :
+          unit-line([[-0.5, -0.4], [-0.5, -0.15], [-0.3, -0.15]])
+          unit-line([[0.5, -0.4], [0.5, -0.65], [0.3, -0.65]])
+        else : fatal("Incorrect diode symbol type %_." % [d-type])
+    (o) : false
+
+  unit-ref([1.0, 0.5])
+  unit-val([1.0, -0.5])
+
+public pcb-symbol bjt-sym (bjt-type:Symbol) :
+  pin e at unit-point(1.0, -1.0)
+  pin c at unit-point(1.0, 1.0)
+  pin b at unit-point(-1.0, 0.0)
+
+  unit-line([[-1.0, 0.0],[-0.75, 0.0]])
+  unit-line(0.1, [[-0.75, 0.0], [-0.25, 0.0]])
+
+  unit-line(0.1, [[-0.25, 0.75], [-0.25, -0.75]])
+  
+  unit-line(0.1, [[-0.25, 0.375], [0.75, 0.875]])
+  unit-line([[0.75, 0.875], [1.0, 1.0]])
+  
+  unit-line(0.1, [[-0.25, -0.375], [0.75, -0.875]])
+  unit-line([[0.75, -0.875], [1.0, -1.0]])
+
+  switch(bjt-type) :
+    `npn :
+      unit-triangle([0.0, -0.5], [0.5, -0.75], 0.3)
+    `pnp :
+      unit-triangle([0.5, 0.75], [0.0, 0.5], 0.3)
+    else:
+      fatal("Incorrect BJT type %_.", % [bjt-type])
+
+  unit-ref([1.0, 0.5])
+  unit-val([1.0, -0.5])
+
+public defn bjt-sym () :
+  bjt-sym(`npn)
+
+public pcb-symbol fet-sym (type:Symbol, mode:Symbol, diode?:True|False, bulk?:True|False) :
+  
+  val n-type? = switch(type) :
+    `n-type :
+      unit-line([[0.0, 0.0], [-0.25, 0.0]])
+      unit-triangle([-0.25, 0.0], [-0.5, 0.0], 0.3)
+      if not bulk? : unit-line([[0.0, 0.0], [0.0, -0.5]])
+      true
+    `p-type :
+      unit-line([[-0.5, 0.0], [-0.25, 0.0]])
+      unit-triangle([-0.25, 0.0], [0.0, 0.0], 0.3)
+      if not bulk? : unit-line([[0.0, 0.0], [0.0, 0.5]])
+      false
+    else :
+      fatal("Incorrect FET channel type %_." % [type])
+
+  pin g at unit-point(-1.0, 0.0) with:
+    direction = Right
+    length = 0.0
+    number-size = 1.0
+  
+  val [s-y, s-dir, d-y, d-dir] = if n-type? :
+    [-1.0, Up, 1.0, Down]
+  else :
+    [1.0, Down, -1.0, Up]
+
+  pin s at unit-point(0.0, s-y) with:
+    direction = s-dir
+    length = 0.0
+    number-size = 1.0
+  
+  pin d at unit-point(0.0, d-y) with:
+    direction = d-dir
+    length = 0.0
+    number-size = 1.0
+
+  if bulk? :
+    pin bulk at unit-point(1.0, 0.0)
+    unit-line([[0.0, 0.0], [1.0, 0.0]])
+
+  unit-line([[0.0, 1.0], [0.0, 0.5], [-0.5, 0.5]])
+  unit-line([[0.0, -1.0], [0.0, -0.5], [-0.5, -0.5]])
+  unit-line([[-1.0, 0.0], [-0.75, 0.0]])
+
+  unit-line(0.1, [[-0.75, 0.65], [-0.75, -0.65]])
+  
+  switch(mode) :
+    `enhancement :
+      for i in 0 to 3 do :
+        val dy = to-double(i) * 0.5
+        unit-line(0.1, [[-0.5, 0.65 - dy], [-0.5, 0.35 - dy]])
+    `depletion :
+      unit-line(0.1, [[-0.5, 0.65], [-0.5, -0.65]])
+    else :
+      fatal("Incorrect FET mode %_." % [mode])
+
+  if diode? :
+    unit-line([[0.0, -0.5], [0.5, -0.5], [0.5, -0.2]])
+    unit-triangle([0.5, -0.2], [0.5, 0.2], 0.5)
+    unit-line([[0.25, 0.2], [0.75, 0.2]])  
+    unit-line([[0.5, 0.2], [0.5, 0.5], [0.0, 0.5]])
+    
+  unit-ref([1.0, 0.5])
+  unit-val([1.0, -0.5])
+
+public defn fet-sym (type:Symbol, mode:Symbol, diode?:True|False) :
+  fet-sym(type, mode, diode?, false)
+
+public defn fet-sym (type:Symbol, mode:Symbol) :
+  fet-sym(type, mode, true)
+
+public defn fet-sym (type:Symbol) :
+  fet-sym(type, `enhancement)
+  
+public defn fet-sym () :
+  fet-sym(`n-type)
+
+; ====== Op-Amps, Logic Gates ==================================================
+
+pcb-symbol power-supply-sym :
+  pin vs+ at unit-point(0.0, 2.0) with:
+    direction = Down
+    length = 0.5 * UNIT-TO-MM
+    number-size = 0.3 * UNIT-TO-MM
+    name-size = 0.3 * UNIT-TO-MM
+
+  pin vs- at unit-point(0.0, -2.0) with:
+    direction = Up
+    length = 0.5 * UNIT-TO-MM
+    number-size = 0.3 * UNIT-TO-MM
+    name-size = 0.3 * UNIT-TO-MM
+  
+  unit-rectangle("foreground", 1.0, 3.0)
+  
+  unit-ref([0.5, 0.5])
+  unit-val([0.5, -0.5])
+
+pcb-symbol multi-op-amp-sym :
+  pin vi- at unit-point(-2.0, -1.0) with:
+    direction = Right
+    length = 0.5 * UNIT-TO-MM
+    number-size = 0.3 * UNIT-TO-MM
+    name-size = 0.0
+ 
+  pin vi+ at unit-point(-2.0, 1.0) with:
+    direction = Right
+    length = 0.5 * UNIT-TO-MM
+    number-size = 0.3 * UNIT-TO-MM
+    name-size = 0.0
+  
+  pin vo at unit-point(2.0, 0.0) with:
+    direction = Left
+    length = 0.5 * UNIT-TO-MM
+    number-size = 0.3 * UNIT-TO-MM
+    name-size = 0.0
+
+  unit-triangle("foreground", [-1.5, 0.0], [1.5, 0.0], 3.0)
+  
+  unit-text([-1.1, 0.8], "+")
+  unit-text([-1.1, -0.8], "-")
+
+  unit-ref([0.0, 1.0])
+  unit-val([0.0, -1.0]) 
+
+; DEPRECATED
+public pcb-symbol op-amp-sym :
+  pin v- at unit-point(0.0, -2.0)
+  pin v+ at unit-point(0.0, 2.0)
+  pin in- at unit-point(-2.0, -1.0)
+  pin in+ at unit-point(-2.0, 1.0)
+  pin out at unit-point(2.0, 0.0)
+  
+  unit-line([[0.0, -2.0], [0.0, -0.75]])
+  unit-line([[0.0, 2.0], [0.0, 0.75]])
+  unit-line([[-2.0, -1.0], [-1.5, -1.0]])
+  unit-line([[-2.0, 1.0], [-1.5, 1.0]])
+  unit-line([[2.0, 0.0], [1.5, 0.0]])
+
+  unit-triangle("foreground", [-1.5, 0.0], [1.5, 0.0], 3.0)
+
+  unit-text([-1.1, 0.8], "+")
+  unit-text([-1.1, -0.8], "-")
+
+  unit-ref([0.0, 1.5])
+  unit-val([0.0, -1.0])
+
+public pcb-symbol multi-digital-buffer-sym (open-drain?:True|False) :
+  pin a at unit-point(-2.0, 0.0) with:
+    direction = Right
+    length = 0.5 * UNIT-TO-MM
+    number-size = 0.3 * UNIT-TO-MM
+    name-size = 0.0
+  
+  pin y at unit-point(2.0, 0.0) with:
+    direction = Left
+    length = 0.5 * UNIT-TO-MM
+    number-size = 0.3 * UNIT-TO-MM
+    name-size = 0.0
+ 
+  unit-triangle("foreground", [-1.5, 0.0], [1.5, 0.0], 3.0)
+
+  if open-drain? :  
+    unit-line([[-0.5, -0.5], [-1.0, 0.0], [-0.5, 0.5], [0.0, 0.0], [-0.5, -0.5]])
+    unit-line([[-1.0, -0.5], [0.0, -0.5]])
+
+  unit-ref([0.0, 1.0])
+  unit-val([0.0, -1.0])
+
+public defn multi-digital-buffer-sym () :
+  multi-digital-buffer-sym(false)
+
+; DEPRECATED
+public pcb-symbol digital-buffer-sym :
+  pin v- at unit-point(0.0, -2.0)
+  pin v+ at unit-point(0.0, 2.0)
+  pin a at unit-point(-2.0, 0.0)
+  pin y at unit-point(2.0, 0.0)
+
+  unit-triangle("foreground", [-1.5, 0.0], [1.5, 0.0], 3.0)
+  
+  unit-line([[0.0, -2.0], [0.0, -0.75]])
+  unit-line([[0.0, 2.0], [0.0, 0.75]])
+  unit-line([[-2.0, 0.0], [-1.5, 0.0]])
+  unit-line([[2.0, 0.0], [1.5, 0.0]])
+  
+  unit-ref([0.0, 1.5])
+  unit-val([0.0, -1.0])
+
+; ====== Connectors, Test Points, Holes ========================================
+
+public pcb-symbol test-point-sym :
+  pin p[0] at unit-point(1.0, 0.0)
+
+  unit-circle([-0.5, 0.0], 0.25)
+  unit-line(0.1, [[-0.25, 0.0], [1.0, 0.0]])
+  
+  unit-ref([-1.0, 0.75])
+
+public pcb-symbol hole-sym :
+  pin p[0] at unit-point(1.0, 0.0)
+
+  unit-circle("background", [-0.5, 0.0], 0.25)
+  unit-circle([-0.5, 0.0], 0.45)
+  
+  unit-line(0.1, [[-0.1, 0.0], [1.0, 0.0]])
+  
+  unit-ref([-1.0, 0.75])
+
+public pcb-symbol unplated-hole-sym :
+
+  unit-circle("background", [-0.5, 0.0], 0.25)
+  unit-circle([-0.5, 0.0], 0.45)
+  
+  unit-ref([-1.0, 0.75])
+
+
+; ====== Switches, Relays ======================================================
+
+; TODO: Switch symbol parametric in connections
+
+; TODO: Relay symbol parametric in connections
