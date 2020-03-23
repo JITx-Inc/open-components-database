@@ -23,4 +23,4 @@ Components are modeled with the standardized open-source Embedded Systems Interm
 | `utils/generator-utils`      | General purpose utilities for modeling components and creating circuit generators. |
 | `utils/generic-components`      | Collection of generic components (e.g. generic resistors, or banana-plugs)|
 | `utils/land-patterns`      | Generators for land-pattern geometry (e.g. `make-qfn-package()`)|
-| `utils/pin-spec`      | Convenince function for creating pins/package mappings from datasheet information.|
+| `utils/pin-spec`      | Convenience function for creating pins/package mappings from datasheet information.|
