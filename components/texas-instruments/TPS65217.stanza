@@ -1,0 +1,287 @@
+;To Do 
+;Determine which TPS65217A/B/C/D is required based on system DDR Type.  
+;This will change Default DCDC Output voltages.
+;Symbol is currently for TPS65217A.
+
+
+#use-added-syntax(esir)
+defpackage texas-instruments/TPS65217:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+
+  import land-patterns
+  import symbols
+  import box-symbol
+  import pinspec
+  import bundles
+  import generator-utils
+  import generic-components
+
+public unique pcb-component component :
+  manufacturer = "Texas Instruments"
+  mpn = "TPS65217xxx"
+  description = "TPS65217 Power Management IC (PMIC) w/ 3 DC/DCs, 4 LDOs, linear battery charger & white LED driver"
+  val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [SYS1      | 7      | Right ]
+    [SYS2      | 8      | Right ]
+    [BAT1      | 4      | Right ]
+    [BAT2      | 5      | Right ]
+    [BAT_SENSE | 6      | Right ]
+    [TS        | 11     | Right ]
+    [MUX_OUT   | 16     | Right ]
+    [VIO       | 18     | Right ]
+    [PGOOD     | 26     | Right ]
+    [LDO_PGOOD | 46     | Right ]
+    [WAKEUP    | 13     | Right ]
+    [INT       | 45     | Right ]
+    [L1        | 20     | Right ]
+    [VDCDC1    | 19     | Right ]
+    [L2        | 23     | Right ]
+    [VDCDC2    | 24     | Right ]
+    [L3        | 31     | Right ]
+    [VDCDC3    | 29     | Right ]
+    [VLDO1     | 3      | Right ]
+    [VLDO2     | 1      | Right ]
+    [LDO3      | 40     | Right ]
+    [LDO4      | 43     | Right ]
+    [AGND      | 41     | Right ]
+    [PGND      | 30     | Right ]
+    [PPAD      | 49     | Right ]
+    [AC        | 10     | Left ]
+    [USB       | 12     | Left ]
+    [NC        | 15     | Left ]
+    [NC1       | 17     | Left ]
+    [INT_LDO   | 48     | Left ]
+    [BYPASS    | 47     | Left ]
+    [MUX_IN    | 14     | Left ]
+    [PWR_EN    | 9      | Left ]
+    [RESET     | 44     | Left ]
+    [PB_IN     | 25     | Left ]
+    [SCL       | 28     | Left ]
+    [SDA       | 27     | Left ]
+    [VIN_DCDC1 | 21     | Left ]
+    [VIN_DCDC2 | 22     | Left ]
+    [VIN_DCDC3 | 32     | Left ]
+    [VINLDO    | 2      | Left ]
+    [LDO3_IN   | 39     | Left ]
+    [LDO4_IN   | 42     | Left ]
+    [L4        | 37     | Left ]
+    [FB_WLED   | 38     | Left ]
+    [ISINK1    | 34     | Left ]
+    [ISINK2    | 33     | Left ]
+    [ISET1     | 35     | Left ]
+    [ISET2     | 36     | Left ]
+  gen-symbol-map(ps, qfn-package(0.4, 6.0, 48, 0.2, 0.4, [4.6, 4.6]))
+  ;note: height is VQFN = 1mm height
+
+public pcb-module module :
+  pin AC_5V
+  pin USB_5V
+  pin GND
+  pin VOUT_DCDC1
+  pin VOUT_DCDC2
+  pin VOUT_DCDC3
+  pin VOUT_LDO1
+  pin VOUT_LDO2
+  pin VOUT_LDO3
+  pin VOUT_LDO4
+  pin MUX_IN
+  pin PWR_EN
+  pin RESET
+  pin PB_IN
+  pin SCL
+  pin SDA
+  pin WLED_ANODE
+  pin ISINK1
+  pin ISINK2
+  pin INT
+  pin WAKEUP
+  pin LDO_PGOOD
+  pin PGOOD
+  pin VIO
+  pin MUX_OUT
+  pin TS
+  pin BAT_SENSE
+  pin BATT
+  pin SYS_MAIN
+  
+
+  inst pmic : {texas-instruments/TPS65217/component}
+
+;GND pins
+  net (GND pmic.AGND pmic.PGND pmic.PPAD)
+
+;Input Voltage
+;VIN on AC,USB = 4.3V -> 5.8V 
+  net (AC_5V pmic.AC)
+  cap-strap(pmic.AC, GND, 10.0)
+
+  net (USB_5V pmic.USB)
+  cap-strap(pmic.USB, GND, 10.0)
+
+;Output Voltage 
+  net (SYS_MAIN pmic.SYS1)
+  net (SYS_MAIN pmic.SYS2)
+  cap-strap(SYS_MAIN, GND, 22.0)
+
+;Battery Voltage & Thermistor
+  net (BATT pmic.BAT1)
+  net (BATT pmic.BAT2)
+  net (BATT pmic.BAT_SENSE);connect trace at battery terminal
+  cap-strap(BATT, GND, 10.0)
+  net (TS pmic.TS)
+
+
+;GPIO & I2C
+;(OUTPUT) PGOOD = Active HIGH PMIC Power Good 
+  net (PGOOD pmic.PGOOD)
+
+;(OUTPUT) LDO_PGOOD = Active HIGH LDO Power Good 
+  net (LDO_PGOOD pmic.LDO_PGOOD)
+
+;(OUTPUT) WAKEUP = Active LOW wakeup, open-drain
+  net (WAKEUP pmic.WAKEUP)
+  res-strap(WAKEUP, VIO, 100000.0) 
+
+;(OUTPUT) INT = Active LOW interrupt, open-drain
+  net (INT pmic.INT)
+  res-strap(INT, VIO, 100000.0)  
+
+;(INPUT) PWR_EN = Active HIGH enable for all DCDC & LDO/LS 
+  net (PWR_EN pmic.PWR_EN)
+
+;(INPUT) RESET = Active LOW reset for PMIC shut-down. 
+  net (RESET pmic.RESET)
+
+;(INPUT) Power Button IN = Active LOW push button monitor with 100kohm internal pull-up
+  net (PB_IN pmic.PB_IN)
+
+;I2C SCL/SDA with pull-ups (voltage must be user specified)
+  net (SCL pmic.SCL)
+  res-strap(SCL, VIO, 2200.0)
+  net (SDA pmic.SDA)
+  res-strap(SDA, VIO, 2200.0)
+
+
+;Misc
+;VIO (INTPUT Voltage) = supply for output buffers
+  net (VIO pmic.VIO)
+
+;INT_LDO = Internal bias voltage = 2.3V, do not connect
+  net int_ldo (pmic.INT_LDO)
+  cap-strap(pmic.INT_LDO, GND, 0.1)
+
+;BYPASS = Internal bias voltage = 2.25V, do not connect
+  net bypass (pmic.BYPASS)
+  cap-strap(pmic.BYPASS, GND, 10.0)
+
+;MUX_IN = monitor any system voltage (accepts 0V -> 3.3V)
+  net (MUX_IN pmic.MUX_IN)
+
+;MUX_OUT =  mux_in output
+  net (MUX_OUT pmic.MUX_OUT)
+  cap-strap(MUX_OUT, GND, 0.1)
+
+
+;WLED 
+;ISET1 = sets low-level WLED current, ILED = 1048*(1.24V/RISET)
+;ISET2 = sets high-level WLED current, ILED = 1048*(1.24V/RISET)
+;RISET = 130kohm = 10mA
+;RISET = 86.6kohm = 15mA
+;RISET = 64.9kohm = 20mA
+;RISET = 52.3kohm = 25mA
+
+  val user_iled_low = 0.01 ;needs to be updated with real user input
+  val user_iled_high = 0.025 ;needs to be updated with real user input
+  val riset1 = closest-std-val(1.24 * 2048.0, 1.0) / user_iled_low ;rounded to EIA value
+  val riset2 = closest-std-val(1.24 * 2048.0, 1.0) / user_iled_high 
+
+  net ISET1 (pmic.ISET1)
+  res-strap(pmic.ISET1, GND, riset1) 
+  net ISET2 (pmic.ISET2)
+  res-strap(pmic.ISET2, GND, riset2) 
+
+  net (ISINK1 pmic.ISINK1)
+  net (ISINK2 pmic.ISINK2)
+
+  inst l4    : {pulse_electronics/P1167_183NLT/component}
+  inst d1    : {on-semiconductor/NSR0240HT1G/component}
+
+  net wled_sw (l4.p[1] pmic.L4)
+  net (SYS_MAIN l4.p[2])
+  net (wled_sw d1.a)
+  net (WLED_ANODE d1.c pmic.FB_WLED)
+  cap-strap(WLED_ANODE, GND, 4.7) ;50V rated
+
+;DCDC1 Buck Converter (Typically DDR Voltage)
+;0.6V -> SYS_MAIN @ 1.2A (external resistor divider) -- not provided
+;0.9V -> 1.8V @ 1.2A (I2C selectable in 25mV steps)
+
+  inst l1    : {murata/LQM2HPN2R2MG0L/component}
+
+  net (SYS_MAIN pmic.VIN_DCDC1)
+  cap-strap(pmic.VIN_DCDC1, GND, 10.0)
+
+  net sw1 (l1.p[1] pmic.L1)
+  net VOUT_VDCDC1 (l1.p[2] pmic.VDCDC1)
+  cap-strap(VOUT_VDCDC1, GND, 10.0)
+
+;DCDC2 Buck Converter (Typically AM335x MPU Voltage)
+;0.6V -> SYS_MAIN @ 1.2A (external resistor divider) -- not provided
+;0.9V -> 3.3V @ 1.2A (I2C selectable in 25mV steps)
+  inst l2    : {murata/LQM2HPN2R2MG0L/component}
+
+  net (SYS_MAIN pmic.VIN_DCDC2)
+  cap-strap(pmic.VIN_DCDC2, GND, 10.0)
+
+  net sw2 (l2.p[1] pmic.L2)
+  net VOUT_VDCDC2 (l2.p[2] pmic.VDCDC2)
+  cap-strap(VOUT_VDCDC2, GND, 10.0)
+
+;DCDC3 Buck Converter (Typically AM335x Core Voltage) 
+;0.6V -> SYS_MAIN @ 1.2A (external resistor divider) -- not provided
+;0.9V -> 2.5V @ 1.2A (I2C selectable in 25mV steps)
+  inst l3    : {murata/LQM2HPN2R2MG0L/component}
+
+  net (SYS_MAIN pmic.VIN_DCDC3)
+  cap-strap(pmic.VIN_DCDC3, GND, 10.0)
+
+  net sw3 (l3.p[1] pmic.L3)
+  net VOUT_VDCDC3 (l3.p[2] pmic.VDCDC3)
+  cap-strap(VOUT_VDCDC3, GND, 10.0)
+
+;LDO1 & LDO2: 1V -> 3.3V @ 100mA
+;VIN should be VBUS-5V, shared between rails
+
+  net (SYS_MAIN pmic.VINLDO)
+  cap-strap(pmic.VINLDO, GND, 4.7) ;cap should be X7R
+
+  net (VOUT_LDO1 pmic.VLDO1)
+  cap-strap(VOUT_LDO1, GND, 2.2)
+
+  net (VOUT_LDO2 pmic.VLDO2)
+  cap-strap(VOUT_LDO2, GND, 2.2)
+
+;LDO3 & LDO4: Load Switch or LDO 1.5V -> 3.3V
+;TPS65217A = 200mA
+;TPS65217B = 200mA
+;TPS65217C = 400mA
+;TPS65217D = 400mA
+
+  net (SYS_MAIN pmic.LDO3_IN)
+  cap-strap(pmic.LDO3_IN, GND, 4.7)
+
+  net (VOUT_LDO3 pmic.LDO3)
+  cap-strap(VOUT_LDO3, GND, 10.0)
+
+  net (SYS_MAIN pmic.LDO4_IN)
+  cap-strap(pmic.LDO4_IN, GND, 4.7)
+
+  net (VOUT_LDO4 pmic.LDO4)
+  cap-strap(VOUT_LDO4, GND, 10.0)
