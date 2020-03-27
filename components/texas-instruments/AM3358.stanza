@@ -28,6 +28,7 @@ pcb-bundle dcan0 :
 pcb-bundle dcan1 :
   pin dcan1_tx
   pin dcan1_rx
+
 pcb-bundle debugss :
   pin tms
   pin tdi 
@@ -86,6 +87,7 @@ pcb-bundle eqep2 :
   pin eqep2b_in
   pin eqep2_index
   pin eqep2_strobe
+
 ;gigabit ethernet
 pcb-bundle mdio :
   pin mdio_data
@@ -358,8 +360,6 @@ pcb-bundle uart0 :
   pin uart0_rxd
   pin uart0_txd
 
-
-
 pcb-bundle uart1 :
   pin uart1_dcdn
   pin uart1_dsrn
@@ -483,8 +483,6 @@ pcb-bundle ecat_pruss1 (pr1_edio_sof?:True|False, pr1_edio_latch_in?:True|False)
   pin pr1_edc_latch0_in
   pin pr1_edc_latch1_in
 
-
-
 pcb-bundle mdio_pruss1 :
   pin pr1_mdio_data
   pin pr1_mdio_mdclk
@@ -551,8 +549,14 @@ pcb-bundle adc_ain :
 pcb-bundle gpios :
   pin gpio
 
-pcb-bundle xdmas :
-  pin xdma
+pcb-bundle xdma0 :
+  pin xdma_event_intr0
+
+pcb-bundle xdma1 :
+  pin xdma_event_intr1
+
+pcb-bundle xdma2 :
+  pin xdma_event_intr2
 
 pcb-bundle clkout1 :
   pin clkout1
@@ -1421,7 +1425,6 @@ public unique pcb-component component :
   supports mdio_pruss1 :
     pr1_mdio_data => io[8]
     pr1_mdio_mdclk => io[4]
-
   
   supports {mii0_pruss1(true)} :
     option :
@@ -2877,18 +2880,22 @@ public unique pcb-component component :
   for i in 0 to 113 do :
     supports gpios :
       gpio => io[i]
+
   ;dma event or interrupt
-  supports xdmas :
+  supports xdma0 :
+    xdma_event_intr0 => io[0]
+  
+  supports xdma1 :
+    xdma_event_intr1 => io[1]
+  
+  supports xdma2 :
     option :
-      xdma => io[0]
+      xdma_event_intr2 => io[54]
     option :
-      xdma => io[1]
+      xdma_event_intr2 => io[67]
     option :
-      xdma => io[54]
-    option :
-      xdma => io[67]
-    option :
-      xdma => io[83]
+      xdma_event_intr2 => io[83]
+    
   ;main clock output
   supports clkout1 :
     clkout1 => io[0]
@@ -2896,6 +2903,7 @@ public unique pcb-component component :
   ;32.768khz clock output
   supports clkout2 :
     clkout2 => io[1]
+    
   ;timer clk in
   supports tclkin :
     tclkin => io[1]
@@ -2994,23 +3002,35 @@ public unique pcb-component component :
 
 public pcb-module module:
   pin gnd
-  pin vdd_core
-  pin vdd_mpu
-  pin vdd_mpuon
-  pin cap_vdd_sdram_core
-  pin vdd_pll
-  pin vdds_sram_mpu_bb
-  pin vdds_sram_core_bg
-  pin vdda3p3v_usb0
-  pin vdda1p8v_usb0
-  pin vdds_ddr
-  pin vddshv
-  pin vdds
+  pin vdd_core              ;1.1V(OPP100), 0.95V(OPP50)
+  pin vdd_mpu               ;variable
+  pin vdd_mpuon            
+  pin vdd_pll              
+  pin vdd_1v8
+  pin vdd_3v3a
+  pin vdds_ddr              ;1.8V(DDR2), 1.5V(DDR3), 1.35V(DDR3L)
+  pin vddshv1               ;1.8V or 3.3V IO
+  pin vddshv2               ;1.8V or 3.3V IO
+  pin vddshv3               ;1.8V or 3.3V IO
+  pin vddshv4               ;1.8V or 3.3V IO
+  pin vddshv5               ;1.8V or 3.3V IO
+  pin vddshv6               ;1.8V or 3.3V IO
+  pin vdds                  ;1.8V
   pin vdd_adc
   pin gnda_adc
-  pin vrtc
+  pin vrtc                  ;1.8V
+  pin vdd_rtc               ;1.1V
+  pin pmic_pwr_en
+  pin ext_wakeup
+  pin porz
+  pin rtc_porzn
+  pin warm_reset
+  pin nnmi
 
   inst cpu : {texas-instruments/AM3358/component}
+  inst fb1 : {laird/LI0805H151R-10/component}
+  inst fb2 : {laird/LI0805H151R-10/component}
+  inst fb3 : {laird/LI0805H151R-10/component}
 
   ;gnd
   net (gnd cpu.VSS1 cpu.VSS2 cpu.VSS3 cpu.VSS4 cpu.VSS5 cpu.VSS6 cpu.VSS7 cpu.VSS8)
@@ -3039,31 +3059,31 @@ public pcb-module module:
   cap-strap(vdd_mpu, gnd, 0.1)
   cap-strap(vdd_mpu, gnd, 0.1)
   cap-strap(vdd_mpu, gnd, 0.1)
-  net (vdd_mpuon cpu.VDD_MPU_MON)
+  net (vdd_mpuon cpu.VDD_MPU_MON) ;mpu rail feedback voltage to CPU 
 
-  ;vdd_sdram_core
-  net (cap_vdd_sdram_core cpu.CAP_VDD_SRAM_CORE)
-  cap-strap(cap_vdd_sdram_core, gnd, 1.0) ;10V
-
-  ;vdd_pll
-  net (vdd_pll cpu.VDDS_PLL_MPU cpu.VDDS_PLL_DDR cpu.VDDS_PLL_CORE_LCD cpu.VDDS_OSC)
-  cap-strap(vdd_pll gnd 1.0) ;on VDDS_OSC pin
-  cap-strap(vdd_pll gnd 0.1) ;on VDDS_PLL_CORE_LCD pin
-  cap-strap(vdd_pll gnd 0.1) ;on VDDS_PLL_MPU pin
-  cap-strap(vdd_pll gnd 0.1) ;on VDDS_PLL_DDR pin
-
-  ;sram
-  net (vdds_sram_mpu_bb cpu.VDDS_SRAM_MPU_BB) ;should connect to VDD_1V8
-  cap-strap(vdds_sram_mpu_bb, gnd, 0.1)
+  ;internal ldo output capacitors / do-not-connect
+  cap-strap(cpu.CAP_VDD_SRAM_CORE, gnd, 1.0) ;10V
+  cap-strap(cpu.CAP_VDD_SRAM_MPU, gnd, 1.0) ;10V
   cap-strap(cpu.CAP_VBB_MPU, gnd, 1.0) ;10V
-  net (vdds_sram_core_bg cpu.VDDS_SRAM_CORE_BG) ;should connect to VDD_1V8
-  cap-strap(vdds_sram_core_bg, gnd, 0.1)
 
-  ;usb
-  net (vdda3p3v_usb0 cpu.VDDA3P3V_USB0) ;should connect to VDD_3V3A
-  cap-strap(vdda3p3v_usb0, gnd, 0.1)
-  net (vdda1p8v_usb0 cpu.VDDA1P8V_USB0) ;should connect to VDD_1V8
-  cap-strap(vdda1p8v_usb0, gnd, 0.1)
+  ;vdd_1v8 
+  net (vdd_1v8 cpu.VDDS_SRAM_MPU_BB cpu.VDDS_SRAM_CORE_BG cpu.VDDA1P8V_USB0 cpu.VDDA1P8V_USB1) ;should connect to VDD_1V8
+  cap-strap(cpu.VDDS_SRAM_MPU_BB, gnd, 0.1)
+  cap-strap(cpu.VDDS_SRAM_CORE_BG, gnd, 0.1)
+  cap-strap(cpu.VDDA1P8V_USB0, gnd, 0.1) ;shared between USB0 & USB1
+
+  ;vdd_pll - created from vdd_1v8
+  net (vdd_1v8 fb1.p[1])
+  net (vdd_pll fb1.p[2])
+  net (vdd_pll cpu.VDDS_PLL_MPU cpu.VDDS_PLL_DDR cpu.VDDS_PLL_CORE_LCD cpu.VDDS_OSC)
+  cap-strap(cpu.VDDS_PLL_MPU, gnd, 0.1) 
+  cap-strap(cpu.VDDS_PLL_DDR, gnd, 0.1) 
+  cap-strap(cpu.VDDS_PLL_CORE_LCD, gnd, 0.1) 
+  cap-strap(cpu.VDDS_OSC, gnd, 1.0)
+
+  ;vdd_3v3a
+  net (vdd_3v3a cpu.VDDA3P3V_USB0 cpu.VDDA3P3V_USB1)
+  cap-strap(cpu.VDDA3P3V_USB0, gnd, 0.1) ;shared between USB0 & USB1
 
   ;ddr
   ;every 2 pins should have 0.1uF, every 10 pins 10uF
@@ -3076,29 +3096,70 @@ public pcb-module module:
   
   ;vddshv
   ;every pin should have 0.1uF, every 10 pins 10uF
-  net (vddshv cpu.VDDSHV11 cpu.VDDSHV12 cpu.VDDSHV21 cpu.VDDSHV22 cpu.VDDSHV31 cpu.VDDSHV32)
-  net (vddshv cpu.VDDSHV41 cpu.VDDSHV42 cpu.VDDSHV51 cpu.VDDSHV52 cpu.VDDSHV61 cpu.VDDSHV62)
-  net (vddshv cpu.VDDSHV63 cpu.VDDSHV64 cpu.VDDSHV65 cpu.VDDSHV66 cpu.VDDSHV67 cpu.VDDSHV68 cpu.VDDSHV69)
-  cap-strap(vddshv, gnd, 10.0)  ;should connect to VDD_3V3A
-  for i in 1 to 19 do :
-    cap-strap(vddshv, gnd, 0.1) ;should connect to VDD_3V3A
+  net (vddshv1 cpu.VDDSHV11 cpu.VDDSHV12) 
+  cap-strap(vddshv1, gnd, 0.1)
+  cap-strap(vddshv1, gnd, 0.1)
+  net (vddshv2 cpu.VDDSHV21 cpu.VDDSHV22) 
+  cap-strap(vddshv2, gnd, 0.1)
+  cap-strap(vddshv2, gnd, 0.1)
+  net (vddshv3 cpu.VDDSHV31 cpu.VDDSHV32)
+  cap-strap(vddshv3, gnd, 0.1)
+  cap-strap(vddshv3, gnd, 0.1)
+  net (vddshv4 cpu.VDDSHV41 cpu.VDDSHV42)
+  cap-strap(vddshv4, gnd, 0.1)
+  cap-strap(vddshv4, gnd, 0.1)
+  net (vddshv5 cpu.VDDSHV51 cpu.VDDSHV52)
+  cap-strap(vddshv5, gnd, 0.1)
+  cap-strap(vddshv5, gnd, 0.1)
+  net (vddshv6 cpu.VDDSHV61 cpu.VDDSHV62 cpu.VDDSHV63 cpu.VDDSHV64 cpu.VDDSHV65 cpu.VDDSHV66 cpu.VDDSHV67 cpu.VDDSHV68 cpu.VDDSHV69)
+  cap-strap(vddshv6, gnd, 10.0)  
+  for i in 1 to 9 do :
+    cap-strap(vddshv6, gnd, 0.1) 
     i == i + 1
 
   ;vdds
   net (vdds cpu.VDDS1 cpu.VDDS2 cpu.VDDS3 cpu.VDDS4 cpu.VDDS5 cpu.VDDS6 cpu.VDDS7)
   for i in 1 to 6 do :
-    cap-strap(vdds, gnd, 0.1) ;should connect to vdds
+    cap-strap(vdds, gnd, 0.1) 
     i == i + 1
 
   ;vdda_adc
-  ;TO DO: needs 2 ferrites
+  net (vdd_1v8 fb2.p[1])
+  net (vdd_adc fb2.p[2])
   net (vdd_adc cpu.VDDA_ADC)
-  cap-strap(vdd_adc, gnda_adc, 0.1)
+  cap-strap(cpu.VDDA_ADC, gnda_adc, 0.1)
   net (gnda_adc cpu.VSSA_ADC)
+  net (gnd fb3.p[1])
+  net (gnda_adc fb3.p[2])
+
+  res-strap(vdd_adc, cpu.VREFP, 0.1)  ;ERROR: this needs to be 0ohm
+  net (gnda_adc cpu.VREFN)
+  cap-strap(cpu.VREFP, gnda_adc, 0.1)
+  cap-strap(cpu.VREFP, gnda_adc, 0.1)
+  cap-strap(cpu.VREFP, gnda_adc, 0.001)
+
 
   ;vdds_rtc
   net (vrtc cpu.VDDS_RTC)
-  cap-strap(vrtc, gnd, 0.1) ;should connect to vrtc
-  cap-strap(cpu.CAP_VDD_RTC, gnd, 1.0)
-  ;vdds_rtc enable
-  res-strap(cpu.ENZ_KALDO_1P8V, gnd, 10000.0) ;1%
+  cap-strap(cpu.VDDS_RTC, gnd, 0.1)
+  ;active-low enable for internal CAP_VDD_RTC regulator
+  res-strap(cpu.ENZ_KALDO_1P8V, gnd, 10000.0) 
+  cap-strap(cpu.CAP_VDD_RTC, gnd, 1.0) ;voltage supplied internally if ENZ_KALDO = LO, else supply 1.1V externally
+  ;vdd_rtc == 0
+  ;if vdd_rtc == 1 :
+  ;  net(vdd_rtc cpu.CAP_VDD_RTC) 
+
+  ;pmic IO
+  ;output to enable pmic pwr
+  net (pmic_pwr_en cpu.PMIC_POWER_EN) 
+  ;input wakeup event
+  net (ext_wakeup cpu.EXT_WAKEUP)
+  res-strap(ext_wakeup, vrtc, 4750.0)
+  ;input active low power-on reset
+  net (porz cpu.PORZn)
+  ;input active low rtc reset
+  net (rtc_porzn cpu.PORZn)
+  ;output
+  net (warm_reset cpu.NRESET_INOUT)
+  ;input = interrupt to ARM-A8 core
+  net (nnmi cpu.NNMI)
