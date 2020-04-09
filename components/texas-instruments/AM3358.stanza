@@ -593,12 +593,12 @@ pcb-bundle uart3 (uart3_ctsn?:True|False, uart3_rtsn?:True|False):
   pin uart3_txd
   pin uart3_rxd
 
-public pcb-bundle ddr3-dat (dim:Int) :
+public pcb-bundle ddr-dat (dim:Int) :
   port dq : pin[dim] ;data bits
   port dqs : diff-pair[dim / 8]
   port dm : pin[dim / 8]
 
-pcb-bundle ddr3-acc :
+pcb-bundle ddr-acc :
   port a : pin[16] ;Address bits
   port ba : pin[3]
   port ck : diff-pair
@@ -610,9 +610,9 @@ pcb-bundle ddr3-acc :
   pin nWE
   pin nRESET  
   
-pcb-bundle ddr3 :
-  port dat : {ddr3-dat(32)}
-  port acc : ddr3-acc
+pcb-bundle ddr :
+  port dat : {ddr-dat(32)}
+  port acc : ddr-acc
 
 pcb-bundle usb :
   port data : diff-pair
@@ -621,8 +621,8 @@ public unique pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "AM3358BZCZ100"
   description = "ARM® Cortex®-A8 Microprocessor IC Sitara™ 1 Core, 32-Bit 1.0GHz 324-NFBGA(15x15)"
-  port dat : {ddr3-dat(16)}
-  port acc : ddr3-acc
+  port dat : {ddr-dat(16)}
+  port acc : ddr-acc
   port usb0 : usb
   port usb1 : usb
   pin OSC0_IN 
@@ -3470,6 +3470,7 @@ public pcb-module cpu_module:
   pin vdd_1v8
   pin vdd_3v3a
   pin vdds_ddr              ;1.8V(DDR2), 1.5V(DDR3), 1.35V(DDR3L)
+  pin ddr_vref
   pin vddshv1               ;1.8V or 3.3V IO
   pin vddshv2               ;1.8V or 3.3V IO
   pin vddshv3               ;1.8V or 3.3V IO
@@ -3512,7 +3513,6 @@ public pcb-module cpu_module:
   cap-strap(vdd_core, gnd, 10.0)
   for i in 1 to 14 do :
     cap-strap(vdd_core, gnd, 0.1)
-    i == i + 1
  
   ;vdd_mpu
   net (vdd_mpu cpu.VDD_MPU1 cpu.VDD_MPU2 cpu.VDD_MPU3 cpu.VDD_MPU4 cpu.VDD_MPU5 cpu.VDD_MPU6 cpu.VDD_MPU7)
@@ -3553,7 +3553,16 @@ public pcb-module cpu_module:
   cap-strap(vdds_ddr, gnd, 10.0)
   for i in 1 to 7 do :
     cap-strap(vdds_ddr, gnd, 0.1)
-    i == i + 1
+  
+  net (ddr_vref cpu.DDR_VREF)
+  cap-strap(ddr_vref, gnd, 0.1)
+
+  ;DDR RESET requires pull-up to hold the line when processor is not active/in low-power mode
+  res-strap(cpu.acc.nRESET, vdds_ddr, 1500.0)
+  ;DDR CKE requires pull-down to hold the line when processor is not active/in low-power mode
+  res-strap(cpu.acc.cke, gnd, 10000.0)
+  ;DDR VTP (voltage-temperature process) compensation resistor
+  res-strap(cpu.DDR_VTP, gnd, 49.9) ;1% required
   
   ;vddshv
   ;every pin should have 0.1uF, every 10 pins 10uF

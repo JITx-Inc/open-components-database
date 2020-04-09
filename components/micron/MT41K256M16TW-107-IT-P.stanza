@@ -1,0 +1,203 @@
+;Component designed as point-to-point (single x16 DDR3 IC), no VTT Termination
+#use-added-syntax(esir)
+defpackage micron/MT41K256M16TW-107-IT-P:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+
+  import land-patterns
+  import symbols
+  import box-symbol
+  import pinspec
+  import bundles
+  import generator-utils
+  import generic-components
+
+;  supports ddr3 :
+;    ddr3.dat => dat
+;    ddr3.acc => acc
+
+public pcb-bundle ddr3-dat (dim:Int) :
+  port dq : pin[dim] ; data bits
+  port dm : pin[dim / 8]
+  port dqs : diff-pair[dim / 8]
+
+pcb-bundle ddr3-acc :
+  ; control signals
+  port ck : diff-pair
+  pin cke
+  pin odt
+  pin nCS
+  pin nRAS
+  pin nCAS
+  pin nWE
+  pin nRESET
+  port ba : pin[3] ;bank address
+  port a : pin[15] ;address bits
+
+pcb-bundle ddr3-power :
+  port vddq : pin[9]
+  port vssq : pin[9]
+  port vdd : pin[9]
+  port vss : pin[12]
+  pin vrefdq
+  pin vrefca
+  pin zq
+
+pcb-bundle ddr3 :
+  port dat : {ddr3-dat(32)}
+  port acc : ddr3-acc
+
+public unique pcb-component component :
+  manufacturer = "Micron"
+  mpn = "MT41K256M16TW-107 IT:P"
+  description = "SDRAM - DDR3L Memory IC 4Gb (256M x 16) Parallel 933MHz 20ns 96-FBGA (8x14)"
+  port dat : {ddr3-dat(16)} 
+  port acc : ddr3-acc
+  port pwr : ddr3-power
+  pin NC1  
+  pin NC2  
+  pin NC3  
+  pin NC4  
+  pin NC5  
+
+  val ps = PinSpec $ #TABLE :
+    [Ref            | Ref ...  | Dir     ]
+    [acc.nRESET     |   T[2]   |   Left  ]
+    [acc.ck.P       |   J[7]   |   Left  ]
+    [acc.ck.N       |   K[7]   |   Left  ]
+    [acc.cke        |   K[9]   |   Left  ]
+    [acc.nCS        |   L[2]   |   Left  ]
+    [acc.nRAS       |   J[3]   |   Left  ]
+    [acc.nCAS       |   K[3]   |   Left  ]
+    [acc.nWE        |   L[3]   |   Left  ]
+    [dat.dq[0]      |   E[3]   |   Left  ]
+    [dat.dq[1]      |   F[7]   |   Left  ]
+    [dat.dq[2]      |   F[2]   |   Left  ]
+    [dat.dq[3]      |   F[8]   |   Left  ]
+    [dat.dq[4]      |   H[3]   |   Left  ]
+    [dat.dq[5]      |   H[8]   |   Left  ]
+    [dat.dq[6]      |   G[2]   |   Left  ]
+    [dat.dq[7]      |   H[7]   |   Left  ]
+    [dat.dq[8]      |   D[7]   |   Left  ] 
+    [dat.dq[9]      |   C[3]   |   Left  ]
+    [dat.dq[10]     |   C[8]   |   Left  ]
+    [dat.dq[11]     |   C[2]   |   Left  ]
+    [dat.dq[12]     |   A[7]   |   Left  ]
+    [dat.dq[13]     |   A[2]   |   Left  ] 
+    [dat.dq[14]     |   B[8]   |   Left  ]
+    [dat.dq[15]     |   A[3]   |   Left  ]
+    [dat.dqs[1].P   |   C[7]   |   Left  ]
+    [dat.dqs[1].N   |   B[7]   |   Left  ]
+    [dat.dqs[0].P   |   F[3]   |   Left  ]
+    [dat.dqs[0].N   |   G[3]   |   Left  ]
+    [dat.dm[1]      |   D[3]   |   Left  ]
+    [dat.dm[0]      |   E[7]   |   Left  ]
+    [pwr.vddq[0]    |   A[1]   |   Left  ]
+    [pwr.vddq[1]    |   C[1]   |   Left  ]
+    [pwr.vddq[2]    |   F[1]   |   Left  ]
+    [pwr.vddq[3]    |   D[2]   |   Left  ]
+    [pwr.vddq[4]    |   H[2]   |   Left  ]
+    [pwr.vddq[5]    |   A[8]   |   Left  ]  
+    [pwr.vddq[6]    |   C[9]   |   Left  ]
+    [pwr.vddq[7]    |   E[9]   |   Left  ]
+    [pwr.vddq[8]    |   H[9]   |   Left  ]
+    [NC1            |   J[1]   |   Left  ]
+    [NC2            |   L[1]   |   Left  ]
+    [NC3            |   M[7]   |   Left  ]
+    [NC4            |   J[9]   |   Left  ]
+    [NC5            |   L[9]   |   Left  ]
+    [pwr.vrefca     |   M[8]   |   Left  ]
+    [pwr.vrefdq     |   H[1]   |   Left  ]
+    [acc.a[0]       |   N[3]   |   Right ]
+    [acc.a[1]       |   P[7]   |   Right ]
+    [acc.a[2]       |   P[3]   |   Right ]
+    [acc.a[3]       |   N[2]   |   Right ]
+    [acc.a[4]       |   P[8]   |   Right ]
+    [acc.a[5]       |   P[2]   |   Right ]
+    [acc.a[6]       |   R[8]   |   Right ]
+    [acc.a[7]       |   R[2]   |   Right ]
+    [acc.a[8]       |   T[8]   |   Right ]
+    [acc.a[9]       |   R[3]   |   Right ]
+    [acc.a[10]      |   L[7]   |   Right ]
+    [acc.a[11]      |   R[7]   |   Right ]
+    [acc.a[12]      |   N[7]   |   Right ]
+    [acc.a[13]      |   T[3]   |   Right ]
+    [acc.a[14]      |   T[7]   |   Right ]
+    [acc.ba[0]      |   M[2]   |   Right ]
+    [acc.ba[1]      |   N[8]   |   Right ]
+    [acc.ba[2]      |   M[3]   |   Right ]
+    [acc.odt        |   K[1]   |   Right ]
+    [pwr.vdd[0]     |   N[1]   |   Right ]
+    [pwr.vdd[1]     |   R[1]   |   Right ]
+    [pwr.vdd[2]     |   B[2]   |   Right ]
+    [pwr.vdd[3]     |   K[2]   |   Right ]
+    [pwr.vdd[4]     |   G[7]   |   Right ]
+    [pwr.vdd[5]     |   K[8]   |   Right ]
+    [pwr.vdd[6]     |   D[9]   |   Right ]
+    [pwr.vdd[7]     |   N[9]   |   Right ]
+    [pwr.vdd[8]     |   R[9]   |   Right ]
+    [pwr.vss[0]     |   E[1]   |   Right ]
+    [pwr.vss[1]     |   M[1]   |   Right ]
+    [pwr.vss[2]     |   P[1]   |   Right ]
+    [pwr.vss[3]     |   T[1]   |   Right ]
+    [pwr.vss[4]     |   J[2]   |   Right ]
+    [pwr.vss[5]     |   B[3]   |   Right ]
+    [pwr.vss[6]     |   G[8]   |   Right ]
+    [pwr.vss[7]     |   J[8]   |   Right ]
+    [pwr.vss[8]     |   A[9]   |   Right ]
+    [pwr.vss[9]     |   M[9]   |   Right ]
+    [pwr.vss[10]    |   P[9]   |   Right ]
+    [pwr.vss[11]    |   T[9]   |   Right ]
+    [pwr.vssq[0]    |   B[1]   |   Right ]
+    [pwr.vssq[1]    |   D[1]   |   Right ]
+    [pwr.vssq[2]    |   G[1]   |   Right ]
+    [pwr.vssq[3]    |   E[2]   |   Right ]
+    [pwr.vssq[4]    |   D[8]   |   Right ]
+    [pwr.vssq[5]    |   E[8]   |   Right ]
+    [pwr.vssq[6]    |   B[9]   |   Right ]
+    [pwr.vssq[7]    |   F[9]   |   Right ]
+    [pwr.vssq[8]    |   G[9]   |   Right ]
+    [pwr.zq         |   L[8]   |   Right ]
+  assign-package(bga-pkg(0.8, 0.42, [9, 16], [8.0, 14.0], []), ps) ;package needs updating
+  make-box-symbol(ps)
+
+public pcb-module ddr3l_module :
+  pin GND
+  pin VDDS_DDR
+  pin DDR_VREF
+
+  inst ddr3l : {micron/MT41K256M16TW-107-IT-P/component}
+
+  ;GND pins
+  for i in 0 to 12 do :
+   net (GND ddr3l.pwr.vss[i])
+  for i in 0 to 9 do :
+   net (GND ddr3l.pwr.vssq[i])
+
+  ;VDDS_DDR Voltage
+  for i in 0 to 9 do :
+   net (VDDS_DDR ddr3l.pwr.vdd[i] ddr3l.pwr.vddq[i])
+  
+  cap-strap(VDDS_DDR, GND, 10.0)
+  cap-strap(VDDS_DDR, GND, 10.0)
+  for i in 0 to 14 do :
+    cap-strap(VDDS_DDR, GND, 0.1)
+  
+  ;ZQ 240ohm resistor - output drive calibration
+  res-strap(ddr3l.pwr.zq, GND, 240.0)
+
+  ;VREFCA - Reference voltage for control, command, and address (0.5 x VDD)
+  ;VREFDQ - Reference voltage for data (0.5 x VDD)
+  net (DDR_VREF ddr3l.pwr.vrefca ddr3l.pwr.vrefdq)
+  res-strap(VDDS_DDR, DDR_VREF, 10000.0)
+  cap-strap(DDR_VREF, GND, 0.001)
+  cap-strap(DDR_VREF, GND, 0.1)
+  res-strap(DDR_VREF, GND, 10000.0)
+
+
+  
