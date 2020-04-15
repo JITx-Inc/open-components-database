@@ -1,0 +1,48 @@
+#use-added-syntax(esir)
+defpackage Beagle :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import repl-lib
+
+  import land-patterns
+  import symbols
+  import generic-components
+
+  import pinspec
+  import box-symbol
+  ;import texas-instruments/AM3358
+  ;import micron/MT41K256M16TW-107-IT-P
+
+
+pcb-module my-design :
+  ;inst PMIC : {texas-instruments/TPS65217/pmic_module}
+  inst CPU  : {texas-instruments/AM3358/cpu_module}
+  inst DDR3L : {micron/MT41K256M16TW-107-IT-P/ddr3l_module}
+  ;inst eMMC : {micron/MTFC8GAKAJCN-4M-IT/emmc_module}
+
+  require cpu_ddr_addr:{texas-instruments/AM3358/ddr-acc(false)} from CPU
+  require ddr3l_addr:{micron/MT41K256M16TW-107-IT-P/ddr3-acc} from DDR3L
+
+  ;Power Rails
+  ;net VDD_CORE (PMIC.VOUT_DCDC3, CPU.vdd_core)
+  ;net VDD_MPU (PMIC.VOUT_DCDC2, CPU.vdd_mpu)
+  ;net VDDS_DDR (PMIC.VOUT_DCDC1, CPU.vdds_ddr)
+
+  ;DDR Bundle Connect
+  ;require ddr: ddr3 from ddr3l
+
+
+default-board(my-design, 4, 85.0, 55.0)
+
+print-esir()
+export-kicad("beagle", [`place => true 
+                          `gen-board => true 
+                          `gen-schematic => true 
+                          `fresh => false
+                          `schematic-version => 1 
+                          `param-configs => [`sketch]] )
