@@ -599,8 +599,12 @@ public pcb-bundle ddr-dat (dim:Int) :
   port dqs : diff-pair[dim / 8]
   port dm : pin[dim / 8]
 
-pcb-bundle ddr-acc :
-  port a : pin[16];Address bits
+;check for 15 or 16-bit row address support
+pcb-bundle ddr-acc (A15?:True|False) :
+  if A15? :
+    port a : pin[16]  ;address bits
+  else :
+    port a : pin[15]  ;address bits
   port ba : pin[3]
   port ck : diff-pair
   pin cke
@@ -611,9 +615,9 @@ pcb-bundle ddr-acc :
   pin nWE
   pin nRESET  
   
-pcb-bundle ddr :
-  port dat : {ddr-dat(32)}
-  port acc : ddr-acc
+;pcb-bundle ddr :
+;  port dat : {ddr-dat(32)}
+;  port acc : {ddr-acc(true)}
 
 pcb-bundle usb :
   port data : diff-pair
@@ -623,7 +627,7 @@ public unique pcb-component component :
   mpn = "AM3358BZCZ100"
   description = "ARM® Cortex®-A8 Microprocessor IC Sitara™ 1 Core, 32-Bit 1.0GHz 324-NFBGA(15x15)"
   port dat : {ddr-dat(16)}
-  port acc : ddr-acc
+  port acc : {ddr-acc(true)}
   port usb0 : usb
   port usb1 : usb
   pin OSC0_IN 
@@ -3461,7 +3465,48 @@ public unique pcb-component component :
       pru1_pru1_pru_r31_gpi => io[0]
     option :
       pru1_pru1_pru_r31_gpi => io[60]      
+ 
+  supports {ddr-acc(true)} :
+    for i in 0 to 16 do :
+      a[i] => acc.a[i]
+    ba[0] => acc.ba[0]
+    ba[1] => acc.ba[1]
+    ba[2] => acc.ba[2]
+    ck.P => acc.ck.P
+    ck.N => acc.ck.N
+    cke => acc.cke
+    odt => acc.odt
+    nCS => acc.nCS
+    nRAS => acc.nRAS
+    nCAS => acc.nCAS
+    nWE => acc.nWE
+    nRESET => acc.nRESET
+   
+  supports {ddr-acc(false)} :
+    for i in 0 to 15 do :
+      a[i] => acc.a[i]
+    ba[0] => acc.ba[0]
+    ba[1] => acc.ba[1]
+    ba[2] => acc.ba[2]
+    ck.P => acc.ck.P
+    ck.N => acc.ck.N
+    cke => acc.cke
+    odt => acc.odt
+    nCS => acc.nCS
+    nRAS => acc.nRAS
+    nCAS => acc.nCAS
+    nWE => acc.nWE
+    nRESET => acc.nRESET
 
+  supports {ddr-dat(16)} :
+    for i in 0 to 16 do :
+      dq[i] => dat.dq[i]
+    dqs[0].P => dat.dqs[0].P 
+    dqs[0].N => dat.dqs[0].N 
+    dqs[1].P => dat.dqs[1].P 
+    dqs[1].N => dat.dqs[1].N 
+    dm[0] => dat.dm[0]
+    dm[1] => dat.dm[1]    
 public pcb-module cpu_module:
   pin gnd
   pin vdd_core              ;1.1V(OPP100), 0.95V(OPP50)

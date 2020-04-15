@@ -17,17 +17,14 @@ defpackage micron/MT41K256M16TW-107-IT-P:
   import generator-utils
   import generic-components
 
-;  supports ddr3 :
-;    ddr3.dat => dat
-;    ddr3.acc => acc
-
-public pcb-bundle ddr3-dat (dim:Int) :
-  port dq : pin[dim] ; data bits
-  port dm : pin[dim / 8]
-  port dqs : diff-pair[dim / 8]
+pcb-bundle ddr3-dat :
+  port dq : pin[16] ; data bits
+  port dm : pin[2]
+  port dqs : diff-pair[2]
 
 pcb-bundle ddr3-acc :
-  ; control signals
+  port a : pin[15] ;address bits
+  port ba : pin[3] ;bank address
   port ck : diff-pair
   pin cke
   pin odt
@@ -36,8 +33,6 @@ pcb-bundle ddr3-acc :
   pin nCAS
   pin nWE
   pin nRESET
-  port ba : pin[3] ;bank address
-  port a : pin[15] ;address bits
 
 pcb-bundle ddr3-power :
   port vddq : pin[9]
@@ -48,15 +43,15 @@ pcb-bundle ddr3-power :
   pin vrefca
   pin zq
 
-pcb-bundle ddr3 :
-  port dat : {ddr3-dat(32)}
-  port acc : ddr3-acc
+;pcb-bundle ddr3 :
+;  port dat : {ddr3-dat(32)}
+;  port acc : ddr3-acc
 
 public unique pcb-component component :
   manufacturer = "Micron"
   mpn = "MT41K256M16TW-107 IT:P"
   description = "SDRAM - DDR3L Memory IC 4Gb (256M x 16) Parallel 933MHz 20ns 96-FBGA (8x14)"
-  port dat : {ddr3-dat(16)} 
+  port dat : ddr3-dat
   port acc : ddr3-acc
   port pwr : ddr3-power
   pin NC1  
@@ -165,6 +160,32 @@ public unique pcb-component component :
     [pwr.zq         |   L[8]   |   Right ]
   assign-package(bga-pkg(0.8, 0.42, [9, 16], [8.0, 14.0], []), ps) ;package needs updating
   make-box-symbol(ps)
+
+  supports ddr3-dat :
+    for i in 0 to 16 do :
+      dq[i] => dat.dq[i]
+    dm[0] => dat.dm[0]
+    dm[1] => dat.dm[1]
+    dqs[0].P => dat.dqs[0].P 
+    dqs[0].N => dat.dqs[0].N 
+    dqs[1].P => dat.dqs[1].P 
+    dqs[1].N => dat.dqs[1].N    
+
+  supports ddr3-acc :
+    for i in 0 to 15 do :
+      a[i] => acc.a[i]
+    ba[0] => acc.ba[0]
+    ba[1] => acc.ba[1]
+    ba[2] => acc.ba[2]
+    ck.P => acc.ck.P
+    ck.N => acc.ck.N
+    cke => acc.cke
+    odt => acc.odt
+    nCS => acc.nCS
+    nRAS => acc.nRAS
+    nCAS => acc.nCAS
+    nWE => acc.nWE
+    nRESET => acc.nRESET
 
 public pcb-module ddr3l_module :
   pin GND
