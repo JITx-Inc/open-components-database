@@ -15,27 +15,37 @@ defpackage Beagle :
 
   import pinspec
   import box-symbol
-  ;import texas-instruments/AM3358
-  ;import micron/MT41K256M16TW-107-IT-P
+
 
 
 pcb-module my-design :
-  ;inst PMIC : {texas-instruments/TPS65217/pmic_module}
+  inst PMIC : {texas-instruments/TPS65217/pmic_module}
   inst CPU  : {texas-instruments/AM3358/cpu_module}
   inst DDR3L : {micron/MT41K256M16TW-107-IT-P/ddr3l_module}
-  ;inst eMMC : {micron/MTFC8GAKAJCN-4M-IT/emmc_module}
+  inst eMMC : {micron/MTFC8GAKAJCN-4M-IT/emmc_module}
+  inst LDO : {texas-instruments/TL5209/ldo_module(3.32)} 
 
-  require cpu_ddr_addr:{texas-instruments/AM3358/ddr-acc(false)} from CPU
-  require ddr3l_addr:{micron/MT41K256M16TW-107-IT-P/ddr3-acc} from DDR3L
+
 
   ;Power Rails
-  ;net VDD_CORE (PMIC.VOUT_DCDC3, CPU.vdd_core)
-  ;net VDD_MPU (PMIC.VOUT_DCDC2, CPU.vdd_mpu)
-  ;net VDDS_DDR (PMIC.VOUT_DCDC1, CPU.vdds_ddr)
+  ;
+  ;CPU
+  net VDD_CORE (PMIC.VOUT_DCDC3, CPU.vdd_core)      ;PMIC to CPU core
+  net VDD_MPU (PMIC.VOUT_DCDC2, CPU.vdd_mpu)        ;PMIC to CPU mpu
+  ;DDR
+  net VDDS_DDR (PMIC.VOUT_DCDC1, CPU.vdds_ddr)      ;PMIC to CPU ddr
+  net (VDDS_DDR DDR3L.VDDS_DDR)                     ;PMIC to DDR ddr
+  ;LDO 3.3V
+  net VDD_3V3B (LDO.vout eMMC.VCC eMMC.VCCQ)        ;LDO to eMMC 
 
-  ;DDR Bundle Connect
-  ;require ddr: ddr3 from ddr3l
 
+  ;DDR Addr/Cmd & Data Connection
+  ;require cpu_ddr_addr:{texas-instruments/AM3358/ddr-acc(false)} from CPU
+  ;require ddr3l_addr:{micron/MT41K256M16TW-107-IT-P/ddr3-acc} from DDR3L
+
+  ;eMMC Data Connection
+  ;require cpu_emmc_dat:{texas-instruments/AM3358/mmc1(true, true, true, true, false, false)}
+  ;require emmc_dat:{micron/MTFC8GAKAJCN-4M-IT/emmc-data}
 
 default-board(my-design, 4, 85.0, 55.0)
 
