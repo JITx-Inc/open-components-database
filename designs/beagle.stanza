@@ -24,19 +24,44 @@ pcb-module my-design :
   inst DDR3L : {micron/MT41K256M16TW-107-IT-P/ddr3l_module}
   inst eMMC : {micron/MTFC8GAKAJCN-4M-IT/emmc_module}
   inst LDO : {texas-instruments/TL5209/ldo_module(3.32)} 
+  inst BLUE_LED : {lite-on/LTST-C190TBKT/led_component}
 
 
 
   ;Power Rails
   ;
+  ;GND
+  net DGND (CPU.gnd, PMIC.GND, DDR3L.GND, eMMC.GND, LDO.GND)
   ;CPU
-  net VDD_CORE (PMIC.VOUT_DCDC3, CPU.vdd_core)      ;PMIC to CPU core
-  net VDD_MPU (PMIC.VOUT_DCDC2, CPU.vdd_mpu)        ;PMIC to CPU mpu
+  net VDD_CORE (PMIC.VOUT_DCDC3, CPU.vdd_core)      ;PMIC DCDC3 to CPU core
+  net VDD_MPU (PMIC.VOUT_DCDC2, CPU.vdd_mpu)        ;PMIC DCDC2 to CPU mpu
+  net VDD_1V8 (PMIC.VOUT_LDO3, CPU.vdd_1v8)         ;PMIC LDO3 to CPU misc 1.8V rails
+  net VDD_3V3A (PMIC.VOUT_LDO4, CPU.vdd_3v3a)       ;PMIC LDO4 to CPU misc 3.3V rails
+  ;net VDDSHV1 (PMIC.xxx, CPU.vddshv1)              ;PMIC to CPU IO domain 1
+  ;net VDDSHV2 (PMIC.xxx, CPU.vddshv2)              ;PMIC to CPU IO domain 2
+  ;net VDDSHV3 (PMIC.xxx, CPU.vddshv3)              ;PMIC to CPU IO domain 3
+  ;net VDDSHV4 (PMIC.xxx, CPU.vddshv4)              ;PMIC to CPU IO domain 4
+  ;net VDDSHV5 (PMIC.xxx, CPU.vddshv5)              ;PMIC to CPU IO domain 5
+  ;net VDDSHV6 (PMIC.xxx, CPU.vddshv6)              ;PMIC to CPU IO domain 6
+  net VDDS (CPU.vdds)                               
+  res-strap(PMIC.VOUT_LDO4, VDDS, 0.0)              ;PMIC LDO4 to CPU vdds through 0ohm resistor
+  net VRTC (CPU.vrtc)
+  res-strap(PMIC.VOUT_LDO4, VRTC, 0.0)              ;PMIC LDO4 to CPU vrtc through 0ohm resistor
+
   ;DDR
-  net VDDS_DDR (PMIC.VOUT_DCDC1, CPU.vdds_ddr)      ;PMIC to CPU ddr
+  net VDDS_DDR (PMIC.VOUT_DCDC1, CPU.vdds_ddr)      ;PMIC DCDC1 to CPU ddr
   net (VDDS_DDR DDR3L.VDDS_DDR)                     ;PMIC to DDR ddr
+  net DDR_VREF (DDR3L.DDR_VREF, CPU.ddr_vref)       ;DDR3L to PMIC ddr vref
   ;LDO 3.3V
-  net VDD_3V3B (LDO.vout eMMC.VCC eMMC.VCCQ)        ;LDO to eMMC 
+  net VDD_3V3B (LDO.VOUT eMMC.VCC eMMC.VCCQ)        ;LDO to eMMC 
+
+  ;PMIC / CPU connections
+  net PMIC_POWR_EN (CPU.pmic_pwr_en, PMIC.PWR_EN)   ;CPU to PMIC - high enables all DC/DC & LDO on PMIC
+
+  ;Power Indicator LED
+  net VDD_3V3AUX (PMIC.VOUT_LDO2, BLUE_LED.a)       ;PMIC to BLUE LED anode
+  net PWR_LEDR (BLUE_LED.c)
+  res-strap(PWR_LEDR, DGND, 4750.0)                 ;BLUE LED cathode through 4.75k resistor to GND
 
 
   ;DDR Addr/Cmd & Data Connection
