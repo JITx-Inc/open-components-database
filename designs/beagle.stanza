@@ -12,10 +12,7 @@ defpackage Beagle :
   import land-patterns
   import symbols
   import generic-components
-
-  import pinspec
-  import box-symbol
-
+  import bundles
 
 
 pcb-module my-design :
@@ -25,52 +22,74 @@ pcb-module my-design :
   inst eMMC : {micron/MTFC8GAKAJCN-4M-IT/emmc_module}
   inst LDO : {texas-instruments/TL5209/ldo_module(3.32)} 
   inst BLUE_LED : {lite-on/LTST-C190TBKT/led_component}
+  inst USB_ESD : {texas-instruments/TPD4S012/esd_module}
 
 
-
-  ;Power Rails
-  ;
   ;GND
   net DGND (CPU.gnd, PMIC.GND, DDR3L.GND, eMMC.GND, LDO.GND)
-  ;CPU
-  net VDD_CORE (PMIC.VOUT_DCDC3, CPU.vdd_core)      ;PMIC DCDC3 to CPU core
-  net VDD_MPU (PMIC.VOUT_DCDC2, CPU.vdd_mpu)        ;PMIC DCDC2 to CPU mpu
-  net VDD_1V8 (PMIC.VOUT_LDO3, CPU.vdd_1v8)         ;PMIC LDO3 to CPU misc 1.8V rails
-  net VDD_3V3A (PMIC.VOUT_LDO4, CPU.vdd_3v3a)       ;PMIC LDO4 to CPU misc 3.3V rails
-  ;net VDDSHV1 (PMIC.xxx, CPU.vddshv1)              ;PMIC to CPU IO domain 1
-  ;net VDDSHV2 (PMIC.xxx, CPU.vddshv2)              ;PMIC to CPU IO domain 2
-  ;net VDDSHV3 (PMIC.xxx, CPU.vddshv3)              ;PMIC to CPU IO domain 3
-  ;net VDDSHV4 (PMIC.xxx, CPU.vddshv4)              ;PMIC to CPU IO domain 4
-  ;net VDDSHV5 (PMIC.xxx, CPU.vddshv5)              ;PMIC to CPU IO domain 5
-  ;net VDDSHV6 (PMIC.xxx, CPU.vddshv6)              ;PMIC to CPU IO domain 6
-  net VDDS (CPU.vdds)                               
-  res-strap(PMIC.VOUT_LDO4, VDDS, 0.0)              ;PMIC LDO4 to CPU vdds through 0ohm resistor
-  net VRTC (CPU.vrtc)
-  res-strap(PMIC.VOUT_LDO4, VRTC, 0.0)              ;PMIC LDO4 to CPU vrtc through 0ohm resistor
 
-  ;DDR
-  net VDDS_DDR (PMIC.VOUT_DCDC1, CPU.vdds_ddr)      ;PMIC DCDC1 to CPU ddr
-  net (VDDS_DDR DDR3L.VDDS_DDR)                     ;PMIC to DDR ddr
-  net DDR_VREF (DDR3L.DDR_VREF, CPU.ddr_vref)       ;DDR3L to PMIC ddr vref
-  ;LDO 3.3V
-  net VDD_3V3B (LDO.VOUT eMMC.VCC eMMC.VCCQ)        ;LDO to eMMC 
+  ;CPU Power
+  net VDD_CORE (PMIC.VOUT_DCDC3, CPU.vdd_core)                ;PMIC DCDC3 to CPU core
+  net VDD_MPU (PMIC.VOUT_DCDC2, CPU.vdd_mpu)                  ;PMIC DCDC2 to CPU mpu
+  net VDD_1V8 (PMIC.VOUT_LDO3, CPU.vdd_1v8)                   ;PMIC LDO3 to CPU misc 1.8V rails
+  net VDD_3V3A (PMIC.VOUT_LDO4, CPU.vdd_3v3a)                 ;PMIC LDO4 to CPU misc 3.3V rails
+  ;net VDDSHV1 (PMIC.xxx, CPU.vddshv1)                        ;PMIC to CPU IO domain 1
+  ;net VDDSHV2 (PMIC.xxx, CPU.vddshv2)                        ;PMIC to CPU IO domain 2
+  ;net VDDSHV3 (PMIC.xxx, CPU.vddshv3)                        ;PMIC to CPU IO domain 3
+  ;net VDDSHV4 (PMIC.xxx, CPU.vddshv4)                        ;PMIC to CPU IO domain 4
+  ;net VDDSHV5 (PMIC.xxx, CPU.vddshv5)                        ;PMIC to CPU IO domain 5
+  ;net VDDSHV6 (PMIC.xxx, CPU.vddshv6)                        ;PMIC to CPU IO domain 6
+  net VDDS (CPU.vdds)                               
+  res-strap(PMIC.VOUT_LDO4, VDDS, 0.0)                        ;PMIC LDO4 to CPU vdds through 0ohm resistor
+  net VRTC (CPU.vrtc)
+  res-strap(PMIC.VOUT_LDO4, VRTC, 0.0)                        ;PMIC LDO4 to CPU vrtc through 0ohm resistor
+
+  ;DDR Power
+  net VDDS_DDR (PMIC.VOUT_DCDC1, CPU.vdds_ddr)                ;PMIC DCDC1 to CPU ddr
+  net (VDDS_DDR DDR3L.VDDS_DDR)                               ;PMIC to DDR ddr
+  net DDR_VREF (DDR3L.DDR_VREF, CPU.ddr_vref)                 ;DDR3L to PMIC ddr vref
+  
+  ;External LDO 3.3V
+  net SYS_5V (PMIC.SYS_MAIN, LDO.VIN)                         ;PMIC to LDO 
+  net (VDD_3V3A, LDO.EN)                                      ;PMIC LDO4 to LDO en
+  net VDD_3V3B (LDO.VOUT eMMC.VCC eMMC.VCCQ)                  ;LDO to eMMC 
 
   ;PMIC / CPU connections
-  net PMIC_POWR_EN (CPU.pmic_pwr_en, PMIC.PWR_EN)   ;CPU to PMIC - high enables all DC/DC & LDO on PMIC
+  net PMIC_POWR_EN (CPU.pmic_pwr_en, PMIC.PWR_EN)             ;CPU to PMIC - high enables all DC/DC & LDO on PMIC
+  net PMIC_PGOOD (PMIC.PGOOD, CPU.porz)                       ;PMIC to CPU - high if all power rails are in regulation
+  net LDO_PGOOD (PMIC.LDO_PGOOD, CPU.rtc_porzn)               ;PMIC to CPU - high if LDO1 / LDO2 are in regulation
+  net WAKEUP (PMIC.WAKEUP, CPU.ext_wakeup)                    ;PMIC to CPU - signal to host to indicate power-on event
+  net PMIC_INT (PMIC.INT, CPU.nnmi)                           ;PMIC to CPU Cortex-A8 core interrupt
+
+  ;require cpu_i2c0:{texas-instruments/AM3358/i2c0} from CPU
+  ;require pmic_i2C:i2c from PMIC
+  ;net PMIC-I2C (cpu_i2c0 pmic_i2c)
+
 
   ;Power Indicator LED
-  net VDD_3V3AUX (PMIC.VOUT_LDO2, BLUE_LED.a)       ;PMIC to BLUE LED anode
+  net VDD_3V3AUX (PMIC.VOUT_LDO2, BLUE_LED.a)                 ;PMIC to BLUE LED anode
   net PWR_LEDR (BLUE_LED.c)
-  res-strap(PWR_LEDR, DGND, 4750.0)                 ;BLUE LED cathode through 4.75k resistor to GND
+  res-strap(PWR_LEDR, DGND, 4750.0)                           ;BLUE LED cathode through 4.75k resistor to GND
 
+  ;USB PC Input
+  ;require cpu_usb0:usb from CPU
+  ;require esd_usb:usb from USB_ESD
+  ;net USB-ESD (cpu_usb0 esd_usb)
 
   ;DDR Addr/Cmd & Data Connection
   ;require cpu_ddr_addr:{texas-instruments/AM3358/ddr-acc(false)} from CPU
   ;require ddr3l_addr:{micron/MT41K256M16TW-107-IT-P/ddr3-acc} from DDR3L
+  ;net DDR3L-ADDR (cpu_ddr_addr ddr3l_addr)
+
+  ;require cpu_ddr_dat:{texas-instruments/AM3358/ddr-dat(16)} from CPU
+  ;require ddr3l_dat:{micron/MT41K256M16TW-107-IT-P/ddr3-dat} from DDR3L
+  ;net DDR3L-DAT (cpu_ddr_dat ddr3l_dat)
+
 
   ;eMMC Data Connection
   ;require cpu_emmc_dat:{texas-instruments/AM3358/mmc1(true, true, true, true, false, false)}
   ;require emmc_dat:{micron/MTFC8GAKAJCN-4M-IT/emmc-data}
+  ;net eMMC-DAT (cpu_emmc_dat emmc_dat)
 
 default-board(my-design, 4, 85.0, 55.0)
 
