@@ -1,0 +1,67 @@
+#use-added-syntax(esir)
+defpackage tests/test-refdb :
+  import core
+  import collections
+  import esir
+  import refdb
+  import tests/default-harness
+
+;============================================================
+;================== Processor Definitions ===================
+;============================================================
+
+pcb-component myproc1 (n:Int) :
+  port p : pin[n]
+  
+pcb-component myproc2 (n:Int) :
+  port p : pin[n]
+
+;============================================================
+;===================== Processor Database ===================
+;============================================================
+
+val PROC-DB = RefDB()
+add(PROC-DB, Args([`fpu => false, `nports => 1]), {myproc1(1)})
+add(PROC-DB, Args([`fpu => false, `nports => 4]), {myproc1(4)})
+add(PROC-DB, Args([`fpu => false, `nports => 8]), {myproc1(8)})
+add(PROC-DB, Args([`fpu => true, `nports => 1]), {myproc2(1)})
+add(PROC-DB, Args([`fpu => true, `nports => 4]), {myproc2(4)})
+add(PROC-DB, Args([`fpu => true, `nports => 8]), {myproc2(8)})
+
+;============================================================
+;======================= Simple Generator ===================
+;============================================================
+
+;Simple generator that returns the first match in the database,
+;or fails if there are no matches.
+defn proc (args:Tuple<KeyValue<Symbol,?>>) :
+  val r = get?(PROC-DB, Args(args))
+  if r is False :
+    fatal("No processor matching properties %_." % [args])
+  r as Ref
+
+;============================================================
+;======================= Design Example =====================
+;============================================================
+
+pcb-module main-module :
+  ;Create two processors 
+  inst p1 : {proc([`fpu => false, `nports => 4])}
+  inst p2 : {proc([`fpu => true, `nports => 8])}
+  net (p1.p[2], p2.p[4])
+
+  ;Retrieve all processors with nports = 4
+  val matches = matches?(PROC-DB, Args([`nports => 4]))
+  println("Processors with nports = 4")
+  println(matches)
+
+  ;Create an instance of the second one in the list
+  inst p3 : {PROC-DB[matches[1]]}
+
+pcb-design main-design :
+  module = main-module
+  rules = default-rules
+  board = {default-board(4, 10.0, 10.0)}
+
+;Print generated ESIR
+repl-lib/print-esir()

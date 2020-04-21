@@ -1,0 +1,53 @@
+#use-added-syntax(esir)
+defpackage power-regulators :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+  import generator-utils
+  import generic-components
+  import bundles
+  import design-vars
+  import powergen
+  import powergen/gen
+
+within (input, output) =
+  add-switching-regulator(
+    "Buck-ti-TLV62130A",
+    1.0,            ;max duty_cycle
+    SwitchedNoise(2.5e6, 2.2e-6, 22.0e-6),  ;Noise(fs, L, C)
+    0.90,           ;efficiency
+    125.0,          ;tjmax
+    46.0,           ;thetaja
+    3.0, 17.0,      ;vin
+    0.9, 5.5,       ;vout
+    0.0, 3.0) :     ;iout
+  inside pcb-module :        
+    unique inst ps : {texas-instruments/TLV62130/module(voltage(output))}
+    ; schematic-group(ps) = "power"
+    ;Create nets
+    net ({ps}.gnd, {neg(input)}, {neg(output)})
+    net ({ps}.vin, {pos(input)})
+    net ({ps}.vout, {pos(output)})
+
+val adm7154v = [1.2 1.8 2.5 2.8 3.0 3.3]
+
+for v in adm7154v do:
+  within (input, output) =
+    add-LDO("LDO"      ;description
+            1.6e-6,       ;noise
+            0.21,          ;drop out
+            125.0,         ;tjmax
+            36.7,          ;thetaja
+            2.3, 5.5,     ;vin
+            v, v,    ;vout
+            0.0, 0.6) : ;iout
+    inside pcb-module :        
+      unique inst ps : {analog-devices/ADM7154/module(voltage(output))}
+      ;Create nets
+      net ({ps}.gnd, {neg(input)}, {neg(output)})
+      net ({ps}.vin, {pos(input)})
+      net ({ps}.vout, {pos(output)})

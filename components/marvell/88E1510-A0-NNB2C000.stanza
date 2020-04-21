@@ -1,0 +1,137 @@
+#use-added-syntax(esir)
+defpackage marvell/88E1510-A0-NNB2C000:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import tests/default-harness
+
+  import symbols
+  import box-symbol
+  import pinspec
+  import land-patterns
+  import bundles
+  import generator-utils
+  import generic-components
+
+  import powergen
+  import powergen/gen
+
+public unique pcb-component component :
+  port mdi : diff-pair[4]
+  port rgmii : rgmii
+  port hsdac : diff-pair
+  port led : pin[3]
+  pin clk125
+  pin xtal-in
+  pin xtal-out
+  pin mdio
+  pin mdc
+  pin config
+  pin nRESET
+  pin RSET
+  pin VSS
+  pin VDDO
+  pin DVDD
+  pin DVDD-OUT
+  pin AVDDC18 
+  pin AVDD18 
+  pin AVDD18-OUT 
+  pin AVDD33 
+  pin REG-IN 
+  pin REGCAP1 
+  pin REGCAP2 
+
+  manufacturer = "Marvell"
+  mpn = "88E1510-A0-NNB2C000"
+  description = "Ethernet ICs Single-port Gigabit Ethernet PHY with EEE; RGMII; 2.5/3.3V IO in 48-pin QFN package"
+  val ps = PinSpec $ #TABLE :
+    [Ref     | Int ...   | Dir]
+    [rgmii.rx-ctrl | 37 | Left]
+    [rgmii.rx-clk  | 40 | Left]
+    [rgmii.rxd[0]  | 38 | Left]
+    [rgmii.rxd[2]  | 39 | Left]
+    [rgmii.rxd[1]  | 41 | Left]
+    [rgmii.rxd[3]  | 42 | Left]
+    [rgmii.tx-ctrl | 2  | Left]
+    [rgmii.tx-clk  | 47 | Left]
+    [rgmii.txd[0]  | 44 | Left]
+    [rgmii.txd[2]  | 45 | Left]
+    [rgmii.txd[1]  | 48 | Left]
+    [rgmii.txd[3]  | 1 | Left]
+    [mdio | 5 | Left]
+    [mdc  | 4 | Left]
+    [config | 11 | Left]
+    [nRESET | 12 | Left]
+    [RSET | 25 | Left]
+    [mdi[0].P | 24 | Right]
+    [mdi[0].N | 23 | Right]
+    [mdi[1].P | 20 | Right]
+    [mdi[1].N | 19 | Right]
+    [mdi[2].P | 18 | Right]
+    [mdi[2].N | 17 | Right]
+    [mdi[3].P | 14 | Right]
+    [mdi[3].N | 13 | Right]
+    [hsdac.P | 27 | Right]
+    [hsdac.N | 26 | Right]
+    [led[0] | 10 | Right]
+    [led[1] | 9 | Right]
+    [led[2] | 8 | Right]
+    [clk125 | 6 | Right]
+    [xtal-in  | 29  | Right]
+    [xtal-out | 28 | Right]
+    [VSS | 49 | Down]
+    [VDDO | 7 43 46 | Up]
+    [DVDD | 3 36 | Up]
+    [DVDD-OUT | 34 | Up]
+    [AVDDC18 | 30 | Up]
+    [AVDD18 | 15 22 | Up]
+    [AVDD18-OUT | 33  | Up]
+    [AVDD33 | 16 21 | Up]
+    [REG-IN | 31 | Up]
+    [REGCAP1 | 32 | Up]
+    [REGCAP2 | 35 | Up]
+    
+  make-box-symbol(ps)
+  assign-package(qfn-package(0.5, 7.0, 48, 0.3, 0.4, [3.1 3.1]), ps)
+
+public unique pcb-module module :
+  port P2P5V : power
+  port P3P3V : power
+  port mdi : diff-pair[4]
+  port rgmii : rgmii
+  pin mdio
+  pin mdc
+  pin nRESET
+  pin gnd
+
+  inst phy : {marvell/88E1510-A0-NNB2C000/component}
+  
+  net (gnd phy.VSS, P2P5V.gnd, P3P3V.gnd)
+  properties(phy.VDDO):
+    power-request => [2.5 0.1 1.0e-5]
+    gnd-ref => #R(gnd)
+  properties(phy.REG-IN):
+    power-request => [3.3 0.05 3.0e-5]
+    gnd-ref => #R(gnd)
+
+  net (P2P5V.vdd, phy.VDDO)
+  net (P3P3V.vdd, phy.REG-IN, phy.AVDD33)
+  net (mdi, phy.mdi)
+  net (rgmii, phy.rgmii)
+  res-strap(phy.mdio, phy.VDDO, 4.99e3)
+  res-strap(phy.nRESET, phy.VSS, 4.99e3)
+  cap-strap(phy.REGCAP1, phy.REGCAP2, 0.22e-6)
+  bypass-caps(phy.VDDO, phy.VSS, 6.3, [0.1e-6 0.1e-6 0.1e-6 10.0e-6], `vddo)
+  net (phy.DVDD, phy.DVDD-OUT)
+  bypass-caps(phy.DVDD, phy.VSS, 6.3, [0.1e-6 0.1e-6 10.0e-6], `dvdd)
+  bypass-caps(phy.REG-IN, phy.VSS, 6.3, [0.1e-6 10.0e-6], `reg-in)
+  bypass-caps(phy.AVDD18, phy.VSS, 6.3, [0.1e-6 0.1e-6 0.1e-6 10.0e-6], `avdd18)
+  net (phy.AVDD18, phy.AVDDC18, phy.AVDD18-OUT)
+  bypass-caps(phy.AVDD33, phy.VSS, 6.3, [0.1e-6 0.1e-6 10.0e-6], `avdd33)
+  inst xtal : {abracon/ABM12-32-B2X-T3/module}
+  net (gnd xtal.gnd)
+  net (xtal.xc[0], phy.xtal-in)
+  net (xtal.xc[1], phy.xtal-out)  

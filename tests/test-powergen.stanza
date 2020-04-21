@@ -1,0 +1,126 @@
+#use-added-syntax(esir)
+defpackage tests/test-powergen :
+  import core
+  import collections
+  import esir
+  import esir/gen
+  import powergen
+  import powergen/gen
+  import tests/default-harness
+
+within (input, output) =
+  add-LDO("MXP3"      ;description
+          1.0e-4,     ;noise
+          0.67,       ;drop out
+          125.0,      ;tjmax
+          41.8,       ;thetaja
+          2.7, 5.5,   ;vin
+          0.6, 5.0,   ;vout
+          0.0, 3.0) : ;iout
+  inside pcb-module :        
+    ;Code for generating the LDO        
+    println("Generating LDO MXP3")
+
+    ;Create nets
+    println("Input rail is at voltage: %_" % [voltage(input)])
+    println("Between %_ and %_" % [pos(input), neg(input)])
+
+    println("Output rail is at voltage: %_" % [voltage(output)])
+    println("Between %_ and %_" % [pos(output), neg(output)])
+
+within (input, output) =
+  add-LDO("LDO SDF"      ;description
+          0.33e-4,       ;noise
+          1.65,          ;drop out
+          125.0,         ;tjmax
+          29.0,          ;thetaja
+          1.2, 40.0,     ;vin
+          0.0, 38.50,    ;vout
+          0.5e-3, 0.2) : ;iout
+  inside pcb-module :        
+    ;Code for generating the LDO        
+    println("Generating LDO SDF")
+
+    ;Create nets
+    println("Input rail is at voltage: %_" % [voltage(input)])
+    println("Between %_ and %_" % [pos(input), neg(input)])
+
+    println("Output rail is at voltage: %_" % [voltage(output)])
+    println("Between %_ and %_" % [pos(output), neg(output)])
+
+within (input, output) =
+  add-switching-regulator(
+    "SWR1"                                 ;description
+    0.85,                                  ;max duty_cycle
+    SwitchedNoise(1.4e6, 1.0e-6, 4.4e-5),  ;Noise(fs, L, C)
+    0.8,                                   ;efficiency
+    125.0,                                 ;tjmax
+    46.0,                                  ;thetaja
+    4.5, 18.0,                             ;vin
+    0.6, 20.0,                             ;vout
+    0.0, 3.0) :                            ;iout
+  inside pcb-module :        
+    ;Code for generating the LDO        
+    println("Generating switching regulator SWR1")
+
+    ;Create nets
+    println("Input rail is at voltage: %_" % [voltage(input)])
+    println("Between %_ and %_" % [pos(input), neg(input)])
+
+    println("Output rail is at voltage: %_" % [voltage(output)])
+    println("Between %_ and %_" % [pos(output), neg(output)])
+    println("\n")
+
+within (input, output) =
+  add-switching-regulator(
+    "SW150"         ;description
+    1.0,            ;max duty_cycle
+    7.e-2,          ;noise
+    0.87,           ;efficiency
+    125.0,          ;tjmax
+    0.0,            ;thetaja
+    18.0, 75.0,     ;vin
+    5.0, 5.0,       ;vout
+    0.0, 3.0) :     ;iout
+  inside pcb-module :        
+    ;Code for generating the LDO        
+    println("Generating switching regulator SW150")
+
+    ;Create nets
+    println("Input rail is at voltage: %_" % [voltage(input)])
+    println("Between %_ and %_" % [pos(input), neg(input)])
+
+    println("Output rail is at voltage: %_" % [voltage(output)])
+    println("Between %_ and %_" % [pos(output), neg(output)])
+    println("\n")
+
+within (rail) = make-load("Washing Machine", 3.0, 1.0, 5.0e-3) :
+  println("Generate load (1A) on rail with voltage = %_" % [voltage(rail)])
+  println("Rail from %_ to %_" % [pos(rail), neg(rail)])
+  println("\n")
+
+within (rail) = make-load("Dryer", 3.0, 0.1, 5.0e-3) :
+  println("Generate load (0.1A) on rail with voltage = %_" % [voltage(rail)])
+  println("Rail from %_ to %_" % [pos(rail), neg(rail)])
+  println("\n")
+
+within (rail) = make-load("DryerB", 4.0, 0.05, 5.0e-3) :
+  println("Generate load (0.1A) on rail with voltage = %_" % [voltage(rail)])
+  println("Rail from %_ to %_" % [pos(rail), neg(rail)])
+  println("\n")
+
+within (rail) = make-load("BigFuse", 18.0, 3.0, 5.0e-3) :
+  println("Generate load (0.1A) on rail with voltage = %_" % [voltage(rail)])
+  println("Rail from %_ to %_" % [pos(rail), neg(rail)])
+  println("\n")
+
+pcb-module main-module :
+  node BATTERY-POS: pin
+  node BATTERY-NEG: pin
+  generate-power-system(18.0, 75.0, BATTERY-POS, BATTERY-NEG)
+
+pcb-design main-design :
+  module = main-module
+  rules = default-rules
+  board = {default-board(4, 10.0, 10.0)}
+

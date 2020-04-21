@@ -473,13 +473,24 @@ public unique pcb-module module :
   port src-io : power
   port sys-i2c : i2c[2]
   inst fpga : {microsemi/A2F200M3F-FGG256I/component}
-  net gnd (src-1V5.gnd, src-3V3.gnd, src-io.gnd)
+  pin gnd 
+  net (gnd src-1V5.gnd, src-3V3.gnd, src-io.gnd)
   for p in ports(fpga) do :
     val pin-name = to-string(p)
     if substring?(pin-name, "GND") : net (gnd, {p})
     for n in ["VCCFPGAIOB" "VCCMSSIOB"] do : if substring?(pin-name, n) : net (src-io.vdd, {p})
     for n in ["VCC15A" "VCC15ADC"] do : if substring?(pin-name, n) : net (src-1V5.vdd, {p}, fpga.VCC)
     for n in ["VPP" "VCC33A" "VCC33ADC" "VCC33AP" "VCC33SDD" "VCCMAINXTAL" "VCCLPXTAL"] do : if substring?(pin-name, n) : net (src-3V3.vdd, {p})
+
+  properties(fpga.VCCFPGAIOB[0]):
+    power-request => [1.8 0.1 5.0e-5]
+    gnd-ref => #R(gnd)
+  properties(fpga.VCC15A):
+    power-request => [1.5 0.7 5.0e-2]
+    gnd-ref => #R(gnd)
+  properties(fpga.VPP):
+    power-request => [3.3 0.05 5.0e-2]
+    gnd-ref => #R(gnd)
 
   net (sys-i2c[0].sda, fpga.I2C_0_SDA-GPIO[22])
   net (sys-i2c[0].scl, fpga.I2C_0_SCL-GPIO[23])
@@ -503,3 +514,18 @@ public unique pcb-module module :
       require d:fpga-io[2] from fpga
       sda => d[0].io
       scl => d[1].io
+  for i in 0 to 5 do :
+    supports rgmii : 
+      require pins:fpga-io[12] from fpga
+      txd[0] => pins[0].io
+      txd[1] => pins[1].io
+      txd[2] => pins[2].io
+      txd[3] => pins[3].io
+      rxd[0] => pins[4].io
+      rxd[1] => pins[5].io
+      rxd[2] => pins[6].io
+      rxd[3] => pins[7].io
+      tx-clk => pins[8].io
+      tx-ctrl => pins[9].io
+      rx-clk => pins[10].io
+      rx-ctrl => pins[11].io

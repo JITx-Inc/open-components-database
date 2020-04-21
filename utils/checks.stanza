@@ -10,41 +10,36 @@ defpackage checks:
   import space-derating
   import generator-utils
 
-; Checks a single-ended digital logic connection between a single driver and receiver.
-; public pcb-check digital-se (n:Ref) :
-;Basic checks would be to determine Voh/Vol for a device is within the range
-;of Vih/Vil of the load(s) based on load input currents, pullup/pulldown
-;current and VCCs of the two parts.  If there are multiple drivers and/or
-;receivers, all combinations must be checked. 
-
-;For the multiple driver case, it can be assumed operational protocol ensures
-;only one driver would be in a low impedance (driving) state at a time, while
-;the remainder are tristated (Hi impedance, or Hi-Z). 
-
-;If pullup or pulldown resistors are on a signal, the voltage of that signal
-;must also be calculated for the LIGHTEST possible load conditions.  As an
-;example, if a 3.3V driver is connected to a 3.3V receiver, but there is a
-;pullup resistor that is connected to 5V on the signal, then the lightest load
-;condition is usually ~0A, so the highest voltage on the signal could be 5V. 
-;If the Vo of the driver is tolerant of 5V and the Vi of the receiver is
-;tolerant of 5V, then no change is needed.  If either is not tolerant (or Vo
-;or Vi are not specified), then assumption is just what VCC is (3.3V in this
-;example) for the maximum tolerable.
-
-
 public pcb-check io () :
   for n in nets(self) do :
     ; Check compatibility between two single-ended logic pins (bi directional checks)
     if (length(refs(n))  == 2) and all?(has-property?{_.digital-io}, refs(n)) : 
       val p = refs(n)
-      #CHECK(property(p[0].voh) >= property(p[1].vih))
-      #CHECK(property(p[0].voh) <= property(p[1].rated-voltage)[1])
-      #CHECK(property(p[0].vol) <= property(p[1].vil))
-      #CHECK(property(p[0].vol) >= property(p[1].rated-voltage)[0])
-      #CHECK(property(p[1].voh) >= property(p[0].vih))
-      #CHECK(property(p[1].voh) <= property(p[0].rated-voltage)[1])
-      #CHECK(property(p[1].vol) <= property(p[0].vil))
-      #CHECK(property(p[1].vol) >= property(p[0].rated-voltage)[0])
+      if property(p[0].type) == "io" and 
+         property(p[1].type) == "io" :
+        #CHECK(property(p[0].vOH) >= property(p[1].vIH))
+        #CHECK(property(p[0].vOH) <= property(p[1].rated-voltage)[1])
+        #CHECK(property(p[0].vOL) <= property(p[1].vIL))
+        #CHECK(property(p[0].vOL) >= property(p[1].rated-voltage)[0])
+        #CHECK(property(p[1].vOH) >= property(p[0].vIH))
+        #CHECK(property(p[1].vOH) <= property(p[0].rated-voltage)[1])
+        #CHECK(property(p[1].vOL) <= property(p[0].vIL))
+        #CHECK(property(p[1].vOL) >= property(p[0].rated-voltage)[0])
+      else if property(p[0].type) == "i" and 
+              property(p[1].type) == "o" :
+        #CHECK(property(p[1].vOH) >= property(p[0].vIH))
+        #CHECK(property(p[1].vOH) <= property(p[0].rated-voltage)[1])
+        #CHECK(property(p[1].vOL) <= property(p[0].vIL))
+        #CHECK(property(p[1].vOL) >= property(p[0].rated-voltage)[0])
+      else if property(p[0].type) == "o" and 
+              property(p[1].type) == "i" :
+        #CHECK(property(p[0].vOH) >= property(p[1].vIH))
+        #CHECK(property(p[0].vOH) <= property(p[1].rated-voltage)[1])
+        #CHECK(property(p[0].vOL) <= property(p[1].vIL))
+        #CHECK(property(p[0].vOL) >= property(p[1].rated-voltage)[0])
+      else :
+        println("Invalid logic connection between: %_ and %_" % [property(p[0].type) property(p[1].type)])
+        #CHECK(false)
     ; Check compatibility between lvds pairs (bi directional checks)
     if (length(refs(n))  == 2) and all?(has-property?{_.lvds}, refs(n)) : 
       val p = refs(n)
@@ -80,7 +75,7 @@ public pcb-check voltage-levels (p:Ref, range:[Double,Double,Double]) :
   #CHECK(property(p.voltage)[2] <= range[2])
 
 ; Checks resistors agains operating point and environment
-public pcb-check resistor (r:Ref) :
+public pcb-check resistor-check (r:Ref) :
   #CHECK(has-property?(r.resistor))
   #CHECK(has-property?(r.operating-point))
   val [vpk i temp] = [lookup(property(r.operating-point), `voltage-pk) lookup(property(r.operating-point), `current-rms) property(r.temperature)]
@@ -95,7 +90,7 @@ public pcb-check resistor (r:Ref) :
   else :
     #CHECK(property(r.rated-power) * DERATE-RESISTOR-POWER > power)
 
-public pcb-check capacitor (c:Ref) :
+public pcb-check capacitor-check (c:Ref) :
   #CHECK(has-property?(c.capacitor))
   #CHECK(has-property?(c.operating-point))
   val [vpk temp] = [lookup(property(c.operating-point), `voltage-pk) property(c.temperature)]

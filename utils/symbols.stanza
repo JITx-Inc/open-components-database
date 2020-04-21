@@ -128,8 +128,8 @@ pcb-symbol fuse-sym :
 ; ====== Crystals, Oscillators =================================================
 
 public pcb-symbol crystal-sym (n-gnd:Int) :
-  pin p[0] at unit-point(0.0, -1.0)
-  pin p[1] at unit-point(0.0, 1.0)
+  pin p[1] at unit-point(0.0, -1.0)
+  pin p[2] at unit-point(0.0, 1.0)
 
   unit-line([[0.0, -1.0], [0.0, -0.5]])
   unit-line(0.1, [[-0.5, -0.5], [0.5, -0.5]])
@@ -143,7 +143,7 @@ public pcb-symbol crystal-sym (n-gnd:Int) :
     fatal("Too many gnd pins for crystal symbol %_." % [n-gnd])
 
   for i in 0 to n-gnd do :
-    pin g[i] at unit-point(gnd-locs[i][0], gnd-locs[i][1])
+    pin g[i + 1] at unit-point(gnd-locs[i][0], gnd-locs[i][1])
 
   unit-ref([1.0, 0.5])
   unit-val([1.0, -0.5])
@@ -152,7 +152,7 @@ public pcb-symbol crystal-sym (n-gnd:Int) :
 
 ; TODO: Factor diode shape to allow scaled translation and reuse
 
-public pcb-symbol diode-sym (d-type:String|False) :
+public pcb-symbol diode-sym (d-type:Symbol|False) :
   pin a at unit-point(0.0, 1.0)
   pin c at unit-point(0.0, -1.0)
 
@@ -162,14 +162,14 @@ public pcb-symbol diode-sym (d-type:String|False) :
   unit-line([[-0.5, -0.4], [0.5, -0.4]])  
   
   match(d-type) :
-    (s:String) :
+    (s:Symbol) :
       switch(s) :
-        "led" : draw-opto("emitter")
-        "photo" : draw-opto("detector")
-        "zener" :
+        `led : draw-opto("emitter")
+        `photo : draw-opto("detector")
+        `zener :
           unit-line([[-0.7, -0.2], [-0.5, -0.4]])
           unit-line([[0.5, -0.4], [0.7, -0.6]])
-        "schottky" :
+        `schottky :
           unit-line([[-0.5, -0.4], [-0.5, -0.15], [-0.3, -0.15]])
           unit-line([[0.5, -0.4], [0.5, -0.65], [0.3, -0.65]])
         else : fatal("Incorrect diode symbol type %_." % [d-type])

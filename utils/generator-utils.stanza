@@ -15,6 +15,12 @@ defpackage generator-utils:
   import pinspec
   import land-patterns
   import generic-components
+  import calculate-connected
+
+  import powergen
+  import powergen/gen
+
+  import design-vars
 
 ;[strip]
   import visualizer
@@ -209,9 +215,9 @@ public defn check-design () :
         temperature => DESIGN-TEMPERATURE
       ; Check components
       if has-property?(instance.resistor) :
-        check resistor(instance)
+        check resistor-check(instance)
       if has-property?(instance.capacitor) :
-        check capacitor(instance)
+        check capacitor-check(instance)
 
     ; Check pins
       for p in ports(instance) do :
@@ -219,3 +225,36 @@ public defn check-design () :
           check power-pin(p)
 
     check io()
+
+public defn connect-floating-inputs-to-gnd ():
+  inside pcb-module :
+    for i in all-component-instances(self) do :
+      for p in all-pins(i) do :
+        ; println("Is %_ connected? %_" % [p, connected?(p)])
+        if not connected?(p) and
+           has-property?(p.digital-io) and
+           property(p.type) == "i" :
+          println("Connecting floating input %_ to gnd." % [p])
+          net ({p}, gnd)
+
+public defn generate-power () :
+  println("JITPCB: Generating power system.")
+  inside pcb-module :
+    for i in all-component-instances(self) do :
+      for p in all-pins(i) do :
+        if has-property?(p.power-request) :
+          val [v a n] = property(p.power-request)
+          within (rail) = make-load("Load", v, a, n) :
+            net ({p}, {pos(rail)})
+            net ({property(p.gnd-ref)}, {neg(rail)})
+
+    for i in all-component-instances(self) do :
+      for p in all-pins(i) do :
+        if has-property?(p.power-input) :
+          generate-power-system(property(p.power-input), OPERATING-TEMPERATURE[1], p, property(p.gnd-ref))
+
+public defn set-power-source (pos:Ref, neg:Ref, v-in:Double):
+  inside pcb-module:
+    properties({pos}):
+      power-input => v-in
+      gnd-ref => #R({neg})

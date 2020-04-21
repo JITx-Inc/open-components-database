@@ -11,6 +11,7 @@ defpackage generic-components:
   import pinspec
   import land-patterns
   import generator-utils
+  ; import db-parts
 ;[strip]
   import symbols
   import box-symbol
@@ -106,12 +107,10 @@ public defn closest-std-val (v:Double, tol:Double) :
 
 ; GENERICPASSIVES
 
-public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pol:True|False, pkg:String) :
+public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg:String) :
   port p : pin[{1 2}]
-;[strip]
-  symbol = {capacitor-sym(pol)}(p[1] => p[1], p[2] => p[2])
-;[/strip]
-  emodel = Capacitor(cap, tol, max-v)
+  symbol = {capacitor-sym(false)}(p[1] => p[1], p[2] => p[2])
+  emodel = Capacitor(cap * 1.0e6, tol, max-v)
   package = {ipc-two-pin-package(pkg)}(p[1] => p[1], p[2] => p[2])
   reference-prefix = "C"
   spice :
@@ -120,27 +119,23 @@ public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pol:True
   properties :
     capacitor => true
     type => "ceramic"
-    capacitance => (cap * 1.0e-6)
+    capacitance => cap
     tolerance => (tol * 0.01)
     rated-voltage => max-v
     rated-temperature => [-55.0 125.0]
 
-public defn gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pol:True|False) :
-  gen-cap-cmp(cap, tol, max-v, pol, "0402")
-
-public defn gen-cap-cmp (cap:Double, tol:Double, max-v:Double) :
-  gen-cap-cmp(cap, tol, max-v, false)
-
-public defn gen-cap-cmp (cap:Double, tol:Double) :
-  gen-cap-cmp(cap, tol, 16.0)
+public defn gen-cap-cmp (cap:Double, max-v:Double) :
+  gen-cap-cmp(cap, 0.2, max-v, "0402")
 
 ; 40 is default tolerance due to Yageo cap series 20% tolerance by default
 public defn gen-cap-cmp (cap:Double, pkg:String) :
-  gen-cap-cmp(cap, 20.0, 16.0, false, pkg)
+  ; capacitor(["capacitance" => cap "type" => "ceramic"])
+  gen-cap-cmp(cap, 0.2, 10.0, pkg)
 
 ; 40 is default tolerance due to Yageo cap series 20% tolerance by default
 public defn gen-cap-cmp (cap:Double) :
-  gen-cap-cmp(cap, 20.0)
+  ; capacitor(["capacitance" => cap "type" => "ceramic"])
+  gen-cap-cmp(cap, 10.0)
 
 ;Generic Ceramic surface mount capacitors
 public pcb-component gen-tant-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg:String) :
@@ -256,7 +251,7 @@ public defn bypass-caps (power-pin:Ref|Symbol, gnd-pin:Ref|Symbol, voltage:Doubl
   inside pcb-module:
     val n-caps = length(caps)
     for i in 0 to n-caps do :
-      unique inst c : {gen-cap-cmp(caps[i], 20.0, voltage)}
+      unique inst c : {gen-cap-cmp(caps[i], voltage)}
       match(power-pin) :
         (r:Ref) :
           net ({r}, {c}.p[1])
@@ -367,6 +362,12 @@ public defn bnc-connector (sig:Ref, launch:String) :
       c
     else :
       fatal("Unsupported SMA Connector type")
+
+public defn ethernet-jack ():
+  inside pcb-module :
+    unique inst c : {pulse-electronics/J0G-0009NL/component}
+    net ({c}.shield, gnd)
+    c
 
 public defn add-testpoint (rs:Tuple<Ref>, method:String) :
   inside pcb-module :

@@ -110,6 +110,15 @@ public defn make-pin-grid (n-pin:Int) :
 
 ; ====== Package Family Generators ================================================
 ; TODO: Unify These.
+public pcb-package dummy-package (n:Int, courtyard:[Double,Double]):
+  val r = (max(courtyard[0], courtyard[1]) - 0.2) / 2.0
+  for i in 0 to n do :
+    var theta = (2.0 * PI / to-double(n)) * to-double(i) + PI
+    pad p[i + 1] : {bga-pad(0.05)} at loc(r * cos(theta), r * sin(theta))
+
+  layer(Courtyard(Top)) = Rectangle(courtyard[0], courtyard[1])
+  layer(Silkscreen("f-silk", Top)) = LineRectangle(courtyard[0], courtyard[1])
+  ref-label()
 
 ; from IPC-SM-782 spec
 ; Z - width between outer pad edges
@@ -134,16 +143,30 @@ public pcb-package two-pin-package (Z:Double, G:Double, X:Double, w:Double, h:Do
 public defn make-ipc-two-pin-package (part-name:String, courtyard?:True|False) :
   inside pcb-package :
     val [Z, G, X, nr, nc] = switch(part-name) :
+      "008004":[0.35, 0.10, 0.14, 0.35, 0.14]
+      "01005": [0.56, 0.20, 0.23, 0.56, 0.23]
       "0201" : [1.12, 0.20, 0.42, 1.42, 0.92]
       "0402" : [1.53, 0.39, 0.62, 1.84, 0.92]
       "0603" : [2.55, 0.65, 1.00, 3.10, 1.50]
       "0805" : [2.90, 0.90, 2.00, 3.40, 2.00]
       "1206" : [4.05, 1.65, 1.80, 4.60, 2.30]
-      "2512" : [7.35, 4.85, 3.40, 3.90, 7.90]
       "1210" : [4.40, 1.20, 2.70, 5.00, 3.00]
       "2010" : [6.20, 2.60, 2.70, 7.00, 3.00]
+      "2512" : [7.35, 4.85, 3.40, 3.90, 7.90]
       "2920" : [9.70, 5.10, 5.60, 10.0, 6.00]
-      else : fatal("Unrecognized two pin part name: '%_." % [part-name])
+      else : 
+        val [l w] = switch(length(part-name)):
+          4 : [2 2]
+          5 : [2 3]
+          6 : [3 3]
+        val len = (to-double(part-name[0 to l]) as Double )* 25.4 / (pow(10.0, to-double(l)))
+        val width = (to-double(part-name[l to (l + w)]) as Double )* 25.4 / (pow(10.0, to-double(w)))
+        val Z = len + 2.0 * (0.084 * len - 0.00543)
+        val G = len * 0.465 - 0.222
+        val X = width
+        val nr = Z
+        val nc = X
+        [Z, G, X, nr, nc]
     make-two-pin-package(Z, G, X, nr, nc, courtyard?)
     external-names = ([part-name])
     ref-label()
@@ -360,32 +383,27 @@ public pcb-package bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], cou
 
 public pcb-package INDC1005X55 :
   make-ipc-two-pin-package("0402")
-  external-names = (["0402"])
   ref-label()
 
 public pcb-package CAPT1005X55 :
   make-ipc-two-pin-package("0402")
   layer(Silkscreen("pol", Top)) = PlusSymbol(-1.7, 0.0)
   ref-label()
-  external-names = (["0402"])
 
 public pcb-package CAPT1608X80 :
   make-ipc-two-pin-package("0603")
   layer(Silkscreen("pol", Top)) = PlusSymbol(-2.2, 0.0)
   ref-label()
-  external-names = (["0603"])
 
 public pcb-package CAPT2012X125 :
   make-ipc-two-pin-package("0805")
   layer(Silkscreen("pol", Top)) = PlusSymbol(-2.4, 0.0)
   ref-label()
-  external-names = (["0805"])
 
 public pcb-package CAPT3216X160 :
   make-ipc-two-pin-package("1206")
   layer(Silkscreen("pol", Top)) = PlusSymbol(-3.0, 0.0)
   ref-label()
-  external-names = (["1206"])
 
 public pcb-package FUSC7330X390 :
   name = "FUSC7330X390"
