@@ -1,0 +1,38 @@
+defpackage ocdb/gen-app :
+  import core
+
+val preamble = \<S>
+defpackage fig-app :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import esir/repl-lib
+  import ocdb/tests/default-harness
+  import ocdb/land-patterns
+  import ocdb/generic-components
+  import jitpcb/visualizer
+<S>
+
+val epilogue = \<S>
+<S>
+
+defn main () :
+  val args = command-line-arguments()
+  fatal("Wrong number of arguments %_ usage: gen-ocdb-app url svg code" % [args]) when length(args) != 4
+  val filename    = to-string("/tmp/stanza-fig-gen-%_.stanza" % [current-time-ms()])
+  val url-string  = args[1]
+  val svg-string  = args[2]
+  val code-string = args[3]
+  ; val filename = "output.stanza"
+  ; val string   = \<S>
+  ;   println("hello world")
+  ; <S>
+  val string = to-string("%_\nval URL = \"%_\"\n\n%_%_" % [preamble, url-string, code-string, epilogue])
+  spit(filename, string)
+  call-system("jstanza" ["jstanza" "run" filename])
+  delete-file(filename)
+
+main()
