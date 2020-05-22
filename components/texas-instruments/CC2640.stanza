@@ -1,0 +1,183 @@
+#use-added-syntax(esir)
+defpackage ocdb/texas-instruments/CC2640:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  import jitpcb/visualizer
+
+pcb-bundle analog :
+  pin analog
+
+pcb-bundle high-drive :
+  pin high-drive
+
+pcb-bundle sensor-ctrl : 
+  pin sensor-ctrl
+
+public unique pcb-component component :
+  manufacturer = "Texas Instruments"
+  mpn = "CC2640F128Rxx"
+  description = "SimpleLink™ 32-bit Arm Cortex-M3 Bluetooth® Low Energy wireless MCU with 128kB Flash"
+  
+  val ps = PinSpec $ #TABLE :
+    [Ref       | Int ...   | Dir   | Ref  ]
+    [VDDR      | 45     | Right | base ]
+    [VDDR_RF   | 48     | Right | base ]
+    [VDDS      | 44     | Right | base ]
+    [VDDS2     | 13     | Right | base ]
+    [VDDS3     | 22     | Right | base ]
+    [VDDS_DCDC | 34     | Right | base ]
+    [DCDC_SW   | 33     | Right | base ]
+    [DCOUPL    | 23     | Right | base ]
+    [EGP       | 49     | Right | base ]
+    for i in 0 to 8 do :
+      [DIO_[i] | i + 5  | Left  | gpio ]
+    for i in 8 to 16 do :
+      [DIO_[i] | i + 6  | Left  | gpio ]
+    for i in 16 to 23 do :
+      [DIO_[i] | i + 10 | Right | gpio ]
+    for i in 23 to 31 do :
+      [DIO_[i] | i + 13 | Right | gpio ]
+    [JTAG_TMSC | 24     | Left  | base ]
+    [JTAG_TCKC | 25     | Left  | base ]
+    [RESET_N   | 35     | Left  | base ]
+    [RF_P      | 1      | Left  | base ]
+    [RF_N      | 2      | Left  | base ]
+    [X32K_Q1   | 3      | Left  | base ]
+    [X32K_Q2   | 4      | Left  | base ]
+    [X24M_N    | 46     | Left  | base ]
+    [X24M_P    | 47     | Left  | base ]
+    
+  make-pins(ps)
+  make-box-symbol(ps)
+  assign-package(qfn-package(0.5, 7.0, 48, 0.25, 0.4, [5.15 5.15]), ps)
+
+  unique pcb-bundle io-pin : (pin p)
+  for i in 0 to 31 do :
+    supports {io-pin} :
+      p => DIO_[i]
+
+  for i in 23 to 31 do :
+    supports analog :
+      analog => DIO_[i]
+    supports sensor-ctrl :
+      sensor-ctrl => DIO_[i]
+
+  for i in 0 to 8 do :
+    supports sensor-ctrl :
+      sensor-ctrl => DIO_[i]
+
+  ; Use io-pin to map bundles to peripherals
+  ; There are 2 SPI peripherals
+
+  ; for i in 0 to 2 do:
+  ;   supports spi:
+  ;     require pins:{io-pin}[4]
+  ;     mosi  =>  pins[0].p
+  ;     miso  =>  pins[1].p
+  ;     sck   =>  pins[2].p
+  ;     ss    =>  pins[3].p
+
+  ; supports i2c:
+  ;   require pins:{io-pin}[2]
+  ;   sda   =>    pins[0].p
+  ;   scl   =>    pins[1].p
+
+  ; supports uart:
+  ;   require pins:{io-pin}[2]
+  ;   rx    =>    pins[0].p
+  ;   tx    =>    pins[1].p
+  
+  for i in 0 to 31 do:
+    supports gpio:
+      require pins:{io-pin}
+      gpio => pins.p
+
+  for i in 5 to 8 do :
+    supports high-drive :
+      high-drive => DIO_[i]
+
+  supports high-drive :
+    high-drive => DIO_[16]
+  supports high-drive :
+    high-drive => DIO_[17]
+    
+public unique pcb-module module:
+  ; define ports
+  port i2c-node : i2c
+  port spi-master : spi
+
+  ; start with the CC2640 mcu
+  inst mcu : {ocdb/texas-instruments/CC2640/component}
+  ; set up primary power nets
+  net gnd (mcu.EGP)
+  net vdds (mcu.VDDS, mcu.VDDS2, mcu.VDDS3, mcu.VDDS_DCDC)
+  net vddr (mcu.VDDR, mcu.VDDR_RF)
+  
+  ; add decoupling caps to VDDS
+  for i in 0 to 4 do :
+    cap-strap(mcu.VDDS, gnd, 0.1e-6)
+  cap-strap(mcu.VDDS, gnd, 10.0e-6)
+
+  ; add decoupling caps and inductor to VDDR
+  cap-strap(vddr, gnd, 10.0e-6)
+  cap-strap(vddr, gnd, 0.1e-6)
+  cap-strap(vddr, gnd, 0.1e-6)
+  inst l1 : {ocdb/murata/BLM18HE152SN1D/component}
+  net vcc (l1.p[1])
+  net (l1.p[2], vdds)
+  inst l2 : {gen-ind-cmp(10.0e-6)}
+  net (mcu.DCDC_SW, l2.p[1])
+  net (mcu.VDDR, l2.p[2])
+
+  cap-strap(mcu.DCOUPL, gnd, 1.0e-6)
+
+  ; reset pin circuitry
+  res-strap(mcu.RESET_N, vdds, 100.0e3)
+  cap-strap(mcu.RESET_N, gnd, 0.1e-6)
+
+  ; add RF section
+  inst balun : {ocdb/johanson/2450BM14G0011/component}
+  inst ant : {ocdb/johanson/2450AT18D0100/component}
+  inst jsc : {ocdb/murata/MM5829-2700R/component}
+  net (mcu.RF_N, balun.BAL1)
+  net (mcu.RF_P, balun.BAL2)
+  net (gnd, balun.GND)
+  ; add tuning network
+  inst rfr1 : {gen-res-cmp(0.0)}
+  inst rfr2 : {gen-res-cmp(0.0)}
+  inst rfrjsc : {gen-res-cmp(0.0)}
+  net (rfrjsc.p[1], balun.UBAL, rfr1.p[1])
+  net (jsc.g[1], gnd)
+  net (jsc.p[1], rfrjsc.p[2])
+  net (rfr1.p[2], rfr2.p[1])
+  cap-strap(rfr1.p[2], gnd, 1.0e-6)
+  cap-strap(rfr2.p[2], gnd, 1.0e-6)
+  net (gnd, ant.p[2], ant.p[3], ant.p[4])
+  net (rfr2.p[2], ant.p[1])
+
+  ; add XTALS
+  inst x1 : {ocdb/epson/FC-135/component}
+  inst x2 : {ocdb/epson/TSX-3225/component}
+
+  net (x1.p[1], mcu.X32K_Q1)
+  net (x1.p[2], mcu.X32K_Q2)
+  cap-strap(mcu.X32K_Q1, gnd, 12.0e-12)
+  cap-strap(mcu.X32K_Q2, gnd, 12.0e-12)
+
+  net (x2.p[1], mcu.X24M_P)
+  net (x2.p[3], mcu.X24M_N)
+  net (gnd, x2.p[2], x2.p[4])

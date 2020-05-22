@@ -178,6 +178,71 @@ public pcb-symbol diode-sym (d-type:Symbol|False) :
   unit-ref([1.0, 0.5])
   unit-val([1.0, -0.5])
 
+public pcb-symbol diode-tvs :
+  pin a at unit-point(0.0, 1.5)
+  pin c at unit-point(0.0, -1.5)
+  val ytop = 0.3
+  val ybot = (- ytop)
+  
+  ; draw lower diode first
+  unit-triangle([0.0, ybot], [0.0, (ybot - 0.8)], 1.0)
+  unit-line([[0.0,(ybot - 0.8)], [0.0, -1.5]])
+  unit-line([[-0.5, (ybot - 0.8)], [0.5, (ybot - 0.8)]])
+  unit-line([[-0.7, (ybot - 1.0)], [-0.5, (ybot - 0.8)]])
+  unit-line([[0.5, (ybot - 0.8)], [0.7, (ybot - 0.6)]])  
+
+  ; now draw second one flipped above
+  unit-triangle([0.0, ytop], [0.0, (ytop + 0.8)], 1.0)
+  unit-line([[0.0,(ytop + 0.8)], [0.0, 1.5]])
+  unit-line([[-0.5, (ytop + 0.8)], [0.5, (ytop + 0.8)]])
+  unit-line([[-0.7, (ytop + 0.6)], [-0.5, (ytop + 0.8)]])
+  unit-line([[0.5, (ytop + 0.8)], [0.7, (ytop + 1.0)]]) 
+
+  ; connecting line
+  unit-line([[0.0, ybot], [0.0, ytop]])
+
+  unit-ref([1.0, 1.0])
+  unit-val([1.0, -1.0])
+
+public pcb-symbol diode-rgb-led :
+  val xr = (- 2.0)
+  val xg = 0.0
+  val xb = 2.0
+  val ybot = 0.4
+  
+  pin a at unit-point(0.0, 2.0)
+  pin r at unit-point(xr, -1.5)
+  pin g at unit-point(xg, -1.5)
+  pin b at unit-point(xb, -1.5)
+
+  ; draw three diode symbols next to each other along the bottom
+  ; red
+  unit-triangle([xr, ybot], [xr, (ybot - 0.8)], 1.0)
+  unit-line([[xr,(ybot - 0.8)], [xr, -1.5]])
+  unit-line([[xr - 0.5, (ybot - 0.8)], [xr + 0.5, (ybot - 0.8)]])
+  draw-opto("emitter", [xr, 0.0])
+
+  ; green 
+  unit-triangle([xg, ybot], [xg, (ybot - 0.8)], 1.0)
+  unit-line([[xg,(ybot - 0.8)], [xg, -1.5]])
+  unit-line([[xg - 0.5, (ybot - 0.8)], [xg + 0.5, (ybot - 0.8)]])
+  draw-opto("emitter", [xg, 0.0])
+
+  ; blue 
+  unit-triangle([xb, ybot], [xb, (ybot - 0.8)], 1.0)
+  unit-line([[xb,(ybot - 0.8)], [xb, -1.5]])
+  unit-line([[xb - 0.5, (ybot - 0.8)], [xb + 0.5, (ybot - 0.8)]])
+  draw-opto("emitter", [xb, 0.0])
+
+  ; add remaining lines
+  unit-line([[xr, ybot], [xr, ybot + 0.5]])
+  unit-line([[xg, ybot], [xg, 2.0]])
+  unit-line([[xb, ybot], [xb, ybot + 0.5]])
+  unit-line([[xr, ybot + 0.5], [xb, ybot + 0.5]])
+
+  unit-ref([1.0, 2.0])
+  unit-val([1.0, 1.5])
+  
 public pcb-symbol bjt-sym (bjt-type:Symbol) :
   pin e at unit-point(1.0, -1.0)
   pin c at unit-point(1.0, 1.0)
@@ -423,9 +488,111 @@ public pcb-symbol unplated-hole-sym :
   
   unit-ref([-1.0, 0.75])
 
+public pcb-symbol header-symbol (n-pins:Int, sides:Int) :
+  if sides > 2 :
+    fatal("Header cannot have more than 2 sides!")
+  if n-pins % sides != 0 :
+    fatal("Need an even number of pins for a 2 sided header!")
+  
+  val ytop = to-double(n-pins / sides)/2.0
+  val ypin = to-double(n-pins / sides)/2.0 - 0.5
+  val nside = n-pins / sides
+  unit-line([[(-1.0), ytop], [(-1.0), (- ytop)]])
+  unit-line([[1.0, ytop], [1.0, (- ytop)]])
+  unit-line([[(-1.0), ytop], [1.0, ytop]])
+  unit-line([[(-1.0), (- ytop)], [1.0, (- ytop)]])
+  for i in 0 to nside do :
+    pin p[(i + 1)] at unit-point(2.0, (ypin - (to-double(i) * 1.0)))
+    unit-line([[1.0, (ypin - (to-double(i) * 1.0))], [2.0, (ypin - (to-double(i) * 1.0))]])
+    if sides > 1 :
+      pin p[(i + nside + 1)] at unit-point((- 2.0), (ypin - (to-double(i) * 1.0)))
+      unit-line([[(- 1.0), (ypin - (to-double(i) * 1.0))], [(- 2.0), (ypin - (to-double(i) * 1.0))]])
+    
+
+public defn header-symbol (n-pins:Int) :
+  header-symbol(n-pins, 1)
 
 ; ====== Switches, Relays ======================================================
 
 ; TODO: Switch symbol parametric in connections
 
+public pcb-symbol spst (n-pside:Int, n-tside:Int) :
+  if n-pside < 1 :
+    fatal("not enough pole pins!")
+  if n-tside < 1 :
+    fatal("not enough throw pins!")
+
+  val xpoff = (to-double(n-pside) - 1.0)/2.0
+  val xtoff = (to-double(n-tside) - 1.0)/2.0
+
+  unit-line([[0.0, 0.0], [0.0, (- 1.0)]])
+  unit-line([[0.0, 1.0], [0.0, 2.0]])
+  unit-line([[0.0, 1.0], [1.0, 0.0]])
+
+  for i in 0 to n-pside do :
+    unit-line([[(to-double(i) - xpoff), (- 1.0)], [(to-double(i) - xpoff), (- 2.0)]])
+    pin p[i + 1] at unit-point((to-double(i) - xpoff), (- 2.0))
+  unit-line([[( - xpoff), (- 1.0)], [xpoff, (- 1.0)]])
+
+  for i in 0 to n-tside do :
+    unit-line([[(to-double(i) - xtoff), 2.0], [(to-double(i) - xtoff), 3.0]])
+    pin t[i + 1] at unit-point((to-double(i) - xtoff), 3.0)
+  unit-line([[( - xtoff), 2.0], [xtoff, 2.0]])
+
 ; TODO: Relay symbol parametric in connections
+
+; ====== RF ====================================================================
+
+public pcb-symbol antenna-symbol (n-feeds:Int, n-gnd:Int) :
+  unit-circle([0.0, 0.0], 1.0)
+  unit-line([[0.0, 0.707], [0.0, (- 1.0)]])
+  unit-line([[0.0, 0.0], [0.50, 0.50]])
+  unit-line([[0.0, 0.0], [(- 0.50), 0.50]])
+
+  unit-line([[0.0, (- 1.0)], [(- 1.0), (- 1.0)]])
+  pin p[1] at unit-point((- 1.0), (- 1.0))
+  for i in 1 to n-feeds do :
+    unit-line([[0.0, to-double(i + 1)*(- 1.0)], [(- 1.0), to-double(i + 1)*(- 1.0)]])
+    unit-line([[0.0, to-double(i)*(- 1.0)], [0.0, to-double(i + 1)*(- 1.0)]])
+    pin p[i + 1] at unit-point((- 1.0), to-double(i + 1)*(- 1.0))
+  val yoff = (to-double(n-gnd) - 1.0)/2.0
+  unit-line([[1.0, yoff], [2.0, yoff]])
+  pin p[n-feeds + 1] at unit-point(2.0, yoff)
+  for i in 1 to n-gnd do :
+    unit-line([[1.0, to-double(i)*(- 1.0) + yoff], [2.0, to-double(i)*(- 1.0) + yoff]])
+    unit-line([[1.0, to-double(i - 1)*(- 1.0) + yoff], [1.0, to-double(i)*(- 1.0) + yoff]])
+    pin p[n-feeds + 1 + i] at unit-point(2.0, to-double(i)*(- 1.0) + yoff)
+
+  unit-ref([(-1.5), 2.0])
+  unit-val([(-1.5), 1.5])
+
+; ====== Audio =================================================================
+
+public pcb-symbol speaker-symbol :
+  val xbodl = (- 0.5)
+  val xbodr = 1.0
+  val ybod = 1.0
+  val xcone = 2.0
+  val ycone = 2.0
+  val ypin = 2.0
+  
+  pin high at unit-point(0.0, ypin)
+  pin low at unit-point(0.0, (- ypin))
+
+  ; draw body
+  unit-line([[xbodl, ybod], [xbodr, ybod]])
+  unit-line([[xbodl, (- ybod)], [xbodr, (- ybod)]])
+  unit-line([[xbodl, (- ybod)], [xbodl, ybod]])
+  unit-line([[xbodr, (- ybod)], [xbodr, ybod]])
+
+  ; draw cone
+  unit-line([[xbodr, ybod], [xcone, ycone]])
+  unit-line([[xbodr, (- ybod)], [xcone, (- ycone)]])
+  unit-line([[xcone, (- ycone)], [xcone, ycone]])
+
+  ; draw leads
+  unit-line([[0.0, ybod], [0.0, ypin]])
+  unit-line([[0.0, (- ybod)], [0.0, (- ypin)]])
+
+  unit-ref([1.0, 3.0])
+  unit-val([1.0, 2.5])

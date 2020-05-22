@@ -1,0 +1,50 @@
+#use-added-syntax(esir)
+defpackage ocdb/soberton/GT-111P:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  import jitpcb/visualizer
+
+pcb-package buzzer-pkg :
+  pad high : {pth-pad(0.4)} at loc(0.0, (- 3.25))
+  pad low : {pth-pad(0.4)} at loc(0.0, 3.25)
+
+  layer(Courtyard(Top)) = Circle(6.0)
+  layer(Silkscreen("f-silk", Top)) = Circle(6.1)
+  ref-label()
+
+public unique pcb-component component :
+  manufacturer = "Soberton"
+  description = "AUDIO MAGNETIC XDCR 1-4V TH"
+  mpn = "GT-111P"
+
+  pin high
+  pin low
+
+  symbol = speaker-symbol(high => high, low => low)
+  package = buzzer-pkg(high => high, low => low)
+
+public unique pcb-module module :
+  inst buzzer : {ocdb/soberton/GT-111P/component}
+  inst d : {ocdb/on-semiconductor/BAS21LT1G/component}
+  inst q : {ocdb/nexperia/BC846/component}
+  inst r : {gen-res-cmp(180.0)}
+
+  net (d.a, buzzer.low, q.c)
+  net vcc (d.c, buzzer.high)
+  net gnd (q.e)
+  net (r.p[1], q.b)
+  net buzz (r.p[2])

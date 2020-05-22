@@ -1,0 +1,60 @@
+#use-added-syntax(esir)
+defpackage ocdb/cree/CLMUC-FK:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  import jitpcb/visualizer
+
+pcb-package package-rgb :
+  val xdim = 0.55
+  val ydim = 0.45
+  val xoff = 0.57
+  val yoff = 0.35
+  pad p[1] : {smd-pad(xdim, ydim)} at loc((- xoff), yoff)
+  pad p[2] : {smd-pad(xdim, ydim)} at loc((- xoff), (- yoff))
+  pad p[3] : {smd-pad(xdim, ydim)} at loc(xoff, (- yoff))
+  pad p[4] : {smd-pad(xdim, ydim)} at loc(xoff, yoff)
+
+  layer(Courtyard(Top)) = Rectangle(1.5, 1.5)
+  layer(Silkscreen("f-silk", Top)) = Rectangle(1.7, 1.7)
+  ref-label()
+
+public unique pcb-component component :
+  manufacturer = "Cree"
+  mpn = "CLMUC-FKA-CL8LCFL5L8BB79353"
+  description = "3 in 1 RGB SMD LED"
+
+  pin a
+  pin r
+  pin g
+  pin b
+  symbol = diode-rgb-led(a => a, r => r, g => g, b => b)
+  package = package-rgb(a => p[1], r => p[2], g => p[3], b => p[4])
+
+public unique pcb-module module :
+  inst led : {ocdb/cree/CLMUC-FK/component}
+  inst r-res : {gen-res-cmp(470.0)}
+  inst g-res : {gen-res-cmp(330.0)}
+  inst b-res : {gen-res-cmp(100.0)}
+
+  net (led.r, r-res.p[1])
+  net (led.g, g-res.p[1])
+  net (led.b, b-res.p[1])
+
+  net led-r (r-res.p[2])
+  net led-g (g-res.p[2])
+  net led-b (b-res.p[2])
+  net vcc (led.a)

@@ -1,0 +1,55 @@
+#use-added-syntax(esir)
+defpackage ocdb/fremont-micro-devices/FT25H04:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  import jitpcb/visualizer
+
+public unique pcb-component component :
+  manufacturer = "Fremont Micro Devices"
+  mpn = "FT25H04S"
+  description = "4M-bit Serial Flash - SPI"
+
+  val ps = PinSpec $ #TABLE :
+    [Ref      | Int ...   | Dir   ]
+    [CS       | 1         | Left  ]
+    [SO       | 2         | Left  ]
+    [NC       | 3, 7      | Left  ]
+    [VSS      | 4         | Left  ]
+    [SI       | 5         | Right ]
+    [SCLK     | 6         | Right ]
+    [VCC      | 8         | Right ]
+
+  make-pins(ps)
+  make-box-symbol(ps)
+  assign-package(sop65-package(8), ps)
+  
+  supports spi :
+    mosi  =>  SI
+    miso  =>  SO
+    sck   =>  SCLK
+    ss    =>  CS
+
+public unique pcb-module module :
+  inst flash : {ocdb/fremont-micro-devices/FT25H04/component}
+  net gnd (flash.VSS)
+  net vcc (flash.VCC)
+  net miso (flash.SO)
+  net mosi (flash.SI)
+  net sck (flash.SCLK)
+  net cs (flash.CS)
+  cap-strap(flash.VCC, flash.VSS, 0.1e-6)
+  res-strap(flash.CS, flash.VCC, 100.0e3)  
