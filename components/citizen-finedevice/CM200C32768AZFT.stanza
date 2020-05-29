@@ -1,0 +1,65 @@
+#use-added-syntax(esir)
+defpackage ocdb/citizen-finedevice/CM200C32768AZFT:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import jitpcb/visualizer
+
+pcb-package CM200C32768AZFT-package :
+  val x0 = 2.75
+  val y0 = 1.6
+  pad p[1] : {smd-pad(1.3, 1.9)} at loc((- x0), (- y0))            
+  pad p[2] : {smd-pad(1.3, 1.9)} at loc((- x0), y0) 
+  pad p[3] : {smd-pad(1.3, 1.9)} at loc(x0, y0) 
+  pad p[4] : {smd-pad(1.3, 1.9)} at loc(x0, (- y0))
+
+  layer(Courtyard(Top)) = Rectangle(8.0, 3.71)
+  layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+
+public unique pcb-component component :
+  manufacturer = "Citizen Finedevice Co Ltd"
+  mpn = "CM200C32768AZFT"
+  description = "32.768kHz ±30ppm Crystal 12.5pF 50 kOhms 4-SOJ, 5.50mm pitch"
+  reference-prefix = "Y"
+  pin xtal1
+  pin xtal2
+  package = CM200C32768AZFT-package(xtal1 => p[1], xtal2 => p[4])        
+  view(CM200C32768AZFT-package)
+  symbol = {crystal-sym(0)}(xtal1 => p[1], xtal2 => p[2])   
+
+public pcb-module xtal32khz_module (cstray:Double) :
+  ;cstray = Stray Capacitance of the printed circuit board and connections, estimate at 3pF (min) - 9pF (max) typical
+
+  ;Design Note: C1 and C2 must be placed on either side of crystal to provide load capacitance as seen by the crystal 
+  ;to assure correct frequency operation. See https://en.wikipedia.org/wiki/Pierce_oscillator for more information.
+
+  ;Design Note: if oscillation is measured too high with chosen C1 & C2, increase C1 & C2.  
+  ;If oscillation is too low, decrease C1 & C2.
+
+  ;Calculate C1 & C2
+  ;cl = Load Capacitance target (from datasheet)
+  ;cl = ((C1*C2) / (C1+C2)) + cstray
+  val cl = 12.5e-6
+  val c1_c2 = 2.0 * (cl - cstray)                           ;error: need to update to round to nearest available cap value
+
+  inst xtal : {ocdb/citizen-finedevice/CM200C32768AZFT/component}
+
+  pin OSC_GND
+  
+  net XTAL1 (xtal.xtal1)
+  cap-strap(xtal.xtal1, OSC_GND, c1_c2)
+  net XTAL2 (xtal.xtal2)
+  cap-strap(xtal.xtal2, OSC_GND, c1_c2)
+

@@ -1,0 +1,68 @@
+#use-added-syntax(esir)
+defpackage ocdb/hirose/UX60SC-MB-5ST_80:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import jitpcb/visualizer
+
+pcb-package UX60SC-MB-5ST_80-package :
+  pad p[1] : {smd-pad(0.5, 1.4)} at loc(-1.6, 2.7)
+  pad p[2] : {smd-pad(0.5, 1.4)} at loc(-0.8, 2.7) 
+  pad p[3] : {smd-pad(0.5, 1.4)} at loc(0.0, 2.7) 
+  pad p[4] : {smd-pad(0.5, 1.4)} at loc(0.8, 2.7) 
+  pad p[5] : {smd-pad(0.5, 1.4)} at loc(1.6, 2.7)
+  pad p[6] : {smd-pad(2.5, 3.8)} at loc(4.2, 0.3) 
+  pad p[7] : {smd-pad(2.5, 3.8)} at loc(-4.2, 0.3)
+  pad p[8] : {smd-pad(2.35, 0.8)} at loc(2.675, -2.5)
+  pad p[9] : {smd-pad(2.35, 0.8)} at loc(-2.675, -2.5) 
+  ;Design Note: no conductive traces allowed under device (contains parts of pads 8 & 9):
+  ;Rectangle #1 x-axis: from -2.95 to +2.95
+  ;Rectangle #1 y-axis: from -3.4 to -1.3
+  ;Rectangle #2 x-axis: from -1.5 to +1.5
+  ;Rectangle #3 y-axis: from 0.2 to -3.4
+
+  layer(Courtyard(Top)) = Rectangle(10.9, 6.8)
+  layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+  ;height = 3.95mm
+
+public unique pcb-component component :
+  manufacturer = "Hirose Electric Co Ltd"
+  mpn = "UX60SC-MB-5ST(80)"
+  description = "USB - mini B USB 2.0 Receptacle Connector 5 Position Surface Mount, Right Angle"
+  reference-prefix = "J"
+  val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [vdd      | 1    | Left  ]
+    [dm       | 2    | Left  ]
+    [dp       | 3    | Left  ]
+    [id       | 4    | Left  ]
+    [gnd      | 5    | Left  ]
+    [shield1  | 6    | Right ]
+    [shield2  | 7    | Right ]
+    [shield3  | 8    | Right ]
+    [shield4  | 9    | Right ]
+  gen-symbol-map(ps, UX60SC-MB-5ST_80-package)
+  view(UX60SC-MB-5ST_80-package)
+
+public pcb-module usb_conn_mini_module :
+
+  inst usb_conn_mini : {ocdb/hirose/UX60SC-MB-5ST_80/component}
+
+  net VDD (usb_conn_mini.vdd)
+  net DM (usb_conn_mini.dm)
+  net DP (usb_conn_mini.dp)
+  net ID (usb_conn_mini.id)
+  net GND (usb_conn_mini.gnd)
+  net SHIELD (usb_conn_mini.shield1 usb_conn_mini.shield2 usb_conn_mini.shield3 usb_conn_mini.shield4)

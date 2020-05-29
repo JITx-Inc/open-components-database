@@ -1,0 +1,69 @@
+#use-added-syntax(esir)
+defpackage ocdb/texas-instruments/TPS2051D:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import jitpcb/visualizer
+
+public unique pcb-component component :
+  manufacturer = "Texas Instruments"
+  mpn = "TPS2051D"
+  description = "Power Switch/Driver 1:1 N-Channel 500mA 8-SOIC"
+  val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [in1  | 2     | Left  ] 
+    [in2  | 3     | Left  ]
+    [en   | 4     | Left  ]
+    [gnd  | 1     | Left  ]
+    [out1 | 8     | Right ]
+    [out2 | 7     | Right ]
+    [out3 | 6     | Right ]
+    [oc   | 5     | Right ]
+  gen-symbol-map(ps, soic127p-package(8)) ;error: pitch width is ~5mm, should be 5.4mm
+  ;1.75mm max height
+
+public pcb-module TPS2051D_module:
+
+  inst ls : {ocdb/texas-instruments/TPS2051D/component}
+
+  net IN (ls.in1 ls.in2)
+  net EN (ls.en)
+  net GND (ls.gnd)
+  net OUT (ls.out1 ls.out2 ls.out3)
+  net OC (ls.oc)
+  pin PULL-UP_V
+  pin OC_OUT
+
+  ;input capacitor
+  ;0.01uF - 0.1uF bypass capacitor placed close to device recommended by ds
+  cap-strap(IN, GND, 0.1)   
+  
+  ;output capacitor
+  ;0.01uF - 0.1uF on output improves immunity of the device to short-circuit transients
+  ;DESIGN NOTE: an additional high value capacitor is recommended if heavy output load expected
+  cap-strap(OUT, GND, 0.1)
+  
+  ;OC response
+  ;The OC open-drain output is asserted (active low) when an overcurrent or overtemperature condition is
+  ;encountered. The output will remain asserted until the overcurrent or overtemperature condition is removed.
+  ;An RC filter of 500 µs can be connected to the OC pin to reduce false overcurrent reporting.
+  res-strap(OC, PULL-UP_V, 10000.0)
+  
+  ;can comment out filter if not required
+  ;OC tau = R*C = 500 µs
+  ;res-strap(OC, OC_OUT, 4990.0)
+  ;cap-strap(OC_OUT, GND, 0.1)
+
+ 

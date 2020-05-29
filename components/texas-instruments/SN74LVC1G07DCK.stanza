@@ -1,0 +1,83 @@
+#use-added-syntax(esir)
+defpackage ocdb/texas-instruments/SN74LVC1G07DCK:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import jitpcb/visualizer
+
+  import ocdb/symbol-utils
+
+pcb-symbol single-inv-buffer :
+  pin nc at unit-point(-0.75, -1.15) with:
+    direction = Down
+    length = 0.5 * UNIT-TO-MM
+    number-size = 0.3 * UNIT-TO-MM
+    name-size = 0.3 * UNIT-TO-MM 
+
+  pin a at unit-point(-1.5, 0.0) with:
+    direction = Left
+    length = 0.5 * UNIT-TO-MM
+    number-size = 0.3 * UNIT-TO-MM
+    name-size = 0.3 * UNIT-TO-MM
+
+  pin gnd at unit-point(0.0, -0.75) with:
+    direction = Down
+    length = 0.5 * UNIT-TO-MM
+    number-size = 0.3 * UNIT-TO-MM
+    name-size = 0.3 * UNIT-TO-MM
+
+  pin y at unit-point(1.5, 0.0) with:
+    direction = Right
+    length = 0.5 * UNIT-TO-MM
+    number-size = 0.3 * UNIT-TO-MM
+    name-size = 0.3 * UNIT-TO-MM
+
+  pin vcc at unit-point(-0.4, 0.95) with:
+    direction = Up
+    length = 0.5 * UNIT-TO-MM
+    number-size = 0.3 * UNIT-TO-MM
+    name-size = 0.3 * UNIT-TO-MM
+
+  unit-triangle("foreground", [-1.5, 0.0], [1.5, 0.0], 3.0)
+
+  unit-ref([0.0, 1.0])
+  unit-val([0.0, -1.0])
+
+public unique pcb-component component :
+  manufacturer = "Texas Instruments"
+  mpn = "SN74LVC1G07DCK"
+  description = "Buffer, Non-Inverting 1 Element 1 Bit per Element Open Drain Output SC-70-5"
+
+  pin nc
+  pin a
+  pin gnd 
+  pin y 
+  pin vcc
+
+  package = {dck-R-PDSO-G5}(nc => p[1], a => p[2], gnd => p[3], y => p[4], vcc => p[5]) 
+  symbol = {single-inv-buffer}(nc => nc, a => a, gnd => gnd, y => y, vcc => vcc)
+
+public pcb-module SN74LVC1G07_module:
+
+  inst buff : {ocdb/texas-instruments/SN74LVC1G07DCK/component}
+
+  net A (buff.a)
+  net GND (buff.gnd)
+  net Y (buff.y)
+  net VCC (buff.vcc)
+
+  ;Design Note (datasheet): Each Vcc pin should have a good bypass capacitor to prevent power disturbance. 
+  ;A 0.1-μF capacitor is recommended for devices with a single supply.
+  cap-strap(VCC, GND, 0.1)  

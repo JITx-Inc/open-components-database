@@ -1,0 +1,3714 @@
+;Note:  Only a certain number of "IO Sets" are valid due to timing limitations.
+;       User should verify chosen pinout with the TI pin mux tool available online.
+
+#use-added-syntax(esir)
+defpackage ocdb/texas-instruments/AM3358:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  ;import tests/default-harness
+  ;import repl-lib
+
+;I/O sets pin-restricted by TI
+;
+public pcb-bundle dcan0 :
+  pin dcan0_tx
+  pin dcan0_rx 
+
+public pcb-bundle dcan1 :
+  pin dcan1_tx
+  pin dcan1_rx
+
+public pcb-bundle debugss :
+  pin tms
+  pin tdi 
+  pin tdo
+  pin tck
+  pin ntrst
+  pin emu0
+  pin emu1
+  pin emu2
+  pin emu3
+  pin emu4
+
+;enhanced capture input or auxiliary pwm output
+public pcb-bundle ecap0 :
+  pin ecap0_in_pwm0_out
+
+public pcb-bundle ecap1 :
+  pin ecap1_in_pwm1_out
+
+public pcb-bundle ecap2 :
+  pin ecap2_in_pwm2_out
+
+;pwm output peripheral
+public pcb-bundle ehrpwm0 :
+  pin ehrpwm0a
+  pin ehrpwm0b
+  pin ehrpwm0_tripzone_input
+  pin ehrpwm0_synci
+  pin ehrpwm0_synco
+
+public pcb-bundle ehrpwm1 :
+  pin ehrpwm1a
+  pin ehrpwm1b
+  pin ehrpwm1_tripzone_input
+
+public pcb-bundle ehrpwm2 :
+  pin ehrpwm2a
+  pin ehrpwm2b
+  pin ehrpwm2_tripzone_input
+
+;quadrature encoder pulse interface
+public pcb-bundle eqep0 :
+  pin eqep0a_in
+  pin eqep0b_in
+  pin eqep0_index
+  pin eqep0_strobe
+
+public pcb-bundle eqep1 :
+  pin eqep1a_in
+  pin eqep1b_in
+  pin eqep1_index
+  pin eqep1_strobe
+
+public pcb-bundle eqep2 :
+  pin eqep2a_in
+  pin eqep2b_in
+  pin eqep2_index
+  pin eqep2_strobe
+
+;gigabit ethernet
+public pcb-bundle mdio :
+  pin mdio_data
+  pin mdio_mdclk
+  
+public pcb-bundle gmii1 :
+  pin gmii1_col
+  pin gmii1_crs
+  pin gmii1_rxer
+  pin gmii1_txen
+  pin gmii1_rxdv
+  pin gmii1_txd3
+  pin gmii1_txd2
+  pin gmii1_txd1
+  pin gmii1_txd0
+  pin gmii1_txclk
+  pin gmii1_rxclk
+  pin gmii1_rxd3
+  pin gmii1_rxd2
+  pin gmii1_rxd1
+  pin gmii1_rxd0
+
+public pcb-bundle gmii2 :
+  pin gmii2_col
+  pin gmii2_crs
+  pin gmii2_rxer
+  pin gmii2_txen
+  pin gmii2_rxdv
+  pin gmii2_txd3
+  pin gmii2_txd2
+  pin gmii2_txd1
+  pin gmii2_txd0
+  pin gmii2_txclk
+  pin gmii2_rxclk
+  pin gmii2_rxd3
+  pin gmii2_rxd2
+  pin gmii2_rxd1
+  pin gmii2_rxd0
+
+public pcb-bundle i2c0 :
+  pin sda
+  pin scl
+
+public pcb-bundle i2c1 :
+  pin sda
+  pin scl
+
+public pcb-bundle i2c2 :
+  pin sda
+  pin scl
+
+public pcb-bundle lcdc : 
+  pin lcd_data0
+  pin lcd_data1
+  pin lcd_data2
+  pin lcd_data3
+  pin lcd_data4
+  pin lcd_data5
+  pin lcd_data6
+  pin lcd_data7
+  pin lcd_data8
+  pin lcd_data9
+  pin lcd_data10
+  pin lcd_data11
+  pin lcd_data12
+  pin lcd_data13
+  pin lcd_data14
+  pin lcd_data15
+  pin lcd_vsync
+  pin lcd_hsync
+  pin lcd_pclk
+  pin lcd_ac_bias_en
+  pin lcd_data23
+  pin lcd_data22
+  pin lcd_data21
+  pin lcd_data20
+  pin lcd_data19
+  pin lcd_data18
+  pin lcd_data17
+  pin lcd_data16
+  pin lcd_memory_clk
+
+;digital audio
+;ahclkr = rx mclk,  ahclkx = tx mclk
+;aclkr  = rx bclk,  aclkx  = rx blck
+;fsr    = rx lrclk, fsx    = tx lrclk
+;axr0,1,2,3 = din/dout 
+public pcb-bundle mcasp0 (mcasp0_ahclkr?:True|False, mcasp0_aclkr?:True|False, mcasp0_fsr?:True|False, mcasp0_axr2?:True|False, mcasp0_axr3?:True|False, mcasp0_ahclkx?:True|False) :
+  if mcasp0_ahclkr? :
+    pin mcasp0_ahclkr
+  if mcasp0_aclkr? :
+    pin mcasp0_aclkr
+  if mcasp0_fsr? :
+    pin mcasp0_fsr
+  if mcasp0_axr2? :
+    pin mcasp0_axr2
+  if mcasp0_axr3? :
+    pin mcasp0_axr3
+  if mcasp0_ahclkx? :
+    pin mcasp0_ahclkx
+  pin mcasp0_aclkx
+  pin mcasp0_fsx
+  pin mcasp0_axr0
+  pin mcasp0_axr1
+
+public pcb-bundle mcasp1 (mcasp1_axr0?:True|False, mcasp1_ahclkr?:True|False, mcasp1_aclkr?:True|False, mcasp1_fsr?:True|False, mcasp1_axr1?:True|False, mcasp1_axr2?:True|False, mcasp1_axr3?:True|False, mcasp1_ahclkx?:True|False) :
+  if mcasp1_axr0? :
+    pin mcasp1_axr0
+  if mcasp1_ahclkr? :
+    pin mcasp1_ahclkr
+  if mcasp1_aclkr? :   
+    pin mcasp1_aclkr
+  if mcasp1_fsr? :
+    pin mcasp1_fsr
+  if mcasp1_axr1? :
+    pin mcasp1_axr1
+  if mcasp1_axr2? :
+    pin mcasp1_axr2
+  if mcasp1_axr3? : 
+    pin mcasp1_axr3
+  if mcasp1_ahclkx? :
+    pin mcasp1_ahclkx
+  pin mcasp1_aclkx
+  pin mcasp1_fsx
+
+;removeable media interface
+public pcb-bundle mmc0 (mmc0_sdcd?:True|False, mmc0_sdwp?:True|False) :
+  pin mmc0_dat0
+  pin mmc0_dat1
+  pin mmc0_dat2
+  pin mmc0_dat3
+  pin mmc0_dat4
+  pin mmc0_dat5
+  pin mmc0_dat6
+  pin mmc0_dat7
+  pin mmc0_clk 
+  pin mmc0_cmd
+  if mmc0_sdcd? :
+    pin mmc0_sdcd
+  if mmc0_sdwp? :
+    pin mmc0_sdwp
+
+;Note: To boot from MMC, eMMC must be connected to mmc1
+public pcb-bundle mmc1 (mmc1_dat4?:True|False, mmc1_dat5?:True|False, mmc1_dat6?:True|False, mmc1_dat7?:True|False, mmc1_sdcd?:True|False, mmc1_sdwp?:True|False) :
+  pin mmc1_dat0
+  pin mmc1_dat1
+  pin mmc1_dat2
+  pin mmc1_dat3
+  pin mmc1_clk 
+  pin mmc1_cmd
+  if mmc1_dat4? :
+    pin mmc1_dat4
+  if mmc1_dat5? :
+    pin mmc1_dat5
+  if mmc1_dat6? :
+    pin mmc1_dat6
+  if mmc1_dat7? :
+    pin mmc1_dat7
+  if mmc1_sdcd? :
+    pin mmc1_sdcd
+  if mmc1_sdwp? :
+    pin mmc1_sdwp
+
+public pcb-bundle mmc2 (mmc2_dat4?:True|False, mmc2_dat5?:True|False, mmc2_dat6?:True|False, mmc2_dat7?:True|False, mmc2_sdcd?:True|False, mmc2_sdwp?:True|False) :
+  pin mmc2_dat0
+  pin mmc2_dat1
+  pin mmc2_dat2
+  pin mmc2_dat3
+  pin mmc2_clk 
+  pin mmc2_cmd
+  if mmc2_dat4? :
+    pin mmc2_dat4
+  if mmc2_dat5? :
+    pin mmc2_dat5
+  if mmc2_dat6? :
+    pin mmc2_dat6
+  if mmc2_dat7? :
+    pin mmc2_dat7
+  if mmc2_sdcd? :
+    pin mmc2_sdcd
+  if mmc2_sdwp? :
+    pin mmc2_sdwp
+
+;reduced gigabit ethernet
+public pcb-bundle rgmii1 :
+  pin rgmii1_tctl
+  pin rgmii1_rctl
+  pin rgmii1_td3
+  pin rgmii1_td2
+  pin rgmii1_td1
+  pin rgmii1_td0
+  pin rgmii1_tclk
+  pin rgmii1_rclk
+  pin rgmii1_rd3
+  pin rgmii1_rd2
+  pin rgmii1_rd1
+  pin rgmii1_rd0
+
+public pcb-bundle rgmii2 :
+  pin rgmii2_tctl
+  pin rgmii2_rctl
+  pin rgmii2_td3
+  pin rgmii2_td2
+  pin rgmii2_td1
+  pin rgmii2_td0
+  pin rgmii2_tclk
+  pin rgmii2_rclk
+  pin rgmii2_rd3
+  pin rgmii2_rd2
+  pin rgmii2_rd1
+  pin rgmii2_rd0
+
+;reduced fast ethernet
+public pcb-bundle rmii1 :  
+  pin rmii1_crs_dv
+  pin rmii1_rxer
+  pin rmii1_txen
+  pin rmii1_txd1
+  pin rmii1_txd0
+  pin rmii1_rxd1
+  pin rmii1_rxd0
+  pin rmii1_refclk
+
+public pcb-bundle rmii2 :  
+  pin rmii2_crs_dv
+  pin rmii2_rxer
+  pin rmii2_txen
+  pin rmii2_txd1
+  pin rmii2_txd0
+  pin rmii2_rxd1
+  pin rmii2_rxd0
+  pin rmii2_refclk
+
+public pcb-bundle spi0 :
+  pin spi0_sclk
+  pin spi0_d0
+  pin spi0_d1
+  pin spi0_cs0
+  pin spi0_cs1
+
+public pcb-bundle spi1 (spi1_cs1?:True|False) :
+  pin spi1_sclk
+  pin spi1_d0
+  pin spi1_d1
+  pin spi1_cs0
+  if spi1_cs1? :
+    pin spi1_cs1
+
+public pcb-bundle timer4 :
+  pin timer4
+
+public pcb-bundle timer5 :
+  pin timer5
+
+public pcb-bundle timer6 :
+  pin timer6
+
+public pcb-bundle timer7 :
+  pin timer7
+
+public pcb-bundle uart0 (uart0_ctsn?:True|False, uart0_rtsn?:True|False):
+  if uart0_ctsn? :
+    pin uart0_ctsn
+  if uart0_rtsn? :
+    pin uart0_rtsn
+  pin uart0_rxd
+  pin uart0_txd
+
+public pcb-bundle uart1 (uart1_dcdn?:True|False, uart1_dsrn?:True|False, uart1_dtrn?:True|False, uart1_rin?:True|False, uart1_ctsn?:True|False, uart1_rtsn?:True|False):
+  if uart1_dcdn? :
+    pin uart1_dcdn
+  if uart1_dsrn? :
+    pin uart1_dsrn
+  if uart1_dtrn? :
+    pin uart1_dtrn
+  if uart1_rin? :
+    pin uart1_rin
+  if uart1_ctsn? :
+    pin uart1_ctsn
+  if uart1_rtsn? :
+    pin uart1_rtsn
+  pin uart1_rxd
+  pin uart1_txd
+
+public pcb-bundle uart4 (uart4_ctsn?:True|False, uart4_rtsn?:True|False):
+  if uart4_ctsn? :
+    pin uart4_ctsn
+  if uart4_rtsn? :
+    pin uart4_rtsn
+  pin uart4_rxd
+  pin uart4_txd
+
+public pcb-bundle uart5 (uart5_ctsn?:True|False, uart5_rtsn?:True|False):
+  if uart5_ctsn? :
+    pin uart5_ctsn
+  if uart5_rtsn? :
+    pin uart5_rtsn
+  pin uart5_rxd
+  pin uart5_txd
+
+;external memory/general-purpose-memory-controller/FPGA communication
+public pcb-bundle gpmc (gpmc_clk?:True|False, gpmc_wait0?:True|False, gpmc_wait1?:True|False, gpmc_wpn?:True|False, gpmc_dir?:True|False, gpmc_csn1?:True|False, gpmc_csn2?:True|False, gpmc_csn4?:True|False, gpmc_csn5?:True|False, gpmc_csn6?:True|False) :
+  if gpmc_clk? :
+    pin gpmc_clk
+  if gpmc_wait0? :
+    pin gpmc_wait0
+  if gpmc_wait1? :
+    pin gpmc_wait1
+  if gpmc_wpn? :
+    pin gpmc_wpn
+  if gpmc_dir? :
+    pin gpmc_dir
+  if gpmc_csn1? :
+    pin gpmc_csn1
+  if gpmc_csn2? :
+    pin gpmc_csn2
+  if gpmc_csn4? :
+    pin gpmc_csn4 
+  if gpmc_csn5? :
+    pin gpmc_csn5 
+  if gpmc_csn6? :
+    pin gpmc_csn6
+  pin gpmc_ad0
+  pin gpmc_ad1
+  pin gpmc_ad2
+  pin gpmc_ad3
+  pin gpmc_ad4
+  pin gpmc_ad5
+  pin gpmc_ad6
+  pin gpmc_ad7
+  pin gpmc_ad8
+  pin gpmc_ad9
+  pin gpmc_ad10
+  pin gpmc_ad11
+  pin gpmc_ad12
+  pin gpmc_ad13
+  pin gpmc_ad14
+  pin gpmc_ad15
+  pin gpmc_advn_ale
+  pin gpmc_oen_ren
+  pin gpmc_wen
+  pin gpmc_be0n_cle
+  pin gpmc_be1n
+  pin gpmc_csn0
+  pin gpmc_csn3
+  pin gpmc_a0
+  pin gpmc_a1
+  pin gpmc_a2
+  pin gpmc_a3
+  pin gpmc_a4
+  pin gpmc_a5
+  pin gpmc_a6
+  pin gpmc_a7
+  pin gpmc_a8
+  pin gpmc_a9
+  pin gpmc_a10
+  pin gpmc_a11
+  pin gpmc_a12
+  pin gpmc_a13
+  pin gpmc_a14
+  pin gpmc_a15
+  pin gpmc_a16
+  pin gpmc_a17
+  pin gpmc_a18
+  pin gpmc_a19
+  pin gpmc_a20
+  pin gpmc_a21
+  pin gpmc_a22
+  pin gpmc_a23
+  pin gpmc_a24
+  pin gpmc_a25
+;I/O sets end here
+
+;PRU/ICSS - programmable real-time unit / industrial communication sub-system
+;
+;enhanced capture input or auxiliary pwm output
+public pcb-bundle ecap0_pruss1 :
+  pin ecap0_pruss1_capin_apwm_o
+
+;ethercat (note: only available on AM3357 & AM3359)
+public pcb-bundle ecat_pruss1 (pr1_edio_sof?:True|False, pr1_edio_latch_in?:True|False) :
+  if pr1_edio_sof? :
+    pin pr1_edio_sof
+  if pr1_edio_latch_in? :
+    pin pr1_edio_latch_in
+  pin pr1_edio_data_in0
+  pin pr1_edio_data_in1
+  pin pr1_edio_data_in2
+  pin pr1_edio_data_in3
+  pin pr1_edio_data_in4
+  pin pr1_edio_data_in5
+  pin pr1_edio_data_in6
+  pin pr1_edio_data_in7
+  pin pr1_edc_sync0_out
+  pin pr1_edc_sync1_out
+  pin pr1_edc_latch0_in
+  pin pr1_edc_latch1_in
+
+public pcb-bundle mdio_pruss1 :
+  pin pr1_mdio_data
+  pin pr1_mdio_mdclk
+
+public pcb-bundle mii0_pruss1 (pr1_mii0_crs?:True|False) :
+  pin pr1_mii_mt0_clk
+  pin pr1_mii0_col
+  pin pr1_mii0_rxer
+  pin pr1_mii0_txen
+  pin pr1_mii0_txd3
+  pin pr1_mii0_txd2
+  pin pr1_mii0_txd1
+  pin pr1_mii0_txd0
+  pin pr1_mii_mr0_clk
+  pin pr1_mii0_rxdv
+  pin pr1_mii0_rxd3
+  pin pr1_mii0_rxd2
+  pin pr1_mii0_rxd1
+  pin pr1_mii0_rxd0
+  if pr1_mii0_crs? :
+    pin pr1_mii0_crs
+
+public pcb-bundle mii1_pruss1 (pr1_mii1_crs?:True|False) :
+  pin pr1_mii_mt1_clk
+  pin pr1_mii1_col
+  pin pr1_mii1_rxer
+  pin pr1_mii1_txen
+  pin pr1_mii1_txd3
+  pin pr1_mii1_txd2
+  pin pr1_mii1_txd1
+  pin pr1_mii1_txd0
+  pin pr1_mii_mr1_clk
+  pin pr1_mii1_rxdv
+  pin pr1_mii1_rxd3
+  pin pr1_mii1_rxd2
+  pin pr1_mii1_rxd1
+  pin pr1_mii1_rxd0
+  if pr1_mii1_crs? :
+    pin pr1_mii1_crs
+
+public pcb-bundle uart0_pruss1 (pr1_uart0_cts_n?:True|False, pr1_uart0_rts_n?:True|False) :
+  if pr1_uart0_cts_n? :
+    pin pr1_uart0_cts_n
+  if pr1_uart0_rts_n? :
+    pin pr1_uart0_rts_n
+  pin pr1_uart0_rxd
+  pin pr1_uart0_txd
+
+public pcb-bundle pru0_gpio :
+  pin pr1_pru0_pru_r31 
+
+public pcb-bundle pru0_gpo :
+  pin pru1_pru0_pru_r31_gpo
+
+public pcb-bundle pru0_gpi :
+  pin pru1_pru0_pru_r31_gpi
+
+public pcb-bundle pru1_gpio :
+  pin pru1_pru1_pru_r31
+
+public pcb-bundle pru1_gpi :
+  pin pru1_pru1_pru_r31_gpi
+
+
+;non-IO set
+public pcb-bundle adc_ain :
+  pin adc
+
+public pcb-bundle gpios :
+  pin gpio
+
+public pcb-bundle xdma0 :
+  pin xdma_event_intr0
+
+public pcb-bundle xdma1 :
+  pin xdma_event_intr1
+
+public pcb-bundle xdma2 :
+  pin xdma_event_intr2
+
+public pcb-bundle clkout1 :
+  pin clkout1
+
+public pcb-bundle clkout2 :
+  pin clkout2
+
+public pcb-bundle tclkin:
+  pin tclkin
+
+public pcb-bundle uart2 (uart2_ctsn?:True|False, uart2_rtsn?:True|False): 
+  if uart2_ctsn? :
+    pin uart2_ctsn
+  if uart2_rtsn? :
+    pin uart2_rtsn
+  pin uart2_txd
+  pin uart2_rxd
+
+public pcb-bundle uart3 (uart3_ctsn?:True|False, uart3_rtsn?:True|False):
+  if uart3_ctsn? :
+    pin uart3_ctsn
+  if uart3_rtsn? :
+    pin uart3_rtsn
+  pin uart3_txd
+  pin uart3_rxd
+
+public pcb-bundle ddr-dat (dim:Int) :
+  port dq : pin[dim] ;data bits
+  port dqs : diff-pair[dim / 8]
+  port dm : pin[dim / 8]
+
+;check for 15 or 16-bit row address support
+public pcb-bundle ddr-acc (A15?:True|False) :
+  if A15? :
+    port a : pin[16]  ;address bits
+  else :
+    port a : pin[15]  ;address bits
+  port ba : pin[3]
+  port ck : diff-pair
+  pin cke
+  pin odt
+  pin nCS
+  pin nRAS
+  pin nCAS
+  pin nWE
+  pin nRESET  
+  
+;pcb-bundle ddr :
+;  port dat : {ddr-dat(32)}
+;  port acc : {ddr-acc(true)}
+
+public unique pcb-component component :
+  manufacturer = "Texas Instruments"
+  mpn = "AM3358BZCZ100"
+  description = "ARM® Cortex®-A8 Microprocessor IC Sitara™ 1 Core, 32-Bit 1.0GHz 324-NFBGA(15x15)"
+  port dat : {ddr-dat(16)}
+  port acc : {ddr-acc(true)}
+  port usb0 : usb
+  port usb1 : usb
+  pin OSC0_IN 
+  pin OSC0_OUT 
+  pin VSS_OSC 
+  pin OSC1_IN
+  pin OSC1_OUT
+  pin VSS_RTC
+  pin DDR_VTP
+  pin DDR_VREF
+  pin PORZn
+  pin NRESET_INOUT 
+  pin RTC_PORZn 
+  pin NNMI 
+  for i in 0 to 114 do :
+    pin io[i]
+  pin ntrst 
+  pin tms 
+  pin tdi 
+  pin tck 
+  pin tdo 
+  pin PMIC_POWER_EN
+  pin EXT_WAKEUP
+  for i in 0 to 8 do :
+    pin ain[i]
+  pin VREFP
+  pin VREFN
+  pin USB0_CE 
+  pin USB0_ID 
+  pin USB0_VBUS 
+  pin USB1_CE 
+  pin USB1_ID 
+  pin USB1_VBUS 
+  pin VDD_CORE1
+  pin VDD_CORE2
+  pin VDD_CORE3
+  pin VDD_CORE4
+  pin VDD_CORE5 
+  pin VDD_CORE6 
+  pin VDD_CORE7 
+  pin VDD_CORE8
+  pin VDD_CORE9
+  pin VDD_CORE10 
+  pin VDD_CORE11
+  pin VDD_CORE12
+  pin VDD_CORE13
+  pin VDD_CORE14
+  pin VDD_CORE15 
+  pin VDD_CORE16 
+  pin VDD_CORE17
+  pin VDD_CORE18
+  pin VDD_CORE19 
+  pin VDD_CORE20 
+  pin VDD_MPU1 
+  pin VDD_MPU2 
+  pin VDD_MPU3 
+  pin VDD_MPU4 
+  pin VDD_MPU5 
+  pin VDD_MPU6 
+  pin VDD_MPU7 
+  pin VDD_MPU_MON
+  pin CAP_VDD_SRAM_CORE
+  pin VDDS_PLL_MPU 
+  pin VDDS_SRAM_MPU_BB 
+  pin CAP_VDD_SRAM_MPU 
+  pin CAP_VBB_MPU 
+  pin VDDS_SRAM_CORE_BG
+  pin VDDA3P3V_USB0 
+  pin VDDA1P8V_USB0 
+  pin VSSA_USB2 
+  pin VDDA3P3V_USB1 
+  pin VDDA1P8V_USB1 
+  pin VSSA_USB1 
+  pin VDDS_PLL_DDR
+  pin VDDS_DDR1
+  pin VDDS_DDR2
+  pin VDDS_DDR3
+  pin VDDS_DDR4
+  pin VDDS_DDR5
+  pin VDDS_DDR6
+  pin VDDS_DDR7
+  pin VDDSHV11 
+  pin VDDSHV12 
+  pin VDDSHV21 
+  pin VDDSHV22 
+  pin VDDSHV31 
+  pin VDDSHV32 
+  pin VDDSHV41 
+  pin VDDSHV42 
+  pin VDDSHV51 
+  pin VDDSHV52 
+  pin VDDSHV61 
+  pin VDDSHV62 
+  pin VDDSHV63 
+  pin VDDSHV64 
+  pin VDDSHV65 
+  pin VDDSHV66 
+  pin VDDSHV67
+  pin VDDSHV68
+  pin VDDSHV69
+  pin VDDS1
+  pin VDDS2 
+  pin VDDS3
+  pin VDDS4 
+  pin VDDS5
+  pin VDDS6
+  pin VDDS7 
+  pin VDDA_ADC
+  pin VSSA_ADC
+  pin VPP
+  pin VDDS_PLL_CORE_LCD 
+  pin VDDS_RTC
+  pin CAP_VDD_RTC
+  pin ENZ_KALDO_1P8V
+  pin VDDS_OSC 
+  pin TESTOUT
+  pin VSS1
+  pin VSS2
+  pin VSS3
+  pin VSS4
+  pin VSS5
+  pin VSS6
+  pin VSS7
+  pin VSS8
+  pin VSS9
+  pin VSS10
+  pin VSS11
+  pin VSS12
+  pin VSS13
+  pin VSS14
+  pin VSS15
+  pin VSS16
+  pin VSS17
+  pin VSS18
+  pin VSS19
+  pin VSS20
+  pin VSS21
+  pin VSS22
+  pin VSS23
+  pin VSS24
+  pin VSS25
+  pin VSS26
+  pin VSS27
+  pin VSS28
+  pin VSS29
+  pin VSS30
+  pin VSS31
+  pin VSS32
+  pin VSS33
+  pin VSS34
+  pin VSS35
+  pin VSS36
+  pin VSS37
+  pin VSS38  
+
+  val ps = PinSpec $ #TABLE :
+    [Ref | Ref ...   | Dir | Int]
+    [OSC0_IN            | V[10] | Left  | 1]
+    [OSC0_OUT           | U[11] | Left  | 1]
+    [VSS_OSC            | V[11] | Left  | 1]
+    [OSC1_IN            | A[6]  | Left  | 1]
+    [OSC1_OUT           | A[4]  | Left  | 1]
+    [VSS_RTC            | A[5]  | Left  | 1]
+    [acc.a[0]           | F[3]  | Left  | 1]
+    [acc.a[1]           | H[1]  | Left  | 1]
+    [acc.a[2]           | E[4]  | Left  | 1]
+    [acc.a[3]           | C[3]  | Left  | 1]
+    [acc.a[4]           | C[2]  | Left  | 1]
+    [acc.a[5]           | B[1]  | Left  | 1]
+    [acc.a[6]           | D[5]  | Left  | 1]
+    [acc.a[7]           | E[2]  | Left  | 1]
+    [acc.a[8]           | D[4]  | Left  | 1]
+    [acc.a[9]           | C[1]  | Left  | 1]
+    [acc.a[10]          | F[4]  | Left  | 1]
+    [acc.a[11]          | F[2]  | Left  | 1]
+    [acc.a[12]          | E[3]  | Left  | 1]
+    [acc.a[13]          | H[3]  | Left  | 1]     
+    [acc.a[14]          | H[4]  | Left  | 1]
+    [acc.a[15]          | D[3]  | Left  | 1]
+    [acc.ba[0]          | C[4]  | Left  | 1]
+    [acc.ba[1]          | E[1]  | Left  | 1]
+    [acc.ba[2]          | B[3]  | Left  | 1]
+    [dat.dq[0]          | M[3]  | Left  | 1]
+    [dat.dq[1]          | M[4]  | Left  | 1]
+    [dat.dq[2]          | N[1]  | Left  | 1]
+    [dat.dq[3]          | N[2]  | Left  | 1]
+    [dat.dq[4]          | N[3]  | Left  | 1]
+    [dat.dq[5]          | N[4]  | Left  | 1]
+    [dat.dq[6]          | P[3]  | Left  | 1]
+    [dat.dq[7]          | P[4]  | Left  | 1]
+    [dat.dq[8]          | J[1]  | Left  | 1]
+    [dat.dq[9]          | K[1]  | Left  | 1]
+    [dat.dq[10]         | K[2]  | Left  | 1]
+    [dat.dq[11]         | K[3]  | Left  | 1]
+    [dat.dq[12]         | K[4]  | Left  | 1]
+    [dat.dq[13]         | L[3]  | Left  | 1]
+    [dat.dq[14]         | L[4]  | Left  | 1]
+    [dat.dq[15]         | M[1]  | Left  | 1]
+    [acc.ck.P           | D[2]  | Left  | 1]
+    [acc.ck.N           | D[1]  | Left  | 1]
+    [acc.cke            | G[3]  | Left  | 1]
+    [acc.nCS            | H[2]  | Left  | 1]
+    [acc.nCAS           | F[1]  | Left  | 1]
+    [acc.nRAS           | G[4]  | Left  | 1]
+    [acc.nWE            | B[2]  | Left  | 1]
+    [dat.dm[0]          | M[2]  | Left  | 1]
+    [dat.dqs[0].P       | P[1]  | Left  | 1]
+    [dat.dqs[0].N       | P[2]  | Left  | 1]
+    [dat.dm[1]          | J[2]  | Left  | 1]
+    [dat.dqs[1].P       | L[1]  | Left  | 1]
+    [dat.dqs[1].N       | L[2]  | Left  | 1]
+    [acc.odt            | G[1]  | Left  | 1]
+    [acc.nRESET         | G[2]  | Left  | 1]
+    [DDR_VTP            | J[3]  | Left  | 1]
+    [DDR_VREF           | J[4]  | Left  | 1]
+    [PORZn              | B[15] | Right | 1]
+    [NRESET_INOUT       | A[10] | Right | 1]
+    [RTC_PORZn          | B[5]  | Right | 1]
+    [NNMI               | B[18] | Right | 1]  
+    [io[0]              | A[15] | Right | 1] ;EVENT_INTR0/TIMER4/CLKOUT1/SPI1_CS1/PR1PRU1R31_16/EMU2/GPIO0_19
+    [io[1]              | D[14] | Right | 1] ;EVENT_INTR1/TCLKIN/CLKOUT2/TIMER7/PR1PRU0_PRUR31_16/EMU3/GPIO0_20
+    [ntrst              | B[10] | Right | 1] 
+    [tms                | C[11] | Right | 1] 
+    [tdi                | B[11] | Right | 1] 
+    [tck                | A[12] | Right | 1] 
+    [tdo                | A[11] | Right | 1] 
+    [io[2]              | C[14] | Right | 1] ;EMU1/GPIO3_7
+    [io[3]              | B[14] | Right | 1] ;EMU1/GPIO3_8
+    [io[4]              | V[12] | Right | 1] ;GPMC_CLK/LCD_MEM_CLK/GPMC_WAIT1/MMC2_CLK/PRT1_MII1_TXEN/MCASP1_FSR/GPIO2_1
+    [io[5]              | V[6]  | Right | 1] ;GPMC_CSN0/GPIO1_29
+    [io[6]              | U[9]  | Right | 1] ;GPMC_CSN1/GPMC_CLK/MMC1_CLK/PRT1EDIO_DATA_IN6/PRT1_EDIO_DATA_OUT6/PR1_PRU1_PRU_R30_12/PR1_PRU1_PRU_R31_12/GPIO1_30
+    [io[7]              | V[9]  | Right | 1] ;GPMC_CSN2/GPMC_BE1N/MMC1_CMD/PR1_EDIO_DATA_IN7/PR1_EDIO_DATA_OUT7/PR1_PRU1_PRU_R30_13/PR1_PRU1_PRU_R31_13/GPIO1_31
+    [io[8]              | T[13] | Right | 1] ;GPMC_CSN3/MMC2_CMD/PR1_MDIO_DATA/GPIO2_0
+    [io[9]              | U[6]  | Right | 1] ;GPMC_WEN/TIMER6/GPIO2_4
+    [io[10]             | T[7]  | Right | 1] ;GPMC_OEN_REN/TIMER7/EMU4/GPIO2_3
+    [io[11]             | R[7]  | Right | 1] ;GPMC_ADVN_ALE/TIMER4/GPIO2_2
+    [io[12]             | T[6]  | Right | 1] ;GPMC_BE0N_CLE/TIMER5/GPIO2_5
+    [io[13]             | U[18] | Right | 1] ;GPMC_BE1N/GMII2_COL/GPMC_CSN6/MMC2_DAT3/GPMC_DIR/PR1_MII1_RXLINK/MCASP0_ACLKR/GPIO1_28
+    [io[14]             | T[17] | Right | 1] ;GPMC_WAIT0/GM112_CRS/GPMC_CSN4/RMII2_CRS_DV/MMC1_SDCD/PR1_MII1_RXDV/UART4_RXD/GPIO0_30
+    [io[15]             | U[17] | Right | 1] ;GPMC_WPN/GMII2_RXER/GPMC_CSN5/RMII2_RXERR/MMC2_SDCD/PR1_MDIO_MDCLK/UART4_TXD/GPIO0_31
+    [io[16]             | U[7]  | Right | 1] ;GPMC_AD0/MMC1_DAT0//////GPIO1_0
+    [io[17]             | V[7]  | Right | 1] ;GPMC_AD1/MMC1_DAT1//////GPIO1_1
+    [io[18]             | R[8]  | Right | 1] ;GPMC_AD2/MMC1_DAT2//////GPIO1_2
+    [io[19]             | T[8]  | Right | 1] ;GPMC_AD3/MMC1_DAT3//////GPIO1_3
+    [io[20]             | U[8]  | Right | 1] ;GPMC_AD4/MMC1_DAT4//////GPIO1_4
+    [io[21]             | V[8]  | Right | 1] ;GPMC_AD5/MMC1_DAT5//////GPIO1_5
+    [io[22]             | R[9]  | Right | 1] ;GPMC_AD6/MMC1_DAT6//////GPIO1_6
+    [io[23]             | T[9]  | Right | 1] ;GPMC_AD7/MMC1_DAT7//////GPIO1_7
+    [io[24]             | U[10] | Right | 1] ;GPMC_AD8/LCD_DATA23/MMC1_DAT0/MMC2_DAT4/EHRPWM2A/PR1_MII_MT0_CLK//GPIO0_22
+    [io[25]             | T[10] | Right | 1] ;GPMC_AD9/LCD_DATA22/MMC1_DAT1/MMC2_DAT5/EHRPWM2B/PR1_MII0_CRS//GPIO0_23
+    [io[26]             | T[11] | Right | 1] ;GPMC_AD10/LCD_DATA21/MMC1_DAT2/MMC2_DAT6/EHRPWM2_TRIPZONE_INPUT/PR1_MII0_TXEN//GPIO0_26
+    [io[27]             | U[12] | Right | 1] ;GPMC_AD11/LCD_DATA20/MMC1_DAT3/MMC2_DAT7/EHRPWM2_SYNCI_O/PR1_MII0_TXD3//GPIO0_27
+    [io[28]             | T[12] | Right | 1] ;GPMC_AD12/LCD_DATA19/MMC1_DAT4/MMC2_DAT0/EQEP2A_IN/PR1_MII0_TXD2/PR1_PRU0_PRU_R30_14/GPIO1_12
+    [io[29]             | R[12] | Right | 1] ;GPMC_AD13/LCD_DATA18/MMC1_DAT5/MMC2_DAT1/EQEP2B_IN/PR1_MII0_TXD1/PR1_PRU0_PRU_R30_15/GPIO1_13
+    [io[30]             | V[13] | Right | 1] ;GPMC_AD14/LCD_DATA17/MMC1_DAT6/MMC2_DAT2/EQEP2_INDEX/PR1_MII0_TXD0/PR1_PRU0_PRU_R31_14/GPIO1_14
+    [io[31]             | U[13] | Right | 1] ;GPMC_AD15/LCD_DATA16/MMC1_DAT7/MMC2_DAT3/EQEP2_STROBE/PR1_ECAP0_ECAP_CAPIN_APWM_O/PR1_PRU0_PRU_R31_15/GPIO1_15
+    [io[32]             | R[13] | Right | 1] ;GPMC_A0/GMII2_TXEN/RGMII2_TCTL/RMII2_TXEN/GPMC_A16/PR1_MII_MT1_CLK/EHRPWM1_TRIPZONE_INPUT/GPIO1_16
+    [io[33]             | V[14] | Right | 1] ;GPMC_A1/GMII2_RXDV/RGMII2_RCTL/MMC2_DAT0/GPMC_A17/PR1_MII1_TXD3/EHRPWM1_SYNCI_O/GPIO1_17
+    [io[34]             | U[14] | Right | 1] ;GPMC_A2/GMII2_TXD3/RGMII2_TD3/MMC2_DAT1/GPMC_A18/PR1_MII1_TXD2/EHRPWM1A/GPIO1_18
+    [io[35]             | T[14] | Right | 1] ;GPMC_A3/GMII2_TXD2/RGMII2_TD2/MMC2_DAT2/GPMC_A19/PR1_MII1_TXD1/EHRPWM1B/GPIO1_19
+    [io[36]             | R[14] | Right | 1] ;GPMC_A4/GMII2_TXD1/RGMII2_TD1/RMII2_TXD1/GPMC_A20/PR1_MII1_TXD0/EQEP1A_IN/GPIO1_20
+    [io[37]             | V[15] | Right | 1] ;GPMC_A5/GMII2_TXD0/RGMII2_TD0/RMII2_TXD0/GPMC_A21/PR1_MII1_RXD3/EQEP1B_IN/GPIO1_21
+    [io[38]             | U[15] | Right | 1] ;GPMC_A6/GMII2_TXCLK/RGMII2_TCLK/MMC2_DAT4/GPMC_A22/PR1_MII1_RXD2/EQEP1_INDEX/GPIO1_22
+    [io[39]             | T[15] | Right | 1] ;GPMC_A7/GMII2_RXCLK/RGMII2_RCLK/MMC2_DAT5/GPMC_A23/PR1_MII1_RXD1/EQEP1_STROBE/GPIO1_23
+    [io[40]             | V[16] | Right | 1] ;GPMC_A8/GMII2_RXD3/RGMII2_RD3/MMC2_DAT6/GPMC_A24/PR1_MII1_RXD0/MCASP0_ACLKX/GPIO1_24
+    [io[41]             | U[16] | Right | 1] ;GPMC_A9/GMII2_RXD2/RGMII2_RD2/MMC2_DAT7/GPMC_A25/PR1_MII_MR1_CLK/MCASP0_FSX/GPIO1_25
+    [io[42]             | T[16] | Right | 1];GPMC_A10/GMII2_RXD1/RGMII2_RD1/RMII2_RXD1/GPMC_A26/PR1_MII1_CRS/MCASP0_AXR0/GPIO1_26
+    [io[43]             | V[17] | Right | 1] ;GPMC_A11/GMII2_RXD0/RGMII2_RD0/RMII2_RXD0/GPMC_A27/PR1_MII1_RXER/MCASP0_AXR1/GPIO1_27
+    [io[44]             | G[17] | Right | 1] ;MMC0_CLK/GPMC_A24/UART3_CTSN/UART2_RXD/DCAN1_TX/PR1_PRU0_PRU_R30_12/PR1_PRU0_PRU_R31_12/GPIO2_30
+    [io[45]             | G[18] | Right | 1] ;MMC0_CMD/GPMC_A25/UART3_RTSN/UART2_TXD/DCAN1_RX/PR1_PRU0_PRU_R30_13/PR1_PRU0_PRU_R31_13/GPIO2_31
+    [io[46]             | G[16] | Right | 1] ;MMC0_DAT0/GPMC_A23/UART5_RTSN/UART3_TXD/UART1_RIN/PR1_PRU0_PRU_R30_11/PR1_PRU0_PRU_R31_11/GPIO2_29
+    [io[47]             | G[15] | Right | 1] ;MMC0_DAT1/GPMC_A22/UART5_CTSN/UART3_RXD/UART1_DTRN/PR1_PRU0_PRU_R30_10/PR1_PRU0_PRU_R31_10/GPIO2_28
+    [io[48]             | F[18] | Right | 1] ;MMC0_DAT2/GPMC_A21/UART4_RTSN/TIMER6/UART1_DSRN/PR1_PRU0_PRU_R30_9/PR1_PRU0_PRU_R31_9/GPIO2_27
+    [io[49]             | F[17] | Right | 1] ;MMC0_DAT3/GPMC_A20/UART4_CTSN/TIMER5/UART1_DCDN/PR1_PRU0_PRU_R30_8/PR1_PRU0_PRU_R31_8/GPIO2_26
+    [PMIC_POWER_EN      | C[6]  | Left  | 2] 
+    [EXT_WAKEUP         | C[5]  | Left  | 2]
+    [ain[0]             | B[6]  | Left  | 2] ;AIN0 I/O
+    [ain[1]             | C[7]  | Left  | 2] ;AIN1 I/O
+    [ain[2]             | B[7]  | Left  | 2] ;AIN2 I/O
+    [ain[3]             | A[7]  | Left  | 2] ;AIN3 I/O
+    [ain[4]             | C[8]  | Left  | 2] ;AIN4 I/O
+    [ain[5]             | B[8]  | Left  | 2] ;AIN5 I
+    [ain[6]             | A[8]  | Left  | 2] ;AIN6 I
+    [ain[7]             | C[9]  | Left  | 2] ;AIN7 I
+    [VREFP              | B[9]  | Left  | 2]
+    [VREFN              | A[9]  | Left  | 2]
+    [io[50]             | A[17] | Left  | 2] ;SPI0_SCLK/UART2_RXD/I2C2_SDA/EHRPWM0A/PR1_UART0_CTS_N/PR1_EDIO_SOF/EMU2/GPIO0_2
+    [io[51]             | B[17] | Left  | 2] ;SPI0_D0/UART2_TXD/I2C2_SCL/EHRPWM0B/PR1_UART0_RTS_N/PR1_EDIO_LATCH_IN/EMU3/GPIO0_3
+    [io[52]             | B[16] | Left  | 2] ;SPI0_D1/MMC1_SDWP/I2C1_SDA/EHRPWM0_TRIPZONE_INPUT/PR1_UART0_RXD/PR1_EDIO_DATA_IN0/PR1_EDIO_DATA_OUT0/GPIO0_4
+    [io[53]             | A[16] | Left  | 2] ;SPI0_CS0/MMC2_SDWP/I2C1_SCL/EHRPWM0_SYNCI_O/PR1_UART0_TXD/PR1_EDIO_DATA_IN1/PR1_EDIO_DATA_OUT1/GPIO0_5
+    [io[54]             | C[15] | Left  | 2] ;SPI0_CS1/UART3_RXD/ECAP1_IN_PWM1_OUT/MMC0_POW/XDMA_EVENT_INTR2/MMC0_SDCD/EMU4/GPIO0_6
+    [io[55]             | E[16] | Left  | 2] ;UART0_TXD/SPI1_CS1/DCAN0_RX/I2C2_SCL/ECAP1_IN_PWM1_OUT/PR1_PRU1_PRU_R30_15/PR1_PRU1_PRU_R31_15/GPIO1_11
+    [io[56]             | E[15] | Left  | 2] ;UART0_RXD/SPI1_CS0/DCAN0_TX/I2C2_SDA/ECAP2_IN_PWM2_OUT/PR1_PRU1_PRU_R30_14/PR1_PRU1_PRU_R31_14/GPIO1_10
+    [io[57]             | E[18] | Left  | 2] ;UART0_CTSN/UART4_RXD/DCAN1_TX/I2C1_SDA/SPI1_D0/TIMER7/PR1_EDC_SYNC0_OUT/GPIO1_8
+    [io[58]             | E[17] | Left  | 2] ;UART0_RTSN/UART4_TXD/DCAN1_RX/I2C1_SCL/SPI1_D1/SPI1_CS0/PR1_EDC_SYNC1_OUT/GPIO1_9
+    [io[59]             | D[15] | Left  | 2] ;UART1_TXD/MMC2_SDWP/DCAN1_RX/I2C1_SCL//PR1_UART0_TXD/PR1_PRU0_PRU_R31_16/GPIO0_15
+    [io[60]             | D[16] | Left  | 2] ;UART1_RXD/MMC1_SDWP/DCAN1_TX/I2C1_SDA//PR1_UART0_RXD/PR1_PRU1_PRU_R31_16/GPIO0_14
+    [io[61]             | D[18] | Left  | 2] ;UART1_CTSN/TIMER6/DCAN0_TX/I2C2_SDA/SPI1_CS0/PR1_UART0_CTS_N/PR1_EDC_LATCH0_IN/GPIO0_12
+    [io[62]             | D[17] | Left  | 2] ;UART1_RTSN/TIMER5/DCAN0_RX/I2C2_SCL/SPI1_CS1/PR1_UART0_RTS_N/PR1_EDC_LATCH1_IN/GPIO0_13
+    [io[63]             | C[16] | Left  | 2] ;I2C0_SCL/TIMER7/UART2_RTSN/ECAP1_IN_PWM1_OUT////GPIO3_6
+    [io[64]             | C[17] | Left  | 2] ;I2C0_SDA/TIMER4/UART2_CTSN/ECAP2_IN_PWM2_OUT////GPIO3_5
+    [usb0.data.P        | N[17] | Left  | 2] 
+    [usb0.data.N        | N[18] | Left  | 2] 
+    [USB0_CE            | M[15] | Left  | 2] 
+    [USB0_ID            | P[16] | Left  | 2] 
+    [io[65]             | F[16] | Left  | 2] ;USB0_DRVVBUS/GPIO0_18
+    [USB0_VBUS          | P[15] | Left  | 2] 
+    [usb1.data.P        | R[17] | Left  | 2] 
+    [usb1.data.N        | R[18] | Left  | 2] 
+    [USB1_CE            | P[18] | Left  | 2] 
+    [USB1_ID            | P[17] | Left  | 2] 
+    [io[66]             | F[15] | Left  | 2] ;USB1_DRVVBUS/GPIO3_13
+    [USB1_VBUS          | T[18] | Left  | 2] 
+    [io[67]             | C[18] | Left  | 2] ;ECAP0_IN_PWM0_OUT/UART3_TXD/SPI1_CS1/PR1_ECAP0_ECAP_CAPIN_APWM_O/SPI1_SCLK/MMC0_SDWP/XDMA_EVENT_INTR2/GPIO0_7
+    [io[68]             | K[18] | Right | 2] ;GMII1_TXCLK/UART2_RXD/RGMII1_TCLK/MMC0_DAT7/MMC1_DAT0/UART1_DCDN/MCASP0_ACLKX/GPIO3_9
+    [io[69]             | K[17] | Right | 2] ;GMII1_TXD0/RMII1_TXD0/RGMII1_TD0/MCASP1_AXR2/MCASP1_ACLKR/EQEP0B_IN/MMC1_CLK/GPIO0_28
+    [io[70]             | K[16] | Right | 2] ;GMII1_TXD1/RMII1_TXD1/RGMII1_TD1/MCASP1_FSR/MCASP1_AXR1/EQEP0A_IN/MMC1_CMD/GPIO0_21
+    [io[71]             | K[15] | Right | 2] ;GMII1_TXD2/DCAN0_RX/RGMII1_TD2/UART4_TXD/MCASP1_AXR0/MMC2_DAT2/MCASP0_AHCLKX/GPIO0_17
+    [io[72]             | J[18] | Right | 2] ;GMII1_TXD3/DCAN0_TX/RGMII1_TD3/UART4_RXD/MCASP1_FSX/MMC2_DAT1/MCASP0_FSR/GPIO0_16
+    [io[73]             | J[16] | Right | 2] ;GMII1_TXEN/RMII1_TXEN/RGMII1_TCTL/TIMER4/MCASP1_AXR0/EQEP0_INDEX/MMC2_CMD/GPIO3_3
+    [io[74]             | H[17] | Right | 2] ;GMII1_CRS/RMII1_CRS_DV/SPI1_D0/I2C1_SDA/MCASP1_ACLKX/UART5_CTSN/UART2_RXD/GPIO3_1
+    [io[75]             | H[16] | Right | 2] ;GMII1_COL/RMII2_REFCLK/SPI1_SCLK/UART5_RXD/MCASP1_AXR2/MMC2_DAT3/MCASP0_AXR2/GPIO3_0
+    [io[76]             | L[18] | Right | 2] ;GMII1_RXCLK/UART2_TXD/RGMII1_RCLK/MMC0_DAT6/MMC1_DAT1/UART1_DSRN/MCASP0_FSX/GPIO3_10
+    [io[77]             | M[16] | Right | 2] ;GMII1_RXD0/RMII1_RXD0/RGMII1_RD0/MCASP1_AHCLKX/MCASP1_AHCLKR/MCASP1_ACLKR/MCASP0_AXR3/GPIO2_21
+    [io[78]             | L[15] | Right | 2] ;GMII1_RXD1/RMII1_RXD1/RGMII1_RD1/MCASP1_AXR3/MCASP1_FSR/EQEP0_STROBE/MMC2_CLK/GPIO2_20
+    [io[79]             | L[16] | Right | 2] ;GMII1_RXD2/UART3_TXD/RGMII1_RD2/MMC0_DAT4/MMC1_DAT3/UART1_RIN/MCASP0_AXR1/GPIO2_19
+    [io[80]             | L[17] | Right | 2] ;GMII1_RXD3/UART3_RXD/RGMII1_RD3/MMC0_DAT5/MMC1_DAT2/UART1_DTRN/MCASP0_AXR0/GPIO2_18
+    [io[81]             | J[15] | Right | 2] ;GMII1_RXERR/RMII1_RXERR/SPI1_D1/I2C1_SCL/MCASP1_FSX/UART5_RTSN/UART2_TXD/GPIO3_2
+    [io[82]             | J[17] | Right | 2] ;GMII1_RXDV/LCD_MEMORY_CLK/RGMII1_RCTL/UART5_TXD/MCASP1_ACLKX/MMC2_DAT0/MCASP0_ACLKR/GPIO3_4
+    [io[83]             | H[18] | Right | 2] ;RMII1_REFCLK/XDMA_EVENT_INTR2/SPI1_CS0/UART5_TXD/MCASP1_AXR3/MMC0_POW/MCASP1_AHCLKX/GPIO0_29
+    [io[84]             | M[18] | Right | 2] ;MDIO_CLK/TIMER5/UART5_TXD/UART3_RTSN/MMC0_SDWP/MMC1_CLK/MMC2_CLK/GPIO0_1
+    [io[85]             | M[17] | Right | 2] ;MDIO_DATA/TIMER6/UART5_RXD/UART3_CTSN/MMC0_SDCD/MMC1_CMD/MMC2_CMD/GPIO0_0
+    [io[86]             | R[1]  | Right | 2] ;LCD_DATA0/GPMC_A0//EHRPWM2A//PR1_PRU1_PRU_R30_0/PR1_PRU1_PRU_R31_0/GPIO2_6
+    [io[87]             | R[2]  | Right | 2] ;LCD_DATA1/GPMC_A1//EHRPWM2B//PR1_PRU1_PRU_R30_1/PR1_PRU1_PRU_R31_1/GPIO2_7
+    [io[88]             | R[3]  | Right | 2] ;LCD_DATA2/GPMC_A2//EHRPWM2_TRIPZONE_INPUT//PR1_PRU1_PRU_R30_2/PR1_PRU1_PRU_R31_2/GPIO2_8
+    [io[89]             | R[4]  | Right | 2] ;LCD_DATA3/GPMC_A3//EHRPWM2_SYNCI_O//PR1_PRU1_PRU_R30_3/PR1_PRU1_PRU_R31_3/GPIO2_9
+    [io[90]             | T[1]  | Right | 2] ;LCD_DATA4/GPMC_A4//EQEP2A_IN//PR1_PRU1_PRU_R30_4/PR1_PRU1_PRU_R31_4/GPIO2_10
+    [io[91]             | T[2]  | Right | 2] ;LCD_DATA5/GPMC_A5//EQEP2B_IN//PR1_PRU1_PRU_R30_5/PR1_PRU1_PRU_R31_5/GPIO2_11
+    [io[92]             | T[3]  | Right | 2] ;LCD_DATA6/GPMC_A6/PR1_EDIO_DATA_IN6/EQEP2_INDEX/PR1_EDIO_DATA_OUT6/PR1_PRU1_PRU_R30_6/PR1_PRU1_PRU_R31_6/GPIO2_12
+    [io[93]             | T[4]  | Right | 2] ;LCD_DATA7/GPMC_A7/PR1_EDIO_DATA_IN7/EQEP2_STROBE/PR1_EDIO_DATA_OUT7/PR1_PRU1_PRU_R30_7/PR1_PRU1_PRU_R31_7/GPIO2_13
+    [io[94]             | U[1]  | Right | 2] ;LCD_DATA8/GPMC_A12/EHRPWM1_TRIPZONE_INPUT/MCASP0_ACLKX/UART5_TXD/PR1_MII0_RXD3/UART2_CTSN/GPIO2_14
+    [io[95]             | U[2]  | Right | 2] ;LCD_DATA9/GPMC_A13/EHRPWM1_SYNCI_O/MCASP0_FSX/UART5_RXD/PR1_MII0_RXD2/UART2_RTSN/GPIO2_15
+    [io[96]             | U[3]  | Right | 2] ;LCD_DATA10/GPMC_A14/EHRPWM1A/MCASP0_AXR0//PR1_MII0_RXD1/UART3_CTSN/GPIO2_16
+    [io[97]             | U[4]  | Right | 2] ;LCD_DATA11/GPMC_A15/EHRPWM1B/MCASP0_AHCLKR/MCASP0_AXR2/PR1_MII0_RXD0/UART3_RTSN/GPIO2_17
+    [io[98]             | V[2]  | Right | 2] ;LCD_DATA12/GPMC_A16/EQEP1A_IN/MCASP0_ACLKR/MCASP0_AXR2/PR1_MII0_RXLINK/UART4_CTSN/GPIO0_8
+    [io[99]             | V[3]  | Right | 2] ;LCD_DATA13/GPMC_A17/EQEP1B_IN/MCASP0_FSR/MCASP0_AXR3/PR1_MII0_RXER/UART4_RTSN/GPIO0_9
+    [io[100]            | V[4]  | Right | 2] ;LCD_DATA14/GPMC_A18/EQEP1_INDEX/MCASP0_AXR1/UART5_RXD/PR1_MII_MR0_CLK/UART5_CTSN/GPIO0_10
+    [io[101]            | T[5]  | Right | 2] ;LCD_DATA15/GPMC_A19/EQEP1_STROBE/MCASP0_AHCLKX/MCASP0_AXR3/PR1_MII0_RXDV/UART5_RTSN/GPIO0_11
+    [io[102]            | V[5]  | Right | 2] ;LCD_PCLK/GPMC_A10//PR1_EDIO_DATA_IN4/PR1_EDIO_DATA_OUT4/PR1_PRU1_PRU_R30_10/PR1_PRU1_PRU_R31_10/GPIO2_24
+    [io[103]            | U[5]  | Right | 2] ;LCD_VSYNC/GPMC_A8//PR1_EDIO_DATA_IN2/PR1_EDIO_DATA_OUT2/PR1_PRU1_PRU_R30_8/PR1_PRU1_PRU_R31_8/GPIO2_22
+    [io[104]            | R[5]  | Right | 2] ;LCD_HSYNC/GPMC_A9//PR1_EDIO_DATA_IN3/PR1_EDIO_DATA_OUT3/PR1_PRU1_PRU_R30_9/PR1_PRU1_PRU_R31_9/GPIO2_23
+    [io[105]            | R[6]  | Right | 2] ;LCD_AC_BIAS_EN/GPMC_A11//PR1_EDIO_DATA_IN5/PR1_EDIO_DATA_OUT5/PR1_PRU1_PRU_R30_11/PR1_PRU1_PRU_R31_11/GPIO2_25
+    [io[106]            | A[14] | Right | 2] ;MCASP0_AHCLKX/EQEP0_STROBE/MCASP0_AXR3/MCASP1_AXR1/EMU4/PR1_PRU0_PRU_R30_7/PR1_PRU0_PRU_R31_7/GPIO3_21
+    [io[107]            | A[13] | Right | 2] ;MCASP0_ACLKX/EHRPWM0A//SPI1_SCLK/MMC0_SDCD/PR1_PRU0_PRU_R30_0/PR1_PRU0_PRU_R31_0/GPIO3_14
+    [io[108]            | B[13] | Right | 2] ;MCASP0_FSX/EHRPWM0B//SPI1_D0/MMC1_SDCD/PR1_PRU0_PRU_R30_1/PR1_PRU0_PRU_R31_1/GPIO3_15
+    [io[109]            | D[12] | Right | 2] ;MCASP0_AXR0/EHRPWM0_TRIPZONE_INPUT//SPI1_D1/MMC2_SDCD/PR1_PRU0_PRU_R30_2/PR1_PRU0_PRU_R31_2/GPIO3_16
+    [io[110]            | C[12] | Right | 2] ;MCASP0_AHCLKR/EHRPWM0_SYNCI_O/MCASP0_AXR2/SPI1_CS0/ECAP2_IN_PWM2_OUT/PR1_PRU0_PRU_R30_3/PR1_PRU0_PRU_R31_3/GPIO3_17
+    [io[111]            | B[12] | Right | 2] ;MCASP0_ACLKR/EQEP0A_IN/MCASP0_AXR2/MCASP1_ACLKX/MMC0_SDWP/PR1_PRU0_PRU_R30_4/PR1_PRU0_PRU_R31_4/GPIO3_18
+    [io[112]            | C[13] | Right | 2] ;MCASP0_FSR/EQEP0B_IN/MCASP0_AXR3/MCASP1_FSX/EMU2/PR1_PRU0_PRU_R30_5/PR1_PRU0_PRU_R31_5/GPIO3_19
+    [io[113]            | D[13] | Right | 2] ;MCASP0_AXR1/EQEP0_INDEX//MCASP1_AXR0/EMU3/PR1_PRU0_PRU_R30_6/PR1_PRU0_PRU_R31_6/GPIO3_20
+    [VDD_CORE1          | F[6]  | Left  | 3]
+    [VDD_CORE2          | F[7]  | Left  | 3]
+    [VDD_CORE3          | G[6]  | Left  | 3]
+    [VDD_CORE4          | G[7]  | Left  | 3]
+    [VDD_CORE5          | G[10] | Left  | 3]
+    [VDD_CORE6          | H[11] | Left  | 3]
+    [VDD_CORE7          | J[12] | Left  | 3]
+    [VDD_CORE8          | K[6]  | Left  | 3]
+    [VDD_CORE9          | K[8]  | Left  | 3] 
+    [VDD_CORE10         | K[12] | Left  | 3]
+    [VDD_CORE11         | L[6]  | Left  | 3]
+    [VDD_CORE12         | L[7]  | Left  | 3]
+    [VDD_CORE13         | L[8]  | Left  | 3]
+    [VDD_CORE14         | L[9]  | Left  | 3]
+    [VDD_CORE15         | M[11] | Left  | 3]
+    [VDD_CORE16         | M[13] | Left  | 3]
+    [VDD_CORE17         | N[8]  | Left  | 3]
+    [VDD_CORE18         | N[9]  | Left  | 3]
+    [VDD_CORE19         | N[12] | Left  | 3]
+    [VDD_CORE20         | N[13] | Left  | 3]
+    [VDD_MPU1           | F[10] | Left  | 3]
+    [VDD_MPU2           | F[11] | Left  | 3]
+    [VDD_MPU3           | F[12] | Left  | 3]
+    [VDD_MPU4           | F[13] | Left  | 3]
+    [VDD_MPU5           | G[13] | Left  | 3]
+    [VDD_MPU6           | H[13] | Left  | 3]
+    [VDD_MPU7           | J[13] | Left  | 3]
+    [VDD_MPU_MON        | A[2]  | Left  | 3]
+    [CAP_VDD_SRAM_CORE  | D[9]  | Left  | 3]
+    [VDDS_PLL_MPU       | H[15] | Left  | 3]
+    [VDDS_SRAM_MPU_BB   | D[10] | Left  | 3]
+    [CAP_VDD_SRAM_MPU   | D[11] | Left  | 3]
+    [CAP_VBB_MPU        | C[10] | Left  | 3]
+    [VDDS_SRAM_CORE_BG  | E[9]  | Left  | 3]
+    [VDDA3P3V_USB0      | N[15] | Left  | 3]
+    [VDDA1P8V_USB0      | N[16] | Left  | 3]
+    [VSSA_USB2          | M[14] | Left  | 3]
+    [VDDA3P3V_USB1      | R[15] | Left  | 3]
+    [VDDA1P8V_USB1      | R[16] | Left  | 3]
+    [VSSA_USB1          | N[14] | Left  | 3]
+    [VDDS_PLL_DDR       | E[7]  | Left  | 3]
+    [VDDS_DDR1          | E[5]  | Left  | 3]
+    [VDDS_DDR2          | F[5]  | Left  | 3]
+    [VDDS_DDR3          | G[5]  | Left  | 3]
+    [VDDS_DDR4          | H[5]  | Left  | 3]
+    [VDDS_DDR5          | J[5]  | Left  | 3]
+    [VDDS_DDR6          | K[5]  | Left  | 3]
+    [VDDS_DDR7         | L[5]  | Left  | 3]
+    [VDDSHV11           | P[7]  | Right | 3]
+    [VDDSHV12           | P[8]  | Right | 3]
+    [VDDSHV21           | P[10] | Right | 3]
+    [VDDSHV22           | P[11] | Right | 3]
+    [VDDSHV31           | P[12] | Right | 3]
+    [VDDSHV32           | P[13] | Right | 3]
+    [VDDSHV41           | H[14] | Right | 3]
+    [VDDSHV42           | J[14] | Right | 3]
+    [VDDSHV51           | K[14] | Right | 3]
+    [VDDSHV52           | L[14] | Right | 3]
+    [VDDSHV61           | E[10] | Right | 3]
+    [VDDSHV62           | E[11] | Right | 3]
+    [VDDSHV63           | E[12] | Right | 3]
+    [VDDSHV64           | E[13] | Right | 3]
+    [VDDSHV65           | F[14] | Right | 3]
+    [VDDSHV66           | G[14] | Right | 3]
+    [VDDSHV67           | N[5]  | Right | 3]
+    [VDDSHV68           | P[5]  | Right | 3]
+    [VDDSHV69           | P[6]  | Right | 3]
+    [VDDS1              | E[6]  | Right | 3]
+    [VDDS2              | E[14] | Right | 3]
+    [VDDS3              | F[9]  | Right | 3]
+    [VDDS4              | K[13] | Right | 3]
+    [VDDS5              | N[6]  | Right | 3]
+    [VDDS6              | P[9]  | Right | 3]
+    [VDDS7              | P[14] | Right | 3]
+    [VDDA_ADC           | D[8]  | Right | 3]
+    [VSSA_ADC           | E[8]  | Right | 3]
+    [VPP                | M[5]  | Right | 3]
+    [VDDS_PLL_CORE_LCD  | R[10] | Right | 3]
+    [VDDS_RTC           | D[7]  | Right | 3]
+    [CAP_VDD_RTC        | D[6]  | Right | 3]
+    [ENZ_KALDO_1P8V     | B[4]  | Right | 3]
+    [VDDS_OSC           | R[11] | Right | 3]
+    [TESTOUT            | A[3]  | Right | 3]
+    [VSS1               | A[1]  | Down  | 3]
+    [VSS2               | A[18] | Down  | 3]
+    [VSS3               | F[8]  | Down  | 3]
+    [VSS4               | G[8]  | Down  | 3]
+    [VSS5               | G[9]  | Down  | 3]
+    [VSS6               | G[11] | Down  | 3]
+    [VSS7               | G[12] | Down  | 3]
+    [VSS8               | H[6]  | Down  | 3]
+    [VSS9               | H[7]  | Down  | 3]
+    [VSS10              | H[8]  | Down  | 3]
+    [VSS11              | H[9]  | Down  | 3]
+    [VSS12              | H[10] | Down  | 3]
+    [VSS13              | H[12] | Down  | 3]
+    [VSS14              | J[6]  | Down  | 3]
+    [VSS15              | J[7]  | Down  | 3]
+    [VSS16              | J[8]  | Down  | 3]
+    [VSS17              | J[9]  | Down  | 3]
+    [VSS18              | J[10] | Down  | 3]
+    [VSS19              | J[11] | Down  | 3]
+    [VSS20              | K[7]  | Down  | 3]
+    [VSS21              | K[9]  | Down  | 3]
+    [VSS22              | K[10] | Down  | 3]
+    [VSS23              | K[11] | Down  | 3]
+    [VSS24              | L[10] | Down  | 3]
+    [VSS25              | L[11] | Down  | 3]
+    [VSS26              | L[12] | Down  | 3]
+    [VSS27              | L[13] | Down  | 3]
+    [VSS28              | M[6]  | Down  | 3]
+    [VSS29              | M[7]  | Down  | 3]
+    [VSS30              | M[8]  | Down  | 3]
+    [VSS31              | M[9]  | Down  | 3]
+    [VSS32              | M[10] | Down  | 3]
+    [VSS33              | M[12] | Down  | 3]
+    [VSS34              | N[7]  | Down  | 3]
+    [VSS35              | N[10] | Down  | 3]
+    [VSS36              | N[11] | Down  | 3]
+    [VSS37              | V[1]  | Down  | 3]
+    [VSS38              | V[18] | Down  | 3]
+  assign-package(bga-pkg(0.8, 0.4, [18, 18], [17.0, 17.0], []), ps) ;pad size of 0.4mm for 0.5mm ball diameter per IPC-7351A spec, courtyard 1mm nominal per IPC-7351B spec
+  make-box-symbol(ps)
+  ;gen-symbol-map(ps, bga-pkg(0.8, 0.8, [18, 18], [17.0, 17.0], []))
+
+  ;start IO sets
+  supports dcan0 :
+    option :
+      dcan0_tx => io[72]
+      dcan0_rx => io[71]
+    option :
+      dcan0_tx => io[56]
+      dcan0_rx => io[55]
+    option :
+      dcan0_tx => io[61]
+      dcan0_rx => io[62]
+  
+  supports debugss :
+    option :
+      tms => tms
+      tdi => tdi
+      tdo => tdo
+      tck => tck
+      ntrst => ntrst
+      emu0 => io[2]
+      emu1 => io[3]
+      emu2 => io[0]
+      emu3 => io[1]
+      emu4 => io[54]   
+    option : 
+      tms => tms
+      tdi => tdi
+      tdo => tdo
+      tck => tck
+      ntrst => ntrst
+      emu0 => io[2]
+      emu1 => io[3]
+      emu2 => io[50]
+      emu3 => io[51]
+      emu4 => io[54]
+    option :
+      tms => tms
+      tdi => tdi
+      tdo => tdo
+      tck => tck
+      ntrst => ntrst
+      emu0 => io[2]
+      emu1 => io[3]
+      emu2 => io[112]
+      emu3 => io[113]
+      emu4 => io[106]
+    option :
+      tms => tms
+      tdi => tdi
+      tdo => tdo
+      tck => tck
+      ntrst => ntrst
+      emu0 => io[2]
+      emu1 => io[3]
+      emu2 => io[0]
+      emu3 => io[1]
+      emu4 => io[106]
+  
+  supports ecap0 :
+    ecap0_in_pwm0_out => io[67]
+
+  supports ecap0_pruss1 :
+    option :
+      ecap0_pruss1_capin_apwm_o => io[31]
+    option : 
+      ecap0_pruss1_capin_apwm_o => io[67]
+
+  supports ecap1 :
+    option :
+      ecap1_in_pwm1_out => io[54]
+    option : 
+      ecap1_in_pwm1_out => io[55]
+    option : 
+      ecap1_in_pwm1_out => io[63]
+
+  supports ecap2 :
+    option :
+      ecap2_in_pwm2_out => io[56]
+    option :
+      ecap2_in_pwm2_out => io[110]
+    option :
+      ecap2_in_pwm2_out => io[64] 
+
+  supports {ecat_pruss1(true, true)} :
+    option : 
+      pr1_edio_sof => io[50]
+      pr1_edio_latch_in => io[51]
+      pr1_edio_data_in0 => io[52]
+      pr1_edio_data_in1 => io[53]
+      pr1_edio_data_in2 => io[103]
+      pr1_edio_data_in3 => io[104]
+      pr1_edio_data_in4 => io[102]
+      pr1_edio_data_in5 => io[105]
+      pr1_edio_data_in6 => io[6]
+      pr1_edio_data_in7 => io[7]
+      pr1_edc_sync0_out => io[57]
+      pr1_edc_sync1_out => io[58]
+      pr1_edc_latch0_in => io[61]
+      pr1_edc_latch1_in => io[62]
+    option :
+      pr1_edio_sof => io[50]
+      pr1_edio_latch_in => io[51]
+      pr1_edio_data_in0 => io[52]
+      pr1_edio_data_in1 => io[53]
+      pr1_edio_data_in2 => io[103]
+      pr1_edio_data_in3 => io[104]
+      pr1_edio_data_in4 => io[102]
+      pr1_edio_data_in5 => io[105]
+      pr1_edio_data_in6 => io[92]
+      pr1_edio_data_in7 => io[93]
+      pr1_edc_sync0_out => io[57]
+      pr1_edc_sync1_out => io[58]
+      pr1_edc_latch0_in => io[61]
+      pr1_edc_latch1_in => io[62]     
+
+  supports {ecat_pruss1(false, false)} :
+    option :
+      pr1_edio_data_in0 => io[52]
+      pr1_edio_data_in1 => io[53]
+      pr1_edio_data_in2 => io[103]
+      pr1_edio_data_in3 => io[104]
+      pr1_edio_data_in4 => io[102]
+      pr1_edio_data_in5 => io[105]
+      pr1_edio_data_in6 => io[6]
+      pr1_edio_data_in7 => io[7]
+      pr1_edc_sync0_out => io[57]
+      pr1_edc_sync1_out => io[58]
+      pr1_edc_latch0_in => io[61]
+      pr1_edc_latch1_in => io[62]
+    option :
+      pr1_edio_data_in0 => io[52]
+      pr1_edio_data_in1 => io[53]
+      pr1_edio_data_in2 => io[103]
+      pr1_edio_data_in3 => io[104]
+      pr1_edio_data_in4 => io[102]
+      pr1_edio_data_in5 => io[105]
+      pr1_edio_data_in6 => io[92]
+      pr1_edio_data_in7 => io[93]
+      pr1_edc_sync0_out => io[57]
+      pr1_edc_sync1_out => io[58]
+      pr1_edc_latch0_in => io[61]
+      pr1_edc_latch1_in => io[62] 
+      
+  supports ehrpwm0:
+    option :
+      ehrpwm0a => io[107]
+      ehrpwm0b => io[108]
+      ehrpwm0_tripzone_input => io[109]
+      ehrpwm0_synci => io[110]
+      ehrpwm0_synco => io[89]
+    option :
+      ehrpwm0a => io[50]
+      ehrpwm0b => io[51]
+      ehrpwm0_tripzone_input => io[52]
+      ehrpwm0_synci => io[53]
+      ehrpwm0_synco => io[33]
+    option :
+      ehrpwm0a => io[107]
+      ehrpwm0b => io[108]
+      ehrpwm0_tripzone_input => io[109]
+      ehrpwm0_synci => io[110]
+      ehrpwm0_synco => io[89]
+    option :
+      ehrpwm0a => io[50]
+      ehrpwm0b => io[51]
+      ehrpwm0_tripzone_input => io[52]
+      ehrpwm0_synci => io[53]
+      ehrpwm0_synco => io[27]  
+
+  supports ehrpwm1 :
+    option :
+      ehrpwm1a => io[96]
+      ehrpwm1b => io[97]
+      ehrpwm1_tripzone_input => io[94]
+    option :
+      ehrpwm1a => io[34]
+      ehrpwm1b => io[35]
+      ehrpwm1_tripzone_input => io[32] 
+
+  supports ehrpwm2 :
+    option :
+      ehrpwm2a => io[86]
+      ehrpwm2b => io[87]
+      ehrpwm2_tripzone_input => io[88]
+    option :
+      ehrpwm2a => io[24]
+      ehrpwm2b => io[25]
+      ehrpwm2_tripzone_input => io[26]
+  
+  supports eqep0 :
+    option :
+      eqep0a_in => io[111]
+      eqep0b_in => io[112]
+      eqep0_index => io[113]
+      eqep0_strobe => io[106]
+    option :
+      eqep0a_in => io[70]
+      eqep0b_in => io[69]
+      eqep0_index => io[73]
+      eqep0_strobe => io[78]
+
+  supports eqep1 :
+    option :
+      eqep1a_in => io[98]
+      eqep1b_in => io[99]
+      eqep1_index => io[100]
+      eqep1_strobe => io[101]
+    option :
+      eqep1a_in => io[36]
+      eqep1b_in => io[37]
+      eqep1_index => io[38]
+      eqep1_strobe => io[39]
+  
+  supports eqep2 :
+    option : 
+      eqep2a_in => io[90]
+      eqep2b_in => io[91]
+      eqep2_index => io[92]
+      eqep2_strobe => io[93]
+    option :
+      eqep2a_in => io[28]
+      eqep2b_in => io[29]
+      eqep2_index => io[30]
+      eqep2_strobe => io[31]
+  
+  supports gmii1 :
+    gmii1_col => io[75]
+    gmii1_crs => io[74]
+    gmii1_rxer => io[81]
+    gmii1_txen => io[73]
+    gmii1_rxdv => io[82]
+    gmii1_txd3 => io[72]
+    gmii1_txd2 => io[71]
+    gmii1_txd1 => io[70]
+    gmii1_txd0 => io[69]
+    gmii1_txclk => io[68]
+    gmii1_rxclk => io[76]
+    gmii1_rxd3 => io[80]
+    gmii1_rxd2 => io[79]
+    gmii1_rxd1 => io[78]
+    gmii1_rxd0 => io[77]
+
+  supports gmii2 :
+    gmii2_col => io[13]
+    gmii2_crs => io[14]
+    gmii2_rxer => io[15]
+    gmii2_txen => io[32]
+    gmii2_rxdv => io[33]
+    gmii2_txd3 => io[34]
+    gmii2_txd2 => io[35]
+    gmii2_txd1 => io[36]
+    gmii2_txd0 => io[37]
+    gmii2_txclk => io[38]
+    gmii2_rxclk => io[39]
+    gmii2_rxd3 => io[40]
+    gmii2_rxd2 => io[41]
+    gmii2_rxd1 => io[42]
+    gmii2_rxd0 => io[43]
+
+  supports i2c0 :
+    sda => io[64]
+    scl => io[63]
+  
+  supports i2c1 :
+    option :
+      sda => io[74]
+      scl => io[81]
+    option :
+      sda => io[57]
+      scl => io[58]
+    option :
+      sda => io[60]
+      scl => io[59]
+    option :
+      sda => io[52]
+      scl => io[53]
+
+  supports i2c2 :
+    option :
+      sda => io[61]
+      scl => io[62]
+    option :
+      sda => io[56]
+      scl => io[55]
+    option :
+      sda => io[50]
+      scl => io[51]
+
+  supports lcdc :
+    option :
+      lcd_data0 => io[86]
+      lcd_data1 => io[87]
+      lcd_data2 => io[88]
+      lcd_data3 => io[89]
+      lcd_data4 => io[90]
+      lcd_data5 => io[91]
+      lcd_data6 => io[92]
+      lcd_data7 => io[93]
+      lcd_data8 => io[94]
+      lcd_data9 => io[95]
+      lcd_data10 => io[96]
+      lcd_data11 => io[97]
+      lcd_data12 => io[98]
+      lcd_data13 => io[99]
+      lcd_data14 => io[100]
+      lcd_data15 => io[101]
+      lcd_vsync => io[103]
+      lcd_hsync => io[104]
+      lcd_pclk => io[102]
+      lcd_ac_bias_en => io[105]
+      lcd_data23 => io[24]
+      lcd_data22 => io[25]
+      lcd_data21 => io[26]
+      lcd_data20 => io[27]
+      lcd_data19 => io[28]
+      lcd_data18 => io[29]
+      lcd_data17 => io[30]
+      lcd_data16 => io[31]
+      lcd_memory_clk => io[4]
+    option: 
+      lcd_data0 => io[86]
+      lcd_data1 => io[87]
+      lcd_data2 => io[88]
+      lcd_data3 => io[89]
+      lcd_data4 => io[90]
+      lcd_data5 => io[91]
+      lcd_data6 => io[92]
+      lcd_data7 => io[93]
+      lcd_data8 => io[94]
+      lcd_data9 => io[95]
+      lcd_data10 => io[96]
+      lcd_data11 => io[97]
+      lcd_data12 => io[98]
+      lcd_data13 => io[99]
+      lcd_data14 => io[100]
+      lcd_data15 => io[101]
+      lcd_vsync => io[103]
+      lcd_hsync => io[104]
+      lcd_pclk => io[102]
+      lcd_ac_bias_en => io[105]
+      lcd_data23 => io[24]
+      lcd_data22 => io[25]
+      lcd_data21 => io[26]
+      lcd_data20 => io[27]
+      lcd_data19 => io[28]
+      lcd_data18 => io[29]
+      lcd_data17 => io[30]
+      lcd_data16 => io[31]
+      lcd_memory_clk => io[82]
+
+  supports {mcasp0(true, true, true, false, false, true)} :
+    mcasp0_aclkx => io[107]
+    mcasp0_fsx => io[108]
+    mcasp0_axr0 => io[109]
+    mcasp0_ahclkr => io[110]
+    mcasp0_aclkr => io[111]
+    mcasp0_fsr => io[112]
+    mcasp0_axr1 => io[113]
+    mcasp0_ahclkx => io[106]
+
+  supports {mcasp0(true, false, false, true, true, true)} :
+    mcasp0_aclkx => io[107]
+    mcasp0_fsx => io[108]
+    mcasp0_axr0 => io[109]
+    mcasp0_ahclkr => io[110]
+    mcasp0_axr1 => io[113]
+    mcasp0_axr2 => io[111]
+    mcasp0_axr3 => io[112]
+    mcasp0_ahclkx => io[106]
+  
+  supports {mcasp0(false, true, true, true, true, false)} :
+    option :  
+      mcasp0_aclkx => io[107]
+      mcasp0_fsx => io[108]
+      mcasp0_axr0 => io[109]
+      mcasp0_aclkr => io[111]
+      mcasp0_fsr => io[112]
+      mcasp0_axr1 => io[113]
+      mcasp0_axr2 => io[110]
+      mcasp0_axr3 => io[106]
+    option :
+      mcasp0_aclkx => io[94]
+      mcasp0_fsx => io[95]
+      mcasp0_axr0 => io[96]
+      mcasp0_aclkr => io[98]
+      mcasp0_fsr => io[99]
+      mcasp0_axr1 => io[100]
+      mcasp0_axr2 => io[97]
+      mcasp0_axr3 => io[101]
+
+  supports {mcasp0(false, true, true, true, false, true)} :
+    mcasp0_aclkx => io[107]
+    mcasp0_fsx => io[108]
+    mcasp0_axr0 => io[109]
+    mcasp0_aclkr => io[111]
+    mcasp0_fsr => io[112]
+    mcasp0_axr1 => io[113]
+    mcasp0_axr2 => io[110]
+    mcasp0_ahclkx => io[106]
+
+  supports {mcasp0(true, true, true, false, true, false)} :
+    mcasp0_aclkx => io[107]
+    mcasp0_fsx => io[108]
+    mcasp0_axr0 => io[109]
+    mcasp0_ahclkr => io[110]
+    mcasp0_aclkr => io[111]
+    mcasp0_fsr => io[112]
+    mcasp0_axr1 => io[113]
+    mcasp0_axr3 => io[106]
+
+  supports {mcasp0(false, true, true, true, true, true)} :
+    mcasp0_aclkx => io[68]
+    mcasp0_fsx => io[76]
+    mcasp0_axr0 => io[80]
+    mcasp0_aclkr => io[82]
+    mcasp0_fsr => io[72]
+    mcasp0_axr1 => io[79]
+    mcasp0_axr2 => io[75]
+    mcasp0_axr3 => io[77]
+    mcasp0_ahclkx => io[71]
+
+  supports {mcasp0(false, true, true, false, false, false)} :
+    mcasp0_aclkx => io[40]
+    mcasp0_fsx => io[41]
+    mcasp0_axr0 => io[42]
+    mcasp0_aclkr => io[13]
+    mcasp0_fsr => io[4]
+    mcasp0_axr1 => io[43]
+  
+  supports {mcasp1(true, false, false, false, true, false, false, false)} :
+    mcasp1_aclkx => io[111]
+    mcasp1_fsx => io[112]
+    mcasp1_axr0 => io[113]
+    mcasp1_axr1 => io[106]
+  
+  supports {mcasp1(false, false, false, false, false, true, true, false)} :
+    mcasp1_aclkx => io[74]
+    mcasp1_fsx => io[81]
+    mcasp1_axr2 => io[75]
+    mcasp1_axr3 => io[83]
+
+  supports {mcasp1(true, false, false, false, false, true, false, false)} :
+    mcasp1_aclkx => io[82]
+    mcasp1_fsx => io[72]
+    mcasp1_axr0 => io[71]
+    mcasp1_axr2 => io[75]
+
+  supports {mcasp1(false, false, true, true, false, true, true, false)} :
+    mcasp1_aclkx => io[74]
+    mcasp1_fsx => io[81]
+    mcasp1_aclkr => io[77]
+    mcasp1_fsr => io[70]
+    mcasp1_axr2 => io[69]
+    mcasp1_axr3 => io[83]
+
+  supports {mcasp1(true, false, true, true, true, true, true, false)} :
+    mcasp1_aclkx => io[74]
+    mcasp1_fsx => io[81]
+    mcasp1_axr0 => io[73]
+    mcasp1_aclkr => io[77]
+    mcasp1_fsr => io[78]
+    mcasp1_axr1 => io[70]
+    mcasp1_axr2 => io[69]
+    mcasp1_axr3 => io[83]
+
+  supports {mcasp1(true, true, true, true, true, false, false, true)} :
+    mcasp1_aclkx => io[74]
+    mcasp1_fsx => io[81]
+    mcasp1_axr0 => io[73]
+    mcasp1_ahclkr => io[77]
+    mcasp1_aclkr => io[69]
+    mcasp1_fsr => io[78]
+    mcasp1_axr1 => io[70]
+    mcasp1_ahclkx => io[83]
+
+  supports {mcasp1(true, false, true, true, false, true, true, false)} :
+    option :
+      mcasp1_aclkx => io[82]
+      mcasp1_fsx => io[72]
+      mcasp1_axr0 => io[71]
+      mcasp1_aclkr => io[77]
+      mcasp1_fsr => io[78]
+      mcasp1_axr2 => io[75]
+      mcasp1_axr3 => io[83]
+    option :  
+      mcasp1_aclkx => io[82]
+      mcasp1_fsx => io[72]
+      mcasp1_axr0 => io[71]
+      mcasp1_aclkr => io[77]
+      mcasp1_fsr => io[78]
+      mcasp1_axr2 => io[75]
+      mcasp1_axr3 => io[83]
+
+  supports {mcasp1(true, false, false, false, false, true, true, true)} :
+    mcasp1_aclkx => io[82]
+    mcasp1_fsx => io[72]
+    mcasp1_axr0 => io[71] 
+    mcasp1_axr2 => io[75]
+    mcasp1_axr3 => io[78]
+    mcasp1_ahclkx => io[77]   
+
+  supports {mcasp1(false, false, false, false, false, false, true, true)} :
+    mcasp1_aclkx => io[74]
+    mcasp1_fsx => io[81]
+    mcasp1_axr3 => io[78]
+    mcasp1_ahclkx => io[77]
+  
+  supports mdio :
+    mdio_data => io[85]
+    mdio_mdclk => io[84]
+
+  supports mdio_pruss1 :
+    pr1_mdio_data => io[8]
+    pr1_mdio_mdclk => io[4]
+  
+  supports {mii0_pruss1(true)} :
+    option :
+      pr1_mii_mt0_clk => io[24]
+      pr1_mii0_col => io[25]
+      pr1_mii0_rxer => io[99]
+      pr1_mii0_txen => io[26]
+      pr1_mii0_txd3 => io[27]
+      pr1_mii0_txd2 => io[28]
+      pr1_mii0_txd1 => io[29]
+      pr1_mii0_txd0 => io[30]
+      pr1_mii_mr0_clk => io[100]
+      pr1_mii0_rxdv => io[101]
+      pr1_mii0_rxd3 => io[94]
+      pr1_mii0_rxd2 => io[95]
+      pr1_mii0_rxd1 => io[96]
+      pr1_mii0_rxd0 => io[97]
+      pr1_mii0_crs => io[8]
+    option :
+      pr1_mii_mt0_clk => io[24]
+      pr1_mii0_col => io[25]
+      pr1_mii0_rxer => io[99]
+      pr1_mii0_txen => io[26]
+      pr1_mii0_txd3 => io[27]
+      pr1_mii0_txd2 => io[28]
+      pr1_mii0_txd1 => io[29]
+      pr1_mii0_txd0 => io[30]
+      pr1_mii_mr0_clk => io[100]
+      pr1_mii0_rxdv => io[101]
+      pr1_mii0_rxd3 => io[94]
+      pr1_mii0_rxd2 => io[95]
+      pr1_mii0_rxd1 => io[96]
+      pr1_mii0_rxd0 => io[97]
+      pr1_mii0_crs => io[102]
+    option :
+      pr1_mii_mt0_clk => io[86]
+      pr1_mii0_col => io[25]
+      pr1_mii0_rxer => io[99]
+      pr1_mii0_txen => io[87]
+      pr1_mii0_txd3 => io[88]
+      pr1_mii0_txd2 => io[89]
+      pr1_mii0_txd1 => io[90]
+      pr1_mii0_txd0 => io[91]
+      pr1_mii_mr0_clk => io[100]
+      pr1_mii0_rxdv => io[101]
+      pr1_mii0_rxd3 => io[94]
+      pr1_mii0_rxd2 => io[95]
+      pr1_mii0_rxd1 => io[96]
+      pr1_mii0_rxd0 => io[97]
+      pr1_mii0_crs => io[8]
+    option :
+      pr1_mii_mt0_clk => io[86]
+      pr1_mii0_col => io[25]
+      pr1_mii0_rxer => io[99]
+      pr1_mii0_txen => io[87]
+      pr1_mii0_txd3 => io[88]
+      pr1_mii0_txd2 => io[89]
+      pr1_mii0_txd1 => io[90]
+      pr1_mii0_txd0 => io[91]
+      pr1_mii_mr0_clk => io[100]
+      pr1_mii0_rxdv => io[101]
+      pr1_mii0_rxd3 => io[94]
+      pr1_mii0_rxd2 => io[95]
+      pr1_mii0_rxd1 => io[96]
+      pr1_mii0_rxd0 => io[97]
+      pr1_mii0_crs => io[102]
+
+  supports {mii0_pruss1(false)} :
+    option :
+      pr1_mii_mt0_clk => io[24]
+      pr1_mii0_col => io[25]
+      pr1_mii0_rxer => io[99]
+      pr1_mii0_txen => io[26]
+      pr1_mii0_txd3 => io[27]
+      pr1_mii0_txd2 => io[28]
+      pr1_mii0_txd1 => io[29]
+      pr1_mii0_txd0 => io[30]
+      pr1_mii_mr0_clk => io[100]
+      pr1_mii0_rxdv => io[101]
+      pr1_mii0_rxd3 => io[94]
+      pr1_mii0_rxd2 => io[95]
+      pr1_mii0_rxd1 => io[96]
+      pr1_mii0_rxd0 => io[97]
+    option :
+      pr1_mii_mt0_clk => io[86]
+      pr1_mii0_col => io[25]
+      pr1_mii0_rxer => io[99]
+      pr1_mii0_txen => io[87]
+      pr1_mii0_txd3 => io[88]
+      pr1_mii0_txd2 => io[89]
+      pr1_mii0_txd1 => io[90]
+      pr1_mii0_txd0 => io[91]
+      pr1_mii_mr0_clk => io[100]
+      pr1_mii0_rxdv => io[101]
+      pr1_mii0_rxd3 => io[94]
+      pr1_mii0_rxd2 => io[95]
+      pr1_mii0_rxd1 => io[96]
+      pr1_mii0_rxd0 => io[97]
+
+  supports {mii1_pruss1(true)} :  
+    option :
+      pr1_mii_mt1_clk => io[32]
+      pr1_mii1_col => io[14]
+      pr1_mii1_rxer => io[43]
+      pr1_mii1_txen => io[15]
+      pr1_mii1_txd3 => io[33]
+      pr1_mii1_txd2 => io[34]
+      pr1_mii1_txd1 => io[35]
+      pr1_mii1_txd0 => io[36]
+      pr1_mii_mr1_clk => io[41]
+      pr1_mii1_rxdv => io[42]
+      pr1_mii1_rxd3 => io[37]
+      pr1_mii1_rxd2 => io[38]
+      pr1_mii1_rxd1 => io[39]
+      pr1_mii1_rxd0 => io[40]
+      pr1_mii1_crs => io[4]
+    option :
+      pr1_mii_mt1_clk => io[32]
+      pr1_mii1_col => io[14]
+      pr1_mii1_rxer => io[43]
+      pr1_mii1_txen => io[15]
+      pr1_mii1_txd3 => io[33]
+      pr1_mii1_txd2 => io[34]
+      pr1_mii1_txd1 => io[35]
+      pr1_mii1_txd0 => io[36]
+      pr1_mii_mr1_clk => io[41]
+      pr1_mii1_rxdv => io[42]
+      pr1_mii1_rxd3 => io[37]
+      pr1_mii1_rxd2 => io[38]
+      pr1_mii1_rxd1 => io[39]
+      pr1_mii1_rxd0 => io[40]
+      pr1_mii1_crs => io[105]
+
+  supports {mii1_pruss1(false)} :
+    pr1_mii_mt1_clk => io[32]
+    pr1_mii1_col => io[14]
+    pr1_mii1_rxer => io[43]
+    pr1_mii1_txen => io[15]
+    pr1_mii1_txd3 => io[33]
+    pr1_mii1_txd2 => io[34]
+    pr1_mii1_txd1 => io[35]
+    pr1_mii1_txd0 => io[36]
+    pr1_mii_mr1_clk => io[41]
+    pr1_mii1_rxdv => io[42]
+    pr1_mii1_rxd3 => io[37]
+    pr1_mii1_rxd2 => io[38]
+    pr1_mii1_rxd1 => io[39]
+    pr1_mii1_rxd0 => io[40]
+
+  unique pcb-bundle mmc0_sdcd: (pin io)
+  for i in [54, 85, 107] do :
+    supports {mmc0_sdcd} :
+      io => io[i]
+     
+  unique pcb-bundle mmc0_sdwp: (pin io)
+  for i in [67, 84, 111] do :
+    supports {mmc0_sdwp} :
+      io => io[i]    
+
+  supports {mmc0(true, true)}:
+    mmc0_dat0 => io[46]
+    mmc0_dat1 => io[47]
+    mmc0_dat2 => io[48]
+    mmc0_dat3 => io[49]
+    mmc0_dat4 => io[79]
+    mmc0_dat5 => io[80]
+    mmc0_dat6 => io[76]
+    mmc0_dat7 => io[68]
+    mmc0_clk => io[44]
+    mmc0_cmd => io[45] 
+    require card-detect:{mmc0_sdcd} 
+    mmc0_sdcd => card-detect.io
+    require write-protect:{mmc0_sdwp} 
+    mmc0_sdwp => write-protect.io
+  
+  supports {mmc0(false, false)}:
+    mmc0_dat0 => io[46]
+    mmc0_dat1 => io[47]
+    mmc0_dat2 => io[48]
+    mmc0_dat3 => io[49]
+    mmc0_dat4 => io[79]
+    mmc0_dat5 => io[80]
+    mmc0_dat6 => io[76]
+    mmc0_dat7 => io[68]
+    mmc0_clk => io[44]
+    mmc0_cmd => io[45]    
+
+  unique pcb-bundle mmc1_sdcd: (pin io)
+  for i in [14, 108] do :
+    supports {mmc1_sdcd} :
+      io => io[i]
+     
+  unique pcb-bundle mmc1_sdwp: (pin io)
+  for i in [52, 60] do :
+    supports {mmc1_sdwp} :
+      io => io[i]
+  
+  supports {mmc1(true, true, true, true, true, true)} :
+    option :
+      mmc1_dat0 => io[16]
+      mmc1_dat1 => io[17]
+      mmc1_dat2 => io[18]
+      mmc1_dat3 => io[19]
+      mmc1_dat4 => io[20]
+      mmc1_dat5 => io[21]
+      mmc1_dat6 => io[22]
+      mmc1_dat7 => io[23]
+      mmc1_clk => io[6]
+      mmc1_cmd => io[7]
+      require card-detect:{mmc1_sdcd} 
+      mmc1_sdcd => card-detect.io
+      require write-protect:{mmc1_sdwp} 
+      mmc1_sdwp => write-protect.io
+    option :
+      mmc1_dat0 => io[24]
+      mmc1_dat1 => io[25]
+      mmc1_dat2 => io[26]
+      mmc1_dat3 => io[27]
+      mmc1_dat4 => io[28]
+      mmc1_dat5 => io[29]
+      mmc1_dat6 => io[30]
+      mmc1_dat7 => io[31]
+      mmc1_clk => io[6]
+      mmc1_cmd => io[7]
+      require card-detect:{mmc1_sdcd} 
+      mmc1_sdcd => card-detect.io
+      require write-protect:{mmc1_sdwp} 
+      mmc1_sdwp => write-protect.io
+
+  supports {mmc1(true, true, true, true, false, false)} :
+    option :
+      mmc1_dat0 => io[16]
+      mmc1_dat1 => io[17]
+      mmc1_dat2 => io[18]
+      mmc1_dat3 => io[19]
+      mmc1_dat4 => io[20]
+      mmc1_dat5 => io[21]
+      mmc1_dat6 => io[22]
+      mmc1_dat7 => io[23]
+      mmc1_clk => io[6]
+      mmc1_cmd => io[7]
+    option :
+      mmc1_dat0 => io[24]
+      mmc1_dat1 => io[25]
+      mmc1_dat2 => io[26]
+      mmc1_dat3 => io[27]
+      mmc1_dat4 => io[28]
+      mmc1_dat5 => io[29]
+      mmc1_dat6 => io[30]
+      mmc1_dat7 => io[31]
+      mmc1_clk => io[6]
+      mmc1_cmd => io[7]
+  
+  supports {mmc1(false, false, false, false, true, true)} :
+    option :
+      mmc1_dat0 => io[68]
+      mmc1_dat1 => io[76]
+      mmc1_dat2 => io[80]
+      mmc1_dat3 => io[79]
+      mmc1_clk => io[69]
+      mmc1_cmd => io[70]
+      require card-detect:{mmc1_sdcd} 
+      mmc1_sdcd => card-detect.io
+      require write-protect:{mmc1_sdwp} 
+      mmc1_sdwp => write-protect.io
+    option :
+      mmc1_dat0 => io[68]
+      mmc1_dat1 => io[76]
+      mmc1_dat2 => io[80]
+      mmc1_dat3 => io[79]
+      mmc1_clk => io[84]
+      mmc1_cmd => io[85]
+      require card-detect:{mmc1_sdcd} 
+      mmc1_sdcd => card-detect.io
+      require write-protect:{mmc1_sdwp} 
+      mmc1_sdwp => write-protect.io
+
+  supports {mmc1(false, false, false, false, false, false)} :
+    option :
+      mmc1_dat0 => io[68]
+      mmc1_dat1 => io[76]
+      mmc1_dat2 => io[80]
+      mmc1_dat3 => io[79]
+      mmc1_clk => io[69]
+      mmc1_cmd => io[70]
+    option :
+      mmc1_dat0 => io[68]
+      mmc1_dat1 => io[76]
+      mmc1_dat2 => io[80]
+      mmc1_dat3 => io[79]
+      mmc1_clk => io[84]
+      mmc1_cmd => io[85]
+  
+  unique pcb-bundle mmc2_sdcd: (pin io)
+  for i in [15, 109] do :
+    supports {mmc2_sdcd} :
+      io => io[i]
+     
+  unique pcb-bundle mmc2_sdwp: (pin io)
+  for i in [53, 59] do :
+    supports {mmc2_sdwp} :
+      io => io[i]
+
+  supports {mmc2(true, true, true, true, true, true)} :
+    option :
+      mmc2_dat0 => io[28]
+      mmc2_dat1 => io[29]
+      mmc2_dat2 => io[30]
+      mmc2_dat3 => io[31]
+      mmc2_dat4 => io[24]
+      mmc2_dat5 => io[25]
+      mmc2_dat6 => io[26]
+      mmc2_dat7 => io[27]
+      mmc2_clk => io[4]
+      mmc2_cmd => io[8]
+      require card-detect:{mmc2_sdcd} 
+      mmc2_sdcd => card-detect.io
+      require write-protect:{mmc2_sdwp} 
+      mmc2_sdwp => write-protect.io
+    option :
+      mmc2_dat0 => io[33]
+      mmc2_dat1 => io[34]
+      mmc2_dat2 => io[35]
+      mmc2_dat3 => io[13]
+      mmc2_dat4 => io[38]
+      mmc2_dat5 => io[39]
+      mmc2_dat6 => io[40]
+      mmc2_dat7 => io[41]
+      mmc2_clk => io[4]
+      mmc2_cmd => io[8]
+      require card-detect:{mmc2_sdcd} 
+      mmc2_sdcd => card-detect.io
+      require write-protect:{mmc2_sdwp} 
+      mmc2_sdwp => write-protect.io
+
+  supports {mmc2(true, true, true, true, false, false)} :
+    option :
+      mmc2_dat0 => io[28]
+      mmc2_dat1 => io[29]
+      mmc2_dat2 => io[30]
+      mmc2_dat3 => io[31]
+      mmc2_dat4 => io[24]
+      mmc2_dat5 => io[25]
+      mmc2_dat6 => io[26]
+      mmc2_dat7 => io[27]
+      mmc2_clk => io[4]
+      mmc2_cmd => io[8]
+    option :
+      mmc2_dat0 => io[33]
+      mmc2_dat1 => io[34]
+      mmc2_dat2 => io[35]
+      mmc2_dat3 => io[13]
+      mmc2_dat4 => io[38]
+      mmc2_dat5 => io[39]
+      mmc2_dat6 => io[40]
+      mmc2_dat7 => io[41]
+      mmc2_clk => io[4]
+      mmc2_cmd => io[8]
+  
+  supports {mmc2(false, false, false, false, true, true)} :
+    option :
+      mmc2_dat0 => io[82]
+      mmc2_dat1 => io[72]
+      mmc2_dat2 => io[71]
+      mmc2_dat3 => io[75]
+      mmc2_clk => io[84]
+      mmc2_cmd => io[85]
+      require card-detect:{mmc2_sdcd} 
+      mmc2_sdcd => card-detect.io
+      require write-protect:{mmc2_sdwp} 
+      mmc2_sdwp => write-protect.io
+    option :
+      mmc2_dat0 => io[82]
+      mmc2_dat1 => io[72]
+      mmc2_dat2 => io[71]
+      mmc2_dat3 => io[75]
+      mmc2_clk => io[78]
+      mmc2_cmd => io[73]
+      require card-detect:{mmc2_sdcd} 
+      mmc2_sdcd => card-detect.io
+      require write-protect:{mmc2_sdwp} 
+      mmc2_sdwp => write-protect.io
+
+  supports {mmc2(false, false, false, false, false, false)} :
+    option :
+      mmc2_dat0 => io[82]
+      mmc2_dat1 => io[72]
+      mmc2_dat2 => io[71]
+      mmc2_dat3 => io[75]
+      mmc2_clk => io[84]
+      mmc2_cmd => io[85]
+    option :
+      mmc2_dat0 => io[82]
+      mmc2_dat1 => io[72]
+      mmc2_dat2 => io[71]
+      mmc2_dat3 => io[75]
+      mmc2_clk => io[78]
+      mmc2_cmd => io[73]
+  
+  supports rgmii1 :
+    rgmii1_tctl => io[73]
+    rgmii1_rctl => io[82]
+    rgmii1_td3 => io[72]
+    rgmii1_td2 => io[71]
+    rgmii1_td1 => io[70]
+    rgmii1_td0 => io[69]
+    rgmii1_tclk => io[68]
+    rgmii1_rclk => io[76]
+    rgmii1_rd3 => io[80]
+    rgmii1_rd2 => io[79]
+    rgmii1_rd1 => io[78]
+    rgmii1_rd0 => io[77]
+  
+  supports rgmii2:
+    rgmii2_tctl => io[32]
+    rgmii2_rctl => io[33]
+    rgmii2_td3 => io[34]
+    rgmii2_td2 => io[35]
+    rgmii2_td1 => io[36]
+    rgmii2_td0 => io[37]
+    rgmii2_tclk => io[38]
+    rgmii2_rclk => io[39]
+    rgmii2_rd3 => io[40]
+    rgmii2_rd2 => io[41]
+    rgmii2_rd1 => io[42]
+    rgmii2_rd0 => io[43]
+
+  supports rmii1 :
+    rmii1_crs_dv => io[74]
+    rmii1_rxer => io[81]
+    rmii1_txen => io[73]
+    rmii1_txd1 => io[70]
+    rmii1_txd0 => io[69]
+    rmii1_rxd1 => io[78]
+    rmii1_rxd0 => io[77]
+    rmii1_refclk => io[83]
+  
+  supports rmii2 :
+    option :
+      rmii2_crs_dv => io[14]
+      rmii2_rxer => io[15]
+      rmii2_txen => io[32]
+      rmii2_txd1 => io[36]
+      rmii2_txd0 => io[37]
+      rmii2_rxd1 => io[42]
+      rmii2_rxd0 => io[43]
+      rmii2_refclk => io[75]
+    option :
+      rmii2_crs_dv => io[8]
+      rmii2_rxer => io[15]
+      rmii2_txen => io[32]
+      rmii2_txd1 => io[36]
+      rmii2_txd0 => io[37]
+      rmii2_rxd1 => io[42]
+      rmii2_rxd0 => io[43]
+      rmii2_refclk => io[75]
+    option :
+      rmii2_crs_dv => io[41]
+      rmii2_rxer => io[15]
+      rmii2_txen => io[32]
+      rmii2_txd1 => io[36]
+      rmii2_txd0 => io[37]
+      rmii2_rxd1 => io[42]
+      rmii2_rxd0 => io[43]
+      rmii2_refclk => io[75]
+  
+  supports spi0 :
+    spi0_sclk => io[50]
+    spi0_d0 => io[51]
+    spi0_d1 => io[52]
+    spi0_cs0 => io[53]
+    spi0_cs1 => io[54]
+  
+  supports {spi1(true)} :
+    option :
+      spi1_sclk => io[75]
+      spi1_d0 => io[74]
+      spi1_d1 => io[81]
+      spi1_cs0 => io[83]
+      spi1_cs1 => io[67]
+    option :  
+      spi1_sclk => io[75]
+      spi1_d0 => io[74]
+      spi1_d1 => io[81]
+      spi1_cs0 => io[56]
+      spi1_cs1 => io[55]
+    option :
+      spi1_sclk => io[75]
+      spi1_d0 => io[74]
+      spi1_d1 => io[81]
+      spi1_cs0 => io[58]
+      spi1_cs1 => io[62]
+    option :
+      spi1_sclk => io[75]
+      spi1_d0 => io[74]
+      spi1_d1 => io[81]
+      spi1_cs0 => io[58]
+      spi1_cs1 => io[0]
+    option :
+      spi1_sclk => io[67]
+      spi1_d0 => io[57]
+      spi1_d1 => io[58]
+      spi1_cs0 => io[56]
+      spi1_cs1 => io[55]
+    option :
+      spi1_sclk => io[67]
+      spi1_d0 => io[57]
+      spi1_d1 => io[58]
+      spi1_cs0 => io[61]
+      spi1_cs1 => io[62]
+    option :
+      spi1_sclk => io[67]
+      spi1_d0 => io[57]
+      spi1_d1 => io[58]
+      spi1_cs0 => io[61]
+      spi1_cs1 => io[0]
+    option :
+      spi1_sclk => io[107]
+      spi1_d0 => io[108]
+      spi1_d1 => io[109]
+      spi1_cs0 => io[83]
+      spi1_cs1 => io[67]
+    option :
+      spi1_sclk => io[107]
+      spi1_d0 => io[108]
+      spi1_d1 => io[109]
+      spi1_cs0 => io[56]
+      spi1_cs1 => io[55]
+    option :
+      spi1_sclk => io[107]
+      spi1_d0 => io[108]
+      spi1_d1 => io[109]
+      spi1_cs0 => io[58]
+      spi1_cs1 => io[62]
+    option :
+      spi1_sclk => io[107]
+      spi1_d0 => io[108]
+      spi1_d1 => io[109]
+      spi1_cs0 => io[58]
+      spi1_cs1 => io[0]
+
+  supports {spi1(false)} :
+    option :
+      spi1_sclk => io[75]
+      spi1_d0 => io[74]
+      spi1_d1 => io[81]
+      spi1_cs0 => io[110]
+    option :
+      spi1_sclk => io[67]
+      spi1_d0 => io[57]
+      spi1_d1 => io[58]
+      spi1_cs0 => io[83]
+    option :
+      spi1_sclk => io[67]
+      spi1_d0 => io[57]
+      spi1_d1 => io[58]
+      spi1_cs0 => io[110]
+    option :
+      spi1_sclk => io[107]
+      spi1_d0 => io[108]
+      spi1_d1 => io[109]
+      spi1_cs0 => io[110]
+  
+  supports timer4 :
+    option :
+      timer4 => io[73]
+    option :
+      timer4 => io[0]
+    option :
+      timer4 => io[64]
+    option :
+      timer4 => io[11]
+  
+  supports timer5 :
+    option :
+      timer5 => io[49]
+    option :
+      timer5 => io[62]
+    option :
+      timer5 => io[84]
+    option :
+      timer5 => io[12]
+  
+  supports timer6 :
+    option :
+      timer6 => io[48]
+    option :
+      timer6 => io[61]
+    option :
+      timer6 => io[85]
+    option :
+      timer6 => io[9]
+
+  supports timer7 :
+    option :
+      timer7 => io[57]
+    option :
+      timer7 => io[1]
+    option :
+      timer7 => io[63]
+    option :
+      timer7 => io[10]
+
+  supports {uart0(true,true)}: 
+    uart0_ctsn => io[57]
+    uart0_rtsn => io[58]
+    uart0_rxd => io[56]
+    uart0_txd => io[55]
+
+  supports {uart0(false,false)}:
+    uart0_rxd => io[56]
+    uart0_txd => io[55]
+
+  supports {uart0_pruss1(true,true)} : 
+    option :
+      pr1_uart0_cts_n => io[50]
+      pr1_uart0_rts_n => io[51]
+      pr1_uart0_rxd => io[52]
+      pr1_uart0_txd => io[53]
+    option :
+      pr1_uart0_cts_n => io[61]
+      pr1_uart0_rts_n => io[62]
+      pr1_uart0_rxd => io[60]
+      pr1_uart0_txd => io[59]
+    
+  supports {uart0_pruss1(false,false)} :
+    option :
+      pr1_uart0_rxd => io[52]
+      pr1_uart0_txd => io[53]
+    option :
+      pr1_uart0_rxd => io[60]
+      pr1_uart0_txd => io[59]
+  
+  supports {uart1(true,true,true,true,true,true)}:
+    option :
+      uart1_dcdn => io[68]
+      uart1_dsrn => io[76]
+      uart1_dtrn => io[80]
+      uart1_rin => io[79]
+      uart1_ctsn => io[61]
+      uart1_rtsn => io[62]
+      uart1_rxd => io[60]
+      uart1_txd => io[59]
+    option :
+      uart1_dcdn => io[49]
+      uart1_dsrn => io[48]
+      uart1_dtrn => io[47]
+      uart1_rin => io[46]
+      uart1_ctsn => io[61]
+      uart1_rtsn => io[62]
+      uart1_rxd => io[60]
+      uart1_txd => io[59]
+    
+  supports {uart1(false,false,false,false,false,false)}:
+    uart1_rxd => io[60]
+    uart1_txd => io[59]
+
+  supports {uart1(false,false,false,false,true,true)}:
+      uart1_ctsn => io[61]
+      uart1_rtsn => io[62]
+      uart1_rxd => io[60]
+      uart1_txd => io[59]
+      
+
+  supports {uart4(true,true)}:
+    option :
+      uart4_ctsn => io[49]
+      uart4_rtsn => io[48]
+      uart4_rxd => io[72]
+      uart4_txd => io[71]
+    option :
+      uart4_ctsn => io[49]
+      uart4_rtsn => io[48]
+      uart4_rxd => io[57]
+      uart4_txd => io[58]
+    option :
+      uart4_ctsn => io[49]
+      uart4_rtsn => io[48]
+      uart4_rxd => io[14]
+      uart4_txd => io[15]
+    option :
+      uart4_ctsn => io[98]
+      uart4_rtsn => io[99]
+      uart4_rxd => io[72]
+      uart4_txd => io[71]
+    option :
+      uart4_ctsn => io[98]
+      uart4_rtsn => io[99]
+      uart4_rxd => io[57]
+      uart4_txd => io[58]
+    option :
+      uart4_ctsn => io[98]
+      uart4_rtsn => io[99]
+      uart4_rxd => io[14]
+      uart4_txd => io[15]
+
+  supports {uart4(false,false)} :
+    option :
+      uart4_rxd => io[72]
+      uart4_txd => io[71]
+    option :
+      uart4_rxd => io[57]
+      uart4_txd => io[58]
+    option :
+      uart4_rxd => io[14]
+      uart4_txd => io[15]
+    option :
+      uart4_rxd => io[72]
+      uart4_txd => io[71]
+    option :
+      uart4_rxd => io[57]
+      uart4_txd => io[58]
+    option :
+      uart4_rxd => io[14]
+      uart4_txd => io[15]
+
+  supports {uart5(true,true)} :
+    option :
+      uart5_ctsn => io[47]
+      uart5_rtsn => io[46]
+      uart5_rxd => io[75]
+      uart5_txd => io[82]
+    option :
+      uart5_ctsn => io[47]
+      uart5_rtsn => io[46]
+      uart5_rxd => io[75]
+      uart5_txd => io[83]
+    option :
+      uart5_ctsn => io[47]
+      uart5_rtsn => io[46]
+      uart5_rxd => io[100]
+      uart5_txd => io[83]
+    option :
+      uart5_ctsn => io[47]
+      uart5_rtsn => io[46]
+      uart5_rxd => io[95]
+      uart5_txd => io[94]
+    option :
+      uart5_ctsn => io[47]
+      uart5_rtsn => io[46]
+      uart5_rxd => io[85]
+      uart5_txd => io[84]
+    option :
+      uart5_ctsn => io[47]
+      uart5_rtsn => io[46]
+      uart5_rxd => io[100]
+      uart5_txd => io[82]
+    option :
+      uart5_ctsn => io[100]
+      uart5_rtsn => io[101]
+      uart5_rxd => io[75]
+      uart5_txd => io[82]
+    option :
+      uart5_ctsn => io[100]
+      uart5_rtsn => io[101]
+      uart5_rxd => io[75]
+      uart5_txd => io[83]
+    option :
+      uart5_ctsn => io[100]
+      uart5_rtsn => io[101]
+      uart5_rxd => io[95]
+      uart5_txd => io[94]
+    option :
+      uart5_ctsn => io[100]
+      uart5_rtsn => io[101]
+      uart5_rxd => io[85]
+      uart5_txd => io[84]
+    option :
+      uart5_ctsn => io[74]
+      uart5_rtsn => io[81]
+      uart5_rxd => io[75]
+      uart5_txd => io[82]
+    option :
+      uart5_ctsn => io[74]
+      uart5_rtsn => io[81]
+      uart5_rxd => io[75]
+      uart5_txd => io[83]
+    option:
+      uart5_ctsn => io[74]
+      uart5_rtsn => io[81]
+      uart5_rxd => io[100]
+      uart5_txd => io[83]
+    option :
+      uart5_ctsn => io[74]
+      uart5_rtsn => io[81]
+      uart5_rxd => io[95]
+      uart5_txd => io[94]
+    option :
+      uart5_ctsn => io[74]
+      uart5_rtsn => io[81]
+      uart5_rxd => io[85]
+      uart5_txd => io[84]
+    option :
+      uart5_ctsn => io[74]
+      uart5_rtsn => io[81]
+      uart5_rxd => io[100]
+      uart5_txd => io[82]
+
+  supports {uart5(false,false)} : 
+    option :
+      uart5_rxd => io[100]
+      uart5_txd => io[83]
+    option :
+      uart5_rxd => io[100]
+      uart5_txd => io[82]
+    option :
+      uart5_rxd => io[75]
+      uart5_txd => io[82]
+    option :
+      uart5_rxd => io[75]
+      uart5_txd => io[83]
+    option :
+      uart5_rxd => io[100]
+      uart5_txd => io[83]
+    option :
+      uart5_rxd => io[95]
+      uart5_txd => io[94]
+    option :
+      uart5_rxd => io[85]
+      uart5_txd => io[84]
+    option :
+      uart5_rxd => io[100]
+      uart5_txd => io[82]
+    option :
+      uart5_rxd => io[75]
+      uart5_txd => io[82]
+    option :
+      uart5_rxd => io[75]
+      uart5_txd => io[83]
+    option :
+      uart5_rxd => io[95]
+      uart5_txd => io[94]
+    option :
+      uart5_rxd => io[85]
+      uart5_txd => io[84]
+    option :
+      uart5_rxd => io[75]
+      uart5_txd => io[82]
+    option :
+      uart5_rxd => io[75]
+      uart5_txd => io[83]
+    option:
+      uart5_rxd => io[100]
+      uart5_txd => io[83]
+    option :
+      uart5_rxd => io[95]
+      uart5_txd => io[94]
+    option :
+      uart5_rxd => io[85]
+      uart5_txd => io[84]
+    option :
+      uart5_rxd => io[100]
+      uart5_txd => io[82]
+  
+  supports {gpmc(true, true, false, true, false, true, true, false, false, false)} :
+    gpmc_ad0 => io[16]
+    gpmc_ad1 => io[17]
+    gpmc_ad2 => io[18]
+    gpmc_ad3 => io[19]
+    gpmc_ad4 => io[20]
+    gpmc_ad5 => io[21]
+    gpmc_ad6 => io[22]
+    gpmc_ad7 => io[23]
+    gpmc_ad8 => io[24]
+    gpmc_ad9 => io[25]
+    gpmc_ad10 => io[26]
+    gpmc_ad11 => io[27]
+    gpmc_ad12 => io[28]
+    gpmc_ad13 => io[29]
+    gpmc_ad14 => io[30]
+    gpmc_ad15 => io[31]
+    gpmc_clk => io[4]
+    gpmc_advn_ale => io[11]
+    gpmc_oen_ren => io[10]
+    gpmc_wen => io[9]
+    gpmc_be0n_cle => io[12]
+    gpmc_be1n => io[13]
+    gpmc_wait0 => io[14]
+    gpmc_wpn => io[15]
+    gpmc_csn0 => io[5]
+    gpmc_csn1 => io[6]
+    gpmc_csn2 => io[7]
+    gpmc_csn3 => io[8]
+    gpmc_a0 => io[32]
+    gpmc_a1 => io[33]
+    gpmc_a2 => io[34]
+    gpmc_a3 => io[35]
+    gpmc_a4 => io[36]
+    gpmc_a5 => io[37]
+    gpmc_a6 => io[38]
+    gpmc_a7 => io[39]
+    gpmc_a8 => io[40]
+    gpmc_a9 => io[41]
+    gpmc_a10 => io[42]
+    gpmc_a11 => io[43]
+    gpmc_a12 => io[94]
+    gpmc_a13 => io[95]
+    gpmc_a14 => io[96]
+    gpmc_a15 => io[97]
+    gpmc_a16 => io[98]
+    gpmc_a17 => io[99]
+    gpmc_a18 => io[100]
+    gpmc_a19 => io[101]
+    gpmc_a20 => io[49]
+    gpmc_a21 => io[48]
+    gpmc_a22 => io[47]
+    gpmc_a23 => io[46]
+    gpmc_a24 => io[44]
+    gpmc_a25 => io[45]
+
+  supports {gpmc(true, true, false, false, false, true, true, false, true, false)} :
+    gpmc_ad0 => io[16]
+    gpmc_ad1 => io[17]
+    gpmc_ad2 => io[18]
+    gpmc_ad3 => io[19]
+    gpmc_ad4 => io[20]
+    gpmc_ad5 => io[21]
+    gpmc_ad6 => io[22]
+    gpmc_ad7 => io[23]
+    gpmc_ad8 => io[24]
+    gpmc_ad9 => io[25]
+    gpmc_ad10 => io[26]
+    gpmc_ad11 => io[27]
+    gpmc_ad12 => io[28]
+    gpmc_ad13 => io[29]
+    gpmc_ad14 => io[30]
+    gpmc_ad15 => io[31]
+    gpmc_clk => io[4]
+    gpmc_advn_ale => io[11]
+    gpmc_oen_ren => io[10]
+    gpmc_wen => io[9]
+    gpmc_be0n_cle => io[12]
+    gpmc_be1n => io[13]
+    gpmc_wait0 => io[14]
+    gpmc_csn0 => io[5]
+    gpmc_csn1 => io[6]
+    gpmc_csn2 => io[7]
+    gpmc_csn3 => io[8]
+    gpmc_csn5 => io[15]
+    gpmc_a0 => io[32]
+    gpmc_a1 => io[33]
+    gpmc_a2 => io[34]
+    gpmc_a3 => io[35]
+    gpmc_a4 => io[36]
+    gpmc_a5 => io[37]
+    gpmc_a6 => io[38]
+    gpmc_a7 => io[39]
+    gpmc_a8 => io[40]
+    gpmc_a9 => io[41]
+    gpmc_a10 => io[42]
+    gpmc_a11 => io[43]
+    gpmc_a12 => io[94]
+    gpmc_a13 => io[95]
+    gpmc_a14 => io[96]
+    gpmc_a15 => io[97]
+    gpmc_a16 => io[98]
+    gpmc_a17 => io[99]
+    gpmc_a18 => io[100]
+    gpmc_a19 => io[101]
+    gpmc_a20 => io[49]
+    gpmc_a21 => io[48]
+    gpmc_a22 => io[47]
+    gpmc_a23 => io[46]
+    gpmc_a24 => io[44]
+    gpmc_a25 => io[45]
+
+  supports {gpmc(true, false, false, false, false, true, true, true, true, false)} :
+    gpmc_ad0 => io[16]
+    gpmc_ad1 => io[17]
+    gpmc_ad2 => io[18]
+    gpmc_ad3 => io[19]
+    gpmc_ad4 => io[20]
+    gpmc_ad5 => io[21]
+    gpmc_ad6 => io[22]
+    gpmc_ad7 => io[23]
+    gpmc_ad8 => io[24]
+    gpmc_ad9 => io[25]
+    gpmc_ad10 => io[26]
+    gpmc_ad11 => io[27]
+    gpmc_ad12 => io[28]
+    gpmc_ad13 => io[29]
+    gpmc_ad14 => io[30]
+    gpmc_ad15 => io[31]
+    gpmc_clk => io[4]
+    gpmc_advn_ale => io[11]
+    gpmc_oen_ren => io[10]
+    gpmc_wen => io[9]
+    gpmc_be0n_cle => io[12]
+    gpmc_be1n => io[13]
+    gpmc_csn0 => io[5]
+    gpmc_csn1 => io[6]
+    gpmc_csn2 => io[7]
+    gpmc_csn3 => io[8]
+    gpmc_csn4 => io[14]
+    gpmc_csn5 => io[15] 
+    gpmc_a0 => io[32]
+    gpmc_a1 => io[33]
+    gpmc_a2 => io[34]
+    gpmc_a3 => io[35]
+    gpmc_a4 => io[36]
+    gpmc_a5 => io[37]
+    gpmc_a6 => io[38]
+    gpmc_a7 => io[39]
+    gpmc_a8 => io[40]
+    gpmc_a9 => io[41]
+    gpmc_a10 => io[42]
+    gpmc_a11 => io[43]
+    gpmc_a12 => io[94]
+    gpmc_a13 => io[95]
+    gpmc_a14 => io[96]
+    gpmc_a15 => io[97]
+    gpmc_a16 => io[98]
+    gpmc_a17 => io[99]
+    gpmc_a18 => io[100]
+    gpmc_a19 => io[101]
+    gpmc_a20 => io[49]
+    gpmc_a21 => io[48]
+    gpmc_a22 => io[47]
+    gpmc_a23 => io[46]
+    gpmc_a24 => io[44]
+    gpmc_a25 => io[45]
+
+  supports {gpmc(true, true, false, false, true, true, false, false, true, false)} :
+    gpmc_ad0 => io[16]
+    gpmc_ad1 => io[17]
+    gpmc_ad2 => io[18]
+    gpmc_ad3 => io[19]
+    gpmc_ad4 => io[20]
+    gpmc_ad5 => io[21]
+    gpmc_ad6 => io[22]
+    gpmc_ad7 => io[23]
+    gpmc_ad8 => io[24]
+    gpmc_ad9 => io[25]
+    gpmc_ad10 => io[26]
+    gpmc_ad11 => io[27]
+    gpmc_ad12 => io[28]
+    gpmc_ad13 => io[29]
+    gpmc_ad14 => io[30]
+    gpmc_ad15 => io[31]
+    gpmc_clk => io[4]
+    gpmc_advn_ale => io[11]
+    gpmc_oen_ren => io[10]
+    gpmc_wen => io[9]
+    gpmc_be0n_cle => io[12]
+    gpmc_be1n => io[7]
+    gpmc_wait0 => io[14]  
+    gpmc_dir => io[13]
+    gpmc_csn0 => io[5]
+    gpmc_csn1 => io[6]
+    gpmc_csn3 => io[8]
+    gpmc_csn5 => io[15]
+    gpmc_a0 => io[32]
+    gpmc_a1 => io[33]
+    gpmc_a2 => io[34]
+    gpmc_a3 => io[35]
+    gpmc_a4 => io[36]
+    gpmc_a5 => io[37]
+    gpmc_a6 => io[38]
+    gpmc_a7 => io[39]
+    gpmc_a8 => io[40]
+    gpmc_a9 => io[41]
+    gpmc_a10 => io[42]
+    gpmc_a11 => io[43]
+    gpmc_a12 => io[94]
+    gpmc_a13 => io[95]
+    gpmc_a14 => io[96]
+    gpmc_a15 => io[97]
+    gpmc_a16 => io[98]
+    gpmc_a17 => io[99]
+    gpmc_a18 => io[100]
+    gpmc_a19 => io[101]
+    gpmc_a20 => io[49]
+    gpmc_a21 => io[48]
+    gpmc_a22 => io[47]
+    gpmc_a23 => io[46]
+    gpmc_a24 => io[44]
+    gpmc_a25 => io[45]
+
+  supports {gpmc(true, false, false, false, false, true, false, true, true, true)} :
+    gpmc_ad0 => io[16]
+    gpmc_ad1 => io[17]
+    gpmc_ad2 => io[18]
+    gpmc_ad3 => io[19]
+    gpmc_ad4 => io[20]
+    gpmc_ad5 => io[21]
+    gpmc_ad6 => io[22]
+    gpmc_ad7 => io[23]
+    gpmc_ad8 => io[24]
+    gpmc_ad9 => io[25]
+    gpmc_ad10 => io[26]
+    gpmc_ad11 => io[27]
+    gpmc_ad12 => io[28]
+    gpmc_ad13 => io[29]
+    gpmc_ad14 => io[30]
+    gpmc_ad15 => io[31]
+    gpmc_clk => io[4]
+    gpmc_advn_ale => io[11]
+    gpmc_oen_ren => io[10]
+    gpmc_wen => io[9]
+    gpmc_be0n_cle => io[12]
+    gpmc_be1n => io[7]
+    gpmc_csn0 => io[5]
+    gpmc_csn1 => io[6]
+    gpmc_csn3 => io[8]
+    gpmc_csn4 => io[14]
+    gpmc_csn5 => io[15]
+    gpmc_csn6 => io[13]
+    gpmc_a0 => io[32]
+    gpmc_a1 => io[33]
+    gpmc_a2 => io[34]
+    gpmc_a3 => io[35]
+    gpmc_a4 => io[36]
+    gpmc_a5 => io[37]
+    gpmc_a6 => io[38]
+    gpmc_a7 => io[39]
+    gpmc_a8 => io[40]
+    gpmc_a9 => io[41]
+    gpmc_a10 => io[42]
+    gpmc_a11 => io[43]
+    gpmc_a12 => io[94]
+    gpmc_a13 => io[95]
+    gpmc_a14 => io[96]
+    gpmc_a15 => io[97]
+    gpmc_a16 => io[98]
+    gpmc_a17 => io[99]
+    gpmc_a18 => io[100]
+    gpmc_a19 => io[101]
+    gpmc_a20 => io[49]
+    gpmc_a21 => io[48]
+    gpmc_a22 => io[47]
+    gpmc_a23 => io[46]
+    gpmc_a24 => io[44]
+    gpmc_a25 => io[45]
+
+  supports {gpmc(true, true, true, true, false, false, true, false, false, false)} :
+    gpmc_ad0 => io[16]
+    gpmc_ad1 => io[17]
+    gpmc_ad2 => io[18]
+    gpmc_ad3 => io[19]
+    gpmc_ad4 => io[20]
+    gpmc_ad5 => io[21]
+    gpmc_ad6 => io[22]
+    gpmc_ad7 => io[23]
+    gpmc_ad8 => io[24]
+    gpmc_ad9 => io[25]
+    gpmc_ad10 => io[26]
+    gpmc_ad11 => io[27]
+    gpmc_ad12 => io[28]
+    gpmc_ad13 => io[29]
+    gpmc_ad14 => io[30]
+    gpmc_ad15 => io[31]
+    gpmc_clk => io[6]
+    gpmc_advn_ale => io[11]
+    gpmc_oen_ren => io[10]
+    gpmc_wen => io[9]
+    gpmc_be0n_cle => io[12]
+    gpmc_be1n => io[13]
+    gpmc_wait0 => io[14]
+    gpmc_wait1 => io[4]
+    gpmc_wpn => io[15]
+    gpmc_csn0 => io[5]
+    gpmc_csn2 => io[7]
+    gpmc_csn3 => io[8]
+    gpmc_a0 => io[32]
+    gpmc_a1 => io[33]
+    gpmc_a2 => io[34]
+    gpmc_a3 => io[35]
+    gpmc_a4 => io[36]
+    gpmc_a5 => io[37]
+    gpmc_a6 => io[38]
+    gpmc_a7 => io[39]
+    gpmc_a8 => io[40]
+    gpmc_a9 => io[41]
+    gpmc_a10 => io[42]
+    gpmc_a11 => io[43]
+    gpmc_a12 => io[94]
+    gpmc_a13 => io[95]
+    gpmc_a14 => io[96]
+    gpmc_a15 => io[97]
+    gpmc_a16 => io[98]
+    gpmc_a17 => io[99]
+    gpmc_a18 => io[100]
+    gpmc_a19 => io[101]
+    gpmc_a20 => io[49]
+    gpmc_a21 => io[48]
+    gpmc_a22 => io[47]
+    gpmc_a23 => io[46]
+    gpmc_a24 => io[44]
+    gpmc_a25 => io[45]
+
+  supports {gpmc(true, true, true, false, false, false, true, false, true, false)} :
+    gpmc_ad0 => io[16]
+    gpmc_ad1 => io[17]
+    gpmc_ad2 => io[18]
+    gpmc_ad3 => io[19]
+    gpmc_ad4 => io[20]
+    gpmc_ad5 => io[21]
+    gpmc_ad6 => io[22]
+    gpmc_ad7 => io[23]
+    gpmc_ad8 => io[24]
+    gpmc_ad9 => io[25]
+    gpmc_ad10 => io[26]
+    gpmc_ad11 => io[27]
+    gpmc_ad12 => io[28]
+    gpmc_ad13 => io[29]
+    gpmc_ad14 => io[30]
+    gpmc_ad15 => io[31]
+    gpmc_clk => io[6]
+    gpmc_advn_ale => io[11]
+    gpmc_oen_ren => io[10]
+    gpmc_wen => io[9]
+    gpmc_be0n_cle => io[12]
+    gpmc_be1n => io[13]
+    gpmc_wait0 => io[14]
+    gpmc_wait1 => io[4]
+    gpmc_csn0 => io[5]
+    gpmc_csn2 => io[7]
+    gpmc_csn3 => io[8]
+    gpmc_csn5 => io[15]
+    gpmc_a0 => io[32]
+    gpmc_a1 => io[33]
+    gpmc_a2 => io[34]
+    gpmc_a3 => io[35]
+    gpmc_a4 => io[36]
+    gpmc_a5 => io[37]
+    gpmc_a6 => io[38]
+    gpmc_a7 => io[39]
+    gpmc_a8 => io[40]
+    gpmc_a9 => io[41]
+    gpmc_a10 => io[42]
+    gpmc_a11 => io[43]
+    gpmc_a12 => io[94]
+    gpmc_a13 => io[95]
+    gpmc_a14 => io[96]
+    gpmc_a15 => io[97]
+    gpmc_a16 => io[98]
+    gpmc_a17 => io[99]
+    gpmc_a18 => io[100]
+    gpmc_a19 => io[101]
+    gpmc_a20 => io[49]
+    gpmc_a21 => io[48]
+    gpmc_a22 => io[47]
+    gpmc_a23 => io[46]
+    gpmc_a24 => io[44]
+    gpmc_a25 => io[45]
+
+  supports {gpmc(true, false, true, false, false, false, true, true, true, false)} :
+    gpmc_ad0 => io[16]
+    gpmc_ad1 => io[17]
+    gpmc_ad2 => io[18]
+    gpmc_ad3 => io[19]
+    gpmc_ad4 => io[20]
+    gpmc_ad5 => io[21]
+    gpmc_ad6 => io[22]
+    gpmc_ad7 => io[23]
+    gpmc_ad8 => io[24]
+    gpmc_ad9 => io[25]
+    gpmc_ad10 => io[26]
+    gpmc_ad11 => io[27]
+    gpmc_ad12 => io[28]
+    gpmc_ad13 => io[29]
+    gpmc_ad14 => io[30]
+    gpmc_ad15 => io[31]
+    gpmc_clk => io[6]
+    gpmc_advn_ale => io[11]
+    gpmc_oen_ren => io[10]
+    gpmc_wen => io[9]
+    gpmc_be0n_cle => io[12]
+    gpmc_be1n => io[13]
+    gpmc_wait1 => io[4]
+    gpmc_csn0 => io[5]
+    gpmc_csn2 => io[7]
+    gpmc_csn3 => io[8]
+    gpmc_csn4 => io[14]
+    gpmc_csn5 => io[15]
+    gpmc_a0 => io[32]
+    gpmc_a1 => io[33]
+    gpmc_a2 => io[34]
+    gpmc_a3 => io[35]
+    gpmc_a4 => io[36]
+    gpmc_a5 => io[37]
+    gpmc_a6 => io[38]
+    gpmc_a7 => io[39]
+    gpmc_a8 => io[40]
+    gpmc_a9 => io[41]
+    gpmc_a10 => io[42]
+    gpmc_a11 => io[43]
+    gpmc_a12 => io[94]
+    gpmc_a13 => io[95]
+    gpmc_a14 => io[96]
+    gpmc_a15 => io[97]
+    gpmc_a16 => io[98]
+    gpmc_a17 => io[99]
+    gpmc_a18 => io[100]
+    gpmc_a19 => io[101]
+    gpmc_a20 => io[49]
+    gpmc_a21 => io[48]
+    gpmc_a22 => io[47]
+    gpmc_a23 => io[46]
+    gpmc_a24 => io[44]
+    gpmc_a25 => io[45]
+
+  supports {gpmc(true, true, true, false, true, false, false, false, true, false)} :
+    gpmc_ad0 => io[16]
+    gpmc_ad1 => io[17]
+    gpmc_ad2 => io[18]
+    gpmc_ad3 => io[19]
+    gpmc_ad4 => io[20]
+    gpmc_ad5 => io[21]
+    gpmc_ad6 => io[22]
+    gpmc_ad7 => io[23]
+    gpmc_ad8 => io[24]
+    gpmc_ad9 => io[25]
+    gpmc_ad10 => io[26]
+    gpmc_ad11 => io[27]
+    gpmc_ad12 => io[28]
+    gpmc_ad13 => io[29]
+    gpmc_ad14 => io[30]
+    gpmc_ad15 => io[31]
+    gpmc_clk => io[6]
+    gpmc_advn_ale => io[11]
+    gpmc_oen_ren => io[10]
+    gpmc_wen => io[9]
+    gpmc_be0n_cle => io[12]
+    gpmc_be1n => io[7]
+    gpmc_wait0 => io[14]
+    gpmc_wait1 => io[4]
+    gpmc_dir => io[13]
+    gpmc_csn0 => io[5]
+    gpmc_csn3 => io[8]
+    gpmc_csn5 => io[15]
+    gpmc_a0 => io[32]
+    gpmc_a1 => io[33]
+    gpmc_a2 => io[34]
+    gpmc_a3 => io[35]
+    gpmc_a4 => io[36]
+    gpmc_a5 => io[37]
+    gpmc_a6 => io[38]
+    gpmc_a7 => io[39]
+    gpmc_a8 => io[40]
+    gpmc_a9 => io[41]
+    gpmc_a10 => io[42]
+    gpmc_a11 => io[43]
+    gpmc_a12 => io[94]
+    gpmc_a13 => io[95]
+    gpmc_a14 => io[96]
+    gpmc_a15 => io[97]
+    gpmc_a16 => io[98]
+    gpmc_a17 => io[99]
+    gpmc_a18 => io[100]
+    gpmc_a19 => io[101]
+    gpmc_a20 => io[49]
+    gpmc_a21 => io[48]
+    gpmc_a22 => io[47]
+    gpmc_a23 => io[46]
+    gpmc_a24 => io[44]
+    gpmc_a25 => io[45]
+
+  supports {gpmc(true, false, true, false, false, false, false, true, true, true)} :
+    gpmc_ad0 => io[16]
+    gpmc_ad1 => io[17]
+    gpmc_ad2 => io[18]
+    gpmc_ad3 => io[19]
+    gpmc_ad4 => io[20]
+    gpmc_ad5 => io[21]
+    gpmc_ad6 => io[22]
+    gpmc_ad7 => io[23]
+    gpmc_ad8 => io[24]
+    gpmc_ad9 => io[25]
+    gpmc_ad10 => io[26]
+    gpmc_ad11 => io[27]
+    gpmc_ad12 => io[28]
+    gpmc_ad13 => io[29]
+    gpmc_ad14 => io[30]
+    gpmc_ad15 => io[31]
+    gpmc_clk => io[6]
+    gpmc_advn_ale => io[11]
+    gpmc_oen_ren => io[10]
+    gpmc_wen => io[9]
+    gpmc_be0n_cle => io[12]
+    gpmc_be1n => io[7]
+    gpmc_wait1 => io[4]
+    gpmc_csn0 => io[5]
+    gpmc_csn3 => io[8]
+    gpmc_csn4 => io[14]
+    gpmc_csn5 => io[15]
+    gpmc_csn6 => io[13]
+    gpmc_a0 => io[32]
+    gpmc_a1 => io[33]
+    gpmc_a2 => io[34]
+    gpmc_a3 => io[35]
+    gpmc_a4 => io[36]
+    gpmc_a5 => io[37]
+    gpmc_a6 => io[38]
+    gpmc_a7 => io[39]
+    gpmc_a8 => io[40]
+    gpmc_a9 => io[41]
+    gpmc_a10 => io[42]
+    gpmc_a11 => io[43]
+    gpmc_a12 => io[94]
+    gpmc_a13 => io[95]
+    gpmc_a14 => io[96]
+    gpmc_a15 => io[97]
+    gpmc_a16 => io[98]
+    gpmc_a17 => io[99]
+    gpmc_a18 => io[100]
+    gpmc_a19 => io[101]
+    gpmc_a20 => io[49]
+    gpmc_a21 => io[48]
+    gpmc_a22 => io[47]
+    gpmc_a23 => io[46]
+    gpmc_a24 => io[44]
+    gpmc_a25 => io[45]
+
+  supports {gpmc(false, true, true, true, false, true, true, false, false, false)} : 
+    gpmc_ad0 => io[16]
+    gpmc_ad1 => io[17]
+    gpmc_ad2 => io[18]
+    gpmc_ad3 => io[19]
+    gpmc_ad4 => io[20]
+    gpmc_ad5 => io[21]
+    gpmc_ad6 => io[22]
+    gpmc_ad7 => io[23]
+    gpmc_ad8 => io[24]
+    gpmc_ad9 => io[25]
+    gpmc_ad10 => io[26]
+    gpmc_ad11 => io[27]
+    gpmc_ad12 => io[28]
+    gpmc_ad13 => io[29]
+    gpmc_ad14 => io[30]
+    gpmc_ad15 => io[31]
+    gpmc_advn_ale => io[11]
+    gpmc_oen_ren => io[10]
+    gpmc_wen => io[9]
+    gpmc_be0n_cle => io[12]
+    gpmc_be1n => io[13]
+    gpmc_wait0 => io[14]
+    gpmc_wait1 => io[4]
+    gpmc_wpn => io[15]
+    gpmc_csn0 => io[5]
+    gpmc_csn1 => io[6]
+    gpmc_csn2 => io[7]
+    gpmc_csn3 => io[8]
+    gpmc_a0 => io[32]
+    gpmc_a1 => io[33]
+    gpmc_a2 => io[34]
+    gpmc_a3 => io[35]
+    gpmc_a4 => io[36]
+    gpmc_a5 => io[37]
+    gpmc_a6 => io[38]
+    gpmc_a7 => io[39]
+    gpmc_a8 => io[40]
+    gpmc_a9 => io[41]
+    gpmc_a10 => io[42]
+    gpmc_a11 => io[43]
+    gpmc_a12 => io[94]
+    gpmc_a13 => io[95]
+    gpmc_a14 => io[96]
+    gpmc_a15 => io[97]
+    gpmc_a16 => io[98]
+    gpmc_a17 => io[99]
+    gpmc_a18 => io[100]
+    gpmc_a19 => io[101]
+    gpmc_a20 => io[49]
+    gpmc_a21 => io[48]
+    gpmc_a22 => io[47]
+    gpmc_a23 => io[46]
+    gpmc_a24 => io[44]
+    gpmc_a25 => io[45]
+
+  supports {gpmc(false, true, true, false, false, true, true, false, true, false)} :
+    gpmc_ad0 => io[16]
+    gpmc_ad1 => io[17]
+    gpmc_ad2 => io[18]
+    gpmc_ad3 => io[19]
+    gpmc_ad4 => io[20]
+    gpmc_ad5 => io[21]
+    gpmc_ad6 => io[22]
+    gpmc_ad7 => io[23]
+    gpmc_ad8 => io[24]
+    gpmc_ad9 => io[25]
+    gpmc_ad10 => io[26]
+    gpmc_ad11 => io[27]
+    gpmc_ad12 => io[28]
+    gpmc_ad13 => io[29]
+    gpmc_ad14 => io[30]
+    gpmc_ad15 => io[31]
+    gpmc_advn_ale => io[11]
+    gpmc_oen_ren => io[10]
+    gpmc_wen => io[9]
+    gpmc_be0n_cle => io[12]
+    gpmc_be1n => io[13]
+    gpmc_wait0 => io[14]
+    gpmc_wait1 => io[4]
+    gpmc_csn0 => io[5]
+    gpmc_csn1 => io[6]
+    gpmc_csn2 => io[7]
+    gpmc_csn3 => io[8]
+    gpmc_csn5 => io[15]
+    gpmc_a0 => io[32]
+    gpmc_a1 => io[33]
+    gpmc_a2 => io[34]
+    gpmc_a3 => io[35]
+    gpmc_a4 => io[36]
+    gpmc_a5 => io[37]
+    gpmc_a6 => io[38]
+    gpmc_a7 => io[39]
+    gpmc_a8 => io[40]
+    gpmc_a9 => io[41]
+    gpmc_a10 => io[42]
+    gpmc_a11 => io[43]
+    gpmc_a12 => io[94]
+    gpmc_a13 => io[95]
+    gpmc_a14 => io[96]
+    gpmc_a15 => io[97]
+    gpmc_a16 => io[98]
+    gpmc_a17 => io[99]
+    gpmc_a18 => io[100]
+    gpmc_a19 => io[101]
+    gpmc_a20 => io[49]
+    gpmc_a21 => io[48]
+    gpmc_a22 => io[47]
+    gpmc_a23 => io[46]
+    gpmc_a24 => io[44]
+    gpmc_a25 => io[45]
+
+  supports {gpmc(false, false, true, false, false, true, true, true, true, false)} :
+    gpmc_ad0 => io[16]
+    gpmc_ad1 => io[17]
+    gpmc_ad2 => io[18]
+    gpmc_ad3 => io[19]
+    gpmc_ad4 => io[20]
+    gpmc_ad5 => io[21]
+    gpmc_ad6 => io[22]
+    gpmc_ad7 => io[23]
+    gpmc_ad8 => io[24]
+    gpmc_ad9 => io[25]
+    gpmc_ad10 => io[26]
+    gpmc_ad11 => io[27]
+    gpmc_ad12 => io[28]
+    gpmc_ad13 => io[29]
+    gpmc_ad14 => io[30]
+    gpmc_ad15 => io[31]
+    gpmc_advn_ale => io[11]
+    gpmc_oen_ren => io[10]
+    gpmc_wen => io[9]
+    gpmc_be0n_cle => io[12]
+    gpmc_be1n => io[13]
+    gpmc_wait1 => io[4]
+    gpmc_csn0 => io[5]
+    gpmc_csn1 => io[6]
+    gpmc_csn2 => io[7]
+    gpmc_csn3 => io[8]
+    gpmc_csn4 => io[14]
+    gpmc_csn5 => io[15]
+    gpmc_a0 => io[32]
+    gpmc_a1 => io[33]
+    gpmc_a2 => io[34]
+    gpmc_a3 => io[35]
+    gpmc_a4 => io[36]
+    gpmc_a5 => io[37]
+    gpmc_a6 => io[38]
+    gpmc_a7 => io[39]
+    gpmc_a8 => io[40]
+    gpmc_a9 => io[41]
+    gpmc_a10 => io[42]
+    gpmc_a11 => io[43]
+    gpmc_a12 => io[94]
+    gpmc_a13 => io[95]
+    gpmc_a14 => io[96]
+    gpmc_a15 => io[97]
+    gpmc_a16 => io[98]
+    gpmc_a17 => io[99]
+    gpmc_a18 => io[100]
+    gpmc_a19 => io[101]
+    gpmc_a20 => io[49]
+    gpmc_a21 => io[48]
+    gpmc_a22 => io[47]
+    gpmc_a23 => io[46]
+    gpmc_a24 => io[44]
+    gpmc_a25 => io[45]
+
+  supports {gpmc(false, true, true, false, true, true, false, false, true, false)} :
+    gpmc_ad0 => io[16]
+    gpmc_ad1 => io[17]
+    gpmc_ad2 => io[18]
+    gpmc_ad3 => io[19]
+    gpmc_ad4 => io[20]
+    gpmc_ad5 => io[21]
+    gpmc_ad6 => io[22]
+    gpmc_ad7 => io[23]
+    gpmc_ad8 => io[24]
+    gpmc_ad9 => io[25]
+    gpmc_ad10 => io[26]
+    gpmc_ad11 => io[27]
+    gpmc_ad12 => io[28]
+    gpmc_ad13 => io[29]
+    gpmc_ad14 => io[30]
+    gpmc_ad15 => io[31]
+    gpmc_advn_ale => io[11]
+    gpmc_oen_ren => io[10]
+    gpmc_wen => io[9]
+    gpmc_be0n_cle => io[12]
+    gpmc_be1n => io[7]
+    gpmc_wait0 => io[14]
+    gpmc_wait1 => io[4]
+    gpmc_dir => io[13]
+    gpmc_csn0 => io[5]
+    gpmc_csn1 => io[6]
+    gpmc_csn3 => io[8]  
+    gpmc_csn5 => io[15]
+    gpmc_a0 => io[32]
+    gpmc_a1 => io[33]
+    gpmc_a2 => io[34]
+    gpmc_a3 => io[35]
+    gpmc_a4 => io[36]
+    gpmc_a5 => io[37]
+    gpmc_a6 => io[38]
+    gpmc_a7 => io[39]
+    gpmc_a8 => io[40]
+    gpmc_a9 => io[41]
+    gpmc_a10 => io[42]
+    gpmc_a11 => io[43]
+    gpmc_a12 => io[94]
+    gpmc_a13 => io[95]
+    gpmc_a14 => io[96]
+    gpmc_a15 => io[97]
+    gpmc_a16 => io[98]
+    gpmc_a17 => io[99]
+    gpmc_a18 => io[100]
+    gpmc_a19 => io[101]
+    gpmc_a20 => io[49]
+    gpmc_a21 => io[48]
+    gpmc_a22 => io[47]
+    gpmc_a23 => io[46]
+    gpmc_a24 => io[44]
+    gpmc_a25 => io[45]
+
+  supports {gpmc(false, false, true, false, false, true, false, true, true, true)} :
+    gpmc_ad0 => io[16]
+    gpmc_ad1 => io[17]
+    gpmc_ad2 => io[18]
+    gpmc_ad3 => io[19]
+    gpmc_ad4 => io[20]
+    gpmc_ad5 => io[21]
+    gpmc_ad6 => io[22]
+    gpmc_ad7 => io[23]
+    gpmc_ad8 => io[24]
+    gpmc_ad9 => io[25]
+    gpmc_ad10 => io[26]
+    gpmc_ad11 => io[27]
+    gpmc_ad12 => io[28]
+    gpmc_ad13 => io[29]
+    gpmc_ad14 => io[30]
+    gpmc_ad15 => io[31]
+    gpmc_advn_ale => io[11]
+    gpmc_oen_ren => io[10]
+    gpmc_wen => io[9]
+    gpmc_be0n_cle => io[12]
+    gpmc_be1n => io[7]
+    gpmc_wait1 => io[4]
+    gpmc_csn0 => io[5]
+    gpmc_csn1 => io[6]
+    gpmc_csn3 => io[8]
+    gpmc_csn4 => io[14]
+    gpmc_csn5 => io[15]
+    gpmc_csn6 => io[13]
+    gpmc_a0 => io[32]
+    gpmc_a1 => io[33]
+    gpmc_a2 => io[34]
+    gpmc_a3 => io[35]
+    gpmc_a4 => io[36]
+    gpmc_a5 => io[37]
+    gpmc_a6 => io[38]
+    gpmc_a7 => io[39]
+    gpmc_a8 => io[40]
+    gpmc_a9 => io[41]
+    gpmc_a10 => io[42]
+    gpmc_a11 => io[43]
+    gpmc_a12 => io[94]
+    gpmc_a13 => io[95]
+    gpmc_a14 => io[96]
+    gpmc_a15 => io[97]
+    gpmc_a16 => io[98]
+    gpmc_a17 => io[99]
+    gpmc_a18 => io[100]
+    gpmc_a19 => io[101]
+    gpmc_a20 => io[49]
+    gpmc_a21 => io[48]
+    gpmc_a22 => io[47]
+    gpmc_a23 => io[46]
+    gpmc_a24 => io[44]
+    gpmc_a25 => io[45]
+;end IO sets
+  
+  ;adc
+  for i in 0 to 7 do :
+    supports adc_ain :
+      adc => ain[i]
+ 
+  ;gpio
+  for i in 0 to 113 do :
+    supports gpios :
+      gpio => io[i]
+
+  ;dma event or interrupt
+  supports xdma0 :
+    xdma_event_intr0 => io[0]
+  
+  supports xdma1 :
+    xdma_event_intr1 => io[1]
+  
+  supports xdma2 :
+    option :
+      xdma_event_intr2 => io[54]
+    option :
+      xdma_event_intr2 => io[67]
+    option :
+      xdma_event_intr2 => io[83]
+    
+  ;main clock output
+  supports clkout1 :
+    clkout1 => io[0]
+
+  ;32.768khz clock output
+  supports clkout2 :
+    clkout2 => io[1]
+    
+  ;timer clk in
+  supports tclkin :
+    tclkin => io[1]
+
+  ;uart2 
+  unique pcb-bundle uart2_tx_bundle: (pin io)
+  for i in [45, 51 ,76, 81] do :
+    supports {uart2_tx_bundle} :
+      io => io[i]
+  
+  unique pcb-bundle uart2_rx_bundle: (pin io)
+  for i in [44, 50 ,68, 74] do :
+    supports {uart2_rx_bundle} :
+      io => io[i]
+  
+  unique pcb-bundle uart2_ctsn_bundle: (pin io)
+  for i in [64, 94] do :
+    supports {uart2_ctsn_bundle} :
+      io => io[i]
+
+  unique pcb-bundle uart2_rtsn_bundle: (pin io)
+  for i in [63, 95] do :
+    supports {uart2_rtsn_bundle} :
+      io => io[i]
+  
+  supports {uart2(true,true)}:
+    require tx-pin:{uart2_tx_bundle}
+    require rx-pin:{uart2_rx_bundle}
+    require ctsn-pin:{uart2_ctsn_bundle}
+    require rtsn-pin:{uart2_rtsn_bundle}
+    uart2_ctsn => ctsn-pin.io
+    uart2_rtsn => rtsn-pin.io 
+    uart2_txd => tx-pin.io
+    uart2_rxd => rx-pin.io
+
+  supports {uart2(false,false)}: 
+    require tx-pin:{uart2_tx_bundle}
+    require rx-pin:{uart2_rx_bundle}
+    uart2_txd => tx-pin.io
+    uart2_rxd => rx-pin.io 
+
+  ;uart3 
+  unique pcb-bundle uart3_tx_bundle: (pin io)
+  for i in [46, 67 ,79] do :
+    supports {uart3_tx_bundle} :
+      io => io[i]
+  
+  unique pcb-bundle uart3_rx_bundle: (pin io)
+  for i in [47, 54 ,80] do :
+    supports {uart3_rx_bundle} :
+      io => io[i]
+  
+  unique pcb-bundle uart3_ctsn_bundle: (pin io)
+  for i in [44, 85, 96] do :
+    supports {uart3_ctsn_bundle} :
+      io => io[i]
+
+  unique pcb-bundle uart3_rtsn_bundle: (pin io)
+  for i in [45, 84, 97] do :
+    supports {uart3_rtsn_bundle} :
+      io => io[i]
+
+  supports {uart3(true,true)}:
+    require tx-pin:{uart3_tx_bundle}
+    require rx-pin:{uart3_rx_bundle}
+    require ctsn-pin:{uart3_ctsn_bundle}
+    require rtsn-pin:{uart3_rtsn_bundle}
+    uart3_ctsn => ctsn-pin.io
+    uart3_rtsn => rtsn-pin.io  
+    uart3_txd => tx-pin.io
+    uart3_rxd => rx-pin.io
+  
+  supports {uart3(false,false)}:
+    require tx-pin:{uart3_tx_bundle}
+    require rx-pin:{uart3_rx_bundle}
+    uart3_txd => tx-pin.io
+    uart3_rxd => rx-pin.io
+
+  ;pru0_gpio
+  for i in [107, 108, 109, 110, 111, 112, 113, 106, 49, 48, 47, 46, 44, 45] do :
+    supports pru0_gpio :
+        pr1_pru0_pru_r31 => io[i]
+  
+  ;pru0_gpinput-only
+  for i in [30,31] do :
+    supports pru0_gpi :
+      pru1_pru0_pru_r31_gpi => io[i]
+  
+  supports pru0_gpi :
+    option :
+      pru1_pru0_pru_r31_gpi => io[1]
+    option :
+      pru1_pru0_pru_r31_gpi => io[16]
+  
+  ;pru0_gpoutput-only
+  for i in [28,29] do :
+    supports pru0_gpo :
+       pru1_pru0_pru_r31_gpo => io[i] 
+
+  ;pru1_gpio
+  for i in [6, 7, 55, 56, 86, 87, 88, 89, 90, 91, 92, 93, 102, 103, 104, 105] do :
+    supports pru1_gpio :
+       pru1_pru1_pru_r31 => io[i]
+
+  ;pru1_gpinput-only
+  supports pru1_gpi :
+    option :
+      pru1_pru1_pru_r31_gpi => io[0]
+    option :
+      pru1_pru1_pru_r31_gpi => io[60]      
+ 
+  supports {ddr-acc(true)} :
+    for i in 0 to 16 do :
+      a[i] => acc.a[i]
+    ba[0] => acc.ba[0]
+    ba[1] => acc.ba[1]
+    ba[2] => acc.ba[2]
+    ck.P => acc.ck.P
+    ck.N => acc.ck.N
+    cke => acc.cke
+    odt => acc.odt
+    nCS => acc.nCS
+    nRAS => acc.nRAS
+    nCAS => acc.nCAS
+    nWE => acc.nWE
+    nRESET => acc.nRESET
+   
+  supports {ddr-acc(false)} :
+    for i in 0 to 15 do :
+      a[i] => acc.a[i]
+    ba[0] => acc.ba[0]
+    ba[1] => acc.ba[1]
+    ba[2] => acc.ba[2]
+    ck.P => acc.ck.P
+    ck.N => acc.ck.N
+    cke => acc.cke
+    odt => acc.odt
+    nCS => acc.nCS
+    nRAS => acc.nRAS
+    nCAS => acc.nCAS
+    nWE => acc.nWE
+    nRESET => acc.nRESET
+
+  supports {ddr-dat(16)} :
+    for i in 0 to 16 do :
+      dq[i] => dat.dq[i]
+    dqs[0].P => dat.dqs[0].P 
+    dqs[0].N => dat.dqs[0].N 
+    dqs[1].P => dat.dqs[1].P 
+    dqs[1].N => dat.dqs[1].N 
+    dm[0] => dat.dm[0]
+    dm[1] => dat.dm[1]    
+  
+  supports usb :
+    data.P => usb0.data.P        
+    data.N => usb0.data.N 
+  
+  supports usb :
+    data.P => usb1.data.P        
+    data.N => usb1.data.N 
+
+public pcb-module cpu_module:
+  pin gnd
+  pin vdd_core              ;1.1V(OPP100), 0.95V(OPP50)
+  pin vdd_mpu               ;variable
+  pin vdd_mpuon                       
+  pin vdd_1v8
+  pin vdd_3v3a
+  pin vdds_ddr              ;1.8V(DDR2), 1.5V(DDR3), 1.35V(DDR3L)
+  pin ddr_vref
+  pin vddshv1               ;1.8V or 3.3V IO
+  pin vddshv2               ;1.8V or 3.3V IO
+  pin vddshv3               ;1.8V or 3.3V IO
+  pin vddshv4               ;1.8V or 3.3V IO
+  pin vddshv5               ;1.8V or 3.3V IO
+  pin vddshv6               ;1.8V or 3.3V IO
+  pin vdds                  ;1.8V
+  pin vrtc                  ;1.8V
+  pin vdd_rtc               ;1.1V
+
+  inst cpu : {ocdb/texas-instruments/AM3358/component}
+  inst fb1 : {ocdb/laird/LI0805H151R-10/component}
+  inst fb2 : {ocdb/laird/LI0805H151R-10/component}
+  inst fb3 : {ocdb/laird/LI0805H151R-10/component}
+
+  ;gnd
+  net (gnd cpu.VSS1 cpu.VSS2 cpu.VSS3 cpu.VSS4 cpu.VSS5 cpu.VSS6 cpu.VSS7 cpu.VSS8)
+  net (gnd cpu.VSS9 cpu.VSS10 cpu.VSS11 cpu.VSS12 cpu.VSS13 cpu.VSS14 cpu.VSS15 cpu.VSS16)
+  net (gnd cpu.VSS17 cpu.VSS18 cpu.VSS19 cpu.VSS20 cpu.VSS21 cpu.VSS22 cpu.VSS23 cpu.VSS24)
+  net (gnd cpu.VSS25 cpu.VSS26 cpu.VSS27 cpu.VSS28 cpu.VSS29 cpu.VSS30 cpu.VSS31 cpu.VSS32)
+  net (gnd cpu.VSS33 cpu.VSS34 cpu.VSS35 cpu.VSS36 cpu.VSS37 cpu.VSS38)
+  net (gnd cpu.VSSA_USB2 cpu.VSSA_USB1)
+
+  ;vdd_core
+  ;every 2 pins should have 0.1uF, every 10 pins 10uF
+  net (vdd_core cpu.VDD_CORE1 cpu.VDD_CORE2 cpu.VDD_CORE3 cpu.VDD_CORE4 cpu.VDD_CORE5)
+  net (vdd_core cpu.VDD_CORE6 cpu.VDD_CORE7 cpu.VDD_CORE8 cpu.VDD_CORE9 cpu.VDD_CORE10)
+  net (vdd_core cpu.VDD_CORE11 cpu.VDD_CORE12 cpu.VDD_CORE13 cpu.VDD_CORE14 cpu.VDD_CORE15)
+  net (vdd_core cpu.VDD_CORE16 cpu.VDD_CORE17 cpu.VDD_CORE18 cpu.VDD_CORE19 cpu.VDD_CORE20) 
+  cap-strap(vdd_core, gnd, 10.0e-6)
+  cap-strap(vdd_core, gnd, 10.0e-6)
+  cap-strap(vdd_core, gnd, 10.0e-6)
+  for i in 1 to 14 do :
+    cap-strap(vdd_core, gnd, 0.1e-6)
+ 
+  ;vdd_mpu
+  net (vdd_mpu cpu.VDD_MPU1 cpu.VDD_MPU2 cpu.VDD_MPU3 cpu.VDD_MPU4 cpu.VDD_MPU5 cpu.VDD_MPU6 cpu.VDD_MPU7)
+  cap-strap(vdd_mpu, gnd, 10.0e-6)
+  cap-strap(vdd_mpu, gnd, 0.1e-6)
+  cap-strap(vdd_mpu, gnd, 0.1e-6)
+  cap-strap(vdd_mpu, gnd, 0.1e-6)
+  net (vdd_mpuon cpu.VDD_MPU_MON) ;mpu rail feedback voltage to CPU 
+
+  ;internal ldo output capacitors / do-not-connect
+  cap-strap(cpu.CAP_VDD_SRAM_CORE, gnd, 1.0e-6) ;10V
+  cap-strap(cpu.CAP_VDD_SRAM_MPU, gnd, 1.0e-6) ;10V
+  cap-strap(cpu.CAP_VBB_MPU, gnd, 1.0e-6) ;10V
+
+  ;vdd_1v8 
+  net (vdd_1v8 cpu.VDDS_SRAM_MPU_BB cpu.VDDS_SRAM_CORE_BG cpu.VDDA1P8V_USB0 cpu.VDDA1P8V_USB1) ;should connect to VDD_1V8
+  cap-strap(cpu.VDDS_SRAM_MPU_BB, gnd, 0.1e-6)
+  cap-strap(cpu.VDDS_SRAM_CORE_BG, gnd, 0.1e-6)
+  cap-strap(cpu.VDDA1P8V_USB0, gnd, 0.1e-6) ;shared between USB0 & USB1
+
+  ;vdd_pll - created from vdd_1v8
+  net (vdd_1v8 fb1.p[1])
+  net vdd_pll (fb1.p[2])
+  net (vdd_pll cpu.VDDS_PLL_MPU cpu.VDDS_PLL_DDR cpu.VDDS_PLL_CORE_LCD cpu.VDDS_OSC)
+  cap-strap(cpu.VDDS_PLL_MPU, gnd, 0.1) 
+  cap-strap(cpu.VDDS_PLL_DDR, gnd, 0.1) 
+  cap-strap(cpu.VDDS_PLL_CORE_LCD, gnd, 0.1) 
+  cap-strap(cpu.VDDS_OSC, gnd, 1.0)
+
+  ;vdd_3v3a
+  net (vdd_3v3a cpu.VDDA3P3V_USB0 cpu.VDDA3P3V_USB1)
+  cap-strap(cpu.VDDA3P3V_USB0, gnd, 0.1e-6) ;shared between USB0 & USB1
+
+  ;ddr
+  ;every 2 pins should have 0.1uF, every 10 pins 10uF
+  net (vdds_ddr cpu.VDDS_DDR1 cpu.VDDS_DDR2 cpu.VDDS_DDR3 cpu.VDDS_DDR4 cpu.VDDS_DDR5 cpu.VDDS_DDR6 cpu.VDDS_DDR7)
+  cap-strap(vdds_ddr, gnd, 10.0e-6)
+  cap-strap(vdds_ddr, gnd, 10.0e-6)
+  for i in 1 to 7 do :
+    cap-strap(vdds_ddr, gnd, 0.1e-6)
+  
+  net (ddr_vref cpu.DDR_VREF)
+  cap-strap(ddr_vref, gnd, 0.1e-6)
+
+  ;DDR RESET requires pull-up to hold the line when processor is not active/in low-power mode
+  res-strap(cpu.acc.nRESET, vdds_ddr, 1500.0)
+  ;DDR CKE requires pull-down to hold the line when processor is not active/in low-power mode
+  res-strap(cpu.acc.cke, gnd, 10000.0)
+  ;DDR VTP (voltage-temperature process) compensation resistor
+  res-strap(cpu.DDR_VTP, gnd, 49.9) ;1% required
+  
+  ;vddshv
+  ;every pin should have 0.1uF, every 10 pins 10uF
+  net (vddshv1 cpu.VDDSHV11 cpu.VDDSHV12) 
+  cap-strap(vddshv1, gnd, 0.1e-6)
+  cap-strap(vddshv1, gnd, 0.1e-6)
+  net (vddshv2 cpu.VDDSHV21 cpu.VDDSHV22) 
+  cap-strap(vddshv2, gnd, 0.1e-6)
+  cap-strap(vddshv2, gnd, 0.1e-6)
+  net (vddshv3 cpu.VDDSHV31 cpu.VDDSHV32)
+  cap-strap(vddshv3, gnd, 0.1e-6)
+  cap-strap(vddshv3, gnd, 0.1e-6)
+  net (vddshv4 cpu.VDDSHV41 cpu.VDDSHV42)
+  cap-strap(vddshv4, gnd, 0.1e-6)
+  cap-strap(vddshv4, gnd, 0.1e-6)
+  net (vddshv5 cpu.VDDSHV51 cpu.VDDSHV52)
+  cap-strap(vddshv5, gnd, 0.1e-6)
+  cap-strap(vddshv5, gnd, 0.1e-6)
+  net (vddshv6 cpu.VDDSHV61 cpu.VDDSHV62 cpu.VDDSHV63 cpu.VDDSHV64 cpu.VDDSHV65 cpu.VDDSHV66 cpu.VDDSHV67 cpu.VDDSHV68 cpu.VDDSHV69)
+  cap-strap(vddshv6, gnd, 10.0e-6)  
+  for i in 1 to 9 do :
+    cap-strap(vddshv6, gnd, 0.1e-6) 
+
+  ;vdds
+  net (vdds cpu.VDDS1 cpu.VDDS2 cpu.VDDS3 cpu.VDDS4 cpu.VDDS5 cpu.VDDS6 cpu.VDDS7)
+  for i in 1 to 6 do :
+    cap-strap(vdds, gnd, 0.1e-6) 
+
+  ;vdda_adc
+  net (vdd_1v8 fb2.p[1])
+  net vdd_adc (fb2.p[2])
+  net (vdd_adc cpu.VDDA_ADC)
+  net gnda_adc (cpu.VSSA_ADC)
+  cap-strap(cpu.VDDA_ADC, gnda_adc, 0.1e-6)
+  net (gnd fb3.p[1])
+  net (gnda_adc fb3.p[2])
+  res-strap(vdd_adc, cpu.VREFP, 0.0)  
+  net (gnda_adc cpu.VREFN)
+  cap-strap(cpu.VREFP, gnda_adc, 0.1e-6)
+  cap-strap(cpu.VREFP, gnda_adc, 0.1e-6)
+  cap-strap(cpu.VREFP, gnda_adc, 1.0e-9)
+
+  ;vdds_rtc
+  net (vrtc cpu.VDDS_RTC)
+  cap-strap(cpu.VDDS_RTC, gnd, 0.1e-6)
+  ;active-low enable for internal CAP_VDD_RTC regulator
+  res-strap(cpu.ENZ_KALDO_1P8V, gnd, 10000.0) 
+  cap-strap(cpu.CAP_VDD_RTC, gnd, 1.0e-6) ;voltage supplied internally if ENZ_KALDO = LO, else supply 1.1V externally
+  ;vdd_rtc == 0
+  ;if vdd_rtc == 1 :
+  ;  net(vdd_rtc cpu.CAP_VDD_RTC) 
+
+  ;pmic IO
+  ;output to enable pmic pwr
+  net PMIC_PWR_EN (cpu.PMIC_POWER_EN) 
+  ;input wakeup event
+  net EXT_WAKEUP (cpu.EXT_WAKEUP)
+  res-strap(EXT_WAKEUP, vrtc, 4750.0)
+  ;input active low power-on reset
+  net PORZn (cpu.PORZn)
+  ;input active low rtc reset
+  net RTC_PORZn (cpu.RTC_PORZn)
+  ;output open-drain active-low warm-reset
+  net WARM_RESET (cpu.NRESET_INOUT)
+  ;input = interrupt to ARM-A8 core
+  net NNMI (cpu.NNMI)
+
+  ;High Frequency oscillator input
+  net OSC0_IN (cpu.OSC0_IN)
+  ;High Frequency oscillator output
+  net OSC0_OUT (cpu.OSC0_OUT) 
+  ;High Frequency oscillator GND
+  net GND_OSC0 (cpu.VSS_OSC)
+
+  ;Low frequency (32.768 kHz) Real Time Clock oscillator input
+  net OSC1_IN (cpu.OSC1_IN)
+  ;Low frequency (32.768 kHz) Real Time Clock oscillator output
+  net OSC1_OUT (cpu.OSC1_OUT)
+  ;RTC CLK GND
+  net VSS_RTC (cpu.VSS_RTC)
+
+  ;supply voltage for USB0 VBUS comparator input
+  net USB0_VBUS (cpu.USB0_VBUS)
+  ;USB0 ID input (Micro-A or Micro-B Plug)
+  ;Should be connected to GND for USB Host operation or open-circuit for USB peripheral operation
+  ;never connect to an external voltage source. See AM3358 datasheet pg. 80
+  net USB0_ID (cpu.USB0_ID)
+  ;USB0 Data plus
+  net USB0_DP (cpu.usb0.data.P)
+  ;USB0 Data minus
+  net USB0_DM (cpu.usb0.data.N)
+  ;USB0 Active High Charger Enable output
+  net USB0_CE (cpu.USB0_CE)
+
+  ;supply voltage for USB1 VBUS comparator input
+  net USB1_VBUS (cpu.USB1_VBUS)
+  ;USB1 ID input (Micro-A or Micro-B Plug)
+  ;Should be connected to GND for USB Host operation or open-circuit for USB peripheral operation
+  ;never connect to an external voltage source. See AM3358 datasheet pg. 80
+  net USB1_ID (cpu.USB1_ID)
+  ;USB1 Data plus
+  net USB1_DP (cpu.usb1.data.P)
+  ;USB1 Data minus
+  net USB1_DM (cpu.usb1.data.N)
+  ;USB1 Active High Charger Enable output
+  net USB1_CE (cpu.USB1_CE)

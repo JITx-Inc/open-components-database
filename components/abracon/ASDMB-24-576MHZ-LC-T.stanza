@@ -1,0 +1,56 @@
+#use-added-syntax(esir)
+defpackage ocdb/abracon/ASDMB-24-576MHZ-LC-T:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import jitpcb/visualizer
+
+pcb-package SDMB-24-576MHZ-package :
+  val x0 = 0.825
+  val y0 = 0.775
+  pad p[1] : {smd-pad(0.65, 0.85)} at loc(x0, (- y0))            
+  pad p[2] : {smd-pad(0.65, 0.85)} at loc((- x0), (- y0)) 
+  pad p[3] : {smd-pad(0.65, 0.85)} at loc((- x0), y0) 
+  pad p[4] : {smd-pad(0.65, 0.85)} at loc(x0, y0)
+
+  layer(Courtyard(Top)) = Rectangle(2.55, 2.65)
+  layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+
+public unique pcb-component component :
+  manufacturer = "Abracon LLC"
+  mpn = "ASDMB-24.576MHZ-LC-T"
+  description = "24.576MHz XO (Standard) LVCMOS Oscillator 1.8V ~ 3.3V Standby (Power Down) 4-SMD, No Lead"
+  reference-prefix = "Y"     
+    val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [standby  | 1     | Left  ] 
+    [gnd      | 2     | Left  ]
+    [vdd      | 4     | Right ]
+    [output   | 3     | Right ]
+  gen-symbol-map(ps, SDMB-24-576MHZ-package) 
+  view(sm8-package(8)) 
+
+public pcb-module ASDMB-24-576MHZ_module :
+
+  inst osc : {ocdb/abracon/ASDMB-24-576MHZ-LC-T/component}
+
+  net STANDBY (osc.standby)
+  net GND (osc.gnd)
+  net VDD (osc.vdd)
+  net OUTPUT (osc.output)
+
+  ;DESIGN NOTE (datasheet): Recommend using an approximately 0.01uF bypass capacitor between PIN 2 and 4. 
+  cap-strap(VDD, GND, 0.01)
+

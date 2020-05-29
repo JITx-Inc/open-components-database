@@ -1,0 +1,189 @@
+#use-added-syntax(esir)
+defpackage ocdb/nxp/TDA19988BHN-C1-557:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import jitpcb/visualizer
+
+public unique pcb-component component :
+  manufacturer = "NXP USA Inc."
+  mpn = "TDA19988BHN/C1,557"
+  description = "IC VIDEO HDMI TRANS 64HVQFN (9x9) Package" 
+  val ps = PinSpec $ #TABLE :
+    [Ref    | Int ...  | Dir  ]
+    [VPA[0]           |  63   |  Left ]
+    [VPA[1]           |  62   |  Left ]
+    [VPA[2]           |  61   |  Left ]
+    [VPA[3]           |  60   |  Left ]
+    [VPA[4]           |  59   |  Left ]
+    [VPA[5]           |  58   |  Left ]
+    [VPA[6]           |  57   |  Left ]
+    [VPA[7]           |  56   |  Left ]
+    [VPB[0]           |  9    |  Left ]
+    [VPB[1]           |  8    |  Left ]
+    [VPB[2]           |  7    |  Left ]
+    [VPB[3]           |  6    |  Left ]
+    [VPB[4]           |  3    |  Left ]
+    [VPB[5]           |  2    |  Left ]
+    [VPB[6]           |  1    |  Left ]
+    [VPB[7]           |  64   |  Left ]
+    [VPC[0]           |  18   |  Left ]
+    [VPC[1]           |  17   |  Left ]
+    [VPC[2]           |  16   |  Left ]
+    [VPC[3]           |  15   |  Left ]
+    [VPC[4]           |  13   |  Left ]
+    [VPC[5]           |  12   |  Left ]
+    [VPC[6]           |  11   |  Left ]
+    [VPC[7]           |  10   |  Left ]
+    [VSYNC-VREF       |  21   |  Left ]
+    [HSYNC-VREF       |  22   |  Left ]
+    [DE-VREF          |  20   |  Left ]
+    [PCLK             |  4    |  Left ]
+    [CSDA             |  51   |  Left ]
+    [CSCL             |  52   |  Left ]
+    [A0_I2C           |  53   |  Left ]
+    [A1_I2C           |  54   |  Left ]
+    [INT              |  50   |  Left ]
+    [ACLK             |  23   |  Left ]
+    [AP[4]            |  28   |  Left ]
+    [AP[2]            |  26   |  Left ]
+    [AP[1]            |  25   |  Left ]
+    [AP[0]            |  24   |  Left ]
+    [OSC_IN_AP[3]     |  27   |  Left ] 
+    [TX2-             |  44   |  Right]
+    [TX2+             |  45   |  Right]
+    [DSCL             |  33   |  Right]
+    [DSDA             |  32   |  Right]
+    [TX1-             |  42   |  Right]
+    [TX1+             |  43   |  Right]
+    [HPD              |  31   |  Right]
+    [CEC              |  30   |  Right]
+    [TX0-             |  39   |  Right]
+    [TX0+             |  40   |  Right]
+    [EXT_SWING        |  34   |  Right]
+    [TXC+             |  38   |  Right]
+    [TXC-             |  37   |  Right]
+    [VDDA-PLL0-1V8    |  47   |  Right]
+    [VDDA-PLL1-1V8    |  48   |  Right]
+    [VDDA0-1V8        |  35   |  Right]
+    [VDDA1-TX-1V8     |  36   |  Right]
+    [VDDA2-TX-1V8     |  41   |  Right]
+    [VDDA3-TX-1V8     |  46   |  Right]
+    [VDDC0-1V8        |  5    |  Right]
+    [VDDC1-1V8        |  29   |  Right]
+    [VDDIOA-1V8       |  14   |  Right]
+    [VDDIOB-1V8       |  55   |  Right]
+    [TEST             |  49   |  Right]
+    [VPP              |  19   |  Right]
+    ;[PAD             |  65   |  Right]
+  gen-symbol-map(ps, qfn-package(0.5, 9.2, 64, 0.25, 0.6)) ;error: package needs thermal pad
+
+public pcb-module TDA19988BHN-C1-557_module :
+
+  inst hdmi : {ocdb/nxp/TDA19988BHN-C1-557/component}
+
+  net GND (hdmi.VPP)
+
+  ;Video Port Inputs & Synchronization
+  for i in 0 to 8 do :
+    net VPA[i] (hdmi.VPA[i])
+  for i in 0 to 8 do :
+    net VPB[i] (hdmi.VPB[i])
+  for i in 0 to 8 do :
+    net VPC[i] (hdmi.VPC[i])
+  net VSYNC (hdmi.VSYNC-VREF)
+  net HSYNC (hdmi.HSYNC-VREF)
+  net DE (hdmi.DE-VREF)
+  net PCLK (hdmi.PCLK)
+
+  ;Device I2C Bus
+  net I2C_SDA (hdmi.CSDA)
+  net I2C_SCL (hdmi.CSCL)
+
+  ;Device I2C Bus Address
+  net A0_I2C (hdmi.A0_I2C)
+  net A1_I2C (hdmi.A1_I2C)
+
+  ;INT : Open-Drain Output interrupt
+  net INT (hdmi.INT)
+  pin VDD
+  res-strap(INT, VDD, 10000.0)   
+
+  ;Audio Input Clock & Data
+  net ACLK (hdmi.ACLK)
+  for i in 0 to 3 do :
+    net AP[i] (hdmi.AP[i])
+  net AP4 (hdmi.AP[4])
+  net OSC_IN_AP3 (hdmi.OSC_IN_AP[3])
+
+  ;HDMI TMDS Output Pairs & Clock
+  ;Diff Impedance = 100ohm, SE = 50ohm
+  net HDMI_TX2- (hdmi.TX2-)
+  net HDMI_TX2+ (hdmi.TX2+)
+
+  net HDMI_TX1- (hdmi.TX1-)
+  net HDMI_TX1+ (hdmi.TX1+)
+
+  net HDMI_TX0- (hdmi.TX0-)
+  net HDMI_TX0+ (hdmi.TX0+)
+
+  net HDMI_TXC- (hdmi.TXC-)
+  net HDMI_TXC+ (hdmi.TXC+)
+
+  ;TDMS output swing adjustment
+  net SWING (hdmi.EXT_SWING)
+  res-strap(SWING, GND, 10000.0) ;1% tolerance required
+
+  ;Hot-Plug Detect, 5V Tolerant
+  net HPD (hdmi.HPD)
+
+  ;CEC : Open-Drain connection to HDMI connector
+  net CEC (hdmi.CEC)
+
+  ;HDMI DDC-bus, 5V tolerant
+  net DSCL (hdmi.DSCL)
+  net DSDA (hdmi.DSDA)
+
+  ;PLL Analog Supply Voltage - 1.8V
+  net VDD_PLL (hdmi.VDDA-PLL0-1V8 hdmi.VDDA-PLL1-1V8)
+  cap-strap(VDD_PLL, GND, 0.1)
+  cap-strap(VDD_PLL, GND, 2.2)
+
+  ;Tx Analog Supply Voltage - 1.8V
+  net VDDA (hdmi.VDDA0-1V8 hdmi.VDDA1-TX-1V8 hdmi.VDDA2-TX-1V8 hdmi.VDDA3-TX-1V8)
+  cap-strap(VDDA, GND, 0.1)
+  cap-strap(VDDA, GND, 2.2)
+
+  ;Core Digital Supply Voltage - 1.8V
+  net VDDC (hdmi.VDDC0-1V8 hdmi.VDDC1-1V8)
+  cap-strap(VDDC, GND, 0.1)
+  cap-strap(VDDC, GND, 2.2)
+
+  ;IO Digital Supply Voltage - 1.8V
+  net VDDIO (hdmi.VDDIOA-1V8 hdmi.VDDIOB-1V8)
+  cap-strap(VDDIO, GND, 0.1)
+  cap-strap(VDDIO, GND, 2.2)
+
+  net TEST (hdmi.TEST)
+  res-strap(TEST, GND, 0.0)
+
+
+
+
+
+
+
+
+ 

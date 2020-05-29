@@ -1,0 +1,72 @@
+#use-added-syntax(esir)
+defpackage ocdb/cui-devices/PJ-002AH:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import jitpcb/visualizer
+
+;DESIGN NOTE: PTH Annular Ring Calculation (pth-pad) (plated-slot-pad)
+;Minimum Hole Size = Maximum Lead Diameter + 0.25mm (for Level A of IPC-2222)
+;Minimum Hole Size = Maximum Lead Diameter + 0.20mm (for Level B of IPC-2222)
+;Minimum Hole Size = Maximum Lead Diameter + 0.15mm (for Level C of IPC-2222)
+
+;Pad Diameter = Minimum Hole Size + 0.1mm + 0.60mm (for Level A of IPC-2221)
+;Pad Diameter = Minimum Hole Size + 0.1mm + 0.50mm (for Level B of IPC-2221)
+;Pad Diameter = Minimum Hole Size + 0.1mm + 0.40mm (for Level C of IPC-2221)
+
+;error: Rectangle needs to be Oval drill-shape
+pcb-pad plated-slot-pad (w:Double, h:Double) :
+  type = TH
+  ;calculate max diameter c of rectangle (a^2 + b^2 = c^2)
+  val c:Double = sqrt((w * w) + (h * h))
+  ;calculate hole-size Level B IPC-2222 percent increase 
+  val c_increase_hole:Double = 1.0 + (((c + 0.2) - c) / c)
+  ;add percent increase to w, h
+  val w_new_hole:Double = c_increase_hole * w
+  val h_new_hole:Double = c_increase_hole * h
+  layer(Cutout()) = Rectangle(w_new_hole, h_new_hole)
+
+  ;calculate pad-size Level B IPC-2221 percent increase 
+  val c_increase_pad:Double = 1.0 + (((c + 0.8) - c) / c)
+  ;add percent increase to w, h
+  val w_new_pad:Double = c_increase_pad * w
+  val h_new_pad:Double = c_increase_pad * h
+  shape = Rectangle(w_new_pad, h_new_pad)
+
+;Design for IPC-222x Level B
+pcb-package PJ-002AH-package:
+  pad p[1] : {plated-slot-pad(1.0, 3.5)} at loc(6.65, 0.1)
+  pad p[2] : {plated-slot-pad(1.0, 3.0)} at loc(0.65, 0.1)
+  pad p[3] : {plated-slot-pad(3.0, 1.0)} at loc(3.4, -4.6) 
+
+  layer(Courtyard(Top)) = Rectangle(14.6, 9.15)
+  layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+  ;height = 7.1mm
+
+public unique pcb-component component :
+  manufacturer = "CUI Devices"
+  mpn = "PJ-002AH"
+  description = "Power Barrel Connector Jack 2.10mm ID (0.083in), 5.50mm OD (0.217in) Through Hole, Right Angle"
+  reference-prefix = "J"
+  val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [VDD     | 1    | Right  ]
+    [GND     | 2    | Right  ]
+    [NO      | 3    | Right  ]
+  gen-symbol-map(ps, PJ-002AH-package)
+  view(PJ-002AH-package)
+
+
+  

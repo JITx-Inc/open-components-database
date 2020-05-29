@@ -1,0 +1,59 @@
+#use-added-syntax(esir)
+defpackage ocdb/texas-instruments/TL5209:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+public unique pcb-component component :
+  manufacturer = "Texas Instruments"
+  mpn = "TL5209DR"
+  description = "Linear Voltage Regulator IC 1 Output 500mA 8-SOIC"
+  val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [IN        | 2   | Left  ]
+    [EN        | 1   | Left  ]
+    [GND1      | 5   | Left  ]
+    [GND2      | 6   | Left  ]
+    [OUT       | 3   | Right ]
+    [ADJ/BYP   | 4   | Right ]
+    [GND3      | 7   | Right ]
+    [GND4      | 8   | Right ]
+  gen-symbol-map(ps, soic127p-package(8)) ;need to update package y-dim measures 5.1mm, should be 5.4mm
+
+public pcb-module ldo_module (v-out:Double):
+  pin VIN
+  pin VOUT
+  pin GND
+  pin EN
+  val r2 = 470.0e3                      ;r2 should be <= 470k for optimal performance
+  val r1 = closest-std-val(r2 / ((v-out / 1.242) - 1.0), 1.0) ;maximum v-out = 6.75V +/- 10% -- error: want this to round down vs. up
+
+  inst ldo : {ocdb/texas-instruments/TL5209/component}
+
+  net (GND ldo.GND1 ldo.GND2 ldo.GND3 ldo.GND4)
+  net (VIN ldo.IN)
+  cap-strap(ldo.IN, GND, 1.0)           ;datasheet recommends 1.0uF minimum input cap
+
+  net (EN ldo.EN)
+  
+  net (VOUT ldo.OUT)
+  net fb (ldo.ADJ/BYP)
+  
+  cap-strap(VOUT, GND, 4.7)             ;datasheet recommends 4.7uF output cap (<100uA start-up load), 10uF for higher start-up loads
+
+  res-strap(VOUT, fb, r1)
+  res-strap(fb, GND, r2)
+
+  cap-strap(fb, GND, 0.00047)            ;datasheet recommends 470pF bypass cap

@@ -1,0 +1,148 @@
+#use-added-syntax(esir)
+defpackage ocdb/microchip/LAN8710A-EZC-TR:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import jitpcb/visualizer
+
+pcb-package QFN32_WITHTHERMALPAD :
+  make-qfn-package(0.5, 4.85, 32, 0.28, 0.75)
+  pad p[33] : {smd-pad(3.2,3.2)} at loc(0.0, 0.0) ;thermal pad
+
+public unique pcb-component component :
+  manufacturer = "Microchip Technology"
+  mpn = "LAN8710A-EZC-TR"
+  description = "4/4 Transceiver Full MII, RMII 32-QFN (5x5)" 
+  val ps = PinSpec $ #TABLE :
+    [ Ref               | Int ... | Dir  ]
+    [ MDIO              | 16      | Left  ]
+    [ MDC               | 17      | Left  ]
+    [ RXD3_PHYAD2       | 8       | Left  ]
+    [ RXD2_RMIISEL      | 9       | Left  ]
+    [ RXD1_MODE1        | 10      | Left  ]
+    [ RXD0_MODE0        | 11      | Left  ]
+    [ RXDV              | 26      | Left  ]
+    [ RXCLK_PHYAD1      | 7       | Left  ]
+    [ RXER_RXD4_PHYAD0  | 13      | Left  ]
+    [ TXCLK             | 20      | Left  ]
+    [ TXEN              | 21      | Left  ]
+    [ TXD0              | 22      | Left  ]
+    [ TXD1              | 23      | Left  ]
+    [ TXD2              | 24      | Left  ]
+    [ TXD3              | 25      | Left  ]
+    [ COL_CRS_DV_MODE2  | 15      | Left  ]
+    [ CRS               | 14      | Left  ]
+    [ nRST              | 19      | Left  ]
+    [ XTAL1_CLKIN       | 5       | Left  ]
+    [ XTAL2             | 4       | Left  ]
+    [ VDDIO             | 12      | Up    ]
+    [ VDD2A             | 1       | Up    ]
+    [ VDD1A             | 27      | Up    ]
+    [ VDDCR             | 6       | Up    ]
+    [ TXP               | 29      | Right ]
+    [ TXN               | 28      | Right ]
+    [ RXP               | 31      | Right ]
+    [ RXN               | 30      | Right ]
+    [ LED1_REGOFF       | 3       | Right ]
+    [ LED2_nINTSEL      | 2       | Right ]
+    [ nINT_TXER_TXD4    | 18      | Left  ]
+    [ RBIAS             | 32      | Left  ]
+    [ GND_EP            | 33      | Down  ]
+  gen-symbol-map(ps, QFN32_WITHTHERMALPAD) 
+
+public pcb-module LAN8710A-EZC-TR_module :
+
+  inst ethernet : {ocdb/microchip/LAN8710A-EZC-TR/component}
+
+  net GND (ethernet.GND_EP)
+
+  ;External Crystal Connection
+  net XTAL1_CLKIN (ethernet.XTAL1_CLKIN)
+  net XTAL2 (ethernet.XTAL2)
+ 
+  ;Analog Port Power for Channel 1 & 2 -- Requires 3.3V
+  net VDD_PHYA (ethernet.VDD1A ethernet.VDD2A)
+  cap-strap(VDD_PHYA, GND, 0.1e-6)         ;design note: place close to VDD1A
+  cap-strap(VDD_PHYA, GND, 0.1e-6)         ;design note: place close to VDD2A
+  cap-strap(VDD_PHYA, GND, 10.0e-6)
+
+  ;Internally generated 1.2V Digital Core Supply unless configured for regulator off mode
+  net VDDCR (ethernet.VDDCR)
+  cap-strap(VDDCR, GND, 470.0e-12)     
+  cap-strap(VDDCR, GND, 1.0e-6)
+
+  ;Variable IO Power -- Requires 1.8V - 3.3V
+  net VDDIO (ethernet.VDDIO)
+  cap-strap(VDDIO, GND, 0.1e-6)
+
+  ;Analog Bias Resistor - will dissipate 1mW power
+  net RBIAS (ethernet.RBIAS)
+  res-strap(RBIAS, GND, 12100.0)    ;requires 1% tolerance
+
+  ;Ethernet RX/TX with pull-ups
+  net TXP (ethernet.TXP)
+  net TXN (ethernet.TXN)
+  net RXP (ethernet.RXP)
+  net RXN (ethernet.RXN)
+  res-strap(TXP, VDD_PHYA, 49.9) ;1% tolerance required
+  res-strap(TXN, VDD_PHYA, 49.9) ;1% tolerance required
+  res-strap(RXP, VDD_PHYA, 49.9) ;1% tolerance required
+  res-strap(RXN, VDD_PHYA, 49.9) ;1% tolerance required
+
+  ;Link Activity LED indication - active when a valid link is detected, blinks when activity detected
+  net LED1_REGOFF (ethernet.LED1_REGOFF)
+
+  ;Link Speed LED indication - active at 100Mbps
+  ;Pulled Low = TXER/TXD4 is selected for operation on the nINT/TXER/TXD4 pin.
+  ;Pulled High or Float =  nINT is selected for operation on INT/TXER/TXD4 pin (default)
+  net LED2_nINTSEL (ethernet.LED2_nINTSEL)
+  res-strap(LED2_nINTSEL, GND, 10000.0) ;comment out if Pulled-High required
+  net nINT_TXER_TXD4 (ethernet.nINT_TXER_TXD4)
+
+  ;Serial Management Interface
+  net MDIO (ethernet.MDIO)
+  net MDC (ethernet.MDC)
+
+  ;MII/RMII Signals
+  net RXD3_PHYAD2 (ethernet.RXD3_PHYAD2)
+  net RXD2_RMIISEL (ethernet.RXD2_RMIISEL)
+  net RXD1_MODE1 (ethernet.RXD1_MODE1)
+  net RXD0_MODE0 (ethernet.RXD0_MODE0)
+  net RXDV (ethernet.RXDV)
+  net RXCLK_PHYAD1 (ethernet.RXCLK_PHYAD1)
+  net RXER_RXD4_PHYAD0 (ethernet.RXER_RXD4_PHYAD0)
+  net TXCLK (ethernet.TXCLK)
+  net TXEN (ethernet.TXEN)
+  net TXD0 (ethernet.TXD0)
+  net TXD1 (ethernet.TXD1)
+  net TXD2 (ethernet.TXD2)
+  net TXD3 (ethernet.TXD3)
+  net COL_CRS_DV_MODE2 (ethernet.COL_CRS_DV_MODE2)
+  net CRS (ethernet.CRS)
+
+  ;System reset. This signal is active low.
+  net nRST (ethernet.nRST)
+
+  
+
+
+
+
+
+
+
+
+
+ 

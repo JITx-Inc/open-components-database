@@ -1,0 +1,54 @@
+#use-added-syntax(esir)
+defpackage ocdb/cts/445C33D24M00000:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import jitpcb/visualizer
+
+public unique pcb-component component :
+  manufacturer = "CTS-Frequency Controls"
+  mpn = "445C33D24M00000"
+  description = "24MHz ±30ppm Crystal 18pF 40 Ohms 2-SMD, No Lead"
+  reference-prefix = "Y"
+  ;height = 1.35mm
+  pin xtal1
+  pin xtal2
+  package = {SMD-2(1.8, 2.4, 3.8)}(xtal1 => p[1], xtal2 => p[2])
+  symbol = {crystal-sym(0)}(xtal1 => p[1], xtal2 => p[2])   
+
+public pcb-module xtal24mhz_module (cstray:Double) :
+  ;cstray = Stray Capacitance of the printed circuit board and connections, estimate at 3pF (min) - 9pF (max) typical
+
+  ;Design Note: C1 and C2 must be placed on either side of crystal to provide load capacitance as seen by the crystal 
+  ;to assure correct frequency operation. See https://en.wikipedia.org/wiki/Pierce_oscillator for more information.
+
+  ;Design Note: if oscillation is measured too high with chosen C1 & C2, increase C1 & C2.  
+  ;If oscillation is too low, decrease C1 & C2.
+
+  ;Calculate C1 & C2
+  ;cl = Load Capacitance target (from datasheet)
+  ;cl = ((C1*C2) / (C1+C2)) + cstray
+  val cl = 18.0e-12
+  val c1_c2 = 2.0 * (cl - cstray)  ;error: need to update to round to nearest available value
+
+  inst xtal : {ocdb/cts/445C33D24M00000/component}
+  
+  pin OSC_GND
+  
+  net XTAL1 (xtal.xtal1)
+  cap-strap(xtal.xtal1, OSC_GND, c1_c2)
+  net XTAL2 (xtal.xtal2)
+  cap-strap(xtal.xtal2, OSC_GND, c1_c2)
+

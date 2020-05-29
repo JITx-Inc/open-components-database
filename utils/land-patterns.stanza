@@ -465,3 +465,116 @@ public pcb-package pin-header-pkg (n-pin:Int, n-row:Int, pin-pitch:Double, row-p
   layer(Silkscreen("f-silk", Top)) = LineRectangle(c-w, c-h)
   
   ref-label()
+
+;USON-DRY (-DRY is TI naming convention)
+;max-height = 1.1mm
+public pcb-package uson-dry0006a :
+    val x0 = 0.3
+    val y0 = 0.5
+    pad p[1] : {smd-pad(0.35, 0.2)} at loc((- x0), y0)
+    pad p[2] : {smd-pad(0.35, 0.2)} at loc((- x0), 0.0)
+    pad p[3] : {smd-pad(0.35, 0.2)} at loc((- x0), (- y0))
+    pad p[4] : {smd-pad(0.35, 0.2)} at loc(x0, (- y0))
+    pad p[5] : {smd-pad(0.35, 0.2)} at loc(x0, 0.0)
+    pad p[6] : {smd-pad(0.35, 0.2)} at loc(x0, y0)
+
+    layer(Courtyard(Top)) = Rectangle(1.0, 1.45)
+    layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+
+;DCK (R_PDSO-G5) (-DCK is TI naming convention)
+;max-height = 0.6mm
+public pcb-package dck-R-PDSO-G5 :
+    val x0 = 1.1
+    val y0 = 0.65
+    pad p[1] : {smd-pad(0.9, 0.4)} at loc((- x0), y0)
+    pad p[2] : {smd-pad(0.9, 0.4)} at loc((- x0), 0.0)
+    pad p[3] : {smd-pad(0.9, 0.4)} at loc((- x0), (- y0))
+    pad p[4] : {smd-pad(0.9, 0.4)} at loc(x0, y0)
+    pad p[5] : {smd-pad(0.9, 0.4)} at loc(x0, (- y0))
+
+    layer(Courtyard(Top)) = Rectangle(3.3, 2.15)
+    layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+
+;SM8 / DCT Plastic Small Outline (Texas Instruments)
+public defn make-sm8-package (n:Int) :
+  inside pcb-package :
+
+    val lead-span = 4.4
+    val pin-pitch = 0.65
+
+    val x0 = (- ((lead-span / 2.0) - 0.5))
+    val y0 = (to-double((n / 2) - 1) * pin-pitch) / 2.0
+    val l0 = loc(x0, y0, -90.0)
+    val l1 = loc((- x0), (- y0), 90.0)
+    
+    val pin-row = to-list(row-locs(W, n / 2, pin-pitch))
+
+    for (i in 1 through (n / 2), l in pin-row) do :
+      pad p[i] : {smd-pad(0.3, 1.6)} at l0 * l
+    
+    for (i in (n / 2 + 1) through n, l in pin-row) do :
+      pad p[i] : {smd-pad(0.3, 1.6)} at l1 * l
+    
+    val pkg-height = switch(n) :
+      8 : 3.0
+      14 : 5.0
+      16 : 5.0
+      20 : 6.5
+      24 : 7.8
+      28 : 9.7
+      else :
+        to-double((n / 2) - 1) * pin-pitch + 1.1
+    
+    val c-w = lead-span + 1.5
+    val c-h = pkg-height
+    layer(Courtyard(Top)) = Rectangle(c-w, c-h)
+
+    name = to-string("sm8 with %_ pins." % [n])
+    layer(Silkscreen("f-silk", Top)) = LineRectangle(c-w, c-h)
+    layer(Silkscreen("pol", Top)) = Circle(x0 - 2.0, y0, 0.254)
+    ref-label()
+
+public pcb-package sm8-package (n:Int) :
+  make-sm8-package(n)
+
+
+;DCU (S_PDSO-G8) (-DCU is TI naming convention)
+;max-height = 0.9mm
+public pcb-package dcu-S-PDSO-G8 :
+    val x0 = 1.55
+    val y0 = 0.25
+    val pitch = 0.5
+    pad p[1] : {smd-pad(0.8, 0.3)} at loc((- x0), y0 + pitch)
+    pad p[2] : {smd-pad(0.8, 0.3)} at loc((- x0), y0)
+    pad p[3] : {smd-pad(0.8, 0.3)} at loc((- x0), (- y0))
+    pad p[4] : {smd-pad(0.8, 0.3)} at loc((- x0), (- y0) - pitch)
+    pad p[5] : {smd-pad(0.8, 0.3)} at loc(x0, (- y0) - pitch)
+    pad p[6] : {smd-pad(0.8, 0.3)} at loc(x0, (- y0))
+    pad p[7] : {smd-pad(0.8, 0.3)} at loc(x0, y0)
+    pad p[8] : {smd-pad(0.8, 0.3)} at loc(x0, y0 + pitch)
+
+    layer(Courtyard(Top)) = Rectangle(4.15, 2.05)
+    layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+
+
+;2-SMD, No Lead Generator (ex: crystals/oscillators)
+public pcb-package SMD-2 (pad_x:Double, pad_y:Double, pad-pitch:Double) :
+  val x0 = pad-pitch / 2.0
+  pad p[1] : {smd-pad(pad_x, pad_y)} at loc((- x0), 0.0)
+  pad p[2] : {smd-pad(pad_x, pad_y)} at loc(x0, 0.0)
+
+  val y0 = 0.25 ;add spacing to courtyard
+  layer(Courtyard(Top)) = Rectangle(pad-pitch + pad_x + y0, pad_y + y0)
+  layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+
+;SOT-523 (example: single transistor)
+public pcb-package SOT-523 :
+  val x0 = 0.5
+  val y0 = 0.645
+  pad p[1] : {smd-pad(0.4, 0.51)} at loc(0.0, y0)
+  pad p[2] : {smd-pad(0.4, 0.51)} at loc((- x0), (- y0))
+  pad p[3] : {smd-pad(0.4, 0.51)} at loc(x0, (- y0)) 
+
+  layer(Courtyard(Top)) = Rectangle(1.65, 2.05)
+  layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+
