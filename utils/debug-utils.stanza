@@ -1,0 +1,637 @@
+#use-added-syntax(esir)
+defpackage ocdb/debug-utils :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import esir/fonts
+  import esir/repl-lib
+  import ocdb/tests/default-harness
+
+  import ocdb/checks
+  import ocdb/bundles
+  import ocdb/pinspec
+  import ocdb/land-patterns
+  import ocdb/generic-components
+  import ocdb/calculate-connected
+
+  import jitpcb/powergen
+  import jitpcb/powergen/gen
+
+  import ocdb/design-vars
+
+  import ocdb/rules
+  import ocdb/stackups
+  import ocdb/symbols
+  import ocdb/box-symbol
+
+; =============
+; USAGE
+; =============
+
+; The debug utility facilitates parallel generation of standard debug 
+; components in a design. The components are enabled by assigning a debug
+; property to the module.
+;
+; properties(my-module) :
+;   debug => true
+; 
+; This also enables simultaneous debug and production designs to appear on
+; the same board.
+
+
+; Adds a debug testpoint to a pin or net.
+; Parameters
+; ------------
+; ref: reference to pin or net
+; cmp: reference to pcb-component for testpoint
+public defn db-testpoint (ref:Ref, cmp:Ref) :
+  inside pcb-module :
+    eval-when true :
+      add-testpoint(ref, cmp, false, false)
+
+; Adds a debug testpoint to a pin or net that persists as smd testpad 
+; to production on top layer.
+; Parameters
+; ------------
+; ref: reference to pin or net
+; cmp: reference to pcb-component for testpoint
+public defn db-testpoint-persist (ref:Ref, cmp:Ref) :
+  inside pcb-module :
+    eval-when true :
+      add-testpoint(ref, cmp, true, true)
+
+; Adds a debug testpoint to a pin or net that persists as smd testpad
+; to production on bottom layer.
+; Parameters
+; ------------
+; ref: reference to pin or net
+; cmp: reference to pcb-component for testpoint
+public defn db-testpoint-persist-btm (ref:Ref, cmp:Ref) :
+  inside pcb-module :
+    eval-when true :
+      add-testpoint(ref, cmp, true, false)
+
+; Adds debug testpoints to a tuple of pins or nets 
+; Parameters
+; ------------
+; refs: Tuple of references to pins or nets
+; cmp: reference to pcb-component for testpoint
+public defn db-testpoint (refs:Tuple<Ref>, cmp:Ref) : 
+  inside pcb-module :
+    eval-when true :
+      for ref in refs do :
+        add-testpoint(ref, cmp, false, false)
+   
+; Adds debug testpoints to a tuple of pins or nets that persists as 
+; smd testpads to production on top layer.
+; Parameters
+; ------------
+; refs: Tuple of references to pins or nets
+; cmp: reference to pcb-component for testpoint
+public defn db-testpoint-persist (refs:Tuple<Ref>, cmp:Ref) : 
+  inside pcb-module :
+    eval-when true :
+      for ref in refs do :
+        add-testpoint(ref, cmp, true, true)
+    
+; Adds debug testpoints to a tuple of pins or nets that persists as 
+; smd testpads to production on bottom layer.
+; Parameters
+; ------------
+; refs: Tuple of references to pins or nets
+; cmp: reference to pcb-component for testpoint
+public defn db-testpoint-persist-btm (refs:Tuple<Ref>, cmp:Ref) : 
+  inside pcb-module :
+    eval-when true :
+      for ref in refs do :
+        add-testpoint(ref, cmp, true, false)
+    
+; Adds a debug smd testpad to a pin or net.
+; Parameters
+; ------------
+; ref: reference to pin or net
+public defn db-testpad (ref:Ref) :
+  inside pcb-module :
+    eval-when true :
+      val cmp = top-smd-testpoint-cmp()
+      add-testpoint(ref, cmp, false, false)
+
+; Adds a debug smd testpad to a pin or net that persists as smd testpad
+; to production on top layer.
+; Parameters
+; ------------
+; ref: reference to pin or net
+public defn db-testpad-persist (ref:Ref) :
+  inside pcb-module :
+    eval-when true :
+      val cmp = top-smd-testpoint-cmp()
+      add-testpoint(ref, cmp, true, true)
+  
+; Adds a debug smd testpad to a pin or net that persists as smd testpad
+; to production on bottom layer.
+; Parameters
+; ------------
+; ref: reference to pin or net
+public defn db-testpad-persist-btm (ref:Ref) :
+  inside pcb-module :
+    eval-when true :
+      val cmp = top-smd-testpoint-cmp()
+      add-testpoint(ref, cmp, true, false)
+  
+; Adds debug smd testpads to a tuple of pins or nets.
+; Parameters
+; ------------
+; refs: reference to a tuple of pins or nets
+public defn db-testpad (refs:Tuple<Ref>) :
+  inside pcb-module :
+    eval-when true :
+      for ref in refs do :
+        val cmp = top-smd-testpoint-cmp()
+        add-testpoint(ref, cmp, false, false)
+
+; Adds debug smd testpads to a tuple of pins or nets that persist to 
+; production on top layer.
+; Parameters
+; ------------
+; refs: reference to a tuple of pins or nets
+public defn db-testpad-persist (refs:Tuple<Ref>) :
+  inside pcb-module :
+    eval-when true :
+      for ref in refs do :
+        val cmp = top-smd-testpoint-cmp()
+        add-testpoint(ref, cmp, true, true)
+
+; Adds debug smd testpads to a tuple of pins or nets that persist to 
+; production on bottom layer.
+; Parameters
+; ------------
+; refs: reference to a tuple of pins or nets
+public defn db-testpad-persist-btm (refs:Tuple<Ref>) :
+  inside pcb-module :
+    eval-when true :
+      for ref in refs do :
+        val cmp = top-smd-testpoint-cmp()
+        add-testpoint(ref, cmp, true, false)
+
+; Adds a debug test header to a pin or net.
+; Parameters
+; ------------
+; ref: reference to a pin or net
+public defn db-testheader (ref:Ref) :
+  inside pcb-module :
+    eval-when true :
+      val cmp = pin-header(1)
+      add-testpoint(ref, cmp, false, false)
+
+; Adds a debug test header to a pin or net that persists as smd testpad
+; to production on top layer.
+; Parameters
+; ------------
+; ref: reference to a pin or net
+public defn db-testheader-persist (ref:Ref) :
+  inside pcb-module :
+    eval-when true :
+      val cmp = pin-header(1)
+      add-testpoint(ref, cmp, true, true)
+
+; Adds a debug test header to a pin or net that persists as smd testpad
+; to production on bottom layer.
+; Parameters
+; ------------
+; ref: reference to a pin or net
+public defn db-testheader-persist-btm (ref:Ref) :
+  inside pcb-module :
+    eval-when true :
+      val cmp = pin-header(1)
+      add-testpoint(ref, cmp, true, false)
+
+; Adds debug test headers to a tuple of pins or nets.
+; Parameters
+; ------------
+; refs: reference to a tuple of pins or nets
+public defn db-testheader (refs:Tuple<Ref>) :
+  inside pcb-module :
+    eval-when true :
+      for ref in refs do :
+        val cmp = pin-header(1)
+        add-testpoint(ref, cmp, false, false)
+
+; Adds debug test headers to a tuple of pins or nets that persist as 
+; smd testpads to production on top layer.
+; Parameters
+; ------------
+; refs: reference to a tuple of pins or nets
+public defn db-testheader-persist (refs:Tuple<Ref>) :
+  inside pcb-module :
+    eval-when true :
+      for ref in refs do :
+        val cmp = pin-header(1)
+        add-testpoint(ref, cmp, true, true)
+
+; Adds debug test headers to a tuple of pins or nets that persist as 
+; smd testpads to production on bottom layer.
+; Parameters
+; ------------
+; refs: reference to a tuple of pins or nets
+public defn db-testheader-persist-btm (refs:Tuple<Ref>) :
+  inside pcb-module :
+    eval-when true :
+      for ref in refs do :
+        val cmp = pin-header(1)
+        add-testpoint(ref, cmp, true, false)
+
+; Adds a user specified jumper component with a connection to 
+; input-node and to each node in nodes. Connects input node and default
+; directly for production. 
+; Useful for switching between power supplies.
+; Parameters
+; ------------
+; input-node: reference to input pin or net
+; nodes: reference to tuple of pins or nets
+; default: node that will be connected to input-node for production
+; cmp: reference to jumper component
+public defn db-jumper-mux (input-node:Ref, nodes:Tuple<Ref>,
+                        default:Ref, cmp:Ref) :
+  inside pcb-module :
+    eval-when true :
+      net-inline-jumper(input-node, nodes, default, cmp)
+
+; Adds a jumper with a connection to input-node and to each node in 
+; nodes. Connects input node and default directly for production. 
+; Useful for switching between power supplies.
+; Parameters
+; ------------
+; input-node: reference to input pin or net
+; nodes: reference to tuple of pins or nets
+; default: node that will be connected to input-node for production
+public defn db-jumper-mux (input-node:Ref, nodes:Tuple<Ref>, 
+                        default:Ref) :
+  inside pcb-module :
+    eval-when true :
+      val n = length(nodes)
+      val cmp = pin-header(n + 1)
+      net-inline-jumper(input-node, nodes, default, cmp)
+
+; Adds 2 pin user specified jumper components between one node and 
+; a list of other nodes.
+; Nets each of these connections directly for production.
+; Parameters
+; ------------
+; node1: reference to pin or net
+; nodes: reference to tuple of pins or nets
+; cmp: reference to jumper component
+public defn db-jumper (node1:Ref, nodes:Tuple<Ref>, cmp:Ref) :
+  inside pcb-module :
+    eval-when true :
+      for ref in nodes do :
+        net-inline-jumper(node1, [ref], ref, cmp)
+
+; Adds 2 pin jumpers between node1 and each node in nodes.
+; Nets each of these connections directly for production.
+; Parameters
+; ------------
+; node1: reference to pin or net
+; nodes: reference to tuple of pins or nets
+public defn db-jumper (node1:Ref, nodes:Tuple<Ref>) :
+  inside pcb-module :
+    eval-when true :
+      val cmp = pin-header(2)
+      for ref in nodes do :
+        net-inline-jumper(node1, [ref], ref, cmp)
+
+; Adds user selected jumper components between pairs of pins or nets.
+; Nets each of these connections directly for production.
+; Parameters
+; ------------
+; nodes: reference to a tuple of pin or net pairs.
+public defn db-jumper (nodes:Tuple<Tuple<Ref>>, cmp:Ref) :
+  inside pcb-module :
+    eval-when true :
+      for pair in nodes do :
+        net-inline-jumper(pair[0], [pair[1]], pair[0], cmp)
+
+; Adds 2 pin jumpers between pairs of pins or nets.
+; Nets each of these connections directly for production.
+; Parameters
+; ------------
+; nodes: reference to a tuple of pin or net pairs.
+public defn db-jumper (nodes:Tuple<Tuple<Ref>>) :
+  inside pcb-module :
+    eval-when true :
+      val cmp = pin-header(2)
+      for pair in nodes do :
+        net-inline-jumper(pair[0], [pair[1]], pair[0], cmp)
+
+; Add a 2 pin jumpers between node1 and node2.
+; Nets this connection directly for production.
+; Parameters
+; ------------
+; node1: reference to pin or net
+; node2: reference to pin or net
+public defn db-jumper (node1:Ref, node2:Ref) :
+  inside pcb-module :
+    eval-when true :
+      val cmp = pin-header(2)
+      net-inline-jumper(node1, [node2], node2, cmp) 
+
+; Add a 0 ohm resistor between node1 and node2.
+; Nets this connection directly for production.
+; Parameters
+; ------------
+; node1: reference to pin or net
+; node2: reference to pin or net
+public defn db-zero-res (node1:Ref, node2:Ref) :
+  inside pcb-module :
+    eval-when true :
+      val cmp = gen-res-cmp(0.0)
+      net-inline-jumper(node1, [node2], node2, cmp)
+
+; Add a user specified jumper between node1 and node2. Persists as 
+; 0 ohm resistor on the top layer for production.
+; Parameters
+; ------------
+; node1: reference to pin or net
+; node2: reference to pin or net
+; cmp: reference to component for jumper
+public defn db-jumper-persist-zero-res (node1:Ref, node2:Ref, 
+                                         cmp:Ref) :
+  inside pcb-module :
+    eval-when true :
+      val p-cmp = gen-res-cmp(0.0)
+      net-inline-jumper-persist-cmp(node1, [node2], cmp, p-cmp) 
+
+; Add a 2 pin jumper between node1 and node2. Persists as 0 ohm
+; resistor on the top layer for production.
+; Parameters
+; ------------
+; node1: reference to pin or net
+; node2: reference to pin or net
+public defn db-jumper-persist-zero-res (node1:Ref, node2:Ref) :
+  inside pcb-module :
+    eval-when true :
+      val cmp = pin-header(2) 
+      val p-cmp = gen-res-cmp(0.0)
+      net-inline-jumper-persist-cmp(node1, [node2], cmp, p-cmp)
+
+; Add 2 pin jumpers between one node and a list of other nodes. 
+; Persists as 0 ohm resistors on the top layer for production.
+; Parameters
+; ------------
+; node1: reference to pin or net
+; nodes: reference to a tuple of pins or nets
+public defn db-jumper-persist-zero-res (node1:Ref, 
+                                            nodes:Tuple<Ref>) :
+  inside pcb-module :
+    eval-when true :
+      val cmp = pin-header(2)
+      val p-cmp = gen-res-cmp(0.0)
+      net-inline-jumper-persist-cmp(node1, nodes, cmp, p-cmp)
+
+; Add user specified jumper components between pairs of nodes.
+; Persists as 0 ohm resistors on the top layer for production.
+; Parameters
+; ------------
+; nodes -- reference to tuple of pairs of pins or nets
+; cmp -- reference to jumper component
+public defn db-jumper-persist-zero-res (nodes:Tuple<Tuple<Ref>>, 
+                                         cmp:Ref) :
+  inside pcb-module :
+    eval-when true :
+      val p-cmp = gen-res-cmp(0.0)
+      for pair in nodes do :
+        net-inline-jumper-persist-cmp(pair[0], [pair[1]], cmp, p-cmp)
+
+; Add 2 pin jumpers between pairs of nodes.
+; Persists as 0 ohm resistors on the top layer for production.
+; Parameters
+; ------------
+; nodes -- reference to tuple of pairs of pins or nets
+public defn db-jumper-persist-zero-res (nodes:Tuple<Tuple<Ref>>) :
+  inside pcb-module :
+    eval-when true :
+      val cmp = pin-header(2)
+      val p-cmp = gen-res-cmp(0.0)
+      for pair in nodes do :
+        net-inline-jumper-persist-cmp(pair[0], [pair[1]], cmp, p-cmp)
+
+; Generator function to add a test point to a pin or net
+; Parameters
+; ------------
+; ref : reference to pin or net that test point is attached to
+; cmp : reference to pcb-component for test point
+; persist? : test points migrate to bottom layer for production
+defn add-testpoint (ref:Ref, cmp:Ref, persist?:True|False, top?:True|False) :
+  inside pcb-module  :
+    if property(self.debug) :
+      unique inst tp : {cmp}
+      val pins = ports(tp)
+      if not empty?(pins) :
+        net ({ref}, {next(pins)})
+    else if persist? and not property(self.debug) :
+      if top? :
+        unique inst tp : {top-smd-testpoint-cmp()}
+        net ({ref}, {tp.p})
+      else :
+        unique inst tp : {btm-smd-testpoint-cmp()}
+        net ({ref}, {tp.p})
+
+; Adds a n-way jumper from node1 to nodes
+; For production board, nets node1 to default
+; Parameters
+; ------------
+; node1 : pin or net to connect to first pin of jumper
+; nodes : tuple of pins or nets to connect to remaining pins of jumper
+; default : Connected to node1 directly when dev? is False
+; n : number of nodes to mux node1 with
+; cmp : component of jumper
+defn net-inline-jumper (node1:Ref, nodes:Tuple<Ref>, 
+                        default:Ref, cmp:Ref) :
+  inside pcb-module :
+    val n = length(nodes)
+    if property(self.debug) :
+      unique inst j : {cmp}
+      val pins = all-pins(j)
+      if not empty?(pins) :
+        net ({node1}, {next(pins)})
+        for i in 0 to n do :
+          net ({nodes[i]}, {next(pins)})
+    else :
+      net ({node1}, {default})
+
+; Adds user defined jumper components between node1 and each node in
+; nodes.
+; Parameters
+; ------------
+; node1 : pin or net to connect each jumper to
+; nodes : tuple of pins or nets to connect each jumper to
+; cmp : component of jumper
+; persist-cmp : 
+defn net-inline-jumper-persist-cmp (node1:Ref, nodes:Tuple<Ref>,
+                                    cmp:Ref, persist-cmp:Ref) :
+  inside pcb-module :
+    val n = length(nodes)
+    for i in 0 to n do :
+      if property(self.debug) :
+        unique inst j : {cmp}
+        val pins = all-pins(j)
+        if not empty?(pins) :
+          net ({node1}, {next(pins)})
+          net ({nodes[i]}, {next(pins)})
+      else :
+        unique inst zero : {persist-cmp} 
+        val pins = all-pins(zero)
+        if not empty?(pins) :
+          net ({node1}, {next(pins)})
+          net ({nodes[i]}, {next(pins)})
+
+; Adds a 10 pin Arm JTAG connector to a component
+; Component must support jtag
+; Returns a tuple with [jtag-vdd, jtag-gnd]
+; Parameters
+; ------------
+; cmp : Component that JTAG will be connected to
+public defn db-jtag (cmp:Ref) -> [Ref, Ref]|False:
+  inside pcb-module :
+    eval-when true :
+      if property(self.debug) :
+        require jtag:jtag from {cmp}
+        unique inst jtag-conn : {pin-header(10, 2)}
+        unique inst r-pu1 : {gen-res-cmp(10.0e3)}[3]
+        unique inst r-pu2 : {gen-res-cmp(4.7e3)}
+        unique inst r-pd : {gen-res-cmp(10.0e3)}
+        net jtag-vdd ({jtag-conn}.p[1], {r-pu1}[0].p[1], 
+             {r-pu1}[1].p[1], {r-pu2}.p[1], {r-pu1}[2].p[1])
+        net jtag-gnd ({jtag-conn}.p[3], {jtag-conn}.p[5], 
+                             {jtag-conn}.p[9], {r-pd}.p[1])
+        net tms ({jtag}.tms, {jtag-conn}.p[2], {r-pu1}[0].p[2])
+        net tck ({jtag}.tck, {jtag-conn}.p[4], {r-pd}.p[2])
+        net tdo ({jtag}.tdo, {jtag-conn}.p[6], {r-pu1}[2].p[2])
+        net tdi ({jtag}.tdi, {jtag-conn}.p[8], {r-pu1}[1].p[2])
+        net trstn ({jtag}.trstn, {jtag-conn}.p[10], {r-pu2}.p[2])
+        [jtag-vdd, jtag-gnd]
+
+; Adds a FTDI connector to a component
+; Component must support uart 
+; Returns a tuple with [ftdi-vdd, ftdi-gnd]
+; Parameters
+; ------------
+; cmp : Component that ftdi connector will be connected to
+public defn db-ftdi-two-comms (cmp:Ref) -> [Ref, Ref]|False :
+  inside pcb-module :
+    eval-when true :
+      if property(self.debug) :
+        unique inst ftdi-conn : {pin-header(6, 1)}
+        net ftdi-gnd ({ftdi-conn}.p[1])
+        net ftdi-vdd ({ftdi-conn}.p[3])
+        require uart:uart from {cmp}
+        net (uart.rx, {ftdi-conn}.p[4]) 
+        net (uart.tx, {ftdi-conn}.p[5])
+        [ftdi-vdd, ftdi-gnd]
+
+; Adds a FTDI connector to a component
+; Component must support uart4 
+; Returns a tuple with [ftdi-vdd, ftdi-gnd]
+; Parameters
+; ------------
+; cmp : Component that ftdi connector will be connected to
+public defn db-ftdi-four-comms (cmp:Ref) -> [Ref, Ref]|False:
+  inside pcb-module :
+    eval-when true :
+      if property(self.debug) :
+        unique inst ftdi-conn : {pin-header(6, 1)}
+        net ftdi-gnd ({ftdi-conn}.p[1])
+        net ftdi-vdd ({ftdi-conn}.p[3])
+        require ftdi:uart4 from {cmp}
+        net (ftdi.cts, {ftdi-conn}.p[2])
+        net (ftdi.txd, {ftdi-conn}.p[4])
+        net (ftdi.rxd, {ftdi-conn}.p[5])
+        net (ftdi.rts, {ftdi-conn}.p[6])
+        [ftdi-vdd, ftdi-gnd]
+
+;defn add-testpoints-bundle (bundle:Ref, persist?:True|False) :
+  
+;; TODO adds testpoints to sensible default bundles
+;; TODO Patrick will add bundles iterator
+;; Add to sensible bundles of component
+;public defn add-testpoints-cmp (persist?:True|False) :
+;  inside pcb-component :
+;
+;; Add to sensible bundles of module
+;public defn add-testpoints-mod (persist?:True|False) :
+;  inside pcb-module :
+;
+
+
+; TODO add functions to persist jumpers to zero ohm for bottom layer  
+;; Add user specified jumper components between pairs of nodes.
+;; Persists as 0 ohm resistors on the bottom layer for production.
+;; Parameters
+;; ------------
+;; nodes -- reference to tuple of pairs of pins or nets
+;; cmp -- reference to jumper component
+;public defn db-jumper-persist-btm-zero-res (nodes:Tuple<Tuple<Ref>>, 
+;                                         cmp:Ref) :
+;  inside pcb-module :
+;    eval-when true :
+;      val p-cmp = gen-res-cmp(0.0)
+;      for pair in nodes do :
+;        net-inline-jumper-persist-cmp(pair[0], [pair[1]], cmp, p-cmp,
+;                                      false)
+;
+;; Add 2 pin jumpers between pairs of nodes.
+;; Persists as 0 ohm resistors on the bottom layer for production.
+;; Parameters
+;; ------------
+;; nodes -- reference to tuple of pairs of pins or nets
+;public defn db-jumper-persist-btm-zero-res (nodes:Tuple<Tuple<Ref>>) :
+;  inside pcb-module :
+;    eval-when true :
+;      val cmp = pin-header(2)
+;      val p-cmp = gen-res-cmp(0.0)
+;      for pair in nodes do :
+;        net-inline-jumper-persist-cmp(pair[0], [pair[1]], cmp, p-cmp,
+;                                      false)
+;
+;; Add a user specified jumper between node1 and node2. Persists as 
+;; 0 ohm resistor on the bottom layer for production.
+;; Parameters
+;; ------------
+;; node1: reference to pin or net
+;; node2: reference to pin or net
+;; cmp: reference to component for jumper
+;public defn db-jumper-persist-btm-zero-res (node1:Ref, node2:Ref, 
+;                                         cmp:Ref) :
+;  inside pcb-module :
+;    eval-when true :
+;      val p-cmp = gen-res-cmp(0.0)
+;      net-inline-jumper-persist-cmp(node1, [node2], cmp, p-cmp, false) 
+;
+;; Add a 2 pin jumper between node1 and node2. Persists as 0 ohm
+;; resistor on the bottom layer for production.
+;; Parameters
+;; ------------
+;; node1: reference to pin or net
+;; node2: reference to pin or net
+;public defn db-jumper-persist-btm-zero-res (node1:Ref, node2:Ref) :
+;  inside pcb-module :
+;    eval-when true :
+;      val cmp = pin-header(2) 
+;      val p-cmp = gen-res-cmp(0.0)
+;      net-inline-jumper-persist-cmp(node1, [node2], cmp, p-cmp, false)
+;
+;; Add 2 pin jumpers between one node and a list of other nodes. 
+;; Persists as 0 ohm resistors on the bottom layer for production.
+;; Parameters
+;; ------------
+;; node1: reference to pin or net
+;; nodes: reference to a tuple of pins or nets
+;public defn db-jumper-persist-btm-zero-res (node1:Ref, nodes:Tuple<Ref>) :
+;  inside pcb-module :
+;    eval-when true :
+;      val cmp = pin-header(2)
+;      val p-cmp = gen-res-cmp(0.0)
+;      net-inline-jumper-persist-cmp(node1, nodes, cmp, p-cmp, false)
+

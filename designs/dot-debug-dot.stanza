@@ -1,0 +1,166 @@
+#use-added-syntax(esir)
+defpackage temp-dot :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import esir/repl-lib
+  import ocdb/tests/default-harness
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/debug-utils
+  import ocdb/generic-components
+  import ocdb/connects
+  import jitpcb/visualizer
+
+pcb-module batt-module-rev-pol-pro :
+  pin batt
+  pin vbat
+  pin gnd
+  inst fet : {ocdb/texas-instruments/TPS27081A/component}
+  inst r1 : {gen-res-cmp(1.0e3)}
+  inst r2 : {gen-res-cmp(1.0e3)}
+  inst batt1 : {ocdb/keystone/82/component}
+  inst batt2 : {ocdb/keystone/82/component}
+  inst d1 : {ocdb/texas-instruments/TPD1E10B06/component}
+  net (batt, fet.VOUT)
+  net (vbat, fet.VIN)
+  net (gnd, r1.p[1], r2.p[1], d1.p[1], batt2.neg[1], batt2.neg[2])
+  net (batt2.pos[1], batt2.pos[2], batt1.neg[1], batt1.neg[2])
+  net (batt, batt1.pos[1], batt1.pos[2], d1.p[2])
+  net (r1.p[2], fet.R1_C1)
+  net (r2.p[2], fet.R2)
+  cap-strap(batt, gnd, 100.0e-6)
+  net (fet.ON_OFF, fet.R2)
+  ;add debug header to signal pin
+  db-testheader(fet.ON_OFF) 
+  ;add debug testpads to list of pins, will persist to production on top layer
+  db-testheader-persist([vbat, gnd, batt2.pos[1], batt])
+
+pcb-module buzzer-module :
+  pin vcc
+  pin gnd
+  pin buzz
+  inst buzzer : {ocdb/soberton/GT-111P/component}
+  inst d : {ocdb/on-semiconductor/BAS21LT1G/component}
+  inst q : {ocdb/nexperia/BC846/component}
+  inst r : {gen-res-cmp(180.0)}
+  net (d.a, buzzer.low, q.c)
+  net (vcc, d.c, buzzer.high)
+  net (gnd, q.e)
+  net (r.p[1], q.b)
+  net (buzz, r.p[2])
+
+pcb-module temp-dot :
+  inst r : example-resistor
+  inst ble-soc : {ocdb/texas-instruments/CC2640/module}
+  inst flash : {ocdb/fremont-micro-devices/FT25H04/module}
+  inst adc : {ocdb/microchip/MCP9600/module}
+  inst boost : {ocdb/texas-instruments/TPS610986/module}
+  inst batt-module : batt-module-rev-pol-pro
+  inst led : {ocdb/cree/CLMUC-FK/module}
+  inst jtag : {ocdb/tag-connect/TC2050-IDC-NL/module}
+  inst buzzer : buzzer-module
+  inst button : {ocdb/ck-switches/PTS-540/module}
+  ; establish power/ground connections
+  net gnd (ble-soc.gnd, flash.gnd, adc.gnd, boost.gnd)
+  net (gnd, batt-module.gnd, jtag.gnd, buzzer.gnd, button.gnd)
+  net v-sw (boost.v-sw)
+  net v-boost (boost.v-boost, led.vcc, jtag.vcc, button.vcc, buzzer.vcc)
+  ; add a debug ftdi
+  val ftdi-pwr = db-ftdi-two-comms(ble-soc.mcu)
+  if ftdi-pwr is [Ref, Ref] :
+    val [ftdi-vdd, ftdi-gnd] = ftdi-pwr as [Ref, Ref]
+    ; add debug 3-pin jumper to switch between batt and ftdi, defaults to batt for production 
+    db-jumper-mux(boost.vbat, [batt-module.vbat, ftdi-vdd], batt-module.vbat)
+  ; add debug jumpers to power inputs of ICs 
+  db-jumper(v-sw, [adc.vcc, flash.vcc])
+  db-jumper(v-boost, ble-soc.vcc)
+  ; set up I2C pullups
+  res-strap(adc.sda, v-sw, 10.0e3)
+  res-strap(adc.scl, v-sw, 10.0e3)
+  ; Connect GPIOs
+  net rxd (ble-soc.mcu.DIO_[2])
+  net txd (ble-soc.mcu.DIO_[3])
+  ; add debug headers to signal pins 
+  db-testheader([rxd, txd])
+  net (ble-soc.mcu.DIO_[0], button.button)
+  net buzz (ble-soc.mcu.DIO_[6], buzzer.buzz)
+  net alert1 (ble-soc.mcu.DIO_[12], adc.adc.Alert1)
+  net alert2 (ble-soc.mcu.DIO_[13], adc.adc.Alert2)
+  net alert3 (ble-soc.mcu.DIO_[14], adc.adc.Alert3)
+  net alert4 (ble-soc.mcu.DIO_[15], adc.adc.Alert4)
+  ; add debug headers to signal pins 
+  db-testheader([alert1, alert2, alert3, alert4])
+  net sw (ble-soc.mcu.DIO_[21], boost.sw)
+  ; add debug headers to signal pins 
+  db-testheader(sw)
+  ; add debug jumper to power input of IC
+  db-jumper(ble-soc.mcu.DIO_[24], batt-module.vbat)
+  net (ble-soc.mcu.DIO_[18], led.led-r)
+  net (ble-soc.mcu.DIO_[19], led.led-g)
+  net (ble-soc.mcu.DIO_[20], led.led-b)
+  net tdo (ble-soc.mcu.DIO_[16], jtag.tdo)
+  net tdi (ble-soc.mcu.DIO_[17], jtag.tdi)
+  net tms (ble-soc.mcu.JTAG_TMSC, jtag.tms)
+  net tck (ble-soc.mcu.JTAG_TCKC, jtag.tck)
+  ; add debug headers to signal pins 
+  db-testheader([tdo, tdi, tms, tck])
+  ; ; set up comms
+  net miso (ble-soc.mcu.DIO_[8], flash.miso)
+  net mosi (ble-soc.mcu.DIO_[9], flash.mosi)
+  net sck (ble-soc.mcu.DIO_[10], flash.sck)
+  ; add debug headers to signal pins 
+  db-testheader([miso, mosi, sck])
+  net flash-cs (ble-soc.mcu.DIO_[11], flash.cs)
+  ; add debug headers to signal pins 
+  db-testheader(flash-cs)
+  net sda (ble-soc.mcu.DIO_[5], adc.sda)
+  net scl (ble-soc.mcu.DIO_[4], adc.scl)
+  ; add debug headers to signal pins 
+  db-testheader([sda, scl])
+  ; require i2c-m:i2c from ble-soc.mcu
+  ; require i2c-s:i2c from adc.adc
+  ; net ADC-I2C (i2c-m i2c-s)
+  ; require spi-m:spi from ble-soc.mcu
+  ; require spi-s:spi from flash.flash
+  ; net FLASH-SPI (spi-m spi-s)
+  ; add testpads
+  ; add debug test pads to pins/nets, persists to production on top layer
+  db-testheader-persist([flash.miso, flash.mosi, flash.sck, flash.cs])
+  db-testheader-persist([adc.sda, adc.scl, buzz])
+  db-testheader-persist([rxd, txd])
+  db-testheader-persist([ble-soc.mcu.DIO_[25], ble-soc.mcu.DIO_[26]])
+  db-testheader-persist([jtag.reset, jtag.tdi, jtag.tdo, jtag.tck, jtag.tms])
+  db-testheader-persist([boost.v-boost, boost.v-sw])
+  db-testheader-persist([adc.header.p[1], adc.header.p[2]])
+  db-testheader-persist(button.button)
+
+pcb-module dot-debug-dot :
+  inst dot1 : temp-dot
+  ; Set debug property, non persistant debug content will disappear
+  layout-group(dot1) = Production 
+  package(dot1.r) at loc((- 50.0), 0.0) on Top
+  properties(dot1) :
+    debug => false
+  inst debug-dot : temp-dot
+  ; Set debug property, debug content will appear
+  layout-group(debug-dot) = Debug
+  package(debug-dot.r) at loc(50.0, 0.0) on Top
+  properties(debug-dot) :
+    debug => true
+
+val main-design = default-board(dot-debug-dot, 4, 200.0, 75.0)
+view(main-design)
+export-kicad("jitx-temp-dot", [`place => true 
+                          `gen-board => true 
+                          `gen-schematic => true 
+                          `fresh => true 
+                          `schematic-version => 2
+                          `param-configs => [`sketch]] )
