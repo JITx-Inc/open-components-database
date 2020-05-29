@@ -1,5 +1,6 @@
 #use-added-syntax(esir)
-defpackage ocdb/ck-switches/PTS-540:
+; Include space before colon in definitions
+defpackage ocdb/ck-switches/PTS-540 : 
   import core
   import collections
   import math
@@ -21,13 +22,13 @@ defpackage ocdb/ck-switches/PTS-540:
 pcb-package sw-package :
   val xoff = 1.55
   val yoff = 1.375
-  val xdim = 0.6
-  val ydim = 0.65
+; Assign repetitive code to variables
+  val smd-pad = smd-pad(0.6, 0.65)
 
-  pad p[1] : {smd-pad(xdim, ydim)} at loc((- xoff), (- yoff))
-  pad p[2] : {smd-pad(xdim, ydim)} at loc(xoff, (- yoff))
-  pad p[3] : {smd-pad(xdim, ydim)} at loc((- xoff), yoff)
-  pad p[4] : {smd-pad(xdim, ydim)} at loc(xoff, yoff)
+  pad p[1] : {smd-pad} at loc((- xoff), (- yoff))
+  pad p[2] : {smd-pad} at loc(xoff, (- yoff))
+  pad p[3] : {smd-pad} at loc((- xoff), yoff)
+  pad p[4] : {smd-pad} at loc(xoff, yoff)
 
   layer(Courtyard(Top)) = Rectangle(3.7, 3.7)
   layer(Silkscreen("f-silk", Top)) = Rectangle(3.7, 3.7)
@@ -38,18 +39,20 @@ public unique pcb-component component :
   description = "Tactile Switch"
   mpn = "PTS540-JM035-SMTR-LFS"
 
-  pin p[1]
-  pin p[2]
-  pin p[3]
-  pin p[4]
+; Use unified generator to create pins
+  port p : pin[{1 through 4}]
 
   symbol = {spst(2,2)}(p[1] => t[1], p[2] => t[2], p[3] => p[1], p[4] => p[2])
   package = sw-package(p[1] => p[1], p[2] => p[2], p[3] => p[3], p[4] => p[4])
 
 public unique pcb-module module :
+; Define pins or ports to externally interface with other modules
+  port pwr : power
+  pin button
+
   inst sw : {ocdb/ck-switches/PTS-540/component}
   inst r : {gen-res-cmp(1.0e6)}
-  net button (sw.p[1], sw.p[2])
-  net gnd (sw.p[3], sw.p[4])
+  net (button, sw.p[1], sw.p[2])
+  net (pwr.gnd, sw.p[3], sw.p[4])
   net (r.p[1], sw.p[1])
-  net vcc (r.p[2])
+  net (pwr.vdd, r.p[2])
