@@ -31,7 +31,7 @@ defpackage ocdb/debug-utils :
 ; USAGE
 ; =============
 
-; The debug utility facilitates parallel generation of standard debug 
+; The debug utility provides the ability to generate a host of standard 
 ; components in a design. The components are enabled by assigning a debug
 ; property to the module.
 ;
@@ -41,6 +41,9 @@ defpackage ocdb/debug-utils :
 ; This also enables simultaneous debug and production designs to appear on
 ; the same board.
 
+; =============
+; TESTPOINTS
+; =============
 
 ; Adds a debug testpoint to a pin or net.
 ; Parameters
@@ -243,6 +246,10 @@ public defn db-testheader-persist-btm (refs:Tuple<Ref>) :
         val cmp = pin-header(1)
         add-testpoint(ref, cmp, true, false)
 
+; ============
+; JUMPERS
+; ============
+
 ; Adds a user specified jumper component with a connection to 
 ; input-node and to each node in nodes. Connects input node and default
 ; directly for production. 
@@ -417,6 +424,87 @@ public defn db-jumper-persist-zero-res (nodes:Tuple<Tuple<Ref>>) :
       for pair in nodes do :
         net-inline-jumper-persist-cmp(pair[0], [pair[1]], cmp, p-cmp)
 
+; ======================
+; MISC. DEBUG COMPONENTS
+; ======================
+
+; Adds a 10 pin Arm JTAG connector to a component
+; For debug, the connector is a 10 pin header with additional testheaders
+; on all the signals.
+; For production, the connector is a 10 pin tag connect connector.
+; Component must support jtag
+; Returns a tuple with [jtag-vdd, jtag-gnd]
+; Parameters
+; ------------
+; cmp : Component that JTAG will be connected to
+public defn db-jtag (cmp:Ref) -> [Ref, Ref]|False:
+  inside pcb-module :
+    eval-when true :
+      if property(self.debug) :
+        unique require jtag:jtag from {cmp}
+        unique inst jtag-conn : {pin-header(10, 2)}
+        unique inst r-pu1 : {gen-res-cmp(10.0e3)}[3]
+        unique inst r-pu2 : {gen-res-cmp(4.7e3)}
+        unique inst r-pd : {gen-res-cmp(10.0e3)}
+        net jtag-vdd ({jtag-conn}.p[1], {r-pu1}[0].p[1], 
+             {r-pu1}[1].p[1], {r-pu2}.p[1], {r-pu1}[2].p[1])
+        net jtag-gnd ({jtag-conn}.p[3], {jtag-conn}.p[5], 
+             {jtag-conn}.p[9], {r-pd}.p[1])
+        net tms ({jtag}.tms, {jtag-conn}.p[2], {r-pu1}[0].p[2])
+        net tck ({jtag}.tck, {jtag-conn}.p[4], {r-pd}.p[2])
+        net tdo ({jtag}.tdo, {jtag-conn}.p[6], {r-pu1}[2].p[2])
+        net tdi ({jtag}.tdi, {jtag-conn}.p[8], {r-pu1}[1].p[2])
+        net trstn ({jtag}.trstn, {jtag-conn}.p[10], {r-pu2}.p[2])
+        db-testheader-persist([tms, tck, tdo, tdi, trstn])
+        [jtag-vdd, jtag-gnd]
+      else :
+        unique require jtag:jtag from {cmp}
+        unique inst jtag-conn : {ocdb/tag-connect/TC2050-IDC-NL/module}
+        net ({jtag}, {jtag-conn}.j)
+        [jtag.pwr.vdd, jtag.pwr.gnd]  
+
+; Adds a FTDI connector to a component
+; Component must support uart 
+; Returns a tuple with [ftdi-vdd, ftdi-gnd]
+; Parameters
+; ------------
+; cmp : Component that ftdi connector will be connected to
+public defn db-ftdi-two-comms (cmp:Ref) -> [Ref, Ref]|False :
+  inside pcb-module :
+    eval-when true :
+      if property(self.debug) :
+        unique inst ftdi-conn : {pin-header(6, 1)}
+        net ftdi-gnd ({ftdi-conn}.p[1])
+        net ftdi-vdd ({ftdi-conn}.p[3])
+        unique require uart:uart from {cmp}
+        net ({uart}.rx, {ftdi-conn}.p[4]) 
+        net ({uart}.tx, {ftdi-conn}.p[5])
+        [ftdi-vdd, ftdi-gnd]
+
+; Adds a FTDI connector with RTS and CTS to a component
+; Component must support uart4 
+; Returns a tuple with [ftdi-vdd, ftdi-gnd]
+; Parameters
+; ------------
+; cmp : Component that ftdi connector will be connected to
+public defn db-ftdi-four-comms (cmp:Ref) -> [Ref, Ref]|False:
+  inside pcb-module :
+    eval-when true :
+      if property(self.debug) :
+        unique inst ftdi-conn : {pin-header(6, 1)}
+        net ftdi-gnd ({ftdi-conn}.p[1])
+        net ftdi-vdd ({ftdi-conn}.p[3])
+        unique require ftdi:uart4 from {cmp}
+        net ({ftdi}.cts, {ftdi-conn}.p[2])
+        net ({ftdi}.txd, {ftdi-conn}.p[4])
+        net ({ftdi}.rxd, {ftdi-conn}.p[5])
+        net ({ftdi}.rts, {ftdi-conn}.p[6])
+        [ftdi-vdd, ftdi-gnd]
+
+; ====================
+; HELPER FUNCTIONS
+; ====================
+
 ; Generator function to add a test point to a pin or net
 ; Parameters
 ; ------------
@@ -486,76 +574,3 @@ defn net-inline-jumper-persist-cmp (node1:Ref, nodes:Tuple<Ref>,
         if not empty?(pins) :
           net ({node1}, {next(pins)})
           net ({nodes[i]}, {next(pins)})
-
-; Adds a 10 pin Arm JTAG connector to a component
-; For debug, the connector is a 10 pin header with additional testheaders
-; on all the signals.
-; For production, the connector is a 10 pin tag connect connector.
-; Component must support jtag
-; Returns a tuple with [jtag-vdd, jtag-gnd]
-; Parameters
-; ------------
-; cmp : Component that JTAG will be connected to
-public defn db-jtag (cmp:Ref) -> [Ref, Ref]|False:
-  inside pcb-module :
-    eval-when true :
-      if property(self.debug) :
-        unique require jtag:jtag from {cmp}
-        unique inst jtag-conn : {pin-header(10, 2)}
-        unique inst r-pu1 : {gen-res-cmp(10.0e3)}[3]
-        unique inst r-pu2 : {gen-res-cmp(4.7e3)}
-        unique inst r-pd : {gen-res-cmp(10.0e3)}
-        net jtag-vdd ({jtag-conn}.p[1], {r-pu1}[0].p[1], 
-             {r-pu1}[1].p[1], {r-pu2}.p[1], {r-pu1}[2].p[1])
-        net jtag-gnd ({jtag-conn}.p[3], {jtag-conn}.p[5], 
-             {jtag-conn}.p[9], {r-pd}.p[1])
-        net tms ({jtag}.tms, {jtag-conn}.p[2], {r-pu1}[0].p[2])
-        net tck ({jtag}.tck, {jtag-conn}.p[4], {r-pd}.p[2])
-        net tdo ({jtag}.tdo, {jtag-conn}.p[6], {r-pu1}[2].p[2])
-        net tdi ({jtag}.tdi, {jtag-conn}.p[8], {r-pu1}[1].p[2])
-        net trstn ({jtag}.trstn, {jtag-conn}.p[10], {r-pu2}.p[2])
-        db-testheader-persist([tms, tck, tdo, tdi, trstn])
-        [jtag-vdd, jtag-gnd]
-      else :
-        unique require jtag:jtag from {cmp}
-        unique inst jtag-conn : {ocdb/tag-connect/TC2050-IDC-NL/module}
-        net ({jtag}, {jtag-conn}.j)
-        [jtag.pwr.vdd, jtag.pwr.gnd]  
-
-; Adds a FTDI connector to a component
-; Component must support uart 
-; Returns a tuple with [ftdi-vdd, ftdi-gnd]
-; Parameters
-; ------------
-; cmp : Component that ftdi connector will be connected to
-public defn db-ftdi-two-comms (cmp:Ref) -> [Ref, Ref]|False :
-  inside pcb-module :
-    eval-when true :
-      if property(self.debug) :
-        unique inst ftdi-conn : {pin-header(6, 1)}
-        net ftdi-gnd ({ftdi-conn}.p[1])
-        net ftdi-vdd ({ftdi-conn}.p[3])
-        unique require uart:uart from {cmp}
-        net ({uart}.rx, {ftdi-conn}.p[4]) 
-        net ({uart}.tx, {ftdi-conn}.p[5])
-        [ftdi-vdd, ftdi-gnd]
-
-; Adds a FTDI connector to a component
-; Component must support uart4 
-; Returns a tuple with [ftdi-vdd, ftdi-gnd]
-; Parameters
-; ------------
-; cmp : Component that ftdi connector will be connected to
-public defn db-ftdi-four-comms (cmp:Ref) -> [Ref, Ref]|False:
-  inside pcb-module :
-    eval-when true :
-      if property(self.debug) :
-        unique inst ftdi-conn : {pin-header(6, 1)}
-        net ftdi-gnd ({ftdi-conn}.p[1])
-        net ftdi-vdd ({ftdi-conn}.p[3])
-        unique require ftdi:uart4 from {cmp}
-        net ({ftdi}.cts, {ftdi-conn}.p[2])
-        net ({ftdi}.txd, {ftdi-conn}.p[4])
-        net ({ftdi}.rxd, {ftdi-conn}.p[5])
-        net ({ftdi}.rts, {ftdi-conn}.p[6])
-        [ftdi-vdd, ftdi-gnd]
