@@ -497,21 +497,27 @@ public defn db-jtag (cmp:Ref) -> [Ref, Ref]|False:
   inside pcb-module :
     eval-when true :
       if property(self.debug) :
+        power pwr : power
         unique require jtag:jtag from {cmp}
         unique inst jtag-conn : {pin-header(10, 2)}
         unique inst r-pu1 : {gen-res-cmp(10.0e3)}[3]
         unique inst r-pu2 : {gen-res-cmp(4.7e3)}
         unique inst r-pd : {gen-res-cmp(10.0e3)}
-        net jtag-vdd ({jtag-conn}.p[1], {r-pu1}[0].p[1], 
+        net (pwr.vdd, {jtag-conn}.p[1], {r-pu1}[0].p[1], 
              {r-pu1}[1].p[1], {r-pu2}.p[1], {r-pu1}[2].p[1])
-        net jtag-gnd ({jtag-conn}.p[3], {jtag-conn}.p[5], 
-                             {jtag-conn}.p[9], {r-pd}.p[1])
+        net (pwr.gnd, {jtag-conn}.p[3], {jtag-conn}.p[5], 
+             {jtag-conn}.p[9], {r-pd}.p[1])
         net tms ({jtag}.tms, {jtag-conn}.p[2], {r-pu1}[0].p[2])
         net tck ({jtag}.tck, {jtag-conn}.p[4], {r-pd}.p[2])
         net tdo ({jtag}.tdo, {jtag-conn}.p[6], {r-pu1}[2].p[2])
         net tdi ({jtag}.tdi, {jtag-conn}.p[8], {r-pu1}[1].p[2])
         net trstn ({jtag}.trstn, {jtag-conn}.p[10], {r-pu2}.p[2])
         [jtag-vdd, jtag-gnd]
+      else :
+        unique require jtag:jtag from {cmp}
+        unique inst jtag-conn : {ocdb/tag-connect/TC2050-IDC-NL/component}
+        net ({jtag}, {jtag-conn}.j)
+        net 
 
 ; Adds a FTDI connector to a component
 ; Component must support uart 
