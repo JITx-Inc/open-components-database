@@ -1,0 +1,109 @@
+#use-added-syntax(esir)
+defpackage ocdb/wurth-elektronik/7499010211A:
+  import core
+  import collections
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import jitpcb/visualizer
+
+;DESIGN NOTE: PTH Annular Ring Calculation (pth-pad)
+;Minimum Hole Size = Maximum Lead Diameter + 0.25mm (for Level A of IPC-2222)
+;Minimum Hole Size = Maximum Lead Diameter + 0.20mm (for Level B of IPC-2222)
+;Minimum Hole Size = Maximum Lead Diameter + 0.15mm (for Level C of IPC-2222)
+
+;Pad Diameter = Minimum Hole Size + 0.1mm + 0.60mm (for Level A of IPC-2221)
+;Pad Diameter = Minimum Hole Size + 0.1mm + 0.50mm (for Level B of IPC-2221)
+;Pad Diameter = Minimum Hole Size + 0.1mm + 0.40mm (for Level C of IPC-2221)
+
+;Design for IPC-222x Level B
+pcb-package eth-7499010211A-package :
+  val y0 = -6.35
+  val y1 = -8.89
+  val d0 = 0.9 / 2.0 
+  val p0 = 1.5 / 2.0  
+  pad p[1] : {pth-pad(d0, p0)} at loc(4.445, y0)  ;pth-pad(hole size, pad diameter)
+  pad p[2] : {pth-pad(d0, p0)} at loc(3.175, y1) 
+  pad p[3] : {pth-pad(d0, p0)} at loc(1.905, y0)
+  pad p[4] : {pth-pad(d0, p0)} at loc(0.635, y1)
+  pad p[5] : {pth-pad(d0, p0)} at loc(-0.635, y0)
+  pad p[6] : {pth-pad(d0, p0)} at loc(-1.905, y1)
+  pad p[7] : {pth-pad(d0, p0)} at loc(-3.175, y0)
+  pad p[8] : {pth-pad(d0, p0)} at loc(-4.445, y1) 
+
+  val d1 = 1.02 / 2.0 
+  val p1 = 1.62 / 2.0 
+  pad p[9] : {pth-pad(d1, p1)} at loc(6.325, 4.9) 
+  pad p[10] : {pth-pad(d1, p1)} at loc(3.785, 3.38)  
+  pad p[11] : {pth-pad(d1, p1)} at loc(-3.785, 4.9) 
+  pad p[12] : {pth-pad(d1, p1)} at loc(-6.325, 3.38)
+
+  val d2 = 3.25 / 2.0 
+  val p2 = 3.45 / 2.0 ;non-plated through-hole
+  pad p[13] : {pth-pad(d2, p2)} at loc(-5.715, 0.0)
+  pad p[14] : {pth-pad(d2, p2)} at loc(5.715, 0.0) 
+
+  val d3 = 1.6 / 2.0 
+  val p3 = 2.0 / 2.0 
+  pad p[15] : {pth-pad(d3, p3)} at loc(-7.875, -3.05)
+  pad p[16] : {pth-pad(d3, p3)} at loc(7.875, -3.05) 
+
+  layer(Courtyard(Top)) = Rectangle(15.88, 21.84)
+  layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+  ;height = 13.5mm
+
+public unique pcb-component component :
+  manufacturer = "Würth Elektronik"
+  mpn = "7499010211A"
+  description = "1 Port RJ45 Magjack Connector Through Hole 10/100 Base-T, AutoMDIX"
+  reference-prefix = "J"
+  val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [tct      | 4    | Left  ]
+    [td_p     | 1    | Left  ]
+    [td_n     | 2    | Left  ]
+    [rd_p     | 3    | Left  ]
+    [rd_n     | 6    | Left  ]
+    [rct      | 5    | Left  ]
+    [yelc     | 11   | Left  ]
+    [yela     | 12   | Left  ]
+    [grnc     | 10   | Left  ]
+    [grna     | 9    | Left  ]
+    [nc1      | 7    | Right ]
+    [gnd      | 8    | Right ]
+    [shield1  | 15   | Right ]
+    [shield2  | 16   | Right ]
+    [nc2      | 13   | Right ]
+    [nc3      | 14   | Right ]
+  gen-symbol-map(ps, eth-7499010211A-package)
+  view(eth-7499010211A-package)
+
+public pcb-module eth_7499010211A_module :
+
+  inst eth : {ocdb/wurth-elektronik/7499010211A/component}
+
+  net TCT_RCT (eth.tct eth.rct)
+  net TD+ (eth.td_p)
+  net TD- (eth.td_n)
+  net RD+ (eth.rd_p)
+  net RD- (eth.rd_n)
+  net YEL_C (eth.yelc)
+  net YEL_A (eth.yela)
+  net GRN_C (eth.grnc)
+  net GRN_A (eth.grna)
+  net GND (eth.gnd)
+  net SHIELD (eth.shield1, eth.shield2)
+
+  res-strap(YEL_C, GND, 470.0)      ;Yellow LED current-limit resistor
+  res-strap(GRN_C, GND, 470.0)      ;Green LED current-limit resistor
+  cap-strap(TCT_RCT, GND, 0.1e-6)   ;Transformer middle-tap bypass capacitor
+  
