@@ -433,76 +433,46 @@ public defn db-jumper-persist-zero-res (nodes:Tuple<Tuple<Ref>>) :
 ; on all the signals.
 ; For production, the connector is a 10 pin tag connect connector.
 ; Component must support jtag
-; Returns a tuple with [jtag-vdd, jtag-gnd]
 ; Parameters
 ; ------------
+; pwr : Reference to power port JTAG will be connected to
 ; cmp : Component that JTAG will be connected to
-public defn db-jtag (cmp:Ref) -> [Ref, Ref]|False:
+public defn db-jtag-to-cmp (pwr:Ref, cmp:Ref) :
   inside pcb-module :
     eval-when true :
-      if property(self.debug) :
-        unique require jtag:jtag from {cmp}
-        unique inst jtag-conn : {pin-header(10, 2)}
-        unique inst r-pu1 : {gen-res-cmp(10.0e3)}[3]
-        unique inst r-pu2 : {gen-res-cmp(4.7e3)}
-        unique inst r-pd : {gen-res-cmp(10.0e3)}
-        net jtag-vdd ({jtag-conn}.p[1], {r-pu1}[0].p[1], 
-             {r-pu1}[1].p[1], {r-pu2}.p[1], {r-pu1}[2].p[1])
-        net jtag-gnd ({jtag-conn}.p[3], {jtag-conn}.p[5], 
-             {jtag-conn}.p[9], {r-pd}.p[1])
-        net tms ({jtag}.tms, {jtag-conn}.p[2], {r-pu1}[0].p[2])
-        net tck ({jtag}.tck, {jtag-conn}.p[4], {r-pd}.p[2])
-        net tdo ({jtag}.tdo, {jtag-conn}.p[6], {r-pu1}[2].p[2])
-        net tdi ({jtag}.tdi, {jtag-conn}.p[8], {r-pu1}[1].p[2])
-        net trstn ({jtag}.trstn, {jtag-conn}.p[10], {r-pu2}.p[2])
-        db-testheader-persist([tms, tck, tdo, tdi, trstn])
-        [jtag-vdd, jtag-gnd]
-      else :
-        unique require jtag:jtag from {cmp}
-        unique inst jtag-conn : {ocdb/tag-connect/TC2050-IDC-NL/module}
-        net ({jtag}, {jtag-conn}.j)
-        [jtag.pwr.vdd, jtag.pwr.gnd]  
+      unique require jtag:jtag from {cmp}
+      db-jtag(pwr, jtag)
 
 ; Adds a FTDI connector to a component
 ; Component must support uart 
 ; Returns a tuple with [ftdi-vdd, ftdi-gnd]
 ; Parameters
 ; ------------
+; pwr : Reference to power port that ftdi connector will be connected to
 ; cmp : Component that ftdi connector will be connected to
-public defn db-ftdi-two-comms (cmp:Ref) -> [Ref, Ref]|False :
+public defn db-ftdi-two-comms (pwr:Ref, cmp:Ref) :
   inside pcb-module :
     eval-when true :
       if property(self.debug) :
-        unique inst ftdi-conn : {pin-header(6, 1)}
-        net ftdi-gnd ({ftdi-conn}.p[1])
-        net ftdi-vdd ({ftdi-conn}.p[3])
         unique require uart:uart from {cmp}
-        net ({uart}.rx, {ftdi-conn}.p[4]) 
-        net ({uart}.tx, {ftdi-conn}.p[5])
-        [ftdi-vdd, ftdi-gnd]
+        db-ftdi(pwr, uart)
 
 ; Adds a FTDI connector with RTS and CTS to a component
 ; Component must support uart4 
 ; Returns a tuple with [ftdi-vdd, ftdi-gnd]
 ; Parameters
 ; ------------
+; pwr : Reference to power port that ftdi connector will be connected to
 ; cmp : Component that ftdi connector will be connected to
-public defn db-ftdi-four-comms (cmp:Ref) -> [Ref, Ref]|False:
+public defn db-ftdi-four-comms (pwr:Ref, cmp:Ref) :
   inside pcb-module :
     eval-when true :
       if property(self.debug) :
-        unique inst ftdi-conn : {pin-header(6, 1)}
-        net ftdi-gnd ({ftdi-conn}.p[1])
-        net ftdi-vdd ({ftdi-conn}.p[3])
         unique require ftdi:uart4 from {cmp}
-        net ({ftdi}.cts, {ftdi-conn}.p[2])
-        net ({ftdi}.txd, {ftdi-conn}.p[4])
-        net ({ftdi}.rxd, {ftdi-conn}.p[5])
-        net ({ftdi}.rts, {ftdi-conn}.p[6])
-        [ftdi-vdd, ftdi-gnd]
+        db-ftdi(pwr, ftdi)
 
 ; ====================
-; HELPER FUNCTIONS
+; BASE FUNCTIONS
 ; ====================
 
 ; Generator function to add a test point to a pin or net
@@ -511,20 +481,22 @@ public defn db-ftdi-four-comms (cmp:Ref) -> [Ref, Ref]|False:
 ; ref : reference to pin or net that test point is attached to
 ; cmp : reference to pcb-component for test point
 ; persist? : test points migrate to bottom layer for production
-defn add-testpoint (ref:Ref, cmp:Ref, persist?:True|False, top?:True|False) :
+public defn add-testpoint (ref:Ref, cmp:Ref, persist?:True|False, 
+                           top?:True|False) :
   inside pcb-module  :
-    if property(self.debug) :
-      unique inst tp : {cmp}
-      val pins = ports(tp)
-      if not empty?(pins) :
-        net ({ref}, {next(pins)})
-    else if persist? and not property(self.debug) :
-      if top? :
-        unique inst tp : {top-smd-testpoint-cmp()}
-        net ({ref}, {tp.p})
-      else :
-        unique inst tp : {btm-smd-testpoint-cmp()}
-        net ({ref}, {tp.p})
+    eval-when true :
+      if property(self.debug) :
+        unique inst tp : {cmp}
+        val pins = ports(tp)
+        if not empty?(pins) :
+          net ({ref}, {next(pins)})
+      else if persist? and not property(self.debug) :
+        if top? :
+          unique inst tp : {top-smd-testpoint-cmp()}
+          net ({ref}, {tp.p})
+        else :
+          unique inst tp : {btm-smd-testpoint-cmp()}
+          net ({ref}, {tp.p})
 
 ; Adds a n-way jumper from node1 to nodes
 ; For production board, nets node1 to default
@@ -535,19 +507,20 @@ defn add-testpoint (ref:Ref, cmp:Ref, persist?:True|False, top?:True|False) :
 ; default : Connected to node1 directly when dev? is False
 ; n : number of nodes to mux node1 with
 ; cmp : component of jumper
-defn net-inline-jumper (node1:Ref, nodes:Tuple<Ref>, 
-                        default:Ref, cmp:Ref) :
+public defn net-inline-jumper (node1:Ref, nodes:Tuple<Ref>, 
+                               default:Ref, cmp:Ref) :
   inside pcb-module :
-    val n = length(nodes)
-    if property(self.debug) :
-      unique inst j : {cmp}
-      val pins = all-pins(j)
-      if not empty?(pins) :
-        net ({node1}, {next(pins)})
-        for i in 0 to n do :
-          net ({nodes[i]}, {next(pins)})
-    else :
-      net ({node1}, {default})
+    eval-when true :
+      val n = length(nodes)
+      if property(self.debug) :
+        unique inst j : {cmp}
+        val pins = all-pins(j)
+        if not empty?(pins) :
+          net ({node1}, {next(pins)})
+          for i in 0 to n do :
+            net ({nodes[i]}, {next(pins)})
+      else :
+        net ({node1}, {default})
 
 ; Adds user defined jumper components between node1 and each node in
 ; nodes.
@@ -556,21 +529,76 @@ defn net-inline-jumper (node1:Ref, nodes:Tuple<Ref>,
 ; node1 : pin or net to connect each jumper to
 ; nodes : tuple of pins or nets to connect each jumper to
 ; cmp : component of jumper
-; persist-cmp : 
-defn net-inline-jumper-persist-cmp (node1:Ref, nodes:Tuple<Ref>,
-                                    cmp:Ref, persist-cmp:Ref) :
+; persist-cmp : component that jumper persists to in production 
+public defn net-inline-jumper-persist-cmp (node1:Ref, nodes:Tuple<Ref>,
+                                           cmp:Ref, persist-cmp:Ref) :
   inside pcb-module :
-    val n = length(nodes)
-    for i in 0 to n do :
+    eval-when true :
+      val n = length(nodes)
+      for i in 0 to n do :
+        if property(self.debug) :
+          unique inst j : {cmp}
+          val pins = all-pins(j)
+          if not empty?(pins) :
+            net ({node1}, {next(pins)})
+            net ({nodes[i]}, {next(pins)})
+        else :
+          unique inst zero : {persist-cmp} 
+          val pins = all-pins(zero)
+          if not empty?(pins) :
+            net ({node1}, {next(pins)})
+            net ({nodes[i]}, {next(pins)})
+
+; Adds a 10 pin Arm JTAG connector to a component
+; For debug, the connector is a 10 pin header with additional testheaders
+; on all the signals.
+; For production, the connector is a 10 pin tag connect connector.
+; Parameters
+; ------------
+; jtag-pwr : Reference to power port
+; jtag-comms : Reference to jtag port
+public defn db-jtag (jtag-pwr:Ref, jtag-comms:Ref) :
+  inside pcb-module :
+    eval-when true :
       if property(self.debug) :
-        unique inst j : {cmp}
-        val pins = all-pins(j)
-        if not empty?(pins) :
-          net ({node1}, {next(pins)})
-          net ({nodes[i]}, {next(pins)})
+        unique inst jtag-conn : {pin-header(10, 2)}
+        unique inst r-pu1 : {gen-res-cmp(10.0e3)}[3]
+        unique inst r-pu2 : {gen-res-cmp(4.7e3)}
+        unique inst r-pd : {gen-res-cmp(10.0e3)}
+        net ({jtag-pwr}.vdd, {jtag-conn}.p[1], {r-pu1}[0].p[1], 
+             {r-pu1}[1].p[1], {r-pu2}.p[1], {r-pu1}[2].p[1])
+        net ({jtag-pwr}.gnd, {jtag-conn}.p[3], {jtag-conn}.p[5], 
+             {jtag-conn}.p[9], {r-pd}.p[1])
+        net tms ({jtag-comms}.tms, {jtag-conn}.p[2], {r-pu1}[0].p[2])
+        net tck ({jtag-comms}.tck, {jtag-conn}.p[4], {r-pd}.p[2])
+        net tdo ({jtag-comms}.tdo, {jtag-conn}.p[6], {r-pu1}[2].p[2])
+        net tdi ({jtag-comms}.tdi, {jtag-conn}.p[8], {r-pu1}[1].p[2])
+        net trstn ({jtag-comms}.trstn, {jtag-conn}.p[10], {r-pu2}.p[2])
+        db-testheader-persist([tms, tck, tdo, tdi, trstn])
       else :
-        unique inst zero : {persist-cmp} 
-        val pins = all-pins(zero)
-        if not empty?(pins) :
-          net ({node1}, {next(pins)})
-          net ({nodes[i]}, {next(pins)})
+        unique inst jtag-conn : {ocdb/tag-connect/TC2050-IDC-NL/module}
+        net ({jtag-comms}, {jtag-conn}.j)
+        net ({jtag-conn}.pwr, {jtag-pwr})
+
+; Adds a FTDI connector to a component 
+; Returns a tuple with [ftdi-vdd, ftdi-gnd]
+; Parameters
+; ------------
+; pwr : power port that ftdi is connected to
+; uart : uart port that ftdi is connected to 
+public defn db-ftdi (pwr:Ref, uart:Ref) :
+  inside pcb-module :
+    eval-when true :
+      if property(self.debug) :
+        unique inst ftdi-conn : {pin-header(6, 1)}
+        net ({pwr}.gnd, {ftdi-conn}.p[1])
+        net ({pwr}.vdd, {ftdi-conn}.p[3])
+        if port-type(uart) == #PT(uart) :
+          net ({uart}.rx, {ftdi-conn}.p[4]) 
+          net ({uart}.tx, {ftdi-conn}.p[5])
+        else if port-type(uart) == #PT(uart4) :
+          net ({uart}.cts, {ftdi-conn}.p[2])
+          net ({uart}.txd, {ftdi-conn}.p[4])
+          net ({uart}.rxd, {ftdi-conn}.p[5])
+          net ({uart}.rts, {ftdi-conn}.p[6])
+
