@@ -129,7 +129,7 @@ public defn unit-rectangle (w:Double, h:Double) :
 
 public defn unit-rectangle (p0:Point|[Double,Double], p1:Point|[Double,Double]) :
   val [x0, y0] = point-coords(p0)
-  val [x1, y1] = point-coords(p0)
+  val [x1, y1] = point-coords(p1)
   val w = x1 - x0
   val h = y1 - y0
   val cx = x0 + w / 2.0
@@ -211,15 +211,19 @@ public defn unit-approx-arc (p:Point|[Double,Double], r:Double, a1:Double, a0:Do
 public defn unit-approx-arc (p:Point|[Double,Double], r:Double, a1:Double) :
   unit-approx-arc(p, r, a1, 0.0)
 
-public defn draw-opto (dir:String) :
-  unit-circle("no-fill", 0.75)
-  unit-line([[0.5, 0.1], [0.9, -0.3]])
-  unit-line([[0.5, -0.2], [0.9, -0.6]])
+public defn draw-opto (dir:String, offset:Point|[Double, Double]) :
+  val [xoff, yoff] = point-coords(offset)
+  unit-circle("no-fill", offset, 0.75)
+  unit-line([[xoff + 0.5, yoff + 0.1], [xoff + 0.9, (yoff - 0.3)]])
+  unit-line([[xoff + 0.5, (yoff - 0.2)], [xoff + 0.9, (yoff - 0.6)]])
   switch(dir) :
     "emitter" :
-      unit-line([[0.75, -0.3], [0.9, -0.3], [0.9, -0.15]])
-      unit-line([[0.75, -0.6], [0.9, -0.6], [0.9, -0.45]])
+      unit-line([[xoff + 0.75, (yoff - 0.3)], [xoff + 0.9, (yoff - 0.3)], [xoff + 0.9, (yoff - 0.15)]])
+      unit-line([[xoff + 0.75, (yoff - 0.6)], [xoff + 0.9, (yoff - 0.6)], [xoff + 0.9, (yoff - 0.45)]])
     "detector" :
-      unit-line([[0.5, -0.05], [0.5, 0.1], [0.65, 0.1]])
-      unit-line([[0.5, -0.35], [0.5, -0.2], [0.65, -0.2]])
+      unit-line([[xoff + 0.5, (yoff - 0.05)], [xoff + 0.5, yoff + 0.1], [xoff + 0.65, yoff + 0.1]])
+      unit-line([[xoff + 0.5, (yoff - 0.35)], [xoff + 0.5, (yoff - 0.2)], [xoff + 0.65, (yoff - 0.2)]])
     else : fatal("Incorrect opto type %_." % [dir])
+
+public defn draw-opto (dir:String) :
+  draw-opto(dir, [0.0,0.0])
