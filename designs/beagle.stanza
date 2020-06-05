@@ -49,6 +49,7 @@ pcb-module beagle-board :
   inst D3 :             {ocdb/lite-on/LTST-C191TBKT/led_component}                                   ;User LED1 
   inst D4 :             {ocdb/lite-on/LTST-C191TBKT/led_component}                                   ;User LED2 
   inst D5 :             {ocdb/lite-on/LTST-C191TBKT/led_component}                                   ;User LED3                      ;connect with ethernet
+  inst HDMI_CONN :      {ocdb/amphenol/10118241-001RLF/hdmi_conn_micro_module}
   inst HDMI_TRANS :     {ocdb/nxp/TDA19988BHN-C1-557/TDA19988BHN-C1-557_module}
   inst FF :             {ocdb/texas-instruments/SN74AUC1G74DCT/SN74AUC1G74DCT_module}            ;connect with HDMI
   inst Y4 :             {ocdb/abracon/ASDMB-24-576MHZ-LC-T/ASDMB-24-576MHZ_module}               ;connect with HDMI I2S (mcasp0 mclk)
@@ -83,6 +84,7 @@ pcb-module beagle-board :
   schematic-group(FB1) = usb_host
   schematic-group(USB_LOAD_SW) = usb_host
 
+  schematic-group(HDMI_CONN) = hdmi
   schematic-group(HDMI_TRANS) = hdmi
   schematic-group(FF) = hdmi
   schematic-group(Y4) = hdmi
@@ -105,10 +107,10 @@ pcb-module beagle-board :
   ;DGND
   net DGND (CPU.gnd, PMIC.GND, DDR3L.GND, eMMC.GND, LDO.GND, USB_CONN_MINI.GND, USB_ESD_MINI.GND,
   USB_CONN_TYPEA.GND USB_ESD_TYPEA.GND USB_LOAD_SW.GND PWR_JACK.GND PWR_JACK.NO ETH_CONN.GND 
-  ETH_TRANS.GND)
+  ETH_TRANS.GND HDMI_CONN.GND)
 
   ;Earth GND (connector shields)
-  net EARTH_GND (USB_CONN_MINI.SHIELD, USB_CONN_TYPEA.SHIELD ETH_CONN.SHIELD)
+  net EARTH_GND (USB_CONN_MINI.SHIELD, USB_CONN_TYPEA.SHIELD ETH_CONN.SHIELD HDMI_CONN.SHIELD)
 
   ;DNGD to Earth GND Connection
   res-strap(ETH_CONN.SHIELD, DGND, 1.0) ;Design Note: resistor should be 0805
@@ -293,6 +295,37 @@ pcb-module beagle-board :
   net (VDD_3V3A BUFFER.VCC)
   net (DGND BUFFER.GND)
   net BF_IN (CPU.cpu.io[36] BUFFER.A)
+
+
+  ;
+  ;
+  ;HDMI CONNECTOR & TRANSCEIVER
+  ;
+  ;
+  ;connector power
+  net DVI_+5V (HDMI_CONN.VCC_5V)
+
+  ;transceiver-connector data lines
+  ;Impedance Controlled Nets: Diff Impedance = 100ohm, SE = 50ohm
+  net HDMI_TXC+ (HDMI_CONN.CLK+ HDMI_TRANS.HDMI_TXC+)
+  net HDMI_TXC- (HDMI_CONN.CLK- HDMI_TRANS.HDMI_TXC-)
+  net HDMI_TX0+ (HDMI_CONN.DAT0+ HDMI_TRANS.HDMI_TX0+)
+  net HDMI_TX0- (HDMI_CONN.DAT0- HDMI_TRANS.HDMI_TX0-)
+  net HDMI_TX1+ (HDMI_CONN.DAT1+ HDMI_TRANS.HDMI_TX1+)
+  net HDMI_TX1- (HDMI_CONN.DAT1- HDMI_TRANS.HDMI_TX1-)
+  net HDMI_TX2+ (HDMI_CONN.DAT2+ HDMI_TRANS.HDMI_TX2+)
+  net HDMI_TX2- (HDMI_CONN.DAT2- HDMI_TRANS.HDMI_TX2-)
+
+  ;HDMI I2C bus & pull-ups
+  net HDMI_DSCL (HDMI_CONN.SCL HDMI_TRANS.DSCL)
+  net HDMI_DSDA (HDMI_CONN.SDA HDMI_TRANS.DSDA)
+  res-strap(HDMI_DSCL, DVI_+5V, 1500.0)
+  res-strap(HDMI_DSDA, DVI_+5V, 1500.0)
+
+  ;HPD & CEC & DDC
+  net HDMI_HPD (HDMI_CONN.HPLG HDMI_TRANS.HPD)
+  net HDMI_CEC (HDMI_CONN.CEC HDMI_TRANS.CEC)
+  net (DGND HDMI_CONN.DDC_CEC)
 
 
   ;

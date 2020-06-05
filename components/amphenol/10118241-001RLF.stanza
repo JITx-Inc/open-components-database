@@ -1,0 +1,120 @@
+#use-added-syntax(esir)
+defpackage ocdb/amphenol/10118241-001RLF:
+  import core
+  import collections
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import jitpcb/visualizer
+
+;DESIGN NOTE: PTH Annular Ring Calculation (pth-pad)
+;Minimum Hole Size = Maximum Lead Diameter + 0.25mm (for Level A of IPC-2222)
+;Minimum Hole Size = Maximum Lead Diameter + 0.20mm (for Level B of IPC-2222)
+;Minimum Hole Size = Maximum Lead Diameter + 0.15mm (for Level C of IPC-2222)
+
+;Pad Diameter = Minimum Hole Size + 0.1mm + 0.60mm (for Level A of IPC-2221)
+;Pad Diameter = Minimum Hole Size + 0.1mm + 0.50mm (for Level B of IPC-2221)
+;Pad Diameter = Minimum Hole Size + 0.1mm + 0.40mm (for Level C of IPC-2221)
+
+;Design for IPC-222x Level B
+pcb-package hdmi-10118241-001RLF-package :
+  val x0 = 0.23
+  val y0 = 0.85
+  val y1 = 1.0
+  var loc_x0 = -1.8
+  val loc_y0 = 2.725
+  val loc_y1 = 1.5
+  var loc_x1 = -1.6    ;note: var makes variable mutable
+  ;val pitch = 0.4
+
+  for i in 1 to 20 do:
+    if i % 2 == 0 :    ;number is even
+      pad p[i] : {smd-pad(x0, y1)} at loc(loc_x1, loc_y1)
+      loc_x1 = loc_x1 + 0.4
+    else :
+      pad p[i] : {smd-pad(x0, y0)} at loc(loc_x0, loc_y0)
+      loc_x0 = loc_x0 + 0.4
+  
+  pad p[20] : {pth-pad(1.7 / 2.0)} at loc(-3.1, -2.05)  ;error: this should be 0.65 x 1.7 oval pad
+  pad p[21] : {pth-pad(1.7 / 2.0)} at loc(3.1, -2.05)   ;error: this should be 0.65 x 1.7 oval pad
+  pad p[22] : {smd-pad(2.4, 1.38)} at loc(-3.45, 1.32)
+  pad p[23] : {smd-pad(2.4, 1.38)} at loc(3.45, 1.32)
+
+  layer(Courtyard(Top)) = Rectangle(9.4, 7.5)
+  layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+  ;height = 2.9mm
+
+public unique pcb-component component :
+  manufacturer = "Amphenol ICC (FCI)"
+  mpn = "10118241-001RLF"
+  description = "HDMI - Micro Receptacle Connector 19 Position Surface Mount, Right Angle; Through Hole"
+  reference-prefix = "J"
+  val ps = PinSpec $ #TABLE :
+    [Ref | Int ...   | Dir  ]
+    [dat2_n   | 5    | Left  ]
+    [dat2_p   | 3    | Left  ]
+    [dat2_s   | 4    | Left  ]
+    [scl      | 17   | Left  ]
+    [sda      | 18   | Left  ]
+    [dat1_n   | 8    | Left  ]
+    [dat1_p   | 6    | Left  ]
+    [dat1_s   | 7    | Left  ]
+    [vcc_5v   | 19   | Left  ]
+    [ddc_cec  | 16   | Left  ]
+    [hplg     | 1    | Left  ]
+    [dat0_n   | 11   | Left  ]
+    [dat0_p   | 9    | Left  ] 
+    [dat0_s   | 10   | Left  ]
+    [cec      | 15   | Left  ]
+    [clk_s    | 13   | Left  ]
+    [clk_p    | 12   | Left  ]
+    [clk_n    | 14   | Left  ]
+    [mtg1     | 20   | Right ]
+    [mtg2     | 21   | Right ]
+    [mtg3     | 22   | Right ]
+    [mtg4     | 23   | Right ]
+    [nc       | 2    | Right ]
+  gen-symbol-map(ps, hdmi-10118241-001RLF-package)
+  view(hdmi-10118241-001RLF-package)
+
+public pcb-module hdmi_conn_micro_module :
+
+  inst hdmi : {ocdb/amphenol/10118241-001RLF/component}
+
+  net GND (hdmi.dat0_s hdmi.dat1_s hdmi.dat2_s hdmi.clk_s)
+  net SHIELD (hdmi.mtg1 hdmi.mtg2 hdmi.mtg3 hdmi.mtg4)
+
+  ;Design Note: Impedance Controlled Net
+  ;HDMI TMDS Lines - 50ohm SE, 100ohm DIFF
+  ;intra-pair skew tx = 0.15 * Tbit for TMDS CLK of 225MHz = 66ps
+  ;intra-pair skew rx = 0.4 * Tbit for TMDS CLK of 225MHz = 178ps
+  ;inter-pair skew (time difference between signal pairs) tx = 0.2 * Tcharacter TMDS CLK of 225MHz = 888ps
+  ;inter-pair skew (time difference between signal pairs) rx = 0.2 * Tcharacter + 1.78ns TMDS CLK of 225MHz = 2.67ns 
+  net CLK+ (hdmi.clk_p) 
+  net CLK- (hdmi.clk_n)
+  net DAT+ (hdmi.dat0_p)
+  net DAT0+ (hdmi.dat0_p)
+  net DAT0- (hdmi.dat0_n)
+  net DAT1+ (hdmi.dat1_p)
+  net DAT1- (hdmi.dat1_n)
+  net DAT2+ (hdmi.dat2_p)
+  net DAT2- (hdmi.dat2_n)
+
+  net SCL (hdmi.scl)
+  net SDA (hdmi.sda)
+
+  net VCC_5V (hdmi.vcc_5v)
+  net DDC_CEC (hdmi.ddc_cec)
+  net HPLG (hdmi.hplg)
+  net CEC (hdmi.cec)
+
+  
