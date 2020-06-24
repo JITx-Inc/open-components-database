@@ -487,15 +487,21 @@ public defn add-testpoint (ref:Ref, cmp:Ref, persist?:True|False,
     eval-when true :
       if property(self.debug) :
         unique inst tp : {cmp}
+        schematic-group({tp}) = debug-temp-sch
+        layout-group({tp}) = debug-temp-layout
         val pins = ports(tp)
         if not empty?(pins) :
           net ({ref}, {next(pins)})
       else if persist? and not property(self.debug) :
         if top? :
           unique inst tp : {top-smd-testpoint-cmp()}
+          schematic-group({tp}) = debug-persist-sch
+          layout-group({tp}) = debug-temp-layout
           net ({ref}, {tp.p})
         else :
           unique inst tp : {btm-smd-testpoint-cmp()}
+          schematic-group({tp}) = debug-persist-sch
+          layout-group({tp}) = debug-temp-layout
           net ({ref}, {tp.p})
 
 ; Adds a n-way jumper from node1 to nodes
@@ -514,6 +520,8 @@ public defn net-inline-jumper (node1:Ref, nodes:Tuple<Ref>,
       val n = length(nodes)
       if property(self.debug) :
         unique inst j : {cmp}
+        schematic-group({j}) = debug-temp-sch
+        layout-group({j}) = debug-temp-layout
         val pins = all-pins(j)
         if not empty?(pins) :
           net ({node1}, {next(pins)})
@@ -538,12 +546,16 @@ public defn net-inline-jumper-persist-cmp (node1:Ref, nodes:Tuple<Ref>,
       for i in 0 to n do :
         if property(self.debug) :
           unique inst j : {cmp}
+          schematic-group({j}) = debug-temp-sch
+          layout-group({j}) = debug-temp-layout
           val pins = all-pins(j)
           if not empty?(pins) :
             net ({node1}, {next(pins)})
             net ({nodes[i]}, {next(pins)})
         else :
           unique inst zero : {persist-cmp} 
+          schematic-group({zero}) = debug-persist-sch
+          layout-group({zero}) = debug-temp-layout
           val pins = all-pins(zero)
           if not empty?(pins) :
             net ({node1}, {next(pins)})
@@ -565,6 +577,14 @@ public defn db-jtag (jtag-pwr:Ref, jtag-comms:Ref) :
         unique inst r-pu1 : {gen-res-cmp(10.0e3)}[3]
         unique inst r-pu2 : {gen-res-cmp(4.7e3)}
         unique inst r-pd : {gen-res-cmp(10.0e3)}
+        schematic-group({jtag-conn}) = debug-temp-sch
+        layout-group({jtag-conn}) = debug-temp-layout
+        schematic-group({r-pu1}) = debug-temp-sch
+        layout-group({r-pu1}) = debug-temp-layout
+        schematic-group({r-pu2}) = debug-temp-sch
+        layout-group({r-pu2}) = debug-temp-layout
+        schematic-group({r-pd}) = debug-temp-sch
+        layout-group({r-pd}) = debug-temp-layout
         net ({jtag-pwr}.vdd, {jtag-conn}.p[1], {r-pu1}[0].p[1], 
              {r-pu1}[1].p[1], {r-pu2}.p[1], {r-pu1}[2].p[1])
         net ({jtag-pwr}.gnd, {jtag-conn}.p[3], {jtag-conn}.p[5], 
@@ -577,6 +597,8 @@ public defn db-jtag (jtag-pwr:Ref, jtag-comms:Ref) :
         db-testheader-persist([tms, tck, tdo, tdi, trstn])
       else :
         unique inst jtag-conn : {ocdb/tag-connect/TC2050-IDC-NL/module}
+        schematic-group({jtag-conn}) = debug-persist-sch 
+        layout-group({jtag-conn}) = debug-temp-layout
         net ({jtag-comms}, {jtag-conn}.j)
         net ({jtag-conn}.pwr, {jtag-pwr})
 
@@ -591,6 +613,8 @@ public defn db-ftdi (pwr:Ref, uart:Ref) :
     eval-when true :
       if property(self.debug) :
         unique inst ftdi-conn : {pin-header(6, 1)}
+        schematic-group({ftdi-conn}) = debug-temp-sch
+        layout-group({ftdi-conn}) = debug-temp-layout
         net ({pwr}.gnd, {ftdi-conn}.p[1])
         net ({pwr}.vdd, {ftdi-conn}.p[3])
         if port-type(uart) == #PT(uart) :
