@@ -2,77 +2,21 @@
 defpackage ocdb/db-parts :
   import core
   import collections
-  import mongoc
   import json
   import math
   import esir
   import esir/utils
   import esir/gen
+  import jitpcb/bom-query
   import ocdb/tests/default-harness
-  
+
   import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/symbols
   import ocdb/design-vars
 
-var *collection*:False|MongoCollection = false
-
-public defn open-mongo () :
-  close-mongo() when *collection* is MongoCollection
-  mongo-init()
-  val uri-string ="mongodb+srv://user:XbKPZfOVy5Z3hj43@jitx-5pmqw.mongodb.net/test?serverSelectionTryOnce=false"
-  ; val uri-string ="mongodb+srv://user:XbKPZfOVy5Z3hj43@jitx-5pmqw.mongodb.net/test?retryWrites=true&w=majority"
-  ; val uri-string = "mongodb://localhost:27017"
-  val uri = MongoURI(uri-string)
-  val client = MongoClient(uri)
-  *collection* = get-collection(client, "base", "parts")
-    
-public defn close-mongo () :
-  mongo-cleanup()
-  *collection* = false
-
-
-defn find-cap (request:Tuple<KeyValue>) :
-  val collection = *collection* as MongoCollection
-  val queryAggr = Vector<KeyValue>()
-  for elm in request do :
-    ; println(elm)
-    switch(key(elm)):
-      "capacitance" : 
-        add(queryAggr, "capacitance" => JObject $ ["$gt" => value(elm)* 0.99])
-        add(queryAggr, "capacitance" => JObject $ ["$lt" => value(elm)* 1.01])
-      "type"                    : add(queryAggr, "type" => value(elm))
-      "mpn"                     : add(queryAggr, "mpn" => value(elm))
-      "anode"                   : add(queryAggr, "anode" => value(elm))
-      "electrolyte"             : add(queryAggr, "electrolyte" => value(elm))
-      "mounting"                : add(queryAggr, "mounting" => value(elm))
-      "temperature-coefficient" : add(queryAggr, "temperature-coefficient" => value(elm))
-      "tolerance"               : add(queryAggr, "tolerance" => JObject $ ["$lt" => value(elm)])
-      "rated-voltage"           : add(queryAggr, "rated-voltage" => JObject $ ["$gt" => value(elm)])
-      else :
-        false
-  add(queryAggr, "rated-temperature.min" => JObject $ ["$lt" => OPERATING-TEMPERATURE[0]])
-  add(queryAggr, "rated-temperature.max" => JObject $ ["$gt" => OPERATING-TEMPERATURE[1]])
-  add(queryAggr, "dimensions.z" => JObject $ ["$lt" => MAX-Z])
-  
-  val optAggr = Vector<KeyValue>()
-  for s in OPTIMIZE-FOR do :
-    switch(s):
-      "area" : 
-        add(queryAggr, "dimensions.area" => JObject $ ["$exists" => true])
-        add(optAggr,   "dimensions.area" => 1)
-      "cost" : 
-        add(optAggr,   "vendors.0.prices.0.price" => 1)
-        add(queryAggr, "vendors.0.prices.0.price" => JObject $ ["$exists" => true])
-  val opts = JObject $
-    ["limit" => 10,
-     "sort" => JObject $ to-tuple(optAggr)
-     ]
-
-  next(find(collection, JObject $ to-tuple(queryAggr), opts)) as JObject
 
 defn make-cap (json:JObject):
-  ; print(json)
   inside pcb-component :
     val manufacturer-string = get?(json, "manufacturer")
     match(manufacturer-string:String) :  manufacturer = manufacturer-string
@@ -90,18 +34,18 @@ defn make-cap (json:JObject):
       port p : pin[{1 2}]
       symbol = {capacitor-sym(false)}(p[1] => p[1], p[2] => p[2])
       switch(package-generator):
-        "ipc-two-pin-package" : 
+        "ipc-two-pin-package" :
             match(package-args:String) : package = {ipc-two-pin-package(package-args)}(p[1] => p[1], p[2] => p[2])
-        "dummy-package" :  
+        "dummy-package" :
           package = {dummy-package(2, [c-x c-y])}(p[1] => p[1], p[2] => p[2])
     else:
       pin a
       pin c
       symbol = {capacitor-sym(true)}(a => p[1], c => p[2])
       switch(package-generator):
-        "ipc-two-pin-package" : 
+        "ipc-two-pin-package" :
           match(package-args:String) : package = {ipc-two-pin-package(package-args)}(a => p[1], c => p[2])
-        "dummy-package" : 
+        "dummy-package" :
           package = {dummy-package(2, [c-x c-y])}(a => p[1], c => p[2])
 
     val capacitance-json = get?(json, "capacitance") as Double|False
@@ -112,7 +56,7 @@ defn make-cap (json:JObject):
     val electrolyte-json = get?(json, "electrolyte")
     val esr-json = get?(json, "esr") as Double|False
     val rated-current-rms-json = get?(json, "rated-current-rms") as Double|False
-    val rated-temperature-json = [get?(json["rated-temperature"] as JObject, "min") as Double, 
+    val rated-temperature-json = [get?(json["rated-temperature"] as JObject, "min") as Double,
                                   get?(json["rated-temperature"] as JObject, "max") as Double]
 
     properties :
@@ -128,6 +72,27 @@ defn make-cap (json:JObject):
       match(esr-json:Double) : esr => esr-json
       match(rated-current-rms-json:Double) : rated-current-rms => rated-current-rms-json
 
-public pcb-component capacitor (request:Tuple<KeyValue>) :
-  make-cap(find-cap(request))
 
+defn capacitor (properties:Tuple<KeyValue>) :
+    ;Query the database with the given properties
+    val query_properties = to-tuple $ cat(["category" => "capacitor", "_optimize_for" => to-tuple(OPTIMIZE-FOR)], properties)
+    val reply = dbquery(query_properties)
+
+    ;Declare a new lazily-generated component
+    unique pcb-component mycomponent :
+      try :
+        make-cap(json(reply))
+      catch (e:HTTPError) :
+        print(e)
+    ;Return component
+    mycomponent
+
+deftest works :
+    val _props = ["min-capacitance" => 1.0e-3, "max-capacitance" => 2.0e-3]
+
+    ;val cap = capacitor(_props)
+
+    val query_properties = to-tuple $ cat(["category" => "capacitor", "_optimize_for" => to-tuple(OPTIMIZE-FOR)], _props)
+
+    val reply = dbquery(query_properties)
+    println(json(reply))
