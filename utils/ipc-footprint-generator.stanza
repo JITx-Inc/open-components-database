@@ -13,52 +13,51 @@ defpackage ocdb/ipc-footprint-generator :
 
 public pcb-package gen-res-pkg (size:String, courtyard?:True|False) :
   val fields = HashTable<String, ?>()
-  val [L-Min, L-max, W-min, W-max, T-min, T-max, H] = switch(size) :
+  val [l-min, l-max, w-min, w-max, t-min, t-max, h] = switch(size) :
     "0402" : [0.95, 1.05, 0.45, 0.55, 0.15, 0.35, 0.35]
     "0603" : [1.5, 1.7, 0.75, 0.95, 0.1, 0.5, 0.45]
     "0805" : [1.85, 2.15, 1.1, 1.4, 0.2, 0.6, 0.55]
     "1206" : [3.0, 3.3, 1.45, 1.75, 0.25, 0.75, 0.55]
-  fields["L-min"] = L-min
-  fields["L-max"] = L-max
-  fields["W-min"] = W-min
-  fields["W-max"] = W-max
-  fields["T-min"] = T-min
-  fields["T-max"] = T-max
-  fields["H"] = H 
-  fields["type"] = "res" 
-  fields["density"] = "med" 
+  fields["L-min"] = l-min
+  fields["L-max"] = l-max
+  fields["W-min"] = w-min
+  fields["W-max"] = w-max
+  fields["T-min"] = t-min
+  fields["T-max"] = t-max
+  fields["H"] = h 
+  fields["Type"] = "res" 
+  fields["Density"] = "med" 
   val chip = make-CHIP(fields)
-  pad p[1] : {smd-pad(Y(chip), X(chip))} at loc((- center(chip)) / 2.0, 0.0)
-  pad p[2] : {smd-pad(Y(chip), X(chip))} at loc(center(chip) / 2.0, 0.0)
+  pad p[1] : {smd-pad(Y(chip), X(chip))} at loc((- Center(chip)) / 2.0, 0.0)
+  pad p[2] : {smd-pad(Y(chip), X(chip))} at loc(Center(chip) / 2.0, 0.0)
   if courtyard? : 
     layer(Courtyard(Top)) = Rectangle(V1(chip), V2(chip))
-  name = name(chip)
-  description = description(chip)
+  name = Name(chip)
+  description = Description(chip)
   ref-label()
 
 public defn make-CHIP (fields:HashTable<String, ?>) -> CHIP :
   val required = ["L-min", "L-max", "W-min", "W-max", "T-min", "T-max", 
-                  "H", "type", "density"]
+                  "H", "Type", "Density"]
   for k in required do :
     if not key?(fields, k) :
       fatal("%_ field is required." % k)
-  val [L-Min, L-max, W-min, W-max, T-min, T-max, H, type, density] = 
+  val [l-min, l-max, w-min, w-max, t-min, t-max, h, type, density] = 
       map({fields[_]}, required) as ?
-;      [fields[k] for k in required] ;TODO Can I do this
-  val polarity-pin = switch(key?(fields, "polarity-pin")) :
-    true : fields["polarity-pin"]
+  val polarity-pin = switch(key?(fields, "Polarity-pin")) :
+    true : fields["Polarity-pin"]
     false : false
-  val [S-min, S-max] = switch([key?(fields, "S-min"), 
+  val [s-min, s-max] = switch([key?(fields, "S-min"), 
                                key?(fields, "S-max")]) :
     [true, true] : [fields["S-min"], fields["S-max"]]
-    else : [(W-min - (2.0 * T-max)), (W-max - (2.0 * T-min))] 
-  val fillet-fields = ["JT-min", "JH-min", "JS-min", "courtyard-excess"]
+    else : [(w-min - (2.0 * t-max)), (w-max - (2.0 * t-min))] 
+  val fillet-fields = ["JT-min", "JH-min", "JS-min", "Courtyard-excess"]
   val has-fields? = all?(key?{fields, _}, fillet-fields)
-  val large = ((L-min + L-max) / 2.0) >= 1.55
-  val [JT-min, JH-min, JS-min, courtyard-excess] = 
+  val large = ((l-min + l-max) / 2.0) >= 1.55
+  val [jt-min, jh-min, js-min, courtyard-excess] = 
     if has-fields? : 
       [fields["JT-min"], fields["JH-min"], fields["JS-min"], 
-       fields["courtyard-excess"]]
+       fields["Courtyard-excess"]]
     else :
       switch([large, density]) :
         [false, "low"] : [0.2, -0.05, 0.05, 0.2]
@@ -67,79 +66,78 @@ public defn make-CHIP (fields:HashTable<String, ?>) -> CHIP :
         [true, "low"] : [0.55, -0.05, 0.05, 0.5]
         [true, "med"] : [0.35, -0.05, 0.0, 0.25]
         [true, "high"] : [0.15, -0.05, 0.0, 0.1]
-  val [L-tol, S-tol, W-tol] = switch([key?(fields, "L-tol"),
+  val [l-tol, s-tol, w-tol] = switch([key?(fields, "L-tol"),
                                      key?(fields, "S-tol"),
                                      key?(fields, "W-tol")]) :
     [true, true, true] : [fields["L-tol"], fields["S-tol"], 
                           fields["W-tol"]]
     else : 
-      [(L-max - L-min), (S-max - S-min), (W-max - W-min)]
-  val [fab-tol, placement-tol] = switch([key?(fields, "fab-tol"),
-                                         key?(fields, "placement-tol")]) :
-    [true, true] : [fields["fab-tol"], fields["placement-tol"]]
+      [(l-max - l-min), (s-max - s-min), (w-max - w-min)]
+  val [fab-tol, placement-tol] = switch([key?(fields, "Fab-tol"),
+                                         key?(fields, "Placement-tol")]) :
+    [true, true] : [fields["Fab-tol"], fields["Placement-tol"]]
     ; TODO verify ipc default tolerances
     else : [0.1, 0.1]
-  ; TODO easiest way to do squareroot and squared?
-  val Z-max = L-min + (2.0 * JT-min) + sqrt((L-tol * L-tol) +
-                                        (fab-tol * fab-tol) +
-                                        (placement-tol * placement-tol))
-  val G-max = S-max + (2.0 * JH-min) + sqrt((S-tol * S-tol) +
-                                        (fab-tol * fab-tol) +
-                                        (placement-tol * placement-tol))
-  val X-max = W-min + (2.0 * JS-min) + sqrt((W-tol * W-tol) +
-                                        (fab-tol * fab-tol) +
-                                        (placement-tol * placement-tol))
-  val [X, Y, C] = switch([key?(fields, "X"), key?(fields, "Y"), 
-                          key?(fields, "C")]) :
-    [true, true, true] : [fields["X"], fields["Y"], fields["C"]]
-    else : [X-max, (Z-max - G-max) / 2.0 , (Z-max + G-max) / 2.0]
-  val [sline-W, cline-W, aline-W] = switch([key?(fields, "sline-W"), 
-                                   key?(fields, "cline-W"),
-                                   key?(fields, "aline-W")]) :
-    [true, true, true] : [fields["sline-W"], fields["cline-W"], 
-                          fields["aline-W"]]
+  val z-max = l-min + (2.0 * jt-min) + sqrt(pow(l-tol, 2.0) +
+                                            pow(fab-tol, 2.0) +
+                                            pow(placement-tol, 2.0))
+  val g-max = s-max + (2.0 * jh-min) + sqrt(pow(s-tol, 2.0) +
+                                            pow(fab-tol, 2.0) +
+                                            pow(placement-tol, 2.0))
+  val x-max = w-min + (2.0 * js-min) + sqrt(pow(w-tol, 2.0) +
+                                            pow(fab-tol, 2.0) +
+                                            pow(placement-tol, 2.0))
+  val [x, y, center] = switch([key?(fields, "X"), key?(fields, "Y"), 
+                          key?(fields, "Center")]) :
+    [true, true, true] : [fields["X"], fields["Y"], fields["Center"]]
+    else : [x-max, (z-max - g-max) / 2.0 , (z-max + g-max) / 2.0]
+  val [sl-W, cl-W, al-W] = switch([key?(fields, "Sl-W"), 
+                                   key?(fields, "Cl-W"),
+                                   key?(fields, "Al-W")]) :
+    [true, true, true] : [fields["Sl-W"], fields["Cl-W"], 
+                          fields["Al-W"]]
     ; TODO check whether this is even needed
     else : [0.2, 0.5, 0.1]
-  val [R1, R2] = switch([key?(fields, "R1"), key?(fields, "R2")]) :
+  val [r1, r2] = switch([key?(fields, "R1"), key?(fields, "R2")]) :
     [true, true] : [fields["R1"], fields["R2"]]
-    else : [G-max - (2.0 * sl-W), X-max - sl-W]
-  val [V1, V2] = switch([key?(fields, "V1"), key?(fields, "V2")]) :
+    else : [g-max - (2.0 * sl-W), x-max - sl-W]
+  val [v1, v2] = switch([key?(fields, "V1"), key?(fields, "V2")]) :
     [true, true] : [fields["V1"], fields["V2"]]
-    else : [Z-max + (2.0 * courtyard-excess), 
-            X-max + (2.0 * courtyard-excess)]
-  val [A, B] = switch([key?(fields, "A"), key?(fields, "B")]) :
+    else : [z-max + (2.0 * courtyard-excess), 
+            x-max + (2.0 * courtyard-excess)]
+  val [a, b] = switch([key?(fields, "A"), key?(fields, "B")]) :
     [true, true] : [fields["A"], fields["B"]]
-    else : [L-max, W-max]
-  val [cmp-body-W, cmp-body-L] = switch([key?(fields, "cmp-body-W"),
-                                         key?(fields, "cmp-body-L")]) :
-    [true, true] : [fields["cmp-body-W"], fields["cmp-body-L"]]
-    else : [W-max, L-max]
-  ; TODO how to convert decimal size to string and concatenate
+    else : [l-max, w-max]
+  val [cmp-body-W, cmp-body-L] = switch([key?(fields, "Cmp-body-W"),
+                                         key?(fields, "Cmp-body-L")]) :
+    [true, true] : [fields["Cmp-body-W"], fields["Cmp-body-L"]]
+    else : [w-max, l-max]
   val [type-str, type-abbr] = switch(type) :
     "cap" : ["Capacitor", "CAPC"]
     "ind" : ["Inductor", "INDC"]
     "res" : ["Resistor", "RESC"]
     "dio" : ["Diode", "DIOC"]
-  val size-str = to-string(to-int((L-max + L-min) / 2.0 * 10.0)) + 
-                 to-string(to-int((W-max + W-min) / 2.0 * 10.0)) + "X" +
-                 to-string(to-int(A * 10.0))
+  val size-str = to-string("%_%_%_%_" % 
+                           [to-int((l-max + l-min) / 2.0 * 10.0), 
+                            to-int((w-max + w-min) / 2.0 * 10.0), "X",
+                            to-int(a * 10.0)])
   val [density-str, density-abbr] = switch(density) :
     "low" : ["Low", "M"]
     "med" : ["Medium", "N"]
     "high" : ["High", "L"]
-  val name = switch(key?(fields, "name")) :
-    true : fields["name"]
+  val name = switch(key?(fields, "Name")) :
+    true : fields["Name"]
     else : to-string("%_%_%_" % [type-abbr, size-str, density-abbr])
-  val size-l-str = to-string(to-int((L-max + L-min) / 2.0))
-  val size-w-str = to-string(to-int((W-max + W-min) / 2.0))
-  val description = switch(key?(fields, "description")) :
-    true : fields["description"]
+  val size-l-str = to-string(to-int((l-max + l-min) / 2.0))
+  val size-w-str = to-string(to-int((w-max + w-min) / 2.0))
+  val description = switch(key?(fields, "Description")) :
+    true : fields["Description"]
     else : to-string("Chip %_, 2-Leads, Body %_x%_mm, IPC %_ Density" % 
                      [type-str, size-l-str, size-w-str, density-str])
-  CHIP(L-min, L-max, W-min, W-max, T-min, T-max, A, type, polarity-pin,
-       S-min, S-max, density, JT-min, JH-min, JS-min, L-tol, S-tol, W-tol,
-       fab-tol, placement-tol, courtyard-excess, X, Y, C, sline-W, R1, R2, 
-       V1, V2, cline-W, A, B, aline-W, cmp-body-W, cmp-body-L, name, 
+  CHIP(l-min, l-max, w-min, w-max, t-min, t-max, a, type, polarity-pin,
+       s-min, s-max, density, jt-min, jh-min, js-min, l-tol, s-tol, w-tol,
+       fab-tol, placement-tol, courtyard-excess, x, y, center, sl-W, 
+       r1, r2, v1, v2, cl-W, a, b, al-W, cmp-body-W, cmp-body-L, name,
        description)
 
 ; =======================
@@ -149,13 +147,13 @@ public defn make-CHIP (fields:HashTable<String, ?>) -> CHIP :
 ; W-min, L-max - Body Width Range
 ; T-min, T-max - Bandwidth Range
 ; H            - Maximum Height
-; type         - Package Type - ["cap", "ind", "res", "dio"]
-; density      - Board Density Level - ["low", "med", "high"]
+; Type         - Package Type - ["cap", "ind", "res", "dio"]
+; Density      - Board Density Level - ["low", "med", "high"]
 
 ; =======================
 ; OPTIONAL
 ; =======================
-; polarity-pin     - Polarity Pin Location
+; Polarity-pin     - Polarity Pin Location
 ; S                - Heel spacing
 ; JT-min           - Toe Fillet
 ; JH-min           - Heel Fillet
@@ -163,62 +161,62 @@ public defn make-CHIP (fields:HashTable<String, ?>) -> CHIP :
 ; L-tol            - Tolerance of overall width of component, inc. leads
 ; S-tol            - Tolerance inner distance heels of opposing lead rows
 ; W-tol            - Tolerance of width of component leads
-; fab-tol          - Fabrication Tolerance Assumption
-; placement-tol    - Placement Tolerance Assumption
-; courtyard-excess - Courtyard Excess
+; Fab-tol          - Fabrication Tolerance Assumption
+; Placement-tol    - Placement Tolerance Assumption
+; Courtyard-excess - Courtyard Excess
 ; X                - Pad dimension X
 ; Y                - Pad dimension Y
-; C                - Pad spacing
-; sline-W          - Silkscreen Line Width
+; Center                - Pad spacing
+; Sl-W          - Silkscreen Line Width
 ; R1               - Silkscreen Dimension R1
 ; R2               - Silkscreen Dimension R2
 ; V1               - Courtyard Dimension V1
 ; V2               - Courtyard Dimension V2
-; cline-W          - Courtyard Line Width
+; Cl-W          - Courtyard Line Width
 ; A                - Assembly Information Dimension A
 ; B                - Assembly Information Dimension B
-; aline-W          - Assembly Line Width
-; cmp-body-W       - Component Body Width
-; cmp-body-L       - Component Body Length
-; name             - Footprint Name
-; description      - Footprint Description
+; Al-W          - Assembly Line Width
+; Cmp-body-W       - Component Body Width
+; Cmp-body-L       - Component Body Length
+; Name             - Footprint Name
+; Description      - Footprint Description
 public defstruct CHIP :
-  L-min: Double with: (setter => set-L-min)
-  L-max: Double with: (setter => set-L-max)
-  W-min: Double with: (setter => set-W-min) 
-  W-max: Double with: (setter => set-W-max)
-  T-min: Double with: (setter => set-T-min)
-  T-max: Double with: (setter => set-T-max)
-  H: Double with: (setter => set-H)
-  type: String with: (setter => set-type)
-  density: String with: (setter => set-density)
-  polarity-pin: Int|False with: (setter => set-polarity-pin)
-  S-min: Double with: (setter => set-S-min)
-  S-max: Double with: (setter => set-S-max)
-  JT-min: Double with: (setter => set-JT-min)
-  JH-min: Double with: (setter => set-JH-min)
-  JS-min: Double with: (setter => set-JS-min)
-  L-tol: Double with: (setter => set-L-tol)
-  S-tol: Double with: (setter => set-S-tol)
-  W-tol: Double with: (setter => set-W-tol)
-  fab-tol: Double with: (setter => set-fab-tol)
-  placement-tol: Double with: (setter => set-placement-tol)
-  courtyard-excess: Double with: (setter => set-courtyard-excess)
-  X: Double with: (setter => set-X)
-  Y: Double with: (setter => set-Y)
-  center: Double with: (setter => set-center)
-  sl-W: Double with: (setter => set-sl-W)
-  R1: Double with: (setter => set-R1)
-  R2: Double with: (setter => set-R2)
-  V1: Double with: (setter => set-V1)
-  V2: Double with: (setter => set-V2)
-  cl-W: Double with: (setter => set-cl-W)
-  A: Double with: (setter => set-A)
-  B: Double with: (setter => set-B)
-  al-W: Double with: (setter => set-al-W)
-  cmp-body-W: Double with: (setter => set-cmp-body-W)
-  cmp-body-L: Double with: (setter => set-cmp-body-L)
-  name: String with: (setter => set-name)
-  description: String with: (setter => set-description)
+  L-min: Double|? with: (setter => set-L-min)
+  L-max: Double|? with: (setter => set-L-max)
+  W-min: Double|? with: (setter => set-W-min) 
+  W-max: Double|? with: (setter => set-W-max)
+  T-min: Double|? with: (setter => set-T-min)
+  T-max: Double|? with: (setter => set-T-max)
+  H: Double|? with: (setter => set-H)
+  Type: String|? with: (setter => set-Type)
+  Density: String|? with: (setter => set-Density)
+  Polarity-pin: Int|False|? with: (setter => set-Polarity-pin)
+  S-min: Double|? with: (setter => set-S-min)
+  S-max: Double|? with: (setter => set-S-max)
+  JT-min: Double|? with: (setter => set-JT-min)
+  JH-min: Double|? with: (setter => set-JH-min)
+  JS-min: Double|? with: (setter => set-JS-min)
+  L-tol: Double|? with: (setter => set-L-tol)
+  S-tol: Double|? with: (setter => set-S-tol)
+  W-tol: Double|? with: (setter => set-W-tol)
+  Fab-tol: Double|? with: (setter => set-Fab-tol)
+  Placement-tol: Double|? with: (setter => set-Placement-tol)
+  Courtyard-excess: Double|? with: (setter => set-Courtyard-excess)
+  X: Double|? with: (setter => set-X)
+  Y: Double|? with: (setter => set-Y)
+  Center: Double|? with: (setter => set-Center)
+  Sl-W: Double|? with: (setter => set-Sl-W)
+  R1: Double|? with: (setter => set-R1)
+  R2: Double|? with: (setter => set-R2)
+  V1: Double|? with: (setter => set-V1)
+  V2: Double|? with: (setter => set-V2)
+  Cl-W: Double|? with: (setter => set-Cl-W)
+  A: Double|? with: (setter => set-A)
+  B: Double|? with: (setter => set-B)
+  Al-W: Double|? with: (setter => set-Al-W)
+  Cmp-body-W: Double|? with: (setter => set-Cmp-body-W)
+  Cmp-body-L: Double|? with: (setter => set-Cmp-body-L)
+  Name: String|? with: (setter => set-Name)
+  Description: String|? with: (setter => set-Description)
 
 
