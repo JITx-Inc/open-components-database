@@ -10,14 +10,18 @@ defpackage ocdb/ipc-footprint-generator :
   import esir/repl-lib
   import ocdb/generator-utils
   import ocdb/land-patterns
+  import ocdb/jedec-utils
 
-public pcb-package gen-res-pkg (size:String, courtyard?:True|False) :
+public pcb-package gen-chip-pkg (size:String, density:String, type:String, 
+                                 courtyard?:True|False) :
   val fields = HashTable<String, ?>()
   val [l-min, l-max, w-min, w-max, t-min, t-max, h] = switch(size) :
+    
     "0402" : [0.95, 1.05, 0.45, 0.55, 0.15, 0.35, 0.35]
     "0603" : [1.5, 1.7, 0.75, 0.95, 0.1, 0.5, 0.45]
     "0805" : [1.85, 2.15, 1.1, 1.4, 0.2, 0.6, 0.55]
     "1206" : [3.0, 3.3, 1.45, 1.75, 0.25, 0.75, 0.55]
+  ; TODO Find source of truth for remaining popular packages
   fields["L-min"] = l-min
   fields["L-max"] = l-max
   fields["W-min"] = w-min
@@ -25,72 +29,326 @@ public pcb-package gen-res-pkg (size:String, courtyard?:True|False) :
   fields["T-min"] = t-min
   fields["T-max"] = t-max
   fields["H"] = h 
-  fields["Type"] = "res" 
-  fields["Density"] = "med" 
-  val chip = make-CHIP(fields)
-  pad p[1] : {smd-pad(Y(chip), X(chip))} at loc((- Center(chip)) / 2.0, 0.0)
-  pad p[2] : {smd-pad(Y(chip), X(chip))} at loc(Center(chip) / 2.0, 0.0)
-  if courtyard? : 
-    layer(Courtyard(Top)) = Rectangle(V1(chip), V2(chip))
+  fields["Type"] = type 
+  fields["Density"] = density 
+  val chip = make-two-pin-struct(fields, "CHIP")
+  if courtyard? :
+    make-two-pads(X(chip), Y(chip), Center(chip), V1(chip), V2(chip))
+  else :
+    make-two-pads(X(chip), Y(chip), Center(chip))
   name = Name(chip)
   description = Description(chip)
   ref-label()
 
-public defn make-CHIP (fields:HashTable<String, ?>) -> CHIP :
+public pcb-package gen-chip-pkg (f-list:Tuple<Tuple<?>>) :
+  gen-two-pin-pkg(f-list, "CHIP")
+
+public pcb-package gen-molded-pkg (f-list:Tuple<Tuple<?>>) :
+  gen-two-pin-pkg(f-list, "MOLDED")
+
+public pcb-package gen-molded-pkg (f-list:Tuple<Tuple<?>>) :
+  gen-two-pin-pkg(f-list, "WIREWOUND")
+
+public pcb-package gen-melf-pkg (f-list:Tuple<Tuple<?>>) :
+  gen-two-pin-pkg(f-list, "MELF")
+
+public pcb-package gen-sodfl-pkg (f-list:Tuple<Tuple<?>>) :
+  gen-two-pin-pkg(f-list, "SODFL")
+
+public pcb-package gen-capae-pkg (f-list:Tuple<Tuple<?>>) :
+  gen-two-pin-pkg(f-list, "CAPAE")
+
+public defn gen-two-pin-pkg (f-list:Tuple<Tuple<?>>, pkg:String) :
+  inside pcb-package :
+    val fields = HashTable<String, ?>()
+    for f in f-list do :
+      fields[f[0]] = f[1]
+    val cmp = make-two-pin-struct(fields, pkg)
+    make-two-pads(X(cmp), Y(cmp), Center(cmp), V1(cmp), 
+                  V2(cmp))
+    ; TODO make silkscreen
+    name = Name(cmp)
+    description = Description(cmp)
+    ref-label()
+  
+defn get-fillet-values (pkg:String, predicate:Double, density:String) 
+                                                          -> [?, ?, ?, ?] :
+  println("predicate: %_" % [predicate])
+  switch(pkg) :
+    "CHIP" :
+      if predicate > 4.75 :
+        switch(density) :
+          "least" : [0.4, 0.0, -0.05, 0.1]
+          "nominal" : [0.5, 0.0, 0.0, 0.2]
+          "most" : [0.6, 0.0, 0.05, 0.4]
+      else if predicate > 3.85 :
+        switch(density) :
+          "least" : [0.3, 0.0, -0.05, 0.1]
+          "nominal" : [0.4, 0.0, 0.0, 0.2]
+          "most" : [0.5, 0.0, 0.05, 0.4]
+      else if predicate > 2.85 :
+        switch(density) :
+          "least" : [0.25, 0.0, -0.05, 0.1]
+          "nominal" : [0.35, 0.0, 0.0, 0.2]
+          "most" : [0.45, 0.0, 0.05, 0.4]
+      else if predicate > 1.3 :
+        switch(density) :
+          "least" : [0.2, 0.0, -0.05, 0.1]
+          "nominal" : [0.3, 0.0, 0.0, 0.2]
+          "most" : [0.4, 0.0, 0.05, 0.4]
+      else if predicate > 0.75 :
+        switch(density) :
+          "least" : [0.15, -0.02, -0.02, 0.1]
+          "nominal" : [0.2, -0.01, -0.01, 0.15]
+          "most" : [0.25, 0.0, 0.0, 0.2]
+      else if predicate > 0.5 :
+        switch(density) :
+          "least" : [0.08, -0.03, -0.03, 0.1]
+          "nominal" : [0.1, -0.02, -0.02, 0.15]
+          "most" : [0.12, -0.01, -0.01, 0.2]
+      else :
+        switch(density) :
+          "least" : [0.04, -0.04, -0.04, 0.1]
+          "nominal" : [0.05, -0.03, -0.03, 0.15]
+          "most" : [0.06, -0.02, -0.02, 0.2]
+    "MOLDED" :
+      if predicate > 4.2 :
+        switch(density) :
+          "least" : [0.15, 0.5, -0.05, 0.1]
+          "nominal" : [0.2, 0.6, 0.0, 0.2]
+          "most" : [0.25, 0.7, 0.05, 0.4]
+      else if predicate > 3.2 :
+        switch(density) :
+          "least" : [0.1, 0.45, -0.05, 0.1]
+          "nominal" : [0.15, 0.55, 0.0, 0.2]
+          "most" : [0.2, 0.65, 0.05, 0.4]
+      else if predicate > 2.2 :
+        switch(density) :
+          "least" : [0.05, 0.4, -0.05, 0.1]
+          "nominal" : [0.1, 0.5, 0.0, 0.2]
+          "most" : [0.15, 0.6, 0.05, 0.4]
+      else if predicate > 1.2 :
+        switch(density) :
+          "least" : [0.0, 0.35, -0.05, 0.1]
+          "nominal" : [0.05, 0.45, 0.0, 0.2]
+          "most" : [0.1, 0.55, 0.05, 0.4]
+      else :
+        switch(density) :
+          "least" : [-0.05, 0.3, -0.05, 0.1]
+          "nominal" : [0.0, 0.4, 0.0, 0.2]
+          "most" : [0.05, 0.5, 0.05, 0.4]
+    "WIREWOUND" :
+      if predicate > 4.2 :
+        switch(density) :
+          "least" : [0.15, 0.5, -0.05, 0.1]
+          "nominal" : [0.2, 0.6, 0.0, 0.2]
+          "most" : [0.25, 0.7, 0.05, 0.4]
+      else if predicate > 3.2 :
+        switch(density) :
+          "least" : [0.1, 0.45, -0.05, 0.1]
+          "nominal" : [0.15, 0.55, 0.0, 0.2]
+          "most" : [0.2, 0.65, 0.05, 0.4]
+      else if predicate > 2.2 :
+        switch(density) :
+          "least" : [0.05, 0.4, -0.05, 0.1]
+          "nominal" : [0.1, 0.5, 0.0, 0.2]
+          "most" : [0.15, 0.6, 0.05, 0.4]
+      else if predicate > 1.2 :
+        switch(density) :
+          "least" : [0.0, 0.35, -0.05, 0.1]
+          "nominal" : [0.05, 0.45, 0.0, 0.2]
+          "most" : [0.1, 0.55, 0.05, 0.4]
+      else :
+        switch(density) :
+          "least" : [-0.05, 0.3, -0.05, 0.1]
+          "nominal" : [0.0, 0.4, 0.0, 0.2]
+          "most" : [0.05, 0.5, 0.05, 0.4]
+    "MELF" :
+      switch(density) :
+        "least" : [0.2, 0.02, 0.01, 0.1]
+        "nominal" : [0.4, 0.1, 0.05, 0.2]
+        "most" : [0.6, 0.2, 0.1, 0.4]
+    "SODFL" :
+      switch(density) :
+        "least" : [0.1, 0.0, -0.05, 0.1]
+        "nominal" : [0.2, 0.0, 0.0, 0.2]
+        "most" : [0.3, 0.0, 0.05, 0.4]
+    "CAPAE" :
+      if predicate > 10.0 :
+        switch(density) :
+          "least" : [0.4, -0.05, 0.4, 0.2]
+          "nominal" : [0.7, 0.0, 0.5, 0.4]
+          "most" : [1.0, 0.1, 0.6, 0.8]
+      else: 
+        switch(density) :
+          "least" : [0.3, -0.1, 0.3, 0.1]
+          "nominal" : [0.5, 0.0, 0.4, 0.2]
+          "most" : [0.7, 0.05, 0.5, 0.4]
+
+public defn make-two-pin-struct (fields:HashTable<String, ?>, pkg:String) 
+                                                         -> TWO-PIN-STRUCT :
+;TODO add component types here as you add support for them
+  if not contains?(["CHIP", "MOLDED", "WIREWOUND", "MELF", "SODFL", "CAPAE"]
+                   , pkg) :
+    fatal("Component type not supported")
+
+; assign required values
   val required = ["L-min", "L-max", "W-min", "W-max", "T-min", "T-max", 
-                  "H", "Type", "Density"]
+                  "H", "Density"]
   for k in required do :
     if not key?(fields, k) :
-      fatal("%_ field is required." % k)
-  val [l-min, l-max, w-min, w-max, t-min, t-max, h, type, density] = 
+      fatal("%_ field is required." % [k])
+  val [l-min, l-max, w-min, w-max, t-min, t-max, h, density] = 
       map({fields[_]}, required) as ?
+  val [tw-min, tw-max] = 
+    if contains?(["MOLDED", "WIREWOUND", "SODFL", "CAPAE"], pkg) :
+      for k in ["TW-min", "TW-max"] do :
+        if not key?(fields, k) :
+          fatal("%_ field is required." % [k])
+      [fields["TW-min"], fields["TW-max"]]
+    else :
+      [w-min, w-max]
+  val [e-min, e-max] =
+    if contains?(["SODFL", "CAPAE"], pkg) :
+      for k in ["E-min", "E-max"] do :
+        if not key?(fields, k) :
+          fatal("%_ field is required." % [k])
+      [fields["E-min"], fields["E-max"]]
+    else :
+      [l-min, l-max]
+  val [d-min, d-max] =
+    if contains?(["CAPAE"], pkg) :
+      for k in ["D-min", "D-max"] do :
+        if not key?(fields, k) :
+          fatal("%_ field is required." % [k])
+      [fields["D-min"], fields["D-max"]]
+    else :
+      [l-min, l-max]
+  val type =
+    if contains?(["CHIP", "MOLDED", "MELF"], pkg) :
+      if not key?(fields, "Type") :
+        fatal("Type field is required.")
+      else :
+        fields["Type"]
+    else :
+      ""
+
+; input checks
+  if not contains?(["least", "nominal", "most"], density) :
+    fatal("Component Density Level not supported")
+  if contains?(["CHIP", "MOLDED"], pkg) :
+    if not contains?(["cap", "ind", "res", "dio"], type) :
+      fatal("Component Type not supported")
+  else if pkg == "MELF" :
+    if not contains?(["res", "dio"], type) :
+      fatal("Component Type not supported")
+
+; assign optional values for polarity, tolerances, and spacing
   val polarity-pin = switch(key?(fields, "Polarity-pin")) :
     true : fields["Polarity-pin"]
     false : false
-  val [s-min, s-max] = switch([key?(fields, "S-min"), 
-                               key?(fields, "S-max")]) :
-    [true, true] : [fields["S-min"], fields["S-max"]]
-    else : [(w-min - (2.0 * t-max)), (w-max - (2.0 * t-min))] 
+  val [l-tol, w-tol, t-tol] = switch([key?(fields, "L-tol"),
+                                     key?(fields, "W-tol")
+                                     key?(fields, "T-tol")]) :
+    [true, true, true] : [fields["L-tol"], fields["W-tol"], fields["T-tol"]]
+    else : 
+      [(l-max - l-min), (w-max - w-min), (t-max - t-min)]
+  val tw-tol =
+    if contains?(["MOLDED", "WIREWOUND", "SODFL", "CAPAE"], pkg) :
+      if key?(fields, "TW-tol") :
+        fields["TW-tol"]
+      else :
+        tw-max - tw-min
+    else :
+      0.0
+  val e-tol =
+    if contains?(["SODFL", "CAPAE"], pkg) :
+      if key?(fields, "E-tol") :
+        fields["E-tol"]
+      else :
+        e-max - e-min
+    else :
+      0.0
+  val s-tol =
+    if key?(fields, "S-tol") :
+      fields["S-tol"]
+    else :
+      if contains?(["SODFL", "CAPAE"], pkg) :
+        sqrt(pow(e-tol, 2.0) + (2.0 * pow(t-tol, 2.0)))
+      else :
+        sqrt(pow(l-tol, 2.0) + (2.0 * pow(t-tol, 2.0)))
+  val [s-min, s-max] =
+    if key?(fields, "S-min") and key?(fields, "S-max") :
+      [fields["S-min"], fields["S-max"]]
+    else :
+      if contains?(["SODFL", "CAPAE"], pkg) :
+        [(e-min - (2.0 * t-max)), (e-max - (2.0 * t-max)) + s-tol]
+      else : [(l-min - (2.0 * t-max)), (l-max - (2.0 * t-max)) + s-tol] 
+
+; assign optional values for fillets and courtyard excess  
   val fillet-fields = ["JT-min", "JH-min", "JS-min", "Courtyard-excess"]
   val has-fields? = all?(key?{fields, _}, fillet-fields)
-  val large = ((l-min + l-max) / 2.0) >= 1.55
+  val predicate = switch(pkg) :
+    ; predicate is average component length
+    "CHIP" : (l-min + l-max) / 2.0
+    ; predicate is component height
+    "MOLDED" : h
+    ; predicate is component height
+    "WIREWOUND" : h
+    ; no predicate for MELF components
+    "MELF" : 0.0
+    ; no predicate for SODFL components
+    "SODFL" : 0.0
+    ; predicate is max courtyard dimension
+    "CAPAE" : max((l-min + l-max) / 2.0, (w-min + w-max) / 2.0)
   val [jt-min, jh-min, js-min, courtyard-excess] = 
     if has-fields? : 
       [fields["JT-min"], fields["JH-min"], fields["JS-min"], 
        fields["Courtyard-excess"]]
     else :
-      switch([large, density]) :
-        [false, "low"] : [0.2, -0.05, 0.05, 0.2]
-        [false, "med"] : [0.1, -0.05, 0.0, 0.15]
-        [false, "high"] : [0.0, -0.05, 0.0, 0.1]
-        [true, "low"] : [0.55, -0.05, 0.05, 0.5]
-        [true, "med"] : [0.35, -0.05, 0.0, 0.25]
-        [true, "high"] : [0.15, -0.05, 0.0, 0.1]
-  val [l-tol, s-tol, w-tol] = switch([key?(fields, "L-tol"),
-                                     key?(fields, "S-tol"),
-                                     key?(fields, "W-tol")]) :
-    [true, true, true] : [fields["L-tol"], fields["S-tol"], 
-                          fields["W-tol"]]
-    else : 
-      [(l-max - l-min), (s-max - s-min), (w-max - w-min)]
+      get-fillet-values(pkg, predicate, density)
+  println("%_ %_ %_ %_" % [jt-min, jh-min, js-min, courtyard-excess])
+
+; assign optional values for fab and placement tolerances
   val [fab-tol, placement-tol] = switch([key?(fields, "Fab-tol"),
                                          key?(fields, "Placement-tol")]) :
     [true, true] : [fields["Fab-tol"], fields["Placement-tol"]]
-    ; TODO verify ipc default tolerances
-    else : [0.1, 0.1]
-  val z-max = l-min + (2.0 * jt-min) + sqrt(pow(l-tol, 2.0) +
+    else : [0.1, 0.15]
+
+; calculate and assign geometry values
+  val z-max = 
+    if contains?(["SODFL", "CAPAE"], pkg) :
+      e-min + (2.0 * jt-min) + sqrt(pow(e-tol, 2.0) +
+                                    pow(fab-tol, 2.0) +
+                                    pow(placement-tol, 2.0))
+    else :
+      l-min + (2.0 * jt-min) + sqrt(pow(l-tol, 2.0) +
+                                    pow(fab-tol, 2.0) +
+                                    pow(placement-tol, 2.0))
+  val g-min = s-max - (2.0 * jh-min) - sqrt(pow(s-tol, 2.0) +
                                             pow(fab-tol, 2.0) +
                                             pow(placement-tol, 2.0))
-  val g-max = s-max + (2.0 * jh-min) + sqrt(pow(s-tol, 2.0) +
-                                            pow(fab-tol, 2.0) +
-                                            pow(placement-tol, 2.0))
-  val x-max = w-min + (2.0 * js-min) + sqrt(pow(w-tol, 2.0) +
-                                            pow(fab-tol, 2.0) +
-                                            pow(placement-tol, 2.0))
+  val x-max =
+    if contains?(["MOLDED", "WIREWOUND", "SODFL", "CAPAE"], pkg) :
+      tw-min + (2.0 * js-min) + sqrt(pow(tw-tol, 2.0) +
+                                     pow(fab-tol, 2.0) +
+                                     pow(placement-tol, 2.0))
+    else : 
+      w-min + (2.0 * js-min) + sqrt(pow(w-tol, 2.0) +
+                                    pow(fab-tol, 2.0) +
+                                    pow(placement-tol, 2.0))
   val [x, y, center] = switch([key?(fields, "X"), key?(fields, "Y"), 
                           key?(fields, "Center")]) :
     [true, true, true] : [fields["X"], fields["Y"], fields["Center"]]
-    else : [x-max, (z-max - g-max) / 2.0 , (z-max + g-max) / 2.0]
+    else : [x-max, (z-max - g-min) / 2.0 , (z-max + g-min) / 2.0]
+  println("Z-max: %_" % [z-max])
+  println("G-min: %_" % [g-min])
+  println("X-max: %_" % [x-max])
+  println("C: %_" % [center])
+  println("x: %_" % [x])
+  println("y: %_" % [y])
+  
+; assign values for width of silkscreen, courtyad and assembly lines
   val [sl-W, cl-W, al-W] = switch([key?(fields, "Sl-W"), 
                                    key?(fields, "Cl-W"),
                                    key?(fields, "Al-W")]) :
@@ -98,95 +356,183 @@ public defn make-CHIP (fields:HashTable<String, ?>) -> CHIP :
                           fields["Al-W"]]
     ; TODO check whether this is even needed
     else : [0.2, 0.5, 0.1]
-  val [r1, r2] = switch([key?(fields, "R1"), key?(fields, "R2")]) :
-    [true, true] : [fields["R1"], fields["R2"]]
-    else : [g-max - (2.0 * sl-W), x-max - sl-W]
-  val [v1, v2] = switch([key?(fields, "V1"), key?(fields, "V2")]) :
-    [true, true] : [fields["V1"], fields["V2"]]
-    else : [z-max + (2.0 * courtyard-excess), 
-            x-max + (2.0 * courtyard-excess)]
-  val [a, b] = switch([key?(fields, "A"), key?(fields, "B")]) :
-    [true, true] : [fields["A"], fields["B"]]
-    else : [l-max, w-max]
+
+; assign values for silkscreen, courtyard, and assembly dimensions
+  val [r1, r2] =
+    if key?(fields, "R1") and key?(fields, "R2") :
+      [fields["R1"], fields["R2"]]
+    else if contains?(["MOLDED", "WIREWOUND", "SODFL", "CAPAE"], pkg) :
+      [l-max - (2.0 * sl-W), w-max - sl-W]
+    else : [g-min - (2.0 * sl-W), x-max - sl-W]
+  val [v1, v2] =
+    if key?(fields, "V1") and key?(fields, "V2") :
+      [fields["V1"], fields["V2"]]
+    else if contains?(["MOLDED", "WIREWOUND", "SODFL", "CAPAE"], pkg) :
+      [z-max + (2.0 * courtyard-excess),
+       w-max + (2.0 * courtyard-excess)]
+    else :
+      [z-max + (2.0 * courtyard-excess), 
+       x-max + (2.0 * courtyard-excess)]
+  val [a, b] =
+    if key?(fields, "A") and key?(fields, "B") :
+      [fields["A"], fields["B"]]
+    else :
+      [l-max, w-max]
   val [cmp-body-W, cmp-body-L] = switch([key?(fields, "Cmp-body-W"),
                                          key?(fields, "Cmp-body-L")]) :
     [true, true] : [fields["Cmp-body-W"], fields["Cmp-body-L"]]
     else : [w-max, l-max]
+
+; assign name and description
   val [type-str, type-abbr] = switch(type) :
-    "cap" : ["Capacitor", "CAPC"]
-    "ind" : ["Inductor", "INDC"]
-    "res" : ["Resistor", "RESC"]
-    "dio" : ["Diode", "DIOC"]
+    "cap" : ["Capacitor", "CAP"]
+    "ind" : ["Inductor", "IND"]
+    "res" : ["Resistor", "RES"]
+    "dio" : ["Diode", "DIO"]
+    else : ["", ""]
+  val [pkg-str, pkg-abbr] = switch(pkg) :
+    "CHIP" : ["Chip", "C"]
+    "MOLDED" : ["Molded", "M"]
+    "MELF" : ["MELF", "MELF"]
+    "SODFL" : ["SODFL", "SODFL"]
+    "CAPAE" : ["CAPAE", "CAPAE"]
+    "WIREWOUND" : ["Precision Wire Wound Inductor", "INDP"]
+  val [pol-str, pol-abbr] = 
+    if not polarity-pin or pkg == "WIREWOUND" :
+      ["", ""]
+    else :
+      ["Polarized", "P"]
   val size-str = to-string("%_%_%_%_" % 
                            [to-int((l-max + l-min) / 2.0 * 10.0), 
                             to-int((w-max + w-min) / 2.0 * 10.0), "X",
-                            to-int(a * 10.0)])
+                            to-int(h * 10.0)])
   val [density-str, density-abbr] = switch(density) :
-    "low" : ["Low", "M"]
-    "med" : ["Medium", "N"]
-    "high" : ["High", "L"]
+    "least" : ["Least", "L"]
+    "nominal" : ["Nominal", "N"]
+    "most" : ["Most", "M"]
   val name = switch(key?(fields, "Name")) :
     true : fields["Name"]
-    else : to-string("%_%_%_" % [type-abbr, size-str, density-abbr])
-  val size-l-str = to-string(to-int((l-max + l-min) / 2.0))
-  val size-w-str = to-string(to-int((w-max + w-min) / 2.0))
+    else : to-string("%_%_%_%_%_" % [type-abbr, pkg-abbr, pol-abbr, 
+                                     size-str, density-abbr])
+  println("Name: %_" % [name])
+  val size-l-str = to-string((l-max + l-min) / 2.0)
+  val size-w-str = to-string((w-max + w-min) / 2.0)
   val description = switch(key?(fields, "Description")) :
     true : fields["Description"]
-    else : to-string("Chip %_, 2-Leads, Body %_x%_mm, IPC %_ Density" % 
-                     [type-str, size-l-str, size-w-str, density-str])
-  CHIP(l-min, l-max, w-min, w-max, t-min, t-max, a, type, polarity-pin,
-       s-min, s-max, density, jt-min, jh-min, js-min, l-tol, s-tol, w-tol,
-       fab-tol, placement-tol, courtyard-excess, x, y, center, sl-W, 
-       r1, r2, v1, v2, cl-W, a, b, al-W, cmp-body-W, cmp-body-L, name,
+    else : to-string("%_ %_, 2-Leads, Body %_x%_mm, IPC %_ Density" % 
+                     [pkg-str, type-str, size-l-str, size-w-str, 
+                      density-str])
+  println("Description: %_" % [description])
+
+  TWO-PIN-STRUCT(l-min, l-max, w-min, w-max, t-min, t-max, tw-min, tw-max,
+       e-min, e-max, d-min, d-max, h, type, density, polarity-pin, s-min, 
+       s-max, jt-min, jh-min, js-min, l-tol, s-tol, w-tol, t-tol, tw-tol, 
+       e-tol, fab-tol, placement-tol, courtyard-excess, x, y, center, sl-W, 
+       r1, r2, v1, v2, cl-W, a, b, al-W, cmp-body-W, cmp-body-L, name, 
        description)
 
 ; =======================
-; REQUIRED
+; REQUIRED - ALL
 ; =======================
 ; L-min, L-max - Body Length Range
-; W-min, L-max - Body Width Range
-; T-min, T-max - Bandwidth Range
+; W-min, W-max - Body Width Range
+; T-min, T-max - Lead Length Range
 ; H            - Maximum Height
-; Type         - Package Type - ["cap", "ind", "res", "dio"]
-; Density      - Board Density Level - ["low", "med", "high"]
+; Density      - Board Density Level - ["least", "nominal", "most"]
 
 ; =======================
-; OPTIONAL
+; OPTIONAL - ALL
 ; =======================
 ; Polarity-pin     - Polarity Pin Location
-; S                - Heel spacing
+; S-min, S-max     - Heel spacing
 ; JT-min           - Toe Fillet
 ; JH-min           - Heel Fillet
 ; JS-min           - Side Fillet
 ; L-tol            - Tolerance of overall width of component, inc. leads
 ; S-tol            - Tolerance inner distance heels of opposing lead rows
 ; W-tol            - Tolerance of width of component leads
+; T-tol            - Tolerance of bandwidth of component leads
 ; Fab-tol          - Fabrication Tolerance Assumption
 ; Placement-tol    - Placement Tolerance Assumption
 ; Courtyard-excess - Courtyard Excess
 ; X                - Pad dimension X
 ; Y                - Pad dimension Y
-; Center                - Pad spacing
-; Sl-W          - Silkscreen Line Width
+; Center           - Pad spacing
+; Sl-W             - Silkscreen Line Width
 ; R1               - Silkscreen Dimension R1
 ; R2               - Silkscreen Dimension R2
 ; V1               - Courtyard Dimension V1
 ; V2               - Courtyard Dimension V2
-; Cl-W          - Courtyard Line Width
+; Cl-W             - Courtyard Line Width
 ; A                - Assembly Information Dimension A
 ; B                - Assembly Information Dimension B
-; Al-W          - Assembly Line Width
+; Al-W             - Assembly Line Width
 ; Cmp-body-W       - Component Body Width
 ; Cmp-body-L       - Component Body Length
 ; Name             - Footprint Name
 ; Description      - Footprint Description
-public defstruct CHIP :
+
+; =======================
+; REQUIRED - CHIP
+; =======================
+; Type - Package Type - ["cap", "ind", "res", "dio"]
+
+; =======================
+; REQUIRED - MOLDED
+; =======================
+; Type           - Package Type - ["cap", "ind", "res", "dio"]
+; TW-min, TW-max - Lead Width Range
+
+; ========================
+; OPTIONAL - MOLDED
+; ========================
+; TW-tol - Tolerance of width of molded component leads
+
+; =======================
+; REQUIRED - WIREWOUND 
+; =======================
+; TW-min, TW-max - Lead Width Range
+
+; ========================
+; OPTIONAL - WIREWOUND 
+; ========================
+; TW-tol - Tolerance of width of molded component leads
+
+; =======================
+; REQUIRED - MELF
+; =======================
+; Type - Package Type - ["res", "dio"]
+
+; =======================
+; REQUIRED - SODFL
+; =======================
+; E-min, E-max - Lead Span Range
+; TW-min, TW-max - Lead Width Range
+
+; ========================
+; OPTIONAL - SODFL
+; ========================
+; E-tol - Tolerance of Lead Span Range
+; TW-tol - Tolerance of width of molded component leads
+
+; ========================
+; REQUIRED - CAPAE
+; ========================
+; D-min, D-max - Diameter Range
+
+public defstruct TWO-PIN-STRUCT :
   L-min: Double|? with: (setter => set-L-min)
   L-max: Double|? with: (setter => set-L-max)
   W-min: Double|? with: (setter => set-W-min) 
   W-max: Double|? with: (setter => set-W-max)
   T-min: Double|? with: (setter => set-T-min)
   T-max: Double|? with: (setter => set-T-max)
+  TW-min: Double|? with: (setter => set-TW-min)
+  TW-max: Double|? with: (setter => set-TW-max)
+  E-min: Double|? with: (setter => set-E-min)
+  E-max: Double|? with: (setter => set-E-max)
+  D-min: Double|? with: (setter => set-D-min)
+  D-max: Double|? with: (setter => set-D-max)
   H: Double|? with: (setter => set-H)
   Type: String|? with: (setter => set-Type)
   Density: String|? with: (setter => set-Density)
@@ -199,6 +545,9 @@ public defstruct CHIP :
   L-tol: Double|? with: (setter => set-L-tol)
   S-tol: Double|? with: (setter => set-S-tol)
   W-tol: Double|? with: (setter => set-W-tol)
+  T-tol: Double|? with: (setter => set-T-tol)
+  TW-tol: Double|? with: (setter => set-TW-tol)
+  E-tol: Double|? with: (setter => set-E-tol)
   Fab-tol: Double|? with: (setter => set-Fab-tol)
   Placement-tol: Double|? with: (setter => set-Placement-tol)
   Courtyard-excess: Double|? with: (setter => set-Courtyard-excess)
@@ -219,4 +568,52 @@ public defstruct CHIP :
   Name: String|? with: (setter => set-Name)
   Description: String|? with: (setter => set-Description)
 
+; ====================
+; REQUIRED
+; ====================
+; L-min, L-max   - Body Length Range
+; W-min, W-max   - Body Width Range
+; T-min, T-max   - Lead Length Range
+; TW-min, TW-max - Lead Width Range
+; H              - Maximum Height
+; Type           - Package Type - ["cap", "ind", "res", "dio"]
+; Density        - Board Density Level - ["least", "nominal", "most"]
 
+;public defstruct CHIP :
+;  L-min: Double|? 
+;  L-max: Double|? 
+;  W-min: Double|?  
+;  W-max: Double|? 
+;  T-min: Double|? 
+;  T-max: Double|? 
+;  H: Double|?
+;  Type: String|?
+;  Density: String|?
+;  Polarity-pin: Int|False|?
+;  S-min: Double|?
+;  S-max: Double|?
+;  JT-min: Double|? 
+;  JH-min: Double|? 
+;  JS-min: Double|? 
+;  L-tol: Double|?
+;  S-tol: Double|?
+;  W-tol: Double|?
+;  Fab-tol: Double|?
+;  Placement-tol: Double|?
+;  Courtyard-excess: Double|?
+;  X: Double|?
+;  Y: Double|?
+;  Center: Double|?
+;  Sl-W: Double|?
+;  R1: Double|?
+;  R2: Double|?
+;  V1: Double|?
+;  V2: Double|?
+;  Cl-W: Double|?
+;  A: Double|?
+;  B: Double|?
+;  Al-W: Double|?
+;  Cmp-body-W: Double|?
+;  Cmp-body-L: Double|?
+;  Name: String|?
+;  Description: String|?

@@ -12,15 +12,32 @@ defpackage ocdb/ipc-footprint-generator-test :
   import jitpcb/visualizer
   import ocdb/ipc-footprint-generator
   import ocdb/generic-components
+  import ocdb/land-patterns
 
-pcb-component test :
+pcb-component chip :
   pin p[1]
   pin p[2]
-  package = {gen-res-pkg("0402", true)}(p[1] => p[1], p[2] => p[2])
+  package = {gen-chip-pkg("0402", "nominal", "res", true)}(p[1] => p[1], p[2] => p[2])
+
+pcb-component molded :
+  pin p[1]
+  pin p[2]
+  val fields = [["L-min", 1.95], ["L-max", 2.05], ["W-min", 2.25], ["W-max", 2.35], ["TW-min", 0.45], ["TW-max", 0.55], ["T-min", 0.15], ["T-max", 0.35], ["H", 1.2], ["Type", "res"], ["Density", "nominal"]]
+  package = {gen-molded-pkg(fields)}(p[1] => p[1], p[2] => p[2])
+
+pcb-component melf :
+  pin p[1]
+  pin p[2]
+  val fields = [["L-min", 1.95], ["L-max", 2.05], ["W-min", 2.25], ["W-max", 2.35], ["T-min", 0.15], ["T-max", 0.35], ["H", 1.2], ["Type", "res"], ["Density", "nominal"]]
+  package = {gen-melf-pkg(fields)}(p[1] => p[1], p[2] => p[2])
 
 pcb-module my-design :
   inst r : {gen-res-cmp(1000.0)}
-  inst x : test
+  inst l : {ocdb/texas-instruments/TPS65988/component}
+  inst m : {ocdb/texas-instruments/ISO1540/component} 
+  inst chp : chip 
+  inst mldd : molded
+  inst mlf : melf
   ;inst t : {ocdb/wurth/691412320002M/component}
   
 

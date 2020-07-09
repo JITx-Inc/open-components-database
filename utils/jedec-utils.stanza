@@ -1,0 +1,289 @@
+#use-added-syntax(esir)
+defpackage ocdb/jedec-utils :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import esir/fonts
+  import esir/repl-lib
+  import ocdb/generator-utils
+  import ocdb/land-patterns
+  
+;public defn make-pads (start-pos:String, start-side:Dir, 
+;                       direction:String, n:Int, pad-x:Double, pad-y:Double,
+;                       pad-pitch:Double, rows:Int, sides:Int, 
+;                       vert-row-pitch:Double, hor-row-pitch:Double) :
+;  inside pcb-package :
+;    val row-size = 
+;      ;if sides == 0 and n % rows == 0 :
+;      ;  n / rows
+;      if sides != 0 and n % sides % rows == 0 :
+;        n / sides / rows
+;      else :
+;        fatal("make-pads only supports symmetric pad layouts")
+;    val row-span = to-double(row-size - 1) * pitch
+;    val x0 = switch(start-pos) :
+;      "Left" : (- (row-span / 2.0)) 
+;      "Right" : row-span / 2.0
+;      "Center" : to-double(row-size % 2) * pitch / 2.0
+;    if sides == 0 :
+
+public defn make-two-pads (pad-x:Double, pad-y:Double, pitch:Double, 
+                           court-w:Double, court-h:Double, f-silk:Shape,
+                           pol-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("pol", Top)) = pol-silk 
+    make-two-pads(pad-x, pad-y, pitch, court-w, court-h, f-silk)
+    
+public defn make-two-pads (pad-x:Double, pad-y:Double, pitch:Double,
+                           court-w:Double, court-h:Double, f-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("f-silk", Top)) = f-silk
+    make-two-pads(pad-x, pad-y, pitch, court-w, court-h)
+
+public defn make-two-pads (pad-x:Double, pad-y:Double, pitch:Double,
+                           court-w:Double, court-h:Double) :
+  inside pcb-package :
+    layer(Courtyard(Top)) = Rectangle(court-w, court-h)
+    make-two-pads(pad-x, pad-y, pitch)
+
+public defn make-two-pads (pad-x:Double, pad-y:Double, pitch:Double) :
+  inside pcb-package :
+    pad p[1] : {smd-pad(pad-y, pad-x)} at loc((- pitch) / 2.0, 0.0)
+    pad p[2] : {smd-pad(pad-y, pad-x)} at loc(pitch / 2.0, 0.0)
+
+public defn make-four-pads (start:Tuple<Dir>, direction:String,
+                            pad-x:Double, pad-y:Double, hor-pitch:Double, 
+                            vert-pitch:Double, court-w:Double, 
+                            court-h:Double, f-silk:Shape, pol-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("pol", Top)) = pol-silk 
+    make-four-pads(start, direction, pad-x, pad-y, hor-pitch, vert-pitch, 
+                   court-w, court-h, f-silk)
+
+public defn make-four-pads (start:Tuple<Dir>, direction:String,
+                            pad-x:Double, pad-y:Double, hor-pitch:Double, 
+                            vert-pitch:Double, court-w:Double, 
+                            court-h:Double, f-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("f-silk", Top)) = f-silk 
+    make-four-pads(start, direction, pad-x, pad-y, hor-pitch, vert-pitch, 
+                   court-w, court-h)
+
+public defn make-four-pads (start:Tuple<Dir>, direction:String, 
+                            pad-x:Double, pad-y:Double, hor-pitch:Double, 
+                            vert-pitch:Double, court-w:Double, 
+                            court-h:Double) :
+  inside pcb-package :
+    layer(Courtyard(Top)) = Rectangle(court-w, court-h)
+    make-four-pads(start, direction, pad-x, pad-y, hor-pitch, vert-pitch)
+
+public defn make-four-pads (start:Tuple<Dir>, direction:String, 
+                            pad-x:Double, pad-y:Double, hor-pitch:Double, 
+                            vert-pitch:Double) :
+  val pins = switch([start[0], start[1], direction]) :
+    [Top, Left, "clock"] : [1 2 4 3]
+    [Top, Right, "clock"] : [4 1 3 2]
+    [Bottom, Left, "clock"] : [2 3 1 4]
+    [Bottom, Right, "clock"] : [3 4 2 1]
+    [Top, Left, "a-clock"] : [1 4 2 3]
+    [Top, Right, "a-clock"] : [2 1 3 4]
+    [Bottom, Left, "a-clock"] : [4 3 1 2]
+    [Bottom, Right, "a-clock"] : [3 2 4 1]
+    [Top, Left, "wrap"] : [1 2 3 4]
+    [Top, Right, "wrap"] : [2 1 4 3]
+    [Bottom, Left, "wrap"] : [3 4 1 2]
+    [Bottom, Right, "wrap"] : [4 3 2 1]
+    else :
+      fatal("Orientation of pins not supported")
+  make-four-pads(pins, pad-x, pad-y, hor-pitch, vert-pitch)
+
+public defn make-four-pads (pin-order:Tuple<Int>, pad-x:Double, 
+                            pad-y:Double, hor-pitch:Double, 
+                            vert-pitch:Double, court-w:Double, 
+                            court-h:Double, f-silk:Shape, pol-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("pol", Top)) = pol-silk 
+    make-four-pads(pin-order, pad-x, pad-y, hor-pitch, vert-pitch, court-w,
+                   court-h, f-silk)
+
+public defn make-four-pads (pin-order:Tuple<Int>, pad-x:Double, 
+                            pad-y:Double, hor-pitch:Double, 
+                            vert-pitch:Double, court-w:Double, 
+                            court-h:Double, f-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("f-silk", Top)) = f-silk 
+    make-four-pads(pin-order, pad-x, pad-y, hor-pitch, vert-pitch, court-w,
+                   court-h)
+
+public defn make-four-pads (pin-order:Tuple<Int>, pad-x:Double, 
+                            pad-y:Double, hor-pitch:Double, 
+                            vert-pitch:Double, court-w:Double, 
+                            court-h:Double) :
+  inside pcb-package :
+    layer(Courtyard(Top)) = Rectangle(court-w, court-h)
+    make-four-pads(pin-order, pad-x, pad-y, hor-pitch, vert-pitch)
+
+public defn make-four-pads (pin-order:Tuple<Int>, pad-x:Double, 
+                            pad-y:Double, hor-pitch:Double, 
+                            vert-pitch:Double) :
+  inside pcb-package :
+    for (l in grid-locs(2, 2, hor-pitch, vert-pitch), i in pin-order) do :
+      pad p[i] : {smd-pad(pad-y, pad-x)} at l
+
+public defn make-two-sided-pads (start:Tuple<Dir>, n:Int,
+                                 pad-x:Double, pad-y:Double,
+                                 hor-pitch:Double, pin-pitch:Double,
+                                 court-w:Double, court-h:Double,
+                                 f-silk:Shape, pol-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("pol", Top)) = pol-silk 
+    make-two-sided-pads(start, n, pad-x, pad-y, hor-pitch, pin-pitch,
+                        court-w, court-h, f-silk)
+                        
+public defn make-two-sided-pads (start:Tuple<Dir>, n:Int,
+                                 pad-x:Double, pad-y:Double,
+                                 hor-pitch:Double, pin-pitch:Double,
+                                 court-w:Double, court-h:Double,
+                                 f-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("f-silk", Top)) = f-silk 
+    make-two-sided-pads(start, n, pad-x, pad-y, hor-pitch, pin-pitch,
+                        court-w, court-h)
+
+public defn make-two-sided-pads (start:Tuple<Dir>, n:Int,
+                                 pad-x:Double, pad-y:Double,
+                                 hor-pitch:Double, pin-pitch:Double,
+                                 court-w:Double, court-h:Double) :
+  inside pcb-package :
+    layer(Courtyard(Top)) = Rectangle(court-w, court-h)
+    make-two-sided-pads(start, n, pad-x, pad-y, hor-pitch, pin-pitch)
+
+public defn make-two-sided-pads (start:Tuple<Dir>, n:Int, 
+                                 pad-x:Double, pad-y:Double, 
+                                 hor-pitch:Double, pin-pitch:Double) :
+  inside pcb-package :
+    val x0 = (- (hor-pitch / 2.0))
+    val y0 = (to-double((n / 2) - 1) * pin-pitch) / 2.0
+    val [left, right] = [loc(x0, y0, -90.0), loc((- x0), (- y0), 90.0)]
+    val [l0, l1] = switch(start) :
+      [Top, Left] : [left, right]
+      [Bottom, Right] : [right, left]
+      else :
+        fatal("Orientation of pins not supported")
+    val pin-row = to-list(row-locs(W, n / 2, pin-pitch))
+    for (i in 0 to (n / 2), l in pin-row) do :
+      pad p[i + 1] : {smd-pad(pad-y, pad-x)} at l0 * l
+    for (i in (n / 2) to n, l in pin-row) do :
+      pad p[i + 1] : {smd-pad(pad-y, pad-x)} at l1 * l
+
+public defn make-four-sided-pads (start:Tuple<Dir>, m:Int, n:Int,
+                                  pad-x:Double, pad-y:Double, 
+                                  hor-pitch:Double, vert-pitch:Double,
+                                  pin-pitch:Double, court-w:Double,
+                                  court-h:Double, f-silk:Shape, 
+                                  pol-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("pol", Top)) = pol-silk 
+    make-four-sided-pads(start, m, n, pad-x, pad-y, hor-pitch, vert-pitch, 
+                         pin-pitch, court-w, court-h, f-silk)
+
+public defn make-four-sided-pads (start:Tuple<Dir>, m:Int, n:Int,
+                                  pad-x:Double, pad-y:Double, 
+                                  hor-pitch:Double, vert-pitch:Double,
+                                  pin-pitch:Double, court-w:Double,
+                                  court-h:Double, f-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("f-silk", Top)) = f-silk 
+    make-four-sided-pads(start, m, n, pad-x, pad-y, hor-pitch, vert-pitch, 
+                         pin-pitch, court-w, court-h)
+
+public defn make-four-sided-pads (start:Tuple<Dir>, m:Int, n:Int,
+                                  pad-x:Double, pad-y:Double, 
+                                  hor-pitch:Double, vert-pitch:Double,
+                                  pin-pitch:Double, court-w:Double,
+                                  court-h:Double) :
+  inside pcb-package :
+    layer(Courtyard(Top)) = Rectangle(court-w, court-h)
+    make-four-sided-pads(start, m, n, pad-x, pad-y, hor-pitch, vert-pitch, 
+                         pin-pitch)
+                                
+
+public defn make-four-sided-pads (start:Tuple<Dir|String>, m:Int, 
+                                  n:Int, pad-x:Double, pad-y:Double, 
+                                  hor-pitch:Double, vert-pitch:Double,
+                                  pin-pitch:Double) :
+  inside pcb-package :
+    val x0 = (- (hor-pitch / 2.0))
+    val y0 = (to-double(n - 1) * pin-pitch) / 2.0
+    val [left, right] = [loc(x0, y0, -90.0), loc((- x0), (- y0), 90.0)]
+    val [top, bottom] = [loc(y0, (- x0), 180.0), loc((- y0), x0, 0.0)]
+    val m-row = to-list(loc(0.0,0.0,0.0) * row-locs(W, m, pin-pitch))
+    val n-row = to-list(loc(0.0,0.0,0.0) * row-locs(W, n, pin-pitch))
+    val pin-pad = smd-pad(pad-y, pad-x)
+    val n-pins = 2 * (m + n)
+    ; TODO cleanup and add functions to reduce repetitive code
+    val [l0, l1, l2, l3, row0, row1, p0, p1, p2, p3] = switch(start) :
+      [Top, Left] : [left, bottom, right, top, n-row, m-row,
+                     0 to n, n to (n + m), (n + m) to ((2 * n) + m),
+                     ((2 * n) + m) to (2 * (n + m))]
+      [Bottom, Left] : [bottom, right, top, left, m-row, n-row, 
+                     0 to m, m to (m + n), (m + n) to ((2 * m) + n),
+                     ((2 * m) + n) to (2 * (m + n))]
+      [Bottom, Right] : [right, top, left, bottom, n-row, m-row, 
+                     0 to n, n to (n + m), (n + m) to ((2 * n) + m),
+                     ((2 * n) + m) to (2 * (n + m))]
+      [Top, Right] : [top, left, bottom, right, m-row, n-row, 
+                     0 to m, m to (m + n), (m + n) to ((2 * m) + n),
+                     ((2 * m) + n) to n-pins]
+      [Left, "Center"] : 
+        if n % 2 == 0 :
+          [left, bottom, right, top, n-row, m-row,
+          cat((n-pins - (n / 2)) to n-pins, 0 through (n / 2)),
+          ((n / 2) + 1) through ((n / 2) + m), 
+          ((n / 2) + m + 1) through ((n / 2) + m + n),
+          ((n / 2) + m + n + 1) to (n-pins - (n / 2))]
+        else :
+          fatal("Can't determine Center for an even number of pins")
+      [Bottom, "Center"] : 
+        if m % 2 == 0 :
+          [bottom, right, top, left, m-row, n-row,
+          cat((n-pins - (m / 2)) to n-pins, 0 through (m / 2)),
+          ((m / 2) + 1) through ((m / 2) + n), 
+          ((m / 2) + n + 1) through ((m / 2) + n + m),
+          ((m / 2) + n + m + 1) to (n-pins - (m / 2))]
+        else :
+          fatal("Can't determine Center for an even number of pins")
+      [Right, "Center"] :
+        if n % 2 == 0 :
+          [right, top, left, bottom, n-row, m-row,
+          cat((n-pins - (n / 2)) to n-pins, 0 through (n / 2)),
+          ((n / 2) + 1) through ((n / 2) + m), 
+          ((n / 2) + m + 1) through ((n / 2) + m + n),
+          ((n / 2) + m + n + 1) to (n-pins - (n / 2))]
+        else :
+          fatal("Can't determine Center for an even number of pins")
+      [Top, "Center"] : 
+        if m % 2 == 0 :
+          [top, left, bottom, right, m-row, n-row,
+          cat((n-pins - (m / 2)) to n-pins, 0 through (m / 2)),
+          ((m / 2) + 1) through ((m / 2) + n), 
+          ((m / 2) + n + 1) through ((m / 2) + n + m),
+          ((m / 2) + n + m + 1) to (n-pins - (m / 2))]
+        else :
+          fatal("Can't determine Center for an even number of pins")
+      else :
+        fatal("Orientation of pins not supported")
+    for (i in p0, l in row0) do :
+      pad p[i + 1] : {pin-pad} at l0 * l
+    for (i in p1, l in row1) do :
+      pad p[i + 1] : {pin-pad} at l1 * l
+    for (i in p2, l in row0) do :
+      pad p[i + 1] : {pin-pad} at l2 * l
+    for (i in p3, l in row1) do :
+      pad p[i + 1] : {pin-pad} at l3 * l
+
+;TODO make staggered bga and different pitches generator
+;public defn make-bga-pads (
