@@ -54,7 +54,198 @@ public defn make-two-pads (pad-x:Double, pad-y:Double, pitch:Double) :
     pad p[1] : {smd-pad(pad-y, pad-x)} at loc((- pitch) / 2.0, 0.0)
     pad p[2] : {smd-pad(pad-y, pad-x)} at loc(pitch / 2.0, 0.0)
 
-public defn make-four-pads (start:Tuple<Dir>, direction:String,
+public defn make-two-pads-offset (pad-x:Double, pad-y:Double, pitch:Double,
+                                  offset:Double, court-w:Double, 
+                                  court-h:Double, f-silk:Shape, 
+                                  pol-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("pol", Top)) = pol-silk 
+    make-two-pads-offset(pad-x, pad-y, pitch, offset, court-w, court-h, 
+                         f-silk)
+    
+public defn make-two-pads-offset (pad-x:Double, pad-y:Double, pitch:Double,
+                                  offset:Double, court-w:Double, 
+                                  court-h:Double, f-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("f-silk", Top)) = f-silk
+    make-two-pads-offset(pad-x, pad-y, pitch, offset, court-w, court-h)
+
+public defn make-two-pads-offset (pad-x:Double, pad-y:Double, pitch:Double,
+                                  offset:Double, court-w:Double, 
+                                  court-h:Double) :
+  inside pcb-package :
+    layer(Courtyard(Top)) = Rectangle(court-w, court-h)
+    make-two-pads-offset(pad-x, pad-y, pitch, offset)
+
+public defn make-two-pads-offset (pad-x:Double, pad-y:Double, pitch:Double,
+                                  offset:Double) :
+  inside pcb-package :
+    pad p[1] : {smd-pad(pad-y, pad-x)} at loc((offset - pitch), 0.0)
+    pad p[2] : {smd-pad(pad-y, pad-x)} at loc(offset, 0.0)
+
+public defn make-three-pads-offset (pad-x1:Double, pad-x2:Double, 
+                                    pad-y1:Double, pad-y2:Double,
+                                    hor-pitch:Double,
+                                    hor-pitch-offset:Double, 
+                                    vert-pitch:Double, court-w:Double, 
+                                    court-h:Double, f-silk:Shape, 
+                                    pol-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("pol", Top)) = pol-silk 
+    make-three-pads-offset(pad-x1, pad-x2, pad-y1, pad-y2, hor-pitch, 
+                           hor-pitch-offset, vert-pitch, court-w, court-h, 
+                           f-silk)
+    
+public defn make-three-pads-offset (pad-x1:Double, pad-x2:Double, 
+                                    pad-y1:Double, pad-y2:Double,
+                                    hor-pitch:Double,
+                                    hor-pitch-offset:Double, 
+                                    vert-pitch:Double, court-w:Double, 
+                                    court-h:Double, f-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("f-silk", Top)) = f-silk
+    make-three-pads-offset(pad-x1, pad-x2, pad-y1, pad-y2, hor-pitch, 
+                           hor-pitch-offset, vert-pitch, court-w, court-h)
+
+public defn make-three-pads-offset (pad-x1:Double, pad-x2:Double, 
+                                    pad-y1:Double, pad-y2:Double,
+                                    hor-pitch:Double,
+                                    hor-pitch-offset:Double, 
+                                    vert-pitch:Double, court-w:Double, 
+                                    court-h:Double) :
+  inside pcb-package :
+    layer(Courtyard(Top)) = Rectangle(court-w, court-h)
+    make-three-pads-offset(pad-x1, pad-x2, pad-y1, pad-y2, hor-pitch, 
+                           hor-pitch-offset, vert-pitch)
+
+public defn make-three-pads-offset (pad-x1:Double, pad-x2:Double, 
+                                    pad-y1:Double, pad-y2:Double,
+                                    hor-pitch:Double, 
+                                    hor-pitch-offset:Double,
+                                    vert-pitch:Double) :
+  inside pcb-package :
+    pad p[1] : {smd-pad(pad-y1, pad-x1)} at loc((hor-pitch-offset - 
+                                                 hor-pitch),
+                                                vert-pitch / 2.0)
+    pad p[2] : {smd-pad(pad-y1, pad-x1)} at loc((hor-pitch-offset - 
+                                                 hor-pitch),
+                                                (- (vert-pitch / 2.0)))
+    pad p[3] : {smd-pad(pad-y2, pad-x2)} at loc(hor-pitch-offset, 0.0)
+
+defn get-pin-order (start:Tuple<String>, direction:String) -> Tuple<Int> :
+  switch([start[0], start[1], direction]) :
+    ["Top", "Left", "clock"] : [1 2 4 3]
+    ["Top", "Right", "clock"] : [4 1 3 2]
+    ["Bottom", "Left", "clock"] : [2 3 1 4]
+    ["Bottom", "Right", "clock"] : [3 4 2 1]
+    ["Top", "Left", "a-clock"] : [1 4 2 3]
+    ["Top", "Right", "a-clock"] : [2 1 3 4]
+    ["Bottom", "Left", "a-clock"] : [4 3 1 2]
+    ["Bottom", "Right", "a-clock"] : [3 2 4 1]
+    ["Top", "Left", "wrap"] : [1 2 3 4]
+    ["Top", "Right", "wrap"] : [2 1 4 3]
+    ["Bottom", "Left", "wrap"] : [3 4 1 2]
+    ["Bottom", "Right", "wrap"] : [4 3 2 1]
+    else :
+      fatal("Orientation of pins not supported")
+
+public defn make-four-pads-offset (start:Tuple<String>, direction:String, 
+                                   pad-x1:Double, pad-y1:Double, 
+                                   hor-pitch:Double,
+                                   hor-pitch-offset:Double, 
+                                   vert-pitch:Double, court-w:Double, 
+                                   court-h:Double, f-silk:Shape, 
+                                   pol-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("pol", Top)) = pol-silk 
+    make-four-pads-offset(start, direction, pad-x1, pad-y1, hor-pitch, 
+                          hor-pitch-offset, vert-pitch, court-w, court-h, 
+                          f-silk)
+    
+public defn make-four-pads-offset (start:Tuple<String>, direction:String, 
+                                   pad-x1:Double, pad-y1:Double, 
+                                   hor-pitch:Double,
+                                   hor-pitch-offset:Double, 
+                                   vert-pitch:Double, court-w:Double, 
+                                   court-h:Double, f-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("f-silk", Top)) = f-silk
+    make-four-pads-offset(start, direction, pad-x1, pad-y1, hor-pitch, 
+                          hor-pitch-offset, vert-pitch, court-w, court-h)
+
+public defn make-four-pads-offset (start:Tuple<String>, direction:String, 
+                                   pad-x1:Double, pad-y1:Double, 
+                                   hor-pitch:Double,
+                                   hor-pitch-offset:Double, 
+                                   vert-pitch:Double, court-w:Double, 
+                                   court-h:Double) :
+  inside pcb-package :
+    layer(Courtyard(Top)) = Rectangle(court-w, court-h)
+    make-four-pads-offset(start, direction, pad-x1, pad-y1, hor-pitch, 
+                          hor-pitch-offset, vert-pitch)
+
+public defn make-four-pads-offset (start:Tuple<String>, direction:String, 
+                                   pad-x1:Double, pad-y1:Double, 
+                                   hor-pitch:Double,
+                                   hor-pitch-offset:Double, 
+                                   vert-pitch:Double) :
+  val pin-order = get-pin-order(start, direction)
+  make-four-pads-offset(pin-order, pad-x1, pad-y1, hor-pitch, 
+                        hor-pitch-offset, vert-pitch)
+
+public defn make-four-pads-offset (pin-order:Tuple<Int>, pad-x1:Double, 
+                                   pad-y1:Double, hor-pitch:Double,
+                                   hor-pitch-offset:Double, 
+                                   vert-pitch:Double, court-w:Double, 
+                                   court-h:Double, f-silk:Shape, 
+                                   pol-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("pol", Top)) = pol-silk 
+    make-four-pads-offset(pin-order, pad-x1, pad-y1, hor-pitch, 
+                          hor-pitch-offset, vert-pitch, court-w, court-h, 
+                          f-silk)
+    
+public defn make-four-pads-offset (pin-order:Tuple<Int>, pad-x1:Double, 
+                                   pad-y1:Double, hor-pitch:Double,
+                                   hor-pitch-offset:Double, 
+                                   vert-pitch:Double, court-w:Double, 
+                                   court-h:Double, f-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("f-silk", Top)) = f-silk
+    make-four-pads-offset(pin-order, pad-x1, pad-y1, hor-pitch, 
+                          hor-pitch-offset, vert-pitch, court-w, court-h)
+
+public defn make-four-pads-offset (pin-order:Tuple<Int>, pad-x1:Double, 
+                                   pad-y1:Double, hor-pitch:Double,
+                                   hor-pitch-offset:Double, 
+                                   vert-pitch:Double, court-w:Double, 
+                                   court-h:Double) :
+  inside pcb-package :
+    layer(Courtyard(Top)) = Rectangle(court-w, court-h)
+    make-four-pads-offset(pin-order, pad-x1, pad-y1, hor-pitch, 
+                          hor-pitch-offset, vert-pitch)
+
+public defn make-four-pads-offset (pin-order:Tuple<Int>, pad-x1:Double, 
+                                   pad-y1:Double, hor-pitch:Double, 
+                                   hor-pitch-offset:Double,
+                                   vert-pitch:Double) :
+  inside pcb-package :
+    pad p[pin-order[0]] : {smd-pad(pad-y1, pad-x1)} at 
+                                            loc((hor-pitch-offset - 
+                                                 hor-pitch),
+                                                vert-pitch / 2.0)
+    pad p[pin-order[1]] : {smd-pad(pad-y1, pad-x1)} at 
+                                            loc((hor-pitch-offset - 
+                                                 hor-pitch),
+                                                (- (vert-pitch / 2.0)))
+    pad p[pin-order[2]] : {smd-pad(pad-y1, pad-x1)} at 
+                                            loc(hor-pitch-offset, 
+                                                vert-pitch / 2.0)
+    pad p[pin-order[3]] : {smd-pad(pad-y1, pad-x1)} at 
+                                            loc(hor-pitch-offset, 
+                                                (- (vert-pitch / 2.0)))
+
+public defn make-four-pads (start:Tuple<String>, direction:String,
                             pad-x:Double, pad-y:Double, hor-pitch:Double, 
                             vert-pitch:Double, court-w:Double, 
                             court-h:Double, f-silk:Shape, pol-silk:Shape) :
@@ -63,7 +254,7 @@ public defn make-four-pads (start:Tuple<Dir>, direction:String,
     make-four-pads(start, direction, pad-x, pad-y, hor-pitch, vert-pitch, 
                    court-w, court-h, f-silk)
 
-public defn make-four-pads (start:Tuple<Dir>, direction:String,
+public defn make-four-pads (start:Tuple<String>, direction:String,
                             pad-x:Double, pad-y:Double, hor-pitch:Double, 
                             vert-pitch:Double, court-w:Double, 
                             court-h:Double, f-silk:Shape) :
@@ -72,7 +263,7 @@ public defn make-four-pads (start:Tuple<Dir>, direction:String,
     make-four-pads(start, direction, pad-x, pad-y, hor-pitch, vert-pitch, 
                    court-w, court-h)
 
-public defn make-four-pads (start:Tuple<Dir>, direction:String, 
+public defn make-four-pads (start:Tuple<String>, direction:String, 
                             pad-x:Double, pad-y:Double, hor-pitch:Double, 
                             vert-pitch:Double, court-w:Double, 
                             court-h:Double) :
@@ -80,25 +271,11 @@ public defn make-four-pads (start:Tuple<Dir>, direction:String,
     layer(Courtyard(Top)) = Rectangle(court-w, court-h)
     make-four-pads(start, direction, pad-x, pad-y, hor-pitch, vert-pitch)
 
-public defn make-four-pads (start:Tuple<Dir>, direction:String, 
+public defn make-four-pads (start:Tuple<String>, direction:String, 
                             pad-x:Double, pad-y:Double, hor-pitch:Double, 
                             vert-pitch:Double) :
-  val pins = switch([start[0], start[1], direction]) :
-    [Top, Left, "clock"] : [1 2 4 3]
-    [Top, Right, "clock"] : [4 1 3 2]
-    [Bottom, Left, "clock"] : [2 3 1 4]
-    [Bottom, Right, "clock"] : [3 4 2 1]
-    [Top, Left, "a-clock"] : [1 4 2 3]
-    [Top, Right, "a-clock"] : [2 1 3 4]
-    [Bottom, Left, "a-clock"] : [4 3 1 2]
-    [Bottom, Right, "a-clock"] : [3 2 4 1]
-    [Top, Left, "wrap"] : [1 2 3 4]
-    [Top, Right, "wrap"] : [2 1 4 3]
-    [Bottom, Left, "wrap"] : [3 4 1 2]
-    [Bottom, Right, "wrap"] : [4 3 2 1]
-    else :
-      fatal("Orientation of pins not supported")
-  make-four-pads(pins, pad-x, pad-y, hor-pitch, vert-pitch)
+  val pin-order = get-pin-order(start, direction)
+  make-four-pads(pin-order, pad-x, pad-y, hor-pitch, vert-pitch)
 
 public defn make-four-pads (pin-order:Tuple<Int>, pad-x:Double, 
                             pad-y:Double, hor-pitch:Double, 
@@ -133,7 +310,7 @@ public defn make-four-pads (pin-order:Tuple<Int>, pad-x:Double,
     for (l in grid-locs(2, 2, hor-pitch, vert-pitch), i in pin-order) do :
       pad p[i] : {smd-pad(pad-y, pad-x)} at l
 
-public defn make-two-sided-pads (start:Tuple<Dir>, n:Int,
+public defn make-two-sided-pads (start:Tuple<String>, n:Int,
                                  pad-x:Double, pad-y:Double,
                                  hor-pitch:Double, pin-pitch:Double,
                                  court-w:Double, court-h:Double,
@@ -143,7 +320,7 @@ public defn make-two-sided-pads (start:Tuple<Dir>, n:Int,
     make-two-sided-pads(start, n, pad-x, pad-y, hor-pitch, pin-pitch,
                         court-w, court-h, f-silk)
                         
-public defn make-two-sided-pads (start:Tuple<Dir>, n:Int,
+public defn make-two-sided-pads (start:Tuple<String>, n:Int,
                                  pad-x:Double, pad-y:Double,
                                  hor-pitch:Double, pin-pitch:Double,
                                  court-w:Double, court-h:Double,
@@ -153,7 +330,7 @@ public defn make-two-sided-pads (start:Tuple<Dir>, n:Int,
     make-two-sided-pads(start, n, pad-x, pad-y, hor-pitch, pin-pitch,
                         court-w, court-h)
 
-public defn make-two-sided-pads (start:Tuple<Dir>, n:Int,
+public defn make-two-sided-pads (start:Tuple<String>, n:Int,
                                  pad-x:Double, pad-y:Double,
                                  hor-pitch:Double, pin-pitch:Double,
                                  court-w:Double, court-h:Double) :
@@ -161,7 +338,7 @@ public defn make-two-sided-pads (start:Tuple<Dir>, n:Int,
     layer(Courtyard(Top)) = Rectangle(court-w, court-h)
     make-two-sided-pads(start, n, pad-x, pad-y, hor-pitch, pin-pitch)
 
-public defn make-two-sided-pads (start:Tuple<Dir>, n:Int, 
+public defn make-two-sided-pads (start:Tuple<String>, n:Int, 
                                  pad-x:Double, pad-y:Double, 
                                  hor-pitch:Double, pin-pitch:Double) :
   inside pcb-package :
@@ -169,8 +346,8 @@ public defn make-two-sided-pads (start:Tuple<Dir>, n:Int,
     val y0 = (to-double((n / 2) - 1) * pin-pitch) / 2.0
     val [left, right] = [loc(x0, y0, -90.0), loc((- x0), (- y0), 90.0)]
     val [l0, l1] = switch(start) :
-      [Top, Left] : [left, right]
-      [Bottom, Right] : [right, left]
+      ["Top", "Left"] : [left, right]
+      ["Bottom", "Right"] : [right, left]
       else :
         fatal("Orientation of pins not supported")
     val pin-row = to-list(row-locs(W, n / 2, pin-pitch))
@@ -179,7 +356,7 @@ public defn make-two-sided-pads (start:Tuple<Dir>, n:Int,
     for (i in (n / 2) to n, l in pin-row) do :
       pad p[i + 1] : {smd-pad(pad-y, pad-x)} at l1 * l
 
-public defn make-four-sided-pads (start:Tuple<Dir>, m:Int, n:Int,
+public defn make-four-sided-pads (start:Tuple<String>, m:Int, n:Int,
                                   pad-x:Double, pad-y:Double, 
                                   hor-pitch:Double, vert-pitch:Double,
                                   pin-pitch:Double, court-w:Double,
@@ -190,7 +367,7 @@ public defn make-four-sided-pads (start:Tuple<Dir>, m:Int, n:Int,
     make-four-sided-pads(start, m, n, pad-x, pad-y, hor-pitch, vert-pitch, 
                          pin-pitch, court-w, court-h, f-silk)
 
-public defn make-four-sided-pads (start:Tuple<Dir>, m:Int, n:Int,
+public defn make-four-sided-pads (start:Tuple<String>, m:Int, n:Int,
                                   pad-x:Double, pad-y:Double, 
                                   hor-pitch:Double, vert-pitch:Double,
                                   pin-pitch:Double, court-w:Double,
@@ -200,7 +377,7 @@ public defn make-four-sided-pads (start:Tuple<Dir>, m:Int, n:Int,
     make-four-sided-pads(start, m, n, pad-x, pad-y, hor-pitch, vert-pitch, 
                          pin-pitch, court-w, court-h)
 
-public defn make-four-sided-pads (start:Tuple<Dir>, m:Int, n:Int,
+public defn make-four-sided-pads (start:Tuple<String>, m:Int, n:Int,
                                   pad-x:Double, pad-y:Double, 
                                   hor-pitch:Double, vert-pitch:Double,
                                   pin-pitch:Double, court-w:Double,
@@ -211,7 +388,7 @@ public defn make-four-sided-pads (start:Tuple<Dir>, m:Int, n:Int,
                          pin-pitch)
                                 
 
-public defn make-four-sided-pads (start:Tuple<Dir|String>, m:Int, 
+public defn make-four-sided-pads (start:Tuple<String>, m:Int, 
                                   n:Int, pad-x:Double, pad-y:Double, 
                                   hor-pitch:Double, vert-pitch:Double,
                                   pin-pitch:Double) :
@@ -226,19 +403,19 @@ public defn make-four-sided-pads (start:Tuple<Dir|String>, m:Int,
     val n-pins = 2 * (m + n)
     ; TODO cleanup and add functions to reduce repetitive code
     val [l0, l1, l2, l3, row0, row1, p0, p1, p2, p3] = switch(start) :
-      [Top, Left] : [left, bottom, right, top, n-row, m-row,
+      ["Top", "Left"] : [left, bottom, right, top, n-row, m-row,
                      0 to n, n to (n + m), (n + m) to ((2 * n) + m),
                      ((2 * n) + m) to (2 * (n + m))]
-      [Bottom, Left] : [bottom, right, top, left, m-row, n-row, 
+      ["Bottom", "Left"] : [bottom, right, top, left, m-row, n-row, 
                      0 to m, m to (m + n), (m + n) to ((2 * m) + n),
                      ((2 * m) + n) to (2 * (m + n))]
-      [Bottom, Right] : [right, top, left, bottom, n-row, m-row, 
+      ["Bottom", "Right"] : [right, top, left, bottom, n-row, m-row, 
                      0 to n, n to (n + m), (n + m) to ((2 * n) + m),
                      ((2 * n) + m) to (2 * (n + m))]
-      [Top, Right] : [top, left, bottom, right, m-row, n-row, 
+      ["Top", "Right"] : [top, left, bottom, right, m-row, n-row, 
                      0 to m, m to (m + n), (m + n) to ((2 * m) + n),
                      ((2 * m) + n) to n-pins]
-      [Left, "Center"] : 
+      ["Left", "Center"] : 
         if n % 2 == 0 :
           [left, bottom, right, top, n-row, m-row,
           cat((n-pins - (n / 2)) to n-pins, 0 through (n / 2)),
@@ -247,7 +424,7 @@ public defn make-four-sided-pads (start:Tuple<Dir|String>, m:Int,
           ((n / 2) + m + n + 1) to (n-pins - (n / 2))]
         else :
           fatal("Can't determine Center for an even number of pins")
-      [Bottom, "Center"] : 
+      ["Bottom", "Center"] : 
         if m % 2 == 0 :
           [bottom, right, top, left, m-row, n-row,
           cat((n-pins - (m / 2)) to n-pins, 0 through (m / 2)),
@@ -256,7 +433,7 @@ public defn make-four-sided-pads (start:Tuple<Dir|String>, m:Int,
           ((m / 2) + n + m + 1) to (n-pins - (m / 2))]
         else :
           fatal("Can't determine Center for an even number of pins")
-      [Right, "Center"] :
+      ["Right", "Center"] :
         if n % 2 == 0 :
           [right, top, left, bottom, n-row, m-row,
           cat((n-pins - (n / 2)) to n-pins, 0 through (n / 2)),
@@ -265,7 +442,7 @@ public defn make-four-sided-pads (start:Tuple<Dir|String>, m:Int,
           ((n / 2) + m + n + 1) to (n-pins - (n / 2))]
         else :
           fatal("Can't determine Center for an even number of pins")
-      [Top, "Center"] : 
+      ["Top", "Center"] : 
         if m % 2 == 0 :
           [top, left, bottom, right, m-row, n-row,
           cat((n-pins - (m / 2)) to n-pins, 0 through (m / 2)),

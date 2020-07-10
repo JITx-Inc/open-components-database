@@ -46,7 +46,7 @@ public pcb-package gen-chip-pkg (f-list:Tuple<Tuple<?>>) :
 public pcb-package gen-molded-pkg (f-list:Tuple<Tuple<?>>) :
   gen-two-pin-pkg(f-list, "MOLDED")
 
-public pcb-package gen-molded-pkg (f-list:Tuple<Tuple<?>>) :
+public pcb-package gen-wirewound-pkg (f-list:Tuple<Tuple<?>>) :
   gen-two-pin-pkg(f-list, "WIREWOUND")
 
 public pcb-package gen-melf-pkg (f-list:Tuple<Tuple<?>>) :
@@ -70,8 +70,24 @@ public defn gen-two-pin-pkg (f-list:Tuple<Tuple<?>>, pkg:String) :
     name = Name(cmp)
     description = Description(cmp)
     ref-label()
+
+public pcb-package gen-dfn-pkg (f-list:Tuple<Tuple<?>>) :
+  val fields = HashTable<String, ?>()
+  for f in f-list do :
+    fields[f[0]] = f[1]
+  val cmp = make-dfn-struct(fields)
+  switch(Type(cmp)) :
+    2 : make-two-pads-offset(X1(cmp), Y1(cmp), C1(cmp), C1-o(cmp), V1(cmp), 
+                             V2(cmp))
+    3 : make-three-pads-offset(X1(cmp), X2(cmp), Y1(cmp), Y2(cmp), C1(cmp),
+                               C1-o(cmp), C2(cmp), V1(cmp), V2(cmp))
+    4 : make-four-pads-offset(["Top", "Left"], "a-clock", X1(cmp), Y1(cmp),
+                              C1(cmp), C1-o(cmp), C2(cmp), V1(cmp), V2(cmp))
+  name = Name(cmp)
+  description = Description(cmp)
+  ref-label()
   
-defn get-fillet-values (pkg:String, predicate:Double, density:String) 
+defn two-pin-fillet-values (pkg:String, predicate:Double, density:String) 
                                                           -> [?, ?, ?, ?] :
   println("predicate: %_" % [predicate])
   switch(pkg) :
@@ -187,7 +203,6 @@ defn get-fillet-values (pkg:String, predicate:Double, density:String)
 
 public defn make-two-pin-struct (fields:HashTable<String, ?>, pkg:String) 
                                                          -> TWO-PIN-STRUCT :
-;TODO add component types here as you add support for them
   if not contains?(["CHIP", "MOLDED", "WIREWOUND", "MELF", "SODFL", "CAPAE"]
                    , pkg) :
     fatal("Component type not supported")
@@ -287,7 +302,6 @@ public defn make-two-pin-struct (fields:HashTable<String, ?>, pkg:String)
 
 ; assign optional values for fillets and courtyard excess  
   val fillet-fields = ["JT-min", "JH-min", "JS-min", "Courtyard-excess"]
-  val has-fields? = all?(key?{fields, _}, fillet-fields)
   val predicate = switch(pkg) :
     ; predicate is average component length
     "CHIP" : (l-min + l-max) / 2.0
@@ -299,14 +313,14 @@ public defn make-two-pin-struct (fields:HashTable<String, ?>, pkg:String)
     "MELF" : 0.0
     ; no predicate for SODFL components
     "SODFL" : 0.0
-    ; predicate is max courtyard dimension
-    "CAPAE" : max((l-min + l-max) / 2.0, (w-min + w-max) / 2.0)
+    ; predicate is courtyard length 
+    "CAPAE" : (l-min + l-max) / 2.0
   val [jt-min, jh-min, js-min, courtyard-excess] = 
-    if has-fields? : 
+    if all?(key?{fields, _}, fillet-fields) : 
       [fields["JT-min"], fields["JH-min"], fields["JS-min"], 
        fields["Courtyard-excess"]]
     else :
-      get-fillet-values(pkg, predicate, density)
+      two-pin-fillet-values(pkg, predicate, density)
   println("%_ %_ %_ %_" % [jt-min, jh-min, js-min, courtyard-excess])
 
 ; assign optional values for fab and placement tolerances
@@ -362,7 +376,7 @@ public defn make-two-pin-struct (fields:HashTable<String, ?>, pkg:String)
     if key?(fields, "R1") and key?(fields, "R2") :
       [fields["R1"], fields["R2"]]
     else if contains?(["MOLDED", "WIREWOUND", "SODFL", "CAPAE"], pkg) :
-      [l-max - (2.0 * sl-W), w-max - sl-W]
+      [l-max, w-max]
     else : [g-min - (2.0 * sl-W), x-max - sl-W]
   val [v1, v2] =
     if key?(fields, "V1") and key?(fields, "V2") :
@@ -402,9 +416,9 @@ public defn make-two-pin-struct (fields:HashTable<String, ?>, pkg:String)
       ["", ""]
     else :
       ["Polarized", "P"]
-  val size-str = to-string("%_%_%_%_" % 
+  val size-str = to-string("%_%_X%_" % 
                            [to-int((l-max + l-min) / 2.0 * 10.0), 
-                            to-int((w-max + w-min) / 2.0 * 10.0), "X",
+                            to-int((w-max + w-min) / 2.0 * 10.0),
                             to-int(h * 10.0)])
   val [density-str, density-abbr] = switch(density) :
     "least" : ["Least", "L"]
@@ -425,14 +439,175 @@ public defn make-two-pin-struct (fields:HashTable<String, ?>, pkg:String)
   println("Description: %_" % [description])
 
   TWO-PIN-STRUCT(l-min, l-max, w-min, w-max, t-min, t-max, tw-min, tw-max,
-       e-min, e-max, d-min, d-max, h, type, density, polarity-pin, s-min, 
-       s-max, jt-min, jh-min, js-min, l-tol, s-tol, w-tol, t-tol, tw-tol, 
-       e-tol, fab-tol, placement-tol, courtyard-excess, x, y, center, sl-W, 
-       r1, r2, v1, v2, cl-W, a, b, al-W, cmp-body-W, cmp-body-L, name, 
-       description)
+                 e-min, e-max, d-min, d-max, h, type, density, polarity-pin,
+                 s-min, s-max, jt-min, jh-min, js-min, l-tol, s-tol, w-tol,
+                 t-tol, tw-tol, e-tol, fab-tol, placement-tol, 
+                 courtyard-excess, x, y, center, sl-W, r1, r2, v1, v2, cl-W,
+                 a, b, al-W, cmp-body-W, cmp-body-L, name, description)
 
+public defn make-dfn-struct (fields:HashTable<String, ?>) -> DFN-STRUCT :
+; assign required values
+  val required = ["L-min", "L-max", "W-min", "W-max", "T1-min", "T1-max",
+                  "TW1-min", "TW1-max", "H", "H-s", "Type", "Density", "S1",
+                  "S1-o"]
+  for k in required do :
+    if not key?(fields, k) :
+      fatal("%_ field is required." % [k])
+  val [l-min, l-max, w-min, w-max, t1-min, t1-max, tw1-min, tw1-max, h, h-s,
+       type, density, s1, s1-o] = map({fields[_]}, required) as ?
+  val s2 =
+    if contains?([3, 4], type) :
+      if not key?(fields, "S2") :
+        fatal("S2 field is required.")
+      fields["S2"]
+    else :
+      0.0
+  val [t2-min, t2-max, tw2-min, tw2-max] = 
+    if type == 3 :
+      val f-list = ["T2-min", "T2-max", "TW2-min", "TW2-max"]
+      for k in f-list do :
+        if not key?(fields, k) :
+          fatal("%_ field is required." % [k])
+      map({fields[_]}, f-list) as ?
+    else :
+      [0.0, 0.0, 0.0, 0.0]
+
+; input checks
+  if not contains?(["least", "nominal", "most"], density) :
+    fatal("Component Density Level not supported")
+  if not contains?([2, 3, 4], type) :
+    fatal("Component Type not supported")
+
+; assign optional values for tolerances
+  val tol-fields = ["L-tol", "W-tol", "T1-tol", "TW1-tol"]
+  val [l-tol, w-tol, t1-tol, tw1-tol] = 
+    if all?(key?{fields, _}, tol-fields) :
+      map({fields[_]}, tol-fields) as ?
+    else :
+      [(l-max - l-min), (w-max - w-min), (t1-max - t1-min), 
+       (tw1-max - tw1-min)]
+  val [t2-tol, tw2-tol] =
+    if type == 3 :
+      if key?(fields, "T2-tol") and key?(fields, "TW2-tol") :
+        [fields["T2-tol"], fields["TW2-tol"]]
+      else :
+        [(t2-max - t2-min), (tw2-max - tw2-min)]
+    else :
+      [0.0, 0.0]
+
+; assign optional values for fillet and courtyard excess
+  val [jp-min, courtyard-excess] =
+    if key?(fields, "JP-min") and key?(fields, "Courtyard-excess") :
+      [fields["JP-min"], fields["Courtyard-excess"]]
+    else :
+      if l-max > 1.6 :
+        switch(density) :
+          "least" : [-0.05, 0.1]
+          "nominal" : [0.0, 0.2]
+          "most" : [0.05, 0.4]
+      else :
+        switch(density) :
+          "least" : [-0.04, 0.1]
+          "nominal" : [-0.04, 0.15]
+          "most" : [-0.04, 0.2]
+
+; assign optional values for fab and placement tolerances
+  val [fab-tol, placement-tol] = switch([key?(fields, "Fab-tol"),
+                                         key?(fields, "Placement-tol")]) :
+    [true, true] : [fields["Fab-tol"], fields["Placement-tol"]]
+    else : [0.1, 0.15]
+
+  defn calc-size (l:Double, l-tol:Double) -> Double :
+    l + (2.0 * jp-min) + sqrt(pow(l-tol, 2.0) +
+                              pow(fab-tol, 2.0) +
+                              pow(placement-tol, 2.0))
+        
+; calculate and assign geometry values
+  val all-geometry-fields = ["X1", "Y1", "C1", "C1-o"]
+  val [x1, y1, c1, c1-o] = 
+    if all?(key?{fields, _}, all-geometry-fields) :
+      map({fields[_]}, all-geometry-fields) as ?
+    else :
+      [calc-size(tw1-min, tw1-tol), calc-size(t1-min, t1-tol), s1, s1-o]
+  val [x2, y2] =
+    if type == 3 :
+      if key?(fields, "X2") and key?(fields, "Y2") :
+        [fields["X2"], fields["Y2"]]
+      else :
+        [calc-size(tw2-min, tw2-tol), calc-size(t2-min, t2-tol)]
+    else :
+      [0.0, 0.0]
+  val c2 =
+    if contains?([3, 4], type) :
+      if key?(fields, "C2") :
+        fields["C2"]
+      else :
+        s2
+    else :
+      0.0
+
+; assign values for width of silkscreen courtyard and assembly lines
+  val [sl-W, cl-W, al-W] = switch([key?(fields, "Sl-W"), 
+                                   key?(fields, "Cl-W"),
+                                   key?(fields, "Al-W")]) :
+    [true, true, true] : [fields["Sl-W"], fields["Cl-W"], 
+                          fields["Al-W"]]
+    ; TODO check whether this is even needed
+    else : [0.2, 0.5, 0.1]
+
+; assign values for silkscreen, courtyard, and assembly dimensions
+  val [r1, r2] =
+    if key?(fields, "R1") and key?(fields, "R2") :
+      [fields["R1"], fields["R2"]]
+    else :
+      [l-max, w-max]
+  val [v1, v2] =
+    if key?(fields, "V1") and key?(fields, "V2") :
+      [fields["V1"], fields["V2"]]
+    else :
+      [l-max + (2.0 * courtyard-excess), w-max + (2.0 * courtyard-excess)]
+  val [a, b] =
+    if key?(fields, "A") and key?(fields, "B") :
+      [fields["A"], fields["B"]]
+    else :
+      [l-max, w-max]
+  val [cmp-body-W, cmp-body-L] =
+    if key?(fields, "Cmp-body-W") and key?(fields, "Cmp-body-L") :
+      [fields["Cmp-body-W"], fields["Cmp-body-L"]]
+    else :
+      [w-max, l-max]
+
+; assign name and description
+  val size-str = to-string("%_X%_X%_" % 
+                           [to-int((l-max + l-min) / 2.0 * 10.0), 
+                            to-int((w-max + w-min) / 2.0 * 10.0), 
+                            to-int(h * 10.0)])
+  val [density-str, density-abbr] = switch(density) :
+    "least" : ["Least", "L"]
+    "nominal" : ["Nominal", "N"]
+    "most" : ["Most", "M"]
+  val name = switch(key?(fields, "Name")) :
+    true : fields["Name"]
+    else : to-string("DFN%_-%_%_" % [size-str, to-string(type), 
+                                     density-abbr])
+  val size-l-str = to-string((l-max + l-min) / 2.0)
+  val size-w-str = to-string((w-max + w-min) / 2.0)
+  val size-h-str = to-string(h)
+  val description = switch(key?(fields, "Description")) :
+    true : fields["Description"]
+    else : to-string("DFN, %_-Leads, Body %_x%_x%_mm, IPC %_ Density" % 
+                     [to-string(type), size-l-str, size-w-str, size-h-str, 
+                      density-str])
+
+  DFN-STRUCT(l-min, l-max, w-min, w-max, t1-min, t1-max, tw1-min, tw1-max,
+             t2-min, t2-max, tw2-min, tw2-max, h, h-s, type, density, 
+             s1, s1-o, s2, jp-min, l-tol, w-tol, t1-tol, tw1-tol, t2-tol, 
+             tw2-tol, fab-tol, placement-tol, courtyard-excess, x1, x2, y1,
+             y2, c1, c1-o, c2, sl-W, r1, r2, v1, v2, cl-W, a, b, al-W, 
+             cmp-body-W, cmp-body-L, name, description)
+  
 ; =======================
-; REQUIRED - ALL
+; REQUIRED - ALL TWO PIN
 ; =======================
 ; L-min, L-max - Body Length Range
 ; W-min, W-max - Body Width Range
@@ -441,7 +616,7 @@ public defn make-two-pin-struct (fields:HashTable<String, ?>, pkg:String)
 ; Density      - Board Density Level - ["least", "nominal", "most"]
 
 ; =======================
-; OPTIONAL - ALL
+; OPTIONAL - ALL TWO PIN
 ; =======================
 ; Polarity-pin     - Polarity Pin Location
 ; S-min, S-max     - Heel spacing
@@ -518,7 +693,15 @@ public defn make-two-pin-struct (fields:HashTable<String, ?>, pkg:String)
 ; ========================
 ; REQUIRED - CAPAE
 ; ========================
+; E-min, E-max - Lead Span Range
+; TW-min, TW-max - Lead Width Range
 ; D-min, D-max - Diameter Range
+
+; ========================
+; OPTIONAL - CAPAE 
+; ========================
+; E-tol - Tolerance of Lead Span Range
+; TW-tol - Tolerance of width of molded component leads
 
 public defstruct TWO-PIN-STRUCT :
   L-min: Double|? with: (setter => set-L-min)
@@ -554,6 +737,126 @@ public defstruct TWO-PIN-STRUCT :
   X: Double|? with: (setter => set-X)
   Y: Double|? with: (setter => set-Y)
   Center: Double|? with: (setter => set-Center)
+  Sl-W: Double|? with: (setter => set-Sl-W)
+  R1: Double|? with: (setter => set-R1)
+  R2: Double|? with: (setter => set-R2)
+  V1: Double|? with: (setter => set-V1)
+  V2: Double|? with: (setter => set-V2)
+  Cl-W: Double|? with: (setter => set-Cl-W)
+  A: Double|? with: (setter => set-A)
+  B: Double|? with: (setter => set-B)
+  Al-W: Double|? with: (setter => set-Al-W)
+  Cmp-body-W: Double|? with: (setter => set-Cmp-body-W)
+  Cmp-body-L: Double|? with: (setter => set-Cmp-body-L)
+  Name: String|? with: (setter => set-Name)
+  Description: String|? with: (setter => set-Description)
+
+; =====================
+; REQUIRED - ALL DFN
+; =====================
+; L-min, L-max     - Body Length Range
+; W-min, W-max     - Body Width Range
+; T1-min, T1-max   - Lead Length Range
+; TW1-min, TW1-max - Lead Width Range
+; H                - Maximum Height
+; H-s              - Minimum Standoff Height
+; Type             - Package Type (leads) - [2, 3, 4]
+; Density          - Board Density Level - ["least", "nominal", "most"]
+; S1               - Horizontal Pitch
+; S1-o             - Horizontal offset Pitch from center
+
+; =====================
+; OPTIONAL - ALL DFN
+; =====================
+; JP-min           - Minimum Periphery Fillet
+; L-tol            - Tolerance of overall width of component, inc. leads
+; W-tol            - Tolerance of width of component leads
+; T1-tol            - Tolerance of bandwidth of component leads
+; TW1-tol            - Tolerance of bandwidth of component leads
+; Fab-tol          - Fabrication Tolerance Assumption
+; Placement-tol    - Placement Tolerance Assumption
+; Courtyard-excess - Courtyard Excess
+; X1               - Pad Dimension X1
+; Y1               - Pad Dimension Y1
+; C1               - Horizontal Pad Spacing 
+; C1-o             - Horizontal Pad Offset from center 
+; Sl-W             - Silkscreen Line Width
+; R1               - Silkscreen Dimension R1
+; R2               - Silkscreen Dimension R2
+; V1               - Courtyard Dimension V1
+; V2               - Courtyard Dimension V2
+; Cl-W             - Courtyard Line Width
+; A                - Assembly Information Dimension A
+; B                - Assembly Information Dimension B
+; Al-W             - Assembly Line Width
+; Cmp-body-W       - Component Body Width
+; Cmp-body-L       - Component Body Length
+; Name             - Footprint Name
+; Description      - Footprint Description
+
+; =====================
+; REQUIRED - 3 LEAD DFN
+; =====================
+; S2               - Vertical Pitch
+; T2-min, T2-max   - Lead Length Range
+; TW2-min, TW2-max - Lead Width Range
+
+; =====================
+; OPTIONAL - 3 LEAD DFN
+; =====================
+; C2               - Vertical Pad Spacing 
+; X2               - Pad Dimension X2
+; Y2               - Pad Dimension Y2
+; T2-tol           - Tolerance of bandwidth of component leads
+; TW2-tol          - Tolerance of bandwidth of component leads
+
+; =====================
+; REQUIRED - 4 LEAD DFN
+; =====================
+; S2               - Vertical Pitch
+
+; =====================
+; OPTIONAL - 4 LEAD DFN
+; =====================
+; C2               - Vertical Pad Spacing 
+
+public defstruct DFN-STRUCT :
+  L-min: Double|? with: (setter => set-L-min)
+  L-max: Double|? with: (setter => set-L-max)
+  W-min: Double|? with: (setter => set-W-min) 
+  W-max: Double|? with: (setter => set-W-max)
+  T1-min: Double|? with: (setter => set-T1-min)
+  T1-max: Double|? with: (setter => set-T1-max)
+  TW1-min: Double|? with: (setter => set-TW1-min)
+  TW1-max: Double|? with: (setter => set-TW1-max)
+  T2-min: Double|? with: (setter => set-T2-min)
+  T2-max: Double|? with: (setter => set-T2-max)
+  TW2-min: Double|? with: (setter => set-TW2-min)
+  TW2-max: Double|? with: (setter => set-TW2-max)
+  H: Double|? with: (setter => set-H)
+  H-s: Double|? with: (setter => set-H-s)
+  Type: Int|? with: (setter => set-Type)
+  Density: String|? with: (setter => set-Density)
+  S1: Double|? with: (setter => set-S1)
+  S1-o: Double|? with: (setter => set-S1-o)
+  S2: Double|? with: (setter => set-S2)
+  JP-min: Double|? with: (setter => set-JP-min)
+  L-tol: Double|? with: (setter => set-L-tol)
+  W-tol: Double|? with: (setter => set-W-tol)
+  T1-tol: Double|? with: (setter => set-T1-tol)
+  TW1-tol: Double|? with: (setter => set-TW1-tol)
+  T2-tol: Double|? with: (setter => set-T2-tol)
+  TW2-tol: Double|? with: (setter => set-TW2-tol)
+  Fab-tol: Double|? with: (setter => set-Fab-tol)
+  Placement-tol: Double|? with: (setter => set-Placement-tol)
+  Courtyard-excess: Double|? with: (setter => set-Courtyard-excess)
+  X1: Double|? with: (setter => set-X1)
+  X2: Double|? with: (setter => set-X2)
+  Y1: Double|? with: (setter => set-Y1)
+  Y2: Double|? with: (setter => set-Y2)
+  C1: Double|? with: (setter => set-C1)
+  C1-o: Double|? with: (setter => set-C1-o)
+  C2: Double|? with: (setter => set-C2)
   Sl-W: Double|? with: (setter => set-Sl-W)
   R1: Double|? with: (setter => set-R1)
   R2: Double|? with: (setter => set-R2)
