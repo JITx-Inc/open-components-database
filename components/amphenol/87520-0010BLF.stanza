@@ -25,26 +25,24 @@ defpackage ocdb/amphenol/87520-0010BLF:
 ;Pad Diameter = Minimum Hole Size + 0.1mm + 0.50mm (for Level B of IPC-2221)
 ;Pad Diameter = Minimum Hole Size + 0.1mm + 0.40mm (for Level C of IPC-2221)
 
-;error: Circle needs to be Oval drill-shape
-pcb-pad plated-slot-pad (d:Double) :
+pcb-pad pth-rectangle-pad (w:Double, h:Double) :
   type = TH
-  shape = Rectangle(d + 0.6, d + 0.6)
-  layer(Cutout()) = Circle(d / 2.0)
+  shape = Rectangle(w, h)   ;error: rectangle SMD pad with center PTH hole? 
+  layer(Cutout()) = Rectangle(w, h) 
+  layer(SolderMask(Top)) = Rectangle(w + 0.25, h + 0.25)
+  layer(SolderMask(Bottom)) = Rectangle(w + 0.25, h + 0.25)
 
 ;Design for IPC-222x Level B
 pcb-package usb-87520-0010BLF-package :
-  ;calculated 1.2mm min hole size, 1.8mm pad diameter
   pad p[1] : {pth-pad(0.6, 0.9)} at loc(-6.0, -3.5)
   pad p[2] : {pth-pad(0.6, 0.9)} at loc(-6.0, -1.0) 
   pad p[3] : {pth-pad(0.6, 0.9)} at loc(-6.0, 1.0)
   pad p[4] : {pth-pad(0.6, 0.9)} at loc(-6.0, 3.5) 
-  ;calculated 2.58mm min hole size
-  pad p[5] : {plated-slot-pad(2.58)} at loc(-3.29, -6.55)
-  pad p[6] : {plated-slot-pad(2.58)} at loc(-3.29, 6.55) 
+  pad p[5] : {pth-rectangle-pad(2.34, 0.8)} at loc(-3.29, -6.55)
+  pad p[6] : {pth-rectangle-pad(2.34, 0.8)} at loc(-3.29, 6.55) 
 
-  layer(Courtyard(Top)) = Rectangle(14.0, 13.1)
+  layer(Courtyard(Top)) = Rectangle(14.0, 14.25)
   layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
-  ;height = 7.1mm
 
 public unique pcb-component component :
   manufacturer = "Amphenol ICC (FCI)"
@@ -66,9 +64,14 @@ public unique pcb-module module :
 
   inst usb_conn_typea : {ocdb/amphenol/87520-0010BLF/component}
 
-  net VBUS (usb_conn_typea.vbus)
-  net DM (usb_conn_typea.dm)
-  net DP (usb_conn_typea.dp)
-  net GND (usb_conn_typea.gnd)
-  net SHIELD (usb_conn_typea.shield1, usb_conn_typea.shield2)
+  pin VBUS 
+  net (VBUS usb_conn_typea.vbus)
+  pin DM 
+  net (DM usb_conn_typea.dm)
+  pin DP 
+  net (DP usb_conn_typea.dp)
+  pin GND 
+  net (GND usb_conn_typea.gnd)
+  pin SHIELD 
+  net (SHIELD usb_conn_typea.shield1, usb_conn_typea.shield2)
   

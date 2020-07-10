@@ -17,43 +17,20 @@ defpackage ocdb/cui-devices/PJ-002AH:
   import ocdb/generic-components
   import jitpcb/visualizer
 
-;DESIGN NOTE: PTH Annular Ring Calculation (pth-pad) (plated-slot-pad)
-;Minimum Hole Size = Maximum Lead Diameter + 0.25mm (for Level A of IPC-2222)
-;Minimum Hole Size = Maximum Lead Diameter + 0.20mm (for Level B of IPC-2222)
-;Minimum Hole Size = Maximum Lead Diameter + 0.15mm (for Level C of IPC-2222)
-
-;Pad Diameter = Minimum Hole Size + 0.1mm + 0.60mm (for Level A of IPC-2221)
-;Pad Diameter = Minimum Hole Size + 0.1mm + 0.50mm (for Level B of IPC-2221)
-;Pad Diameter = Minimum Hole Size + 0.1mm + 0.40mm (for Level C of IPC-2221)
-
-;error: Rectangle needs to be Oval drill-shape
-pcb-pad plated-slot-pad (w:Double, h:Double) :
+pcb-pad pth-rectangle-pad (w:Double, h:Double) :
   type = TH
-  ;calculate max diameter c of rectangle (a^2 + b^2 = c^2)
-  val c:Double = sqrt((w * w) + (h * h))
-  ;calculate hole-size Level B IPC-2222 percent increase 
-  val c_increase_hole:Double = 1.0 + (((c + 0.2) - c) / c)
-  ;add percent increase to w, h
-  val w_new_hole:Double = c_increase_hole * w
-  val h_new_hole:Double = c_increase_hole * h
-  layer(Cutout()) = Rectangle(w_new_hole, h_new_hole)
+  shape = Rectangle(w, h)
+  layer(Cutout()) = Rectangle(w, h) ;error: this cuts out as circle not rectangle?
+  layer(SolderMask(Top)) = Rectangle(w + 0.25, h + 0.25)
+  layer(Paste(Top)) = Rectangle(w + 0.25, h + 0.25)
 
-  ;calculate pad-size Level B IPC-2221 percent increase 
-  val c_increase_pad:Double = 1.0 + (((c + 0.8) - c) / c)
-  ;add percent increase to w, h
-  val w_new_pad:Double = c_increase_pad * w
-  val h_new_pad:Double = c_increase_pad * h
-  shape = Rectangle(w_new_pad, h_new_pad)
-
-;Design for IPC-222x Level B
-pcb-package PJ-002AH-package:
-  pad p[1] : {plated-slot-pad(1.0, 3.5)} at loc(6.65, 0.1)
-  pad p[2] : {plated-slot-pad(1.0, 3.0)} at loc(0.65, 0.1)
-  pad p[3] : {plated-slot-pad(3.0, 1.0)} at loc(3.4, -4.6) 
-
-  layer(Courtyard(Top)) = Rectangle(14.6, 9.15)
+unique pcb-package footprint:
+  pad p[1] : {pth-rectangle-pad(1.0, 3.5)} at loc(6.65, 0.1)
+  pad p[2] : {pth-rectangle-pad(1.0, 3.0)} at loc(0.65, 0.1)
+  pad p[3] : {pth-rectangle-pad(3.0, 1.0)} at loc(3.4, -4.6) 
+  layer(Courtyard(Top)) = Rectangle(14.6, 9.85)
   layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
-  ;height = 7.1mm
+  ;height = 11.0mm
 
 public unique pcb-component component :
   manufacturer = "CUI Devices"
@@ -65,8 +42,8 @@ public unique pcb-component component :
     [VDD     | 1    | Right  ]
     [GND     | 2    | Right  ]
     [NO      | 3    | Right  ]
-  gen-symbol-map(ps, PJ-002AH-package)
-  view(PJ-002AH-package)
+  gen-symbol-map(ps, footprint)
+  ;view(footprint)
 
 
   

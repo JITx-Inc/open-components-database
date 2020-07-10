@@ -2,7 +2,6 @@
 defpackage ocdb/microchip/24LC32AT_I_OT:
   import core
   import collections
-  import math
   import esir
   import esir/utils
   import esir/gen
@@ -15,20 +14,22 @@ defpackage ocdb/microchip/24LC32AT_I_OT:
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
+  import jitpcb/visualizer
 
 pcb-package SOT-23-5-package :
-  pad p[1] : {smd-pad(0.6, 1.1)} at loc(-0.95, -1.4)
-  pad p[2] : {smd-pad(0.6, 1.1)} at loc(0.0, -1.4)
-  pad p[3] : {smd-pad(0.6, 1.1)} at loc(0.95, -1.4)
-  pad p[4] : {smd-pad(0.6, 1.1)} at loc(0.95, 1.4)
-  pad p[5] : {smd-pad(0.6, 1.1)} at loc(-0.95, 1.4)
-  layer(Courtyard(Top)) = Rectangle(2.6, 4.0)
+  val smd-pad = smd-pad(0.6, 1.1)
+  pad p[1] : {smd-pad} at loc(-0.95, -1.4)
+  pad p[2] : {smd-pad} at loc(0.0, -1.4)
+  pad p[3] : {smd-pad} at loc(0.95, -1.4)
+  pad p[4] : {smd-pad} at loc(0.95, 1.4)
+  pad p[5] : {smd-pad} at loc(-0.95, 1.4)
+  layer(Courtyard(Top)) = Rectangle(2.8, 4.2)
   layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
 
 public unique pcb-component component :
   manufacturer = "Microchip Technology"
   mpn = "24LC32AT-I/OT"
-  description = "EEPROM Memory IC 32Kb (4K x 8) I²C 400kHz 900ns SOT-23-5"
+  description = "EEPROM Memory IC 32Kb (4K x 8) I2C 400kHz 900ns SOT-23-5"
   val ps = PinSpec $ #TABLE :
     [Ref | Int ...   | Dir  ]
     [scl  | 1     | Left ]
@@ -39,16 +40,20 @@ public unique pcb-component component :
   gen-symbol-map(ps, SOT-23-5-package)
 
 public unique pcb-module module:
-
   inst eeprom : {ocdb/microchip/24LC32AT_I_OT/component}
   ;tie SCL & SDA high in design
   ;100kHz operation = 10kohm pull-up
   ;400kHz operation = 2kohm pull-up
-  net SCL (eeprom.scl)
-  net SDA (eeprom.sda)
-  net VCC (eeprom.vcc)
-  net GND (eeprom.vss)
-  net WP (eeprom.wp)
+  pin SCL
+  net (SCL eeprom.scl)
+  pin SDA
+  net (SDA eeprom.sda)
+  pin VCC
+  net (VCC eeprom.vcc)
+  pin GND
+  net (GND eeprom.vss)
+  pin WP
+  net (WP eeprom.wp)
 
   cap-strap(VCC, GND, 0.1e-6)   ;power decoupling capacitor
 

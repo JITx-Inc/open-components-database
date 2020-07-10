@@ -1,0 +1,70 @@
+#use-added-syntax(esir)
+defpackage ocdb/samtec/RSM-110-02-S-D:
+  import core
+  import collections
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import jitpcb/visualizer
+
+pcb-package RSM-110-02-S-D_footprint :
+    for (l in grid-locs(2, 10, 1.27, 5.65), i in [19 17 15 13 11 9 7 5 3 1 20 18 16 14 12 10 8 6 4 2]) do :
+        pad p[i] : {smd-pad(0.74, 1.84)} at l
+ 
+    layer(Courtyard(Top)) = Rectangle(12.7, 8.75)
+    layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+    ;height = 5.79mm
+
+public unique pcb-component component :
+  manufacturer = "Samtec"
+  mpn = "RSM-110-02-S-D"
+  description = "CONN RCPT 20POS 0.05 GOLD SMD"
+  reference-prefix = "J"
+  for i in 1 to 21 do :
+    pin p[i]
+  symbol = {header-symbol-dual(20)}(for i in 1 to 21 do : p[i] => p[i])
+  package = RSM-110-02-S-D_footprint(for i in 1 to 21 do : p[i] => p[i])
+  
+;recommended pinout for TI Processor JTAG access
+;https://processors.wiki.ti.com/images/tmp/f1252489780-1150881050.html
+public unique pcb-module module :
+  inst jtag : {ocdb/samtec/RSM-110-02-S-D/component}
+  pin TMS
+  net (TMS, jtag.p[1])
+  pin TRSTN
+  net (TRSTN, jtag.p[2])
+  pin TDI
+  net (TDI, jtag.p[3])
+  pin TDIS
+  net (TDIS, jtag.p[4])
+  pin TDO
+  net (TDO, jtag.p[7])
+  pin TCKRTN
+  net (TCKRTN, jtag.p[9])
+  pin TCK
+  net (TCK, jtag.p[11])
+  pin EMU0
+  net (EMU0, jtag.p[13])
+  pin EMU1
+  net (EMU1, jtag.p[14])
+  pin SRST
+  net (SRST, jtag.p[15])
+  pin EMU2
+  net (EMU2, jtag.p[17])
+  pin EMU3
+  net (EMU3, jtag.p[18])
+  pin EMU4
+  net (EMU4, jtag.p[19])
+  pin TVDD
+  net (TVDD, jtag.p[5])
+  pin GND
+  net (GND, jtag.p[8], jtag.p[10], jtag.p[12], jtag.p[16], jtag.p[20])

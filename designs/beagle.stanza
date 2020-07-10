@@ -55,14 +55,19 @@ pcb-module beagle-board :
   inst HDMI_ESD_PWR :   {ocdb/texas-instruments/TPD4E05U06QDQARQ1/module}
   inst HDMI_TRANS :     {ocdb/nxp/TDA19988BHN-C1-557/module}
   inst D6 :             {ocdb/nexperia/RB751V40_115/component}
-  inst FF :             {ocdb/texas-instruments/SN74AUC1G74DCT/module}                        ;connect with HDMI
+  inst FF :             {ocdb/texas-instruments/SN74AUC1G74DCT/module}                        
   inst Y4 :             {ocdb/abracon/ASDMB-24-576MHZ-LC-T/module}                            ;connect with HDMI I2S (mcasp0 mclk)
   inst F1 :             {ocdb/littlefuse/RXEF010/component}
   inst ETH_CONN :       {ocdb/wurth-elektronik/7499010211A/module}
   inst ETH_TRANS :      {ocdb/microchip/LAN8710A-EZC-TR/module}
   inst Y3 :             {ocdb/cts/445C33D25M00000/xtal25mhz_module(5.0e-12)} 
   inst FB4 :            {ocdb/laird/LI0805H151R-10/component}                                 ;USB Host Connector ferrite
-  inst EEPROM :         {ocdb/microchip/24LC32AT_I_OT/module}                                 
+  inst EEPROM :         {ocdb/microchip/24LC32AT_I_OT/module} 
+  inst USD_CONN :       {ocdb/te-connectivity/2201778-1/module}
+  inst HEADER_1 :       {ocdb/sullins/PPPC232LFBN-RC/component}
+  inst HEADER_2 :       {ocdb/sullins/PPPC232LFBN-RC/component}   
+  inst JTAG_HEADER :    {ocdb/samtec/RSM-110-02-S-D/module}  
+  inst J1 :             {ocdb/amphenol/68000-406HLF/component}                           
   
   ;SCHEMATIC GROUPS
   schematic-group(PMIC) = power
@@ -78,19 +83,17 @@ pcb-module beagle-board :
   schematic-group(SDBOOT_BTN) = proc
   schematic-group(BUFFER) = proc
   schematic-group(INV_BUFFER) = proc
-  schematic-group(DUAL_BUFFER) = proc
 
   schematic-group(DDR3L) = ddr
 
   schematic-group(eMMC) = emmc
 
-  schematic-group(USB_CONN_MINI) = usb_slave
-  schematic-group(USB_ESD_MINI) = usb_slave
-
-  schematic-group(USB_CONN_TYPEA) = usb_host
-  schematic-group(USB_ESD_TYPEA) = usb_host
-  schematic-group(FB1) = usb_host
-  schematic-group(USB_LOAD_SW) = usb_host
+  schematic-group(USB_CONN_MINI) = usb
+  schematic-group(USB_ESD_MINI) = usb
+  schematic-group(USB_CONN_TYPEA) = usb
+  schematic-group(USB_ESD_TYPEA) = usb
+  schematic-group(FB1) = usb
+  schematic-group(USB_LOAD_SW) = usb
 
   schematic-group(HDMI_CONN) = hdmi
   schematic-group(HDMI_ESD_TMDS1) = hdmi
@@ -116,20 +119,29 @@ pcb-module beagle-board :
   schematic-group(Y3) = ethernet
   schematic-group(FB4) = ethernet
 
+  schematic-group(USD_CONN) = micro_sd
+
+  schematic-group(HEADER_1) = header
+  schematic-group(HEADER_2) = header
+  schematic-group(JTAG_HEADER) = header
+  schematic-group(J1) = header
+  schematic-group(DUAL_BUFFER) = header
+
   ;=========================================================================
   ; GND & EARTH GND 
   ;=========================================================================
   ;DGND
   net DGND (CPU.gnd, PMIC.GND, DDR3L.GND, eMMC.GND, LDO.GND, USB_CONN_MINI.GND, USB_ESD_MINI.GND,
   USB_CONN_TYPEA.GND USB_ESD_TYPEA.GND USB_LOAD_SW.GND PWR_JACK.GND PWR_JACK.NO ETH_CONN.GND 
-  ETH_TRANS.GND HDMI_CONN.GND HDMI_ESD_TMDS1.GND HDMI_ESD_TMDS2.GND HDMI_ESD_PWR.GND)
+  ETH_TRANS.GND)
 
   ;Earth GND (connector shields)
   net EARTH_GND (USB_CONN_MINI.SHIELD, USB_CONN_TYPEA.SHIELD ETH_CONN.SHIELD HDMI_CONN.SHIELD)
 
   ;DNGD to Earth GND Connection
-  res-strap(ETH_CONN.SHIELD, DGND, 1.0)                             ;Design Note: resistor should be 0805
-
+  val earth_r = res-strap(ETH_CONN.SHIELD, DGND, 1.0)              ;Design Note: resistor should be 0805
+  schematic-group({earth_r}) = ethernet
+  
   ;MOUNTING HOLES 
   ;TBD
 
@@ -144,16 +156,18 @@ pcb-module beagle-board :
   net VDD_MPU (PMIC.VOUT_DCDC2, CPU.vdd_mpu)                       ;PMIC DCDC2 to CPU mpu
   net VDD_1V8 (PMIC.VOUT_LDO3, CPU.vdd_1v8)                        ;PMIC LDO3 to CPU misc 1.8V rails
   net VDD_3V3A (PMIC.VOUT_LDO4, CPU.vdd_3v3a)                      ;PMIC LDO4 to CPU misc 3.3V rails
-  ;net VDDSHV1 (PMIC.xxx, CPU.vddshv1)                             ;PMIC to CPU IO domain 1
-  ;net VDDSHV2 (PMIC.xxx, CPU.vddshv2)                             ;PMIC to CPU IO domain 2
-  ;net VDDSHV3 (PMIC.xxx, CPU.vddshv3)                             ;PMIC to CPU IO domain 3
-  ;net VDDSHV4 (PMIC.xxx, CPU.vddshv4)                             ;PMIC to CPU IO domain 4
-  ;net VDDSHV5 (PMIC.xxx, CPU.vddshv5)                             ;PMIC to CPU IO domain 5
-  ;net VDDSHV6 (PMIC.xxx, CPU.vddshv6)                             ;PMIC to CPU IO domain 6
+  net (VDD_3V3A, CPU.vddshv1)                                      ;PMIC to CPU IO domain 1
+  net (VDD_3V3A, CPU.vddshv2)                                      ;PMIC to CPU IO domain 2
+  net (VDD_3V3A, CPU.vddshv3)                                      ;PMIC to CPU IO domain 3
+  net (VDD_3V3A, CPU.vddshv4)                                      ;PMIC to CPU IO domain 4
+  net (VDD_3V3A, CPU.vddshv5)                                      ;PMIC to CPU IO domain 5
+  net (VDD_3V3A, CPU.vddshv6)                                      ;PMIC to CPU IO domain 6
   net VDDS (CPU.vdds)                               
-  res-strap(PMIC.VOUT_LDO4, VDDS, 0.0)                             ;PMIC LDO4 to CPU vdds through 0ohm resistor
+  val pmic_ld04_r = res-strap(PMIC.VOUT_LDO4, VDDS, 0.0)           ;PMIC LDO4 to CPU vdds through 0ohm resistor
+  schematic-group({pmic_ld04_r}) = power
   net VRTC (CPU.vrtc)
-  res-strap(PMIC.VOUT_LDO4, VRTC, 0.0)                             ;PMIC LDO4 to CPU vrtc through 0ohm resistor
+  val pmic_vrtc_r = res-strap(PMIC.VOUT_LDO4, VRTC, 0.0)           ;PMIC LDO4 to CPU vrtc through 0ohm resistor
+  schematic-group({pmic_vrtc_r}) = power
   net VIO (PMIC.VIO)
 
   ;DDR Power
@@ -176,7 +190,8 @@ pcb-module beagle-board :
   ;Power Indicator LED
   net VDD_3V3AUX (PMIC.VOUT_LDO2, D1.a)                            ;PMIC to BLUE LED anode
   net PWR_LEDR (D1.c)
-  res-strap(PWR_LEDR, DGND, 4750.0)                                ;BLUE LED cathode through 4.75k resistor to GND
+  val pmic_ledr_r = res-strap(PWR_LEDR, DGND, 4750.0)              ;BLUE LED cathode through 4.75k resistor to GND
+  schematic-group({pmic_ledr_r}) = power
 
   ;PMIC to CPU Reset Buffer
   net (PMIC_PGOOD BUFFER.A)
@@ -190,33 +205,39 @@ pcb-module beagle-board :
   ;net I2C0_SCL (cpu_i2c0 pmic_i2c)
 
   ;=========================================================================
-  ; I2C BUS 
+  ; I2C BUS & PULLUPS
   ;=========================================================================
   ;I2C0
   net I2C0_SCL (PMIC.SCL CPU.cpu.io[63])
   net I2C0_SDA (PMIC.SDA CPU.cpu.io[64])
-  res-strap(I2C0_SCL, VDD_3V3A, 1.5e3)
-  res-strap(I2C0_SDA, VDD_3V3A, 1.5e3)
+  val i2c0_scl_r = res-strap(I2C0_SCL, VDD_3V3A, 1.5e3)
+  schematic-group({i2c0_scl_r}) = proc
+  val i2c0_sda_r = res-strap(I2C0_SDA, VDD_3V3A, 1.5e3)
+  schematic-group({i2c0_sda_r}) = proc
 
   ;I2C1
   net I2C1_SCL (CPU.cpu.io[52])
   net I2C1_SDA (CPU.cpu.io[53])
-  val i2c1_sclr = res-strap(I2C1_SCL, VDD_3V3A, 1.5e3)
-  properties({i2c1_sclr}) :
+  val i2c1_scl_r = res-strap(I2C1_SCL, VDD_3V3A, 1.5e3)
+  properties({i2c1_scl_r}) :
     DNP => true
-  val i2c1_sdar = res-strap(I2C1_SDA, VDD_3V3A, 1.5e3)
-  properties({i2c1_sdar}) :
+  schematic-group({i2c1_scl_r}) = proc
+  val i2c1_sda_r = res-strap(I2C1_SDA, VDD_3V3A, 1.5e3)
+  properties({i2c1_sda_r}) :
     DNP => true
+  schematic-group({i2c1_sda_r}) = proc
 
   ;I2C2
   net I2C2_SCL (CPU.cpu.io[61])
   net I2C2_SDA (CPU.cpu.io[62])
-  val i2c2_sclr = res-strap(I2C2_SCL, VDD_3V3A, 1.5e3)
-  properties({i2c2_sclr}) :
+  val i2c2_scl_r = res-strap(I2C2_SCL, VDD_3V3A, 1.5e3)
+  properties({i2c2_scl_r}) :
     DNP => true
-  val i2c2_sdar = res-strap(I2C2_SDA, VDD_3V3A, 1.5e3)
-  properties({i2c2_sdar}) :
+  schematic-group({i2c2_scl_r}) = proc
+  val i2c2_sda_r = res-strap(I2C2_SDA, VDD_3V3A, 1.5e3)
+  properties({i2c2_sda_r}) :
     DNP => true
+  schematic-group({i2c2_sda_r}) = proc
 
   ;=========================================================================
   ; BUTTONS 
@@ -228,9 +249,10 @@ pcb-module beagle-board :
   ;Reset Button
   net (SYS_RESETn CPU.WARM_RESET RST_BTN.P1)
   net (DGND RST_BTN.P2)
-  cap-strap(SYS_RESETn, DGND, 2.2e-6)                               ;note: place close to Reset Button in layout
-  val r_reset = res-strap(SYS_RESETn, VDD_3V3A, 10000.0) 
-  schematic-group({r_reset}) = proc
+  val rst_c = cap-strap(SYS_RESETn, DGND, 2.2e-6)                  ;note: place close to Reset Button in layout
+  schematic-group({rst_c}) = proc
+  val rst_r = res-strap(SYS_RESETn, VDD_3V3A, 10000.0) 
+  schematic-group({rst_r}) = proc
 
   ;uSD Boot Button
   net SDBOOT (SDBOOT_BTN.P1)
@@ -241,8 +263,10 @@ pcb-module beagle-board :
   ;=========================================================================
   ;Mini-USB Client Connector & ESD Protection
   net USB_DC (USB_CONN_MINI.VDD USB_ESD_MINI.VBUS PMIC.USB_5V)     ;Power Net = 500mA typical
-  cap-strap(USB_DC, DGND, 0.1e-6)                                  ;note: place close to TPD4S012_MINI in layout
-  res-strap(USB_DC, CPU.USB0_VBUS, 0.0)                            ;VBUS detect, AM3358 5V tolerant
+  val usb_dc_c = cap-strap(USB_DC, DGND, 0.1e-6)                   ;note: place close to TPD4S012_MINI in layout
+  schematic-group({usb_dc_c}) = usb
+  val usb_dc_r = res-strap(USB_DC, CPU.USB0_VBUS, 0.0)             ;VBUS detect, AM3358 5V tolerant
+  schematic-group({usb_dc_r}) = usb
   net USB0_DM (USB_CONN_MINI.DM USB_ESD_MINI.DM CPU.USB0_DM)
   net USB0_DP (USB_CONN_MINI.DP USB_ESD_MINI.DP CPU.USB0_DP)
   net USB0_ID (USB_CONN_MINI.ID USB_ESD_MINI.ID CPU.USB0_ID)
@@ -250,27 +274,68 @@ pcb-module beagle-board :
   ;Type-A USB Host Connector & ESD Protection / FB CHOKE 
   net VBUS (USB_CONN_TYPEA.VBUS FB1.p[2])                          ;Power Net = 500mA typical
   net USB1_PWR (FB1.p[1] USB_ESD_TYPEA.VBUS)                       ;Power Net = 500mA typical
-  cap-strap(USB1_PWR, DGND, 100.0e-6)
-  cap-strap(USB1_PWR, DGND, 0.1e-6)                                ;note: place close to TPD4S012_TYPEA in layout
+  val usb1_pwr_c = cap-strap(USB1_PWR, DGND, 100.0e-6)
+  schematic-group({usb1_pwr_c}) = usb
+  val usb1_pwr2_c = cap-strap(USB1_PWR, DGND, 0.1e-6)              ;note: place close to TPD4S012_TYPEA in layout
+  schematic-group({usb1_pwr2_c}) = usb
   net USB1_DM (USB_CONN_TYPEA.DM USB_ESD_TYPEA.DM CPU.USB1_DM)
   net USB1_DP (USB_CONN_TYPEA.DP USB_ESD_TYPEA.DP CPU.USB1_DP)
   net USB1_ID (CPU.USB1_ID)
-  res-strap(USB1_ID, DGND, 0.0)
+  val usb1_id_r = res-strap(USB1_ID, DGND, 0.0)
+  schematic-group({usb1_id_r}) = usb
   net USB1_VBUS (CPU.USB1_VBUS)
-  res-strap(USB1_VBUS, USB1_PWR, 0.1)                              ;note: requires RES .10 OHM 1/8W 5% 0805
+  val usb1_vbus_r = res-strap(USB1_VBUS, USB1_PWR, 0.1)            ;note: requires RES .10 OHM 1/8W 5% 0805
+  schematic-group({usb1_vbus_r}) = usb
 
   ;USB Host Load Switch
   net (SYS_5V USB_LOAD_SW.IN)
   net (USB1_PWR USB_LOAD_SW.OUT)
-  net USB1_OCn (USB_LOAD_SW.OC CPU.cpu.io[43])                     ;note: connecting to component directly (not best practice but follows Beagle design)
+  net USB1_OCn (USB_LOAD_SW.OC CPU.cpu.io[42])                     ;note: connecting to component directly (not best practice but follows Beagle design)
   net (VDD_3V3A USB_LOAD_SW.PULL-UP_V)
   net USB1_DRVVBUS (USB_LOAD_SW.EN CPU.cpu.io[66])                 ;note: connecting to component directly (not best practice but follows Beagle design)
-  res-strap(USB1_DRVVBUS, DGND, 10000.0)                           ;active-high enable
+  val usb1_drvbus_r = res-strap(USB1_DRVVBUS, DGND, 10000.0)       ;active-high enable
+  schematic-group({usb1_drvbus_r}) = usb
 
   ;=========================================================================
-  ; microSD CONNECTOR
+  ; microSD CARD CONNECTOR
   ;=========================================================================
-  ;TBD
+  net (EARTH_GND USD_CONN.SHIELD)
+  net (DGND USD_CONN.GND USD_CONN.SWB)
+
+  net (VDD_3V3B USD_CONN.VDD)
+  val c_sdcap1 = cap-strap(VDD_3V3B, USD_CONN.VDD, 10.0e-6)
+  schematic-group({c_sdcap1}) = micro_sd
+  val c_sdcap2 = cap-strap(VDD_3V3B, USD_CONN.VDD, 0.1e-6)
+  schematic-group({c_sdcap2}) = micro_sd
+
+  ;card detect - hi = inserted
+  net MMC0_CD (USD_CONN.SWA CPU.cpu.io[54])
+  val r_sdcd = res-strap(VDD_3V3B, MMC0_CD, 10.0e3)
+  schematic-group({r_sdcd}) = micro_sd
+
+  net MMC0_DAT0 (USD_CONN.DAT0 CPU.cpu.io[46])
+  val r_dat0 = res-strap(VDD_3V3B, MMC0_DAT0, 10.0e3)
+  schematic-group({r_dat0}) = micro_sd
+    
+  net MMC0_DAT1 (USD_CONN.DAT1 CPU.cpu.io[47])
+  val r_dat1 = res-strap(VDD_3V3B, MMC0_DAT1, 10.0e3)
+  schematic-group({r_dat1}) = micro_sd
+
+  net MMC0_DAT2 (USD_CONN.DAT2 CPU.cpu.io[48])
+  val r_dat2 = res-strap(VDD_3V3B, MMC0_DAT2, 10.0e3)
+  schematic-group({r_dat2}) = micro_sd
+
+  net MMC0_DAT3 (USD_CONN.CD_DAT3 CPU.cpu.io[49])
+  val r_dat3 = res-strap(VDD_3V3B, MMC0_DAT3, 10.0e3)
+  schematic-group({r_dat3}) = micro_sd
+
+  net MMC0_CMD (USD_CONN.CMD CPU.cpu.io[45])
+  val r_sdcmd = res-strap(VDD_3V3B, MMC0_CMD, 10.0e3)
+  schematic-group({r_sdcmd}) = micro_sd
+
+  net MMC0_CLKO (USD_CONN.CLK CPU.cpu.io[44])
+  val r_sdclk = res-strap(VDD_3V3B, MMC0_CLKO, 10.0e3)
+  schematic-group({r_sdclk}) = micro_sd
 
   ;=========================================================================
   ; CPU CRYSTALS
@@ -279,24 +344,28 @@ pcb-module beagle-board :
   net OSC0_IN (CPU.OSC0_IN, Y2.XTAL1)
   net XTAL0_OUT (Y2.XTAL2)
   net OSC0_OUT (CPU.OSC0_OUT)
-  res-strap(XTAL0_OUT, OSC0_OUT, 0.0)                         
+  val x_xtal0_r = res-strap(XTAL0_OUT, OSC0_OUT, 0.0)     
+  schematic-group({x_xtal0_r}) = proc            
   val rbias0 = res-strap(OSC0_IN, OSC0_OUT, 1.0e6)
   properties({rbias0}) :
     DNP => true         
-  schematic-group({rbias0}) = ethernet              
+  schematic-group({rbias0}) = proc             
   net GND_OSC0 (CPU.GND_OSC0, Y2.OSC_GND)
-  res-strap(GND_OSC0, DGND, 0.0)
+  val x_osc0_r = res-strap(GND_OSC0, DGND, 0.0)
+  schematic-group({x_osc0_r}) = proc 
 
   ;32.768kHz                
   net OSC1_IN (CPU.OSC1_IN, Y1.XTAL1)
   net XTAL1_OUT (Y1.XTAL2)
   net OSC1_OUT (CPU.OSC1_OUT)
-  res-strap(XTAL1_OUT, OSC1_OUT, 0.0)                         
+  val x_xtal1_r = res-strap(XTAL1_OUT, OSC1_OUT, 0.0) 
+  schematic-group({x_xtal1_r}) = proc                
   val rbias1 = res-strap(OSC1_IN, OSC1_OUT, 1.0e6)                         
   properties({rbias1}) :
     DNP => true
-  schematic-group({rbias1}) = ethernet
-  res-strap(Y1.OSC_GND, GND_OSC0, 0.0)                             ;connect CLK grounds
+  schematic-group({rbias1}) = proc
+  val x_osc_r = res-strap(Y1.OSC_GND, GND_OSC0, 0.0)                  ;connect CLK grounds
+  schematic-group({x_osc_r}) = proc
   net GND_OSC1 (Y1.OSC_GND, CPU.VSS_RTC) 
 
   ;=========================================================================
@@ -304,46 +373,60 @@ pcb-module beagle-board :
   ;=========================================================================
   ;LED0
   net LEDAA (D2.a)
-  res-strap(SYS_5V, LEDAA, 4750.0)
+  val led_aa_r = res-strap(SYS_5V, LEDAA, 4750.0)
+  schematic-group({led_aa_r}) = led
   net LEDAC (D2.c Q1.D)
   net (DGND Q1.S)
   net USR0 (Q1.G CPU.cpu.io[37])
-  res-strap(USR0, DGND, 100000.0)
+  val led_usr0_r = res-strap(USR0, DGND, 100000.0)
+  schematic-group({led_usr0_r}) = led
 
   ;LED1
   net LEDBA (D3.a)
-  res-strap(SYS_5V, LEDBA, 4750.0)
+  val led_ba_r = res-strap(SYS_5V, LEDBA, 4750.0)
+  schematic-group({led_ba_r}) = led
   net LEDBC (D3.c Q2.D)
   net (DGND Q2.S)
   net USR1 (Q2.G CPU.cpu.io[38])
-  res-strap(USR1, DGND, 100000.0)
+  val led_usr1_r = res-strap(USR1, DGND, 100000.0)
+  schematic-group({led_usr1_r}) = led
 
   ;LED2
   net LEDCA (D4.a)
-  res-strap(SYS_5V, LEDCA, 4750.0)
+  val led_ca_r = res-strap(SYS_5V, LEDCA, 4750.0)
+  schematic-group({led_ca_r}) = led
   net LEDCC (D4.c Q3.D)
   net (DGND Q3.S)
   net USR2 (Q3.G CPU.cpu.io[39])
-  res-strap(USR2, DGND, 100000.0)
+  val led_usr2_r = res-strap(USR2, DGND, 100000.0)
+  schematic-group({led_usr2_r }) = led
 
   ;LED3
   net LEDDA (D5.a)
-  res-strap(SYS_5V, LEDDA, 4750.0)
+  val led_da_r = res-strap(SYS_5V, LEDDA, 4750.0)
+  schematic-group({led_da_r}) = led
   net LEDDC (D5.c Q4.D)
   net (DGND Q4.S)
   net USR3 (Q4.G CPU.cpu.io[40])
-  res-strap(USR3, DGND, 100000.0)
+  val led_usr3_r = res-strap(USR3, DGND, 100000.0)
+  schematic-group({led_usr3_r}) = led
 
   ;=========================================================================
-  ; EEPROM (Board ID)
+  ; EEPROM (Board ID) & ADC7
   ;=========================================================================
    net (DGND EEPROM.GND)
    net (VDD_3V3A EEPROM.VCC)
    net (I2C0_SCL EEPROM.SCL)
    net (I2C0_SDA EEPROM.SDA)
 
+   net AIN7 (CPU.cpu.ain[7])
+   val ain7_up_r = res-strap(VDD_3V3B, AIN7, 4.75e3)
+   schematic-group({ain7_up_r}) = proc
+   val ain7_dwn_r = res-strap(DGND, AIN7, 4.75e3)
+   schematic-group({ain7_dwn_r}) = proc
+
   ;=========================================================================
-  ; DDR
+  ; DDR3
   ;=========================================================================
   ;cmd/addr
   net DDR_RESETn (DDR3L.ddr3l.acc.nRESET CPU.cpu.acc.nRESET)
@@ -396,7 +479,8 @@ pcb-module beagle-board :
 
   ;reset buffer
   net eMMC_RSTn (eMMC.nRESET)
-  res-strap(eMMC_RSTn, BUFFER.Y, 0.0)
+  val emmc_r = res-strap(eMMC_RSTn, BUFFER.Y, 0.0)
+  schematic-group({emmc_r}) = emmc
   net (VDD_3V3A BUFFER.VCC)
   net (DGND BUFFER.GND)
   net BF_IN (CPU.cpu.io[36] BUFFER.A)
@@ -404,6 +488,10 @@ pcb-module beagle-board :
   ;=========================================================================
   ; uHDMI CONNECTOR & TRANSCEIVER
   ;=========================================================================
+  ;gnd & thermal pad
+  net (DGND HDMI_TRANS.GND HDMI_TRANS.THERMAL_PAD HDMI_CONN.GND HDMI_ESD_TMDS1.GND 
+       HDMI_ESD_TMDS2.GND HDMI_ESD_PWR.GND)
+  
   ;connector power
   net DVI_+5V (HDMI_CONN.VCC_5V F1.p[1])
   net (SYS_5V  F1.p[2])
@@ -452,10 +540,14 @@ pcb-module beagle-board :
   net LCDDE (CPU.cpu.io[105])
   net LCDPCLK (CPU.cpu.io[102])
 
-  res-strap(LCD_VSYNC, LCDVSYNC, 0.0)
-  res-strap(LCD_HSYNC, LCDHSYNC, 0.0)
-  res-strap(LCD_DE, LCDDE, 0.0)
-  res-strap(LCD_PCLK, LCDPCLK, 22.0)
+  val lcd_vsync_r = res-strap(LCD_VSYNC, LCDVSYNC, 0.0)           ;place r close to processor (source)
+  schematic-group({lcd_vsync_r}) = proc
+  val lcd_hsync_r = res-strap(LCD_HSYNC, LCDHSYNC, 0.0)           ;place r close to processor (source)
+  schematic-group({lcd_hsync_r}) = proc
+  val lcd_de_r = res-strap(LCD_DE, LCDDE, 0.0)                    ;place r close to processor (source)
+  schematic-group({lcd_de_r}) = proc
+  val lcd_pclk_r = res-strap(LCD_PCLK, LCDPCLK, 22.0)             ;place r close to processor (source)
+  schematic-group({lcd_pclk_r}) = proc
   
   ;transciever-cpu i2c
   net (I2C0_SCL, HDMI_TRANS.SCL)
@@ -468,13 +560,25 @@ pcb-module beagle-board :
 
   ;transciever-cpu interrupt
   net HDMI_INT (HDMI_TRANS.INT CPU.cpu.io[41])
-  res-strap(HDMI_INT, VDD_3V3B, 10000.0)
+  val hdmi_int_r = res-strap(HDMI_INT, VDD_3V3B, 10000.0)
+  schematic-group({hdmi_int_r}) = hdmi
 
   ;transciever-connector i2c & pull-ups + esd
   net HDMI_DSCL (HDMI_CONN.SCL HDMI_TRANS.DSCL HDMI_ESD_PWR.IO1)
   net HDMI_DSDA (HDMI_CONN.SDA HDMI_TRANS.DSDA HDMI_ESD_PWR.IO2)
-  res-strap(HDMI_DSCL, DVI_+5V, 1500.0)
-  res-strap(HDMI_DSDA, DVI_+5V, 1500.0)
+  val hdmi_dscl_r = res-strap(HDMI_DSCL, DVI_+5V, 1500.0)
+  schematic-group({hdmi_dscl_r}) = hdmi
+  val hdmi_dsda_r = res-strap(HDMI_DSDA, DVI_+5V, 1500.0)
+  schematic-group({hdmi_dsda_r}) = hdmi
+
+  ;external clock to the McASP0 interface
+  net (DGND Y4.GND)
+  net (VDD_3V3A Y4.VCC)
+  net HDMICLK_DISn (CPU.cpu.io[43])
+  net Y4_CLK (Y4.CLK)
+  net GPIO3_21 (CPU.cpu.io[106])
+  val hdmi_y4_r = res-strap(Y4_CLK, GPIO3_21, 33.0)
+  schematic-group({hdmi_y4_r}) = hdmi
 
   ;cec clock for hdmi framer
   net PROC_A15 (CPU.cpu.io[0])
@@ -484,12 +588,14 @@ pcb-module beagle-board :
   net (VDD_3V3A FF.VCC FF.PREn FF.CLRn)
   net FF_Q (FF.Q)
   net HDMI_12MHZ (HDMI_TRANS.OSC_IN_AP3)
-  res-strap(FF_Q, HDMI_12MHZ, 33.0)
+  val hdmi_12mhz_r = res-strap(FF_Q, HDMI_12MHZ, 33.0)
+  schematic-group({hdmi_12mhz_r}) = hdmi
 
   ;HPD & CEC & DDC
   net HDMI_HPD (HDMI_CONN.HPLG HDMI_TRANS.HPD HDMI_ESD_PWR.IO4)
   net HDMI_CEC (HDMI_CONN.CEC HDMI_TRANS.CEC HDMI_ESD_PWR.IO3 D6.c)
-  res-strap(VDD_3V3B, D6.a, 27000.0)
+  val hdmi_cec_r = res-strap(VDD_3V3B, D6.a, 27000.0)
+  schematic-group({hdmi_cec_r}) = hdmi
   net (DGND HDMI_CONN.DDC_CEC)
 
   ;misc
@@ -503,7 +609,8 @@ pcb-module beagle-board :
   net PHY_XTAL2 (ETH_TRANS.XTAL2)
   net PHY_XTAL1 (Y3.XTAL1)
   net PHYX (Y3.XTAL2)
-  res-strap(PHYX, PHY_XTAL2, 10.0) ;1% tolerance required
+  val eth_phy_r = res-strap(PHYX, PHY_XTAL2, 10.0) ;1% tolerance required
+  schematic-group({eth_phy_r}) = ethernet
   val eth_xtal_r = res-strap(PHY_XTAL1, PHY_XTAL2, 1000000.0) 
   properties({eth_xtal_r}) :
     DNP => true
@@ -517,10 +624,10 @@ pcb-module beagle-board :
   net VDD_PHYA (FB1.p[2] ETH_TRANS.VDD_PHYA)              ;Power Net = ?mA typical
   
   ;transceiver-connector data lines
-  net TXP (ETH_TRANS.TXP, ETH_CONN.TD+)                   ;Impedance Controlled Net = RX/TX diff pairs - keep trace < 25mm, 50ohm SE 100ohm DF
-  net TXN (ETH_TRANS.TXN, ETH_CONN.TD-)
-  net RXP (ETH_TRANS.RXP, ETH_CONN.RD+)
-  net RXN (ETH_TRANS.RXN, ETH_CONN.RD-)
+  net TXP (ETH_TRANS.TXP, ETH_CONN.TD_P)                   ;Impedance Controlled Net = RX/TX diff pairs - keep trace < 25mm, 50ohm SE 100ohm DF
+  net TXN (ETH_TRANS.TXN, ETH_CONN.TD_N)
+  net RXP (ETH_TRANS.RXP, ETH_CONN.RD_P)
+  net RXN (ETH_TRANS.RXN, ETH_CONN.RD_N)
   val ethdat_c0 = cap-strap(TXP, DGND, 15.0e-12) 
   properties({ethdat_c0}) :
     DNP => true
@@ -540,21 +647,29 @@ pcb-module beagle-board :
 
   ;transceiver pull-downs
   net REFCLK0 (ETH_TRANS.RXCLK_PHYAD1)
-  res-strap(REFCLK0, DGND, 10000.0)
-  res-strap(ETH_TRANS.RXD2_RMIISEL, DGND, 10000.0)
-  res-strap(ETH_TRANS.RXD3_PHYAD2, DGND, 10000.0)
-  res-strap(ETH_TRANS.RXER_RXD4_PHYAD0, DGND, 10000.0)
+  val eth_refclk0_r = res-strap(REFCLK0, DGND, 10000.0)
+  schematic-group({eth_refclk0_r}) = ethernet
+  val eth_rxd2_r = res-strap(ETH_TRANS.RXD2_RMIISEL, DGND, 10000.0)
+  schematic-group({eth_rxd2_r}) = ethernet
+  val eth_rxd3_r = res-strap(ETH_TRANS.RXD3_PHYAD2, DGND, 10000.0)
+  schematic-group({eth_rxd3_r}) = ethernet
+  val eth_rxer_r = res-strap(ETH_TRANS.RXER_RXD4_PHYAD0, DGND, 10000.0)
+  schematic-group({eth_rxer_r}) = ethernet
 
   ;transceiver mode pull-ups
   net MODE2 (ETH_TRANS.COL_CRS_DV_MODE2)
   net RXD1_MODE1 (ETH_TRANS.RXD1_MODE1)
   net RXD0_MODE0 (ETH_TRANS.RXD0_MODE0)
-  res-strap(MODE2, VDD_3V3B, 1500.0)
-  res-strap(RXD1_MODE1, VDD_3V3B, 1500.0)
-  res-strap(RXD0_MODE0, VDD_3V3B, 1500.0)
+  val eth_mode2_r = res-strap(MODE2, VDD_3V3B, 1500.0)
+  schematic-group({eth_mode2_r}) = ethernet
+  val eth_mode1_r = res-strap(RXD1_MODE1, VDD_3V3B, 1500.0)
+  schematic-group({eth_mode1_r}) = ethernet
+  val eth_mode0_r = res-strap(RXD0_MODE0, VDD_3V3B, 1500.0)
+  schematic-group({eth_mode0_r}) = ethernet
 
   net ETH_TXD4 (ETH_TRANS.nINT_TXER_TXD4)
-  res-strap(ETH_TXD4, DGND, 10000.0)
+  val eth_txd4_r = res-strap(ETH_TXD4, DGND, 10000.0)
+  schematic-group({eth_txd4_r}) = ethernet
 
   ;connector LED info
   net GRNA (ETH_TRANS.LED1_REGOFF, ETH_CONN.GRN_A)
@@ -562,43 +677,208 @@ pcb-module beagle-board :
 
   ;connector power
   net TCT_RCT (ETH_CONN.TCT_RCT)                      ;Power Net = ?mA typical
-  res-strap(TCT_RCT, VDD_PHYA, 0.0)                   ;Power Net = ?mA typical
+  val eth_tct_r = res-strap(TCT_RCT, VDD_PHYA, 0.0)   ;Power Net = ?mA typical
+  schematic-group({eth_tct_r}) = ethernet
 
   ;transceiver-cpu data lines
   net MDIO_DATA (CPU.cpu.io[85] ETH_TRANS.MDIO)
   net MDIO_CLK (CPU.cpu.io[84] ETH_TRANS.MDC)
 
   net MII1_RXD3 (CPU.cpu.io[80])
-  res-strap(MII1_RXD3, ETH_TRANS.RXD3_PHYAD2, 100.0)
+  val mii1_rxd3_r = res-strap(MII1_RXD3, ETH_TRANS.RXD3_PHYAD2, 100.0)
+  schematic-group({mii1_rxd3_r}) = ethernet
   net MII1_RXD2 (CPU.cpu.io[79])
-  res-strap(MII1_RXD2, ETH_TRANS.RXD2_RMIISEL, 100.0)
+  val mii1_rxd2_r = res-strap(MII1_RXD2, ETH_TRANS.RXD2_RMIISEL, 100.0)
+  schematic-group({mii1_rxd2_r}) = ethernet
   net MII1_RXD1 (CPU.cpu.io[78])
-  res-strap(MII1_RXD1, RXD1_MODE1, 100.0)
+  val mii1_rxd1_r = res-strap(MII1_RXD1, RXD1_MODE1, 100.0)
+  schematic-group({mii1_rxd1_r}) = ethernet
   net MII1_RXD0 (CPU.cpu.io[77])
-  res-strap(MII1_RXD0, RXD0_MODE0, 100.0)
+  val mii1_rxd0_r = res-strap(MII1_RXD0, RXD0_MODE0, 100.0)
+  schematic-group({mii1_rxd0_r}) = ethernet
   net MII1_RXDV (CPU.cpu.io[82])
-  res-strap(MII1_RXDV, ETH_TRANS.RXDV, 100.0)
+  val mii1_rxdv_r = res-strap(MII1_RXDV, ETH_TRANS.RXDV, 100.0)
+  schematic-group({mii1_rxdv_r}) = ethernet
   net MII1_RXCLK (CPU.cpu.io[76])
-  res-strap(MII1_RXCLK, REFCLK0, 100.0)
+  val mii1_rxclk_r = res-strap(MII1_RXCLK, REFCLK0, 100.0)
+  schematic-group({mii1_rxclk_r}) = ethernet
   net MII1_RXERR (CPU.cpu.io[81])
-  res-strap(MII1_RXERR, ETH_TRANS.RXER_RXD4_PHYAD0, 100.0)
-
+  val mii1_rxerr_r = res-strap(MII1_RXERR, ETH_TRANS.RXER_RXD4_PHYAD0, 100.0)
+  schematic-group({mii1_rxerr_r}) = ethernet
   net MII1_TXCLK (CPU.cpu.io[68])
-  res-strap(MII1_TXCLK, ETH_TRANS.TXCLK, 100.0)
+  val mii1_txclk_r = res-strap(MII1_TXCLK, ETH_TRANS.TXCLK, 100.0)
+  schematic-group({mii1_txclk_r}) = ethernet
   net MII1_TXEN (CPU.cpu.io[73])
   net MII1_TXD0 (CPU.cpu.io[69])
   net MII1_TXD1 (CPU.cpu.io[70])
   net MII1_TXD2 (CPU.cpu.io[71])
   net MII1_TXD3 (CPU.cpu.io[72])
   net MII1_COL (CPU.cpu.io[75])
-  res-strap(MII1_COL, MODE2, 100.0)
+  val mii1_col_r = res-strap(MII1_COL, MODE2, 100.0)
+  schematic-group({mii1_col_r}) = ethernet
   net MII1_CRS_DV (CPU.cpu.io[74])
-  res-strap(MII1_CRS_DV, ETH_TRANS.CRS, 100.0)
+  val mii1_crs_r = res-strap(MII1_CRS_DV, ETH_TRANS.CRS, 100.0)
+  schematic-group({mii1_crs_r}) = ethernet
+
+  net U5_H18 (CPU.cpu.io[83])
+  net MII1_REFCLK ()
+  val eth_refclk_r = res-strap(U5_H18, MII1_REFCLK, 33.0)
+  schematic-group({eth_refclk_r}) = ethernet
+  val eth_m1refclk0_r = res-strap(MII1_REFCLK, REFCLK0, 0.0)
+  properties({eth_m1refclk0_r}) :
+    DNP => true
+  schematic-group({eth_m1refclk0_r}) = ethernet
+  val eth_rclkin_r = res-strap(MII1_REFCLK, RCLKIN, 0.0)
+  properties({eth_rclkin_r }) :
+    DNP => true
+  schematic-group({eth_rclkin_r }) = ethernet
 
   ;=========================================================================
-  ; EXPANSION HEADERS
+  ; UART0 SERIAL PORT - USB TO TTL 3.3V 6P HEADER
   ;=========================================================================
-  ;TBD
+  net (VDD_3V3B DUAL_BUFFER.VCC DUAL_BUFFER.OE_2)
+  net (DGND DUAL_BUFFER.GND DUAL_BUFFER.OE_1n J1.p[1])
+  net UART0_TX (CPU.cpu.io[55] DUAL_BUFFER.A2)
+  net UART0_RX (CPU.cpu.io[56] DUAL_BUFFER.Y1)
+  net B_UART0_RX (DUAL_BUFFER.A1 J1.p[4])
+  val uart0_rx_r = res-strap(DGND, B_UART0_RX, 100.0e3)
+  schematic-group({uart0_rx_r}) = header
+  net B_UART0_TX (DUAL_BUFFER.Y2 J1.p[5])
+
+  ;=========================================================================
+  ; JTAG 20P HEADER
+  ;=========================================================================
+  net JTAG_TMS (CPU.cpu.tms JTAG_HEADER.TMS)
+  net JTAG_TDI (CPU.cpu.tdi JTAG_HEADER.TDI)
+  net (VDD_3V3B JTAG_HEADER.TVDD)
+  val jtag_vcc_c = cap-strap(DGND, VDD_3V3B, 0.1e-6)
+  schematic-group({jtag_vcc_c}) = header
+  net JTAG_TDO (CPU.cpu.tdo JTAG_HEADER.TDO)
+  net JTAG_TCK (CPU.cpu.tck JTAG_HEADER.TCK JTAG_HEADER.TCKRTN)
+  net JTAG_EMU0 (CPU.cpu.io[2] JTAG_HEADER.EMU0)
+  val jtag_emu0_r = res-strap(VDD_3V3B, JTAG_EMU0, 4.75e3)
+  schematic-group({jtag_emu0_r}) = header
+  net (SYS_RESETn JTAG_HEADER.SRST)
+  val jtag_rstn_c = cap-strap(DGND, SYS_RESETn, 0.1e-6)
+  schematic-group({jtag_rstn_c}) = header
+  net (XDMA_EVENT_INTRO JTAG_HEADER.EMU2)
+  net (MMC0_CD JTAG_HEADER.EMU4)
+  net JTAG_TRSTn (CPU.cpu.ntrst JTAG_HEADER.TRSTN)
+  val jtag_trstn_r = res-strap(DGND, JTAG_TRSTn, 4.75e3)
+  schematic-group({jtag_trstn_r}) = header
+  net (DGND JTAG_HEADER.TDIS JTAG_HEADER.GND)
+  net JTAG_EMU1 (CPU.cpu.io[3] JTAG_HEADER.EMU1)
+  val jtag_emu1_r = res-strap(VDD_3V3B, JTAG_EMU0, 4.75e3)
+  schematic-group({jtag_emu1_r}) = header
+  net CLKOUT2 (JTAG_HEADER.EMU3)
+  
+  ;=========================================================================
+  ; 2 x EXPANSION 46P HEADERS
+  ;=========================================================================
+  ;HEADER #1
+  net (DGND HEADER_1.p[1] HEADER_1.p[2])
+  net (MMC1_DAT[6] HEADER_1.p[3])
+  net (MMC1_DAT[7] HEADER_1.p[4])
+  net (MMC1_DAT[2] HEADER_1.p[5])
+  net (MMC1_DAT[3] HEADER_1.p[6])
+  net TIMER4 (CPU.cpu.io[11] HEADER_1.p[7])
+  net TIMER7 (CPU.cpu.io[10] HEADER_1.p[8])
+  net TIMER5 (CPU.cpu.io[12] HEADER_1.p[9])
+  net TIMER6 (CPU.cpu.io[9] HEADER_1.p[10])
+  net GPIO1_13 (CPU.cpu.io[29] HEADER_1.p[11])
+  net GPIO1_12 (CPU.cpu.io[28] HEADER_1.p[12])
+  net EHRPWM2B (CPU.cpu.io[25] HEADER_1.p[13])
+  net GPIO0_26 (CPU.cpu.io[26] HEADER_1.p[14])
+  net GPIO1_15 (CPU.cpu.io[31] HEADER_1.p[15])
+  net GPIO1_14 (CPU.cpu.io[30] HEADER_1.p[16])
+  net GPIO0_27 (CPU.cpu.io[27] HEADER_1.p[17])
+  net GPIO2_1 (CPU.cpu.io[4] HEADER_1.p[18])
+  net EHRPWM2A (CPU.cpu.io[24] HEADER_1.p[19])
+  net (MMC1_CMD HEADER_1.p[20])
+  net (MMC1_CLK HEADER_1.p[21])
+  net (MMC1_DAT[5] HEADER_1.p[22])
+  net (MMC1_DAT[4] HEADER_1.p[23])
+  net (MMC1_DAT[1] HEADER_1.p[24])
+  net (MMC1_DAT[0] HEADER_1.p[25])
+  net GPIO1_29 (CPU.cpu.io[5] HEADER_1.p[26])
+  net (LCD_VSYNC HEADER_1.p[27])
+  net (LCD_PCLK HEADER_1.p[28])
+  net (LCD_HSYNC HEADER_1.p[29])
+  net (LCD_DE HEADER_1.p[30])
+  net (LCD_DATA[14] HEADER_1.p[31])
+  net (LCD_DATA[15] HEADER_1.p[32])
+  net (LCD_DATA[13] HEADER_1.p[33])
+  net (LCD_DATA[11] HEADER_1.p[34])
+  net (LCD_DATA[12] HEADER_1.p[35])
+  net (LCD_DATA[10] HEADER_1.p[36])
+  net (LCD_DATA[8] HEADER_1.p[37])
+  net (LCD_DATA[9] HEADER_1.p[38])
+  net (LCD_DATA[6] HEADER_1.p[39])
+  net (LCD_DATA[7] HEADER_1.p[40])
+  net (LCD_DATA[4] HEADER_1.p[41])
+  net (LCD_DATA[5] HEADER_1.p[42])
+  net (LCD_DATA[2] HEADER_1.p[43])
+  net (LCD_DATA[3] HEADER_1.p[44])
+  net (LCD_DATA[0] HEADER_1.p[45])
+  net (LCD_DATA[1] HEADER_1.p[46])
+
+  ;HEADER #2
+  net (DGND HEADER_2.p[1] HEADER_2.p[2] HEADER_2.p[43] HEADER_2.p[44] HEADER_2.p[45] HEADER_2.p[46])
+  net (VDD_3V3B HEADER_2.p[3] HEADER_2.p[4])
+  net (VDD_5V HEADER_2.p[5] HEADER_2.p[6])
+  net (SYS_5V HEADER_2.p[7] HEADER_2.p[8])
+  net (PWR_BUT HEADER_2.p[9])
+  net (SYS_RESETn HEADER_2.p[10])
+  net UART4_RXD (CPU.cpu.io[14] HEADER_2.p[11])
+  net GPIO1_28 (CPU.cpu.io[13] HEADER_2.p[12])
+  net UART4_TXD (CPU.cpu.io[15] HEADER_2.p[13])
+  net EHRPWM1A (CPU.cpu.io[34] HEADER_2.p[14])
+  net U5_T13 (CPU.cpu.io[8])
+  net U5_R13 (CPU.cpu.io[32])
+  net GPIO1_16 (HEADER_2.p[15])
+  val u5t13_r = res-strap(U5_T13, GPIO1_16, 0.0)
+  schematic-group({u5t13_r}) = proc
+  val u5r13_r = res-strap(U5_R13, GPIO1_16, 0.0)
+  schematic-group({u5r13_r}) = proc
+  net EHRPWM1B (CPU.cpu.io[35] HEADER_2.p[16])
+  net (I2C1_SCL HEADER_2.p[17])
+  net (I2C1_SDA HEADER_2.p[18])
+  net (I2C2_SCL HEADER_2.p[19])
+  net (I2C2_SDA HEADER_2.p[20])
+  net UART2_TXD (CPU.cpu.io[51] HEADER_2.p[21])
+  net UART2_RXD (CPU.cpu.io[50] HEADER_2.p[22])
+  net GPIO1_17 (CPU.cpu.io[33] HEADER_2.p[23])
+  net UART1_TXD (CPU.cpu.io[59] HEADER_2.p[24])
+  net (GPIO3_21 HEADER_2.p[25]) 
+  net UART1_RXD (CPU.cpu.io[60] HEADER_2.p[26])
+  net GPIO3_19 (CPU.cpu.io[112] HEADER_2.p[27])
+  net (SPI1_CS0 HEADER_2.p[28])
+  net (SPI1_D0 HEADER_2.p[29])
+  net SPI1_D1 (CPU.cpu.io[109] HEADER_2.p[30])
+  net (SPI1_SCLK HEADER_2.p[31])
+  net VDD_ADC (CPU.vdd_adc HEADER_2.p[32])
+  net AIN4 (CPU.cpu.ain[4] HEADER_2.p[33])
+  net GNDA_ADC (CPU.gnda_adc HEADER_2.p[34])
+  net AIN6 (CPU.cpu.ain[6] HEADER_2.p[35])
+  net AIN5 (CPU.cpu.ain[5] HEADER_2.p[36])
+  net AIN2 (CPU.cpu.ain[2] HEADER_2.p[37])
+  net AIN3 (CPU.cpu.ain[3] HEADER_2.p[38])
+  net AIN0 (CPU.cpu.ain[0] HEADER_2.p[39])
+  net AIN1 (CPU.cpu.ain[1] HEADER_2.p[40])
+  net CLKOUT_SRC (CPU.cpu.io[1])
+  net (CLKOUT2 HEADER_2.p[41])
+  val clksrc_r = res-strap(CLKOUT_SRC, CLKOUT2, 0.0)
+  schematic-group({clksrc_r}) = proc
+  net GPIO3_20 (CPU.cpu.io[113])
+  val gpio3_20_r = res-strap(GPIO3_20, CLKOUT2, 0.0)
+  schematic-group({gpio3_20_r}) = proc
+  net GPIO0_7SRC (CPU.cpu.io[67])
+  net GPIO0_7 (HEADER_2.p[42])
+  val gpio0_7src_r = res-strap(GPIO0_7SRC, GPIO0_7, 0.0)
+  schematic-group({gpio0_7src_r}) = proc
+  net GPIO3_18 (CPU.cpu.io[111])
+  val gpio3_18_r = res-strap(GPIO3_18, GPIO0_7, 0.0)
+  schematic-group({gpio3_18_r}) = proc
 
   ;=========================================================================
   ; BOOT CONFIGURATION
@@ -607,9 +887,8 @@ pcb-module beagle-board :
   ;LO = All others
   ;error = need to add DNP resistors to account for resistor HI/LO settings
 
-  ;var rboot_lo = 0
   for i in 0 to 16 do :
-    ;var rboot_lo[i] = res-strap(#R(LCD_DATA[i]), DGND, 100.0e3)  ;error: how to use for DNP/schematic-group info?
+    ;val rboot_lo[i] = res-strap(#R(LCD_DATA[i]), DGND, 100.0e3)  ;error: how to use for DNP/schematic-group info?
     res-strap(#R(LCD_DATA[i]), DGND, 100.0e3)
     res-strap(#R(LCD_DATA[i]), VDD_3V3A, 100.0e3)
   

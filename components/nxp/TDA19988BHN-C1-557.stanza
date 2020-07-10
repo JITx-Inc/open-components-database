@@ -17,6 +17,10 @@ defpackage ocdb/nxp/TDA19988BHN-C1-557:
   import ocdb/generic-components
   import jitpcb/visualizer
 
+pcb-package QFN64_WITHTHERMALPAD :
+  make-qfn-package(0.5, 9.2, 64, 0.25, 0.6)
+  pad p[65] : {smd-pad(5.1, 5.1)} at loc(0.0, 0.0)
+
 public unique pcb-component component :
   manufacturer = "NXP USA Inc."
   mpn = "TDA19988BHN/C1,557"
@@ -87,15 +91,16 @@ public unique pcb-component component :
     [VDDIOB-1V8       |  55   |  Right]
     [TEST             |  49   |  Right]
     [VPP              |  19   |  Right]
-    ;[PAD             |  65   |  Right]
-  gen-symbol-map(ps, qfn-package(0.5, 9.2, 64, 0.25, 0.6)) ;error: package needs thermal pad
+    [THERMAL_PAD      |  65   |  Right]
+  gen-symbol-map(ps, QFN64_WITHTHERMALPAD) 
+  ;view(QFN64_WITHTHERMALPAD) 
 
 public unique pcb-module module :
-
   inst hdmi : {ocdb/nxp/TDA19988BHN-C1-557/component}
-
   pin GND
   net (GND hdmi.VPP)
+  pin THERMAL_PAD
+  net (THERMAL_PAD hdmi.THERMAL_PAD)
 
   ;Video Port Inputs & Synchronization
   for i in 0 to 8 do :
@@ -104,14 +109,12 @@ public unique pcb-module module :
     pin VPB[i] 
   for i in 0 to 8 do :
     pin VPC[i] 
-
   for i in 0 to 8 do :
     net (VPA[i] hdmi.VPA[i])
   for i in 0 to 8 do :
     net (VPB[i] hdmi.VPB[i])
   for i in 0 to 8 do :
     net (VPC[i] hdmi.VPC[i])
-
   pin VSYNC
   net (VSYNC hdmi.VSYNC-VREF)
   pin HSYNC
@@ -142,10 +145,8 @@ public unique pcb-module module :
   net (ACLK hdmi.ACLK)
   for i in 0 to 3 do :
     pin AP[i] 
-
   for i in 0 to 3 do :
     net (AP[i] hdmi.AP[i])
-  
   pin AP4
   net (AP4 hdmi.AP[4])
   pin OSC_IN_AP3
@@ -157,17 +158,14 @@ public unique pcb-module module :
   net (HDMI_TX2_N hdmi.TX2_N)
   pin HDMI_TX2_P
   net (HDMI_TX2_P hdmi.TX2_P)
-
   pin HDMI_TX1_N 
   net (HDMI_TX1_N hdmi.TX1_N)
   pin HDMI_TX1_P
   net (HDMI_TX1_P hdmi.TX1_P)
-  
   pin HDMI_TX0_N 
   net (HDMI_TX0_N hdmi.TX0_N)
   pin HDMI_TX0_P
   net (HDMI_TX0_P hdmi.TX0_P)
-
   pin HDMI_TXC_N
   net (HDMI_TXC_N hdmi.TXC_N)
   pin HDMI_TXC_P
@@ -216,6 +214,7 @@ public unique pcb-module module :
   cap-strap(VDDIO, GND, 0.1e-6)
   cap-strap(VDDIO, GND, 2.2e-6)
 
+  ;misc
   pin TEST
   net (TEST hdmi.TEST)
   res-strap(TEST, GND, 0.0)

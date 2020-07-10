@@ -107,7 +107,7 @@ public pcb-symbol inductor-sym :
 
 ; ====== Fuses =================================================================
 
-pcb-symbol fuse-sym :
+public pcb-symbol fuse-sym :
   pin p[0] at unit-point(0.0, 1.0)
   pin p[1] at unit-point(0.0, -1.0)
 
@@ -423,6 +423,63 @@ public pcb-symbol unplated-hole-sym :
   
   unit-ref([-1.0, 0.75])
 
+public pcb-symbol header-symbol (n-pins:Int, sides:Int) :
+  if sides > 2 :
+    fatal("Header cannot have more than 2 sides!")
+  if n-pins % sides != 0 :
+    fatal("Need an even number of pins for a 2 sided header!")
+  
+  val ytop = to-double(n-pins / sides)/2.0
+  val ypin = to-double(n-pins / sides)/2.0 - 0.5
+  val nside = n-pins / sides
+  unit-line([[(-1.0), ytop], [(-1.0), (- ytop)]])
+  unit-line([[1.0, ytop], [1.0, (- ytop)]])
+  unit-line([[(-1.0), ytop], [1.0, ytop]])
+  unit-line([[(-1.0), (- ytop)], [1.0, (- ytop)]])
+  for i in 0 to nside do :
+    pin p[(i + 1)] at unit-point(1.0, (ypin - (to-double(i) * 1.0))) with :
+      direction = Right
+      length = 2.54
+      number-size = 0.762
+      name-size = 0.762
+    if sides > 1 :
+      pin p[(i + nside + 1)] at unit-point((- 1.0), (ypin - (to-double(i) * 1.0))) with :
+        direction = Left
+        length = 2.54
+        number-size = 0.762
+        name-size = 0.762
+    
+public defn header-symbol (n-pins:Int) :
+  header-symbol(n-pins, 1)
+
+;odd/even dual-header rows
+public pcb-symbol header-symbol-dual (n-pins:Int) :
+  if n-pins % 2 != 0 :
+    fatal("Need an even number of pins for a 2 sided header!")
+
+  val ytop = to-double(n-pins)/4.0
+  unit-line([[(-1.5), ytop - 0.5], [(-1.5), (- ytop + 0.5)]])
+  unit-line([[1.5, ytop - 0.5], [1.5, (- ytop + 0.5)]])
+  unit-line([[(-1.5), ytop - 0.5], [1.5, ytop - 0.5]])
+  unit-line([[(-1.5), (- ytop + 0.5)], [1.5, (- ytop + 0.5)]])
+
+  var j = 1
+  var k = 1
+  for i in 1 to (n-pins + 1) do :
+    if i % 2 != 0 :
+      pin p[i] at unit-point((-1.5), (ytop - (to-double(j) * 1.0))) with :
+        direction = Left
+        length = 2.54
+        number-size = 0.762
+        name-size = 0.762
+      j = j + 1
+    else :
+      pin p[i] at unit-point(1.5, (ytop - (to-double(k) * 1.0))) with :
+        direction = Right
+        length = 2.54
+        number-size = 0.762
+        name-size = 0.762
+      k = k + 1
 
 ; ====== Switches, Relays ======================================================
 

@@ -16,6 +16,22 @@ defpackage ocdb/texas-instruments/TL5209:
   import ocdb/generator-utils
   import ocdb/generic-components
 
+;SOIC-8
+unique pcb-package footprint :
+  val smd-pad = smd-pad(1.55, 0.6)
+  val x0 = 2.7
+  pad p[1] : {smd-pad} at loc((- x0), 1.905)
+  pad p[2] : {smd-pad} at loc((- x0), 0.635)
+  pad p[3] : {smd-pad} at loc((- x0), -0.635)
+  pad p[4] : {smd-pad} at loc((- x0), -1.905)
+  pad p[5] : {smd-pad} at loc(x0, -1.905)
+  pad p[6] : {smd-pad} at loc(x0, -0.635)
+  pad p[7] : {smd-pad} at loc(x0, 0.635)
+  pad p[8] : {smd-pad} at loc(x0, 1.905)
+  layer(Courtyard(Top)) = Rectangle(7.15, 5.0)
+  layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+  ;height = 1.75mm
+
 public unique pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "TL5209DR"
@@ -30,30 +46,26 @@ public unique pcb-component component :
     [ADJ/BYP   | 4   | Right ]
     [GND3      | 7   | Right ]
     [GND4      | 8   | Right ]
-  gen-symbol-map(ps, soic127p-package(8)) ;need to update package y-dim measures 5.1mm, should be 5.4mm
+  gen-symbol-map(ps, footprint) 
 
 public pcb-module ldo_module (v-out:Double):
   pin VIN
   pin VOUT
   pin GND
   pin EN
+  pin FB
+
   val r2 = 470.0e3                      ;r2 should be <= 470k for optimal performance
   val r1 = closest-std-val(r2 / ((v-out / 1.242) - 1.0), 1.0) ;maximum v-out = 6.75V +/- 10% -- error: want this to round down vs. up
 
   inst ldo : {ocdb/texas-instruments/TL5209/component}
-
   net (GND ldo.GND1 ldo.GND2 ldo.GND3 ldo.GND4)
   net (VIN ldo.IN)
   cap-strap(ldo.IN, GND, 1.0e-6)        ;datasheet recommends 1.0uF minimum input cap
-
   net (EN ldo.EN)
-  
   net (VOUT ldo.OUT)
-  net fb (ldo.ADJ/BYP)
-  
+  net (FB ldo.ADJ/BYP)
+  res-strap(VOUT, FB, r1)
+  res-strap(FB, GND, r2)
   cap-strap(VOUT, GND, 4.7e-6)          ;datasheet recommends 4.7uF output cap (<100uA start-up load), 10uF for higher start-up loads
-
-  res-strap(VOUT, fb, r1)
-  res-strap(fb, GND, r2)
-
-  cap-strap(fb, GND, 470.0e-12)         ;datasheet recommends 470pF bypass cap
+  cap-strap(FB, GND, 470.0e-12)         ;datasheet recommends 470pF bypass cap
