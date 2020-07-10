@@ -75,26 +75,22 @@ pcb-module beagle-board :
   schematic-group(D1) = power
   schematic-group(PWR_JACK) = power
   schematic-group(PWR_BTN) = power
-
   schematic-group(CPU) = proc
   schematic-group(Y1) = proc
   schematic-group(Y2) = proc
   schematic-group(RST_BTN) = proc
-  schematic-group(SDBOOT_BTN) = proc
   schematic-group(BUFFER) = proc
   schematic-group(INV_BUFFER) = proc
-
+  schematic-group(SDBOOT_BTN) = boot
   schematic-group(DDR3L) = ddr
-
   schematic-group(eMMC) = emmc
-
+  schematic-group(EEPROM) = eeprom
   schematic-group(USB_CONN_MINI) = usb
   schematic-group(USB_ESD_MINI) = usb
   schematic-group(USB_CONN_TYPEA) = usb
   schematic-group(USB_ESD_TYPEA) = usb
   schematic-group(FB1) = usb
   schematic-group(USB_LOAD_SW) = usb
-
   schematic-group(HDMI_CONN) = hdmi
   schematic-group(HDMI_ESD_TMDS1) = hdmi
   schematic-group(HDMI_ESD_TMDS2) = hdmi
@@ -103,8 +99,7 @@ pcb-module beagle-board :
   schematic-group(FF) = hdmi
   schematic-group(Y4) = hdmi
   schematic-group(D6) = hdmi
-  schematic-group(F1) = hdmi
-
+  schematic-group(F1) = hdm
   schematic-group(Q1) = led
   schematic-group(Q2) = led
   schematic-group(Q3) = led
@@ -113,14 +108,11 @@ pcb-module beagle-board :
   schematic-group(D3) = led
   schematic-group(D4) = led
   schematic-group(D5) = led
-
   schematic-group(ETH_CONN) = ethernet
   schematic-group(ETH_TRANS) = ethernet
   schematic-group(Y3) = ethernet
   schematic-group(FB4) = ethernet
-
   schematic-group(USD_CONN) = micro_sd
-
   schematic-group(HEADER_1) = header
   schematic-group(HEADER_2) = header
   schematic-group(JTAG_HEADER) = header
@@ -143,7 +135,6 @@ pcb-module beagle-board :
   schematic-group({earth_r}) = ethernet
   
   ;MOUNTING HOLES 
-  ;TBD
 
   ;=========================================================================
   ; PMIC & POWER 
@@ -364,9 +355,9 @@ pcb-module beagle-board :
   properties({rbias1}) :
     DNP => true
   schematic-group({rbias1}) = proc
-  val x_osc_r = res-strap(Y1.OSC_GND, GND_OSC0, 0.0)                  ;connect CLK grounds
+  val x_osc_r = res-strap(Y1.OSC_GND, GND_OSC0, 0.0)                  
   schematic-group({x_osc_r}) = proc
-  net GND_OSC1 (Y1.OSC_GND, CPU.VSS_RTC) 
+  net GND_OSC1 (Y1.OSC_GND, CPU.VSS_RTC)                                  ;connect CLK grounds
 
   ;=========================================================================
   ; USER LEDs
@@ -508,22 +499,18 @@ pcb-module beagle-board :
   net HDMI_TX2_N (HDMI_CONN.DAT2_N HDMI_TRANS.HDMI_TX2_N HDMI_ESD_TMDS1.IO1)
 
   ;transciever-cpu lcd data lines
-  ;var cap_lcd -- error: how to add caps into schematic group?
   for i in 0 to 5 do :
     net LCD_DATA[i] (HDMI_TRANS.VPC[i + 3], CPU.cpu.io[i + 86])
-    cap-strap(LCD_DATA[i], DGND, 47.0e-12)
-    res-strap(LCD_DATA[i], DGND, 100.0e3)
-    ;cap_lcd[i] = cap-strap(LCD_DATA[i], DGND, 47.0e-12)
-    ;schematic-group({cap_lcd[i]}) = hdmi
-
+    val cap_lcd1 = cap-strap(LCD_DATA[i], DGND, 47.0e-12)
+    schematic-group({cap_lcd1}) = hdmi
   for i in 5 to 11 do :
     net LCD_DATA[i] (HDMI_TRANS.VPB[i - 3], CPU.cpu.io[i + 86])
-    cap-strap(LCD_DATA[i], DGND, 47.0e-12)
-
+    val cap_lcd2 = cap-strap(LCD_DATA[i], DGND, 47.0e-12)
+    schematic-group({cap_lcd2}) = hdmi
   for i in 11 to 16 do :
     net LCD_DATA[i] (HDMI_TRANS.VPA[i - 8], CPU.cpu.io[i + 86])
-    cap-strap(LCD_DATA[i], DGND, 47.0e-12)
-
+    val cap_lcd3 = cap-strap(LCD_DATA[i], DGND, 47.0e-12)
+    schematic-group({cap_lcd3}) = hdmi
   for i in 0 to 3 do :
     net (DGND HDMI_TRANS.VPA[i])
     net (DGND HDMI_TRANS.VPC[i])
@@ -534,12 +521,10 @@ pcb-module beagle-board :
   net LCD_HSYNC (HDMI_TRANS.HSYNC)
   net LCD_DE (HDMI_TRANS.DE)
   net LCD_PCLK (HDMI_TRANS.PCLK)
-
   net LCDVSYNC (CPU.cpu.io[103])
   net LCDHSYNC (CPU.cpu.io[104])
   net LCDDE (CPU.cpu.io[105])
   net LCDPCLK (CPU.cpu.io[102])
-
   val lcd_vsync_r = res-strap(LCD_VSYNC, LCDVSYNC, 0.0)           ;place r close to processor (source)
   schematic-group({lcd_vsync_r}) = proc
   val lcd_hsync_r = res-strap(LCD_HSYNC, LCDHSYNC, 0.0)           ;place r close to processor (source)
@@ -885,21 +870,24 @@ pcb-module beagle-board :
   ;=========================================================================
   ;HI = LCD_DATA_2,3,4,5,14
   ;LO = All others
-  ;error = need to add DNP resistors to account for resistor HI/LO settings
+  for i in [2 3 4 5 14] do :
+    val rboot_lo = res-strap(#R(LCD_DATA[i]), DGND, 100.0e3)
+    properties({rboot_lo}) :
+      DNP => true
+    schematic-group({rboot_lo}) = boot
+    val rboot_hi = res-strap(#R(LCD_DATA[i]), VDD_3V3A, 100.0e3)
+    schematic-group({rboot_hi}) = boot
 
-  for i in 0 to 16 do :
-    ;val rboot_lo[i] = res-strap(#R(LCD_DATA[i]), DGND, 100.0e3)  ;error: how to use for DNP/schematic-group info?
-    res-strap(#R(LCD_DATA[i]), DGND, 100.0e3)
-    res-strap(#R(LCD_DATA[i]), VDD_3V3A, 100.0e3)
-  
-  ;res-strap(XTAL0_OUT, OSC0_OUT, 0.0)                         
-  ;val rbias0 = res-strap(OSC0_IN, OSC0_OUT, 1.0e6)
-  ;properties({rbias0}) :
-  ;  DNP => true         
-  ;schematic-group({rbias0}) = ethernet
+  for i in [0 1 6 7 8 9 10 11 12 13 15] do :
+    val rboot_lo = res-strap(#R(LCD_DATA[i]), DGND, 100.0e3)
+    schematic-group({rboot_lo}) = boot
+    val rboot_hi = res-strap(#R(LCD_DATA[i]), VDD_3V3A, 100.0e3)
+    properties({rboot_hi}) :
+      DNP => true
+    schematic-group({rboot_hi}) = boot
 
-  res-strap(#R(LCD_DATA[2]), SDBOOT, 100.0)           ;connect LCD_DATA2 to uSD_button 
-
+  val boot_btn_r = res-strap(#R(LCD_DATA[2]), SDBOOT, 100.0)       ;connect LCD_DATA2 to uSD_button 
+  schematic-group({boot_btn_r}) = boot
 
 ;=========================================================================
 ; CREATE PCB & EXPORT
@@ -910,6 +898,6 @@ print-esir()
 export-kicad("beagle", [`place => true 
                           `gen-board => true 
                           `gen-schematic => true 
-                          `fresh => true
+                          `fresh => false
                           `schematic-version => 1 
                           `param-configs => [`sketch]] )
