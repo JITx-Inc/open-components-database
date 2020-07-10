@@ -606,6 +606,20 @@ public defn make-dfn-struct (fields:HashTable<String, ?>) -> DFN-STRUCT :
              y2, c1, c1-o, c2, sl-W, r1, r2, v1, v2, cl-W, a, b, al-W, 
              cmp-body-W, cmp-body-L, name, description)
   
+;public defn make-two-sided-struct (fields:HashTable<String, ?>) 
+;                                                       -> TWO-SIDED-STRUCT :
+;; assign required values
+;  val required = ["L-min", "L-max", "W-min", "W-max", "T1-min", "T1-max",
+;                  "TW1-min", "TW1-max", "E-min", "E-max", "H", "H-s", 
+;                  "Pin-n", "Density", "Pad-shape"]
+;  for k in required do :
+;    if not key?(fields, k) :
+;      fatal("%_ field is required." % [k])
+;  val [l-min, l-max, w-min, w-max, t1-min, t1-max, tw1-min, tw1-max, e-min, 
+;       e-max, h, h-s, pin-n, density, pad-shape] = 
+;      map({fields[_]}, required) as ?
+  
+  
 ; =======================
 ; REQUIRED - ALL TWO PIN
 ; =======================
@@ -702,7 +716,6 @@ public defn make-dfn-struct (fields:HashTable<String, ?>) -> DFN-STRUCT :
 ; ========================
 ; E-tol - Tolerance of Lead Span Range
 ; TW-tol - Tolerance of width of molded component leads
-
 public defstruct TWO-PIN-STRUCT :
   L-min: Double|? with: (setter => set-L-min)
   L-max: Double|? with: (setter => set-L-max)
@@ -819,7 +832,6 @@ public defstruct TWO-PIN-STRUCT :
 ; OPTIONAL - 4 LEAD DFN
 ; =====================
 ; C2               - Vertical Pad Spacing 
-
 public defstruct DFN-STRUCT :
   L-min: Double|? with: (setter => set-L-min)
   L-max: Double|? with: (setter => set-L-max)
@@ -871,52 +883,108 @@ public defstruct DFN-STRUCT :
   Name: String|? with: (setter => set-Name)
   Description: String|? with: (setter => set-Description)
 
-; ====================
-; REQUIRED
-; ====================
-; L-min, L-max   - Body Length Range
-; W-min, W-max   - Body Width Range
-; T-min, T-max   - Lead Length Range
-; TW-min, TW-max - Lead Width Range
-; H              - Maximum Height
-; Type           - Package Type - ["cap", "ind", "res", "dio"]
-; Density        - Board Density Level - ["least", "nominal", "most"]
+; ========================
+; REQUIRED - ALL TWO-SIDED
+; ========================
+; L-min, L-max     - Body Length Range
+; W-min, W-max     - Body Width Range
+; T1-min, T1-max   - Lead Length Range
+; TW1-min, TW1-max - Lead Width Range
+; E-min, E-max     - Lead Span Range
+; H                - Maximum Height
+; H-s              - Minimum Standoff Height
+; Pin-n            - Number of Pins 
+; Density          - Board Density Level - ["least", "nominal", "most"]
+; Pad-shape        - Pad Shape - ["Rounded", "Rectangular"]
 
-;public defstruct CHIP :
-;  L-min: Double|? 
-;  L-max: Double|? 
-;  W-min: Double|?  
-;  W-max: Double|? 
-;  T-min: Double|? 
-;  T-max: Double|? 
-;  H: Double|?
-;  Type: String|?
-;  Density: String|?
-;  Polarity-pin: Int|False|?
-;  S-min: Double|?
-;  S-max: Double|?
-;  JT-min: Double|? 
-;  JH-min: Double|? 
-;  JS-min: Double|? 
-;  L-tol: Double|?
-;  S-tol: Double|?
-;  W-tol: Double|?
-;  Fab-tol: Double|?
-;  Placement-tol: Double|?
-;  Courtyard-excess: Double|?
-;  X: Double|?
-;  Y: Double|?
-;  Center: Double|?
-;  Sl-W: Double|?
-;  R1: Double|?
-;  R2: Double|?
-;  V1: Double|?
-;  V2: Double|?
-;  Cl-W: Double|?
-;  A: Double|?
-;  B: Double|?
-;  Al-W: Double|?
-;  Cmp-body-W: Double|?
-;  Cmp-body-L: Double|?
-;  Name: String|?
-;  Description: String|?
+; ========================
+; OPTIONAL - ALL TWO-SIDED
+; ========================
+; S-min, S-max     - Heel Spacing
+; S1               - Vertical Pitch
+; JT-min           - Toe Fillet
+; JH-min           - Heel Fillet
+; JS-min           - Side Fillet
+; L-tol            - Tolerance of overall width of component, inc. leads
+; S-tol            - Tolerance inner distance heels of opposing lead rows
+; W-tol            - Tolerance of width of component leads
+; T1-tol           - Tolerance of Lead Length of component leads
+; TW1-tol          - Tolerance of Lead Width of component leads 
+; E-tol            - Tolerance of Lead Span 
+; Fab-tol          - Fabrication Tolerance Assumption
+; Placement-tol    - Placement Tolerance Assumption
+; Courtyard-excess - Courtyard Excess
+; X                - Pad dimension X
+; Y                - Pad dimension Y
+; Center           - Pad spacing
+; Sl-W             - Silkscreen Line Width
+; R1               - Silkscreen Dimension R1
+; R2               - Silkscreen Dimension R2
+; V1               - Courtyard Dimension V1
+; V2               - Courtyard Dimension V2
+; Cl-W             - Courtyard Line Width
+; A                - Assembly Information Dimension A
+; B                - Assembly Information Dimension B
+; Al-W             - Assembly Line Width
+; Cmp-body-W       - Component Body Width
+; Cmp-body-L       - Component Body Length
+; Name             - Footprint Name
+; Description      - Footprint Description
+
+; ========================
+; OPTIONAL - SOIC 
+; ========================
+; THW-min, THW-max - Thermal Pad Width Range
+; THL-min, THL-max - Thermal Pad Length Range
+public defstruct TWO-SIDED-STRUCT :
+  L-min: Double|? with: (setter => set-L-min)
+  L-max: Double|? with: (setter => set-L-max)
+  W-min: Double|? with: (setter => set-W-min) 
+  W-max: Double|? with: (setter => set-W-max)
+  T1-min: Double|? with: (setter => set-T1-min)
+  T1-max: Double|? with: (setter => set-T1-max)
+  TW1-min: Double|? with: (setter => set-TW1-min)
+  TW1-max: Double|? with: (setter => set-TW1-max)
+  E-min: Double|? with: (setter => set-E-min)
+  E-max: Double|? with: (setter => set-E-max)
+  H: Double|? with: (setter => set-H)
+  H-s: Double|? with: (setter => set-H-s)
+  Pin-n: Int|? with: (setter => set-Pin-n)
+  Density: String|? with: (setter => set-Density)
+  Pad-shape: String|? with: (setter => set-Pad-shape)
+  S-min: Double|? with: (setter => set-S-min)
+  S-max: Double|? with: (setter => set-S-max)
+  S1: Double|? with: (setter => set-S1)
+  JT-min: Double|? with: (setter => set-JT-min)
+  JH-min: Double|? with: (setter => set-JH-min)
+  JS-min: Double|? with: (setter => set-JS-min)
+  L-tol: Double|? with: (setter => set-L-tol)
+  S-tol: Double|? with: (setter => set-S-tol)
+  W-tol: Double|? with: (setter => set-W-tol)
+  T1-tol: Double|? with: (setter => set-T1-tol)
+  TW1-tol: Double|? with: (setter => set-TW1-tol)
+  E-tol: Double|? with: (setter => set-E-tol)
+  Fab-tol: Double|? with: (setter => set-Fab-tol)
+  Placement-tol: Double|? with: (setter => set-Placement-tol)
+  Courtyard-excess: Double|? with: (setter => set-Courtyard-excess)
+  X: Double|? with: (setter => set-X)
+  Y: Double|? with: (setter => set-Y)
+  Center: Double|? with: (setter => set-Center)
+  Sl-W: Double|? with: (setter => set-Sl-W)
+  R1: Double|? with: (setter => set-R1)
+  R2: Double|? with: (setter => set-R2)
+  V1: Double|? with: (setter => set-V1)
+  V2: Double|? with: (setter => set-V2)
+  Cl-W: Double|? with: (setter => set-Cl-W)
+  A: Double|? with: (setter => set-A)
+  B: Double|? with: (setter => set-B)
+  Al-W: Double|? with: (setter => set-Al-W)
+  Cmp-body-W: Double|? with: (setter => set-Cmp-body-W)
+  Cmp-body-L: Double|? with: (setter => set-Cmp-body-L)
+  Name: String|? with: (setter => set-Name)
+  Description: String|? with: (setter => set-Description)
+  THW-min: Double|? with: (setter => set-THW-min)
+  THW-max: Double|? with: (setter => set-THW-max)
+  THL-min: Double|? with: (setter => set-THL-min)
+  THL-max: Double|? with: (setter => set-THL-max)
+
