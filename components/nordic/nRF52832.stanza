@@ -1,0 +1,170 @@
+#use-added-syntax(esir)
+defpackage ocdb/nordic/nRF52832 :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  import jitpcb/visualizer
+
+pcb-bundle io-pin : 
+  pin p
+
+public unique pcb-component component :
+  manufacturer = "Nordic Semiconductor"
+  mpn ="nRF52832-QFAA-R7"
+  description = "NRF52 BLE SoC"
+  port dec : pin[4]
+  port p0 : pin[32]
+  port vdd : pin[3]
+  pin SWDCLK
+  pin SWDIO
+  pin ANT
+  port gnd : pin[3]
+  port xc : pin[2]
+  pin dcc
+
+  val ps = PinSpec $ #TABLE :
+    [Ref       | Int ...   | Dir]
+    [dec[0] | 1 | Left]
+    for i in 0 to 11 do : 
+      [p0[i] | i + 2 | Left]
+    [vdd[1] | 36 | Right]
+    [xc[1]  | 35 | Right]
+    [xc[0]  | 34 | Right]
+    [dec[2] | 33 | Right]
+    [dec[1] | 32 | Right]
+    [gnd[0] | 31 | Right]
+    [ANT    | 30 | Right]
+    [p0[24] | 29 | Right]
+    [p0[23] | 28 | Right]
+    [p0[22] | 27 | Right]
+    [SWDIO  | 26 | Right]
+    [SWDCLK | 25 | Right]
+    [vdd[0] | 13 | Down]
+    for i in 11 to 22 do : 
+      [p0[i] | i + 3 | Down]
+    [gnd[2] | 49 | Up]
+    [vdd[2] | 48 | Up]
+    [dcc    | 47 | Up]
+    [dec[3] | 46 | Up]
+    [gnd[1] | 45 | Up]
+    for i in 31 to 24 by -1 do : 
+      [p0[i] | i + 12 | Up]
+
+  for i in 0 to 32 do:
+    supports io-pin :
+      p => p0[i]
+  for i in 2 to 5 do :
+    supports adc :
+      adc => p0[i]
+  for i in 28 to 32 do :
+    supports adc :
+      adc => p0[i]
+
+  make-box-symbol(ps)
+  assign-package(qfn-package(0.4, 6.0, 48, 0.2, 0.4, [4.6 4.6]), ps)
+
+defn add-xtal-caps (xtal:Ref, stray-capacitance:Double) :
+  inside pcb-module:
+    val c-load = property(xtal.load-capacitance)
+    val c-bal = 2.0 * (c-load - stray-capacitance)
+    for i in 1 through 2 do :
+      cap-strap(xtal.p[i], xtal.g[i], c-bal)
+
+; Default stray capacitance
+defn add-xtal-caps (xtal:Ref) :
+  add-xtal-caps(xtal, 5.0e-12)
+
+pcb-module t-filter :
+  pin in
+  pin out
+  pin gnd
+  inst l1 : {gen-ind-cmp(0.0027)}
+  inst l2 : {gen-ind-cmp(0.0039)}
+  inst c : {gen-cap-cmp(1.0e-12)}
+  net (c.p[1], in)
+  net (c.p[2], l1.p[1], l2.p[1])
+  net (l2.p[2], out)
+  net (l1.p[2], gnd)
+  package(l2) at loc(0.0, 0.0) on Top
+  package(l1) at loc(-1.4, 0.6, 90.0) on Top (relative-to l2)
+  package(c) at loc(-2.8, 0.0) on Top (relative-to l2)
+
+public unique pcb-module module :
+  port pow3v0 : power
+  pin gnd
+  ; Chip antenna, with lpf, and t-filter matching network
+  inst proc : {ocdb/nordic/nRF52832/component}
+  net (gnd, proc.gnd[0], proc.gnd[1], proc.gnd[2], pow3v0.gnd)
+  net (pow3v0.vdd, proc.vdd[0], proc.vdd[1], proc.vdd[2]) 
+  ; ; Decoupling caps
+  cap-strap(proc.vdd[0], gnd, 4.7e-6)
+  cap-strap(proc.vdd[0], gnd, 0.1e-6)
+  cap-strap(proc.vdd[0], gnd, 0.1e-6)
+  cap-strap(proc.dec[0], gnd, 0.1e-6)
+  cap-strap(proc.dec[2], gnd, 0.1e-9)
+  cap-strap(proc.dec[3], gnd, 1.0e-6)
+
+  properties(proc.vdd[0]):
+    power-request => [3.0 0.1 5.0e-5]
+    gnd-ref => #R(gnd)
+
+  ; External oscillator
+  inst xtal : {ocdb/abracon/ABM12-32-B2X-T3/component}
+  net XC1 (proc.xc[0], xtal.p[1])
+  net XC2 (proc.xc[1], xtal.p[2])
+  add-xtal-caps(xtal)
+  net (gnd, xtal.g[1], xtal.g[2])
+
+  inst ant : {ocdb/johanson/2450AT18A100/component}
+  inst lpf : {ocdb/johanson/2450FM07A0029/component}
+  net (proc.ANT, lpf.in)
+  inst t : t-filter
+  net (lpf.out, t.in)
+  net (t.out, ant.feed)
+  net (t.gnd, gnd)
+  package(proc) at loc(0.0, 0.0) on Top
+  package(lpf) at loc(4.7, 0.0) on Top (relative-to proc)
+  package(ant) at loc(12.9, 0.0) on Top (relative-to proc)
+  package(t.l2) at loc(9.6, 0.0) on Top (relative-to proc)
+  layer(Courtyard(Top)) = Rectangle(6.0, 3.0, loc(6.35, 0.0))
+
+
+  for i in 0 to 32 do :
+    supports gpio :
+      require pin:io-pin from proc
+      gpio => pin.p
+  for i in 0 to 8 do :
+    supports adc :
+      require pin:adc from proc
+      adc => pin.adc
+  for i in 0 to 2 do :
+    supports i2c :
+      require pins:io-pin[2] from proc
+      sda => pins[0].p
+      scl => pins[1].p
+  for i in 0 to 3 do :
+    supports spi :
+      require pins:io-pin[4] from proc
+      mosi => pins[0].p
+      miso => pins[1].p
+      sck => pins[2].p
+      ss => pins[3].p
+  for i in 0 to 2 do :
+    supports uart :
+      require pins:io-pin[2] from proc
+      tx => pins[0].p
+      rx => pins[1].p
+

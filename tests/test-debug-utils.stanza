@@ -1,0 +1,142 @@
+#use-added-syntax(esir)
+defpackage ocdb/tutorial :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import esir/repl-lib
+  import ocdb/tests/default-harness
+  import ocdb/pinspec
+  import ocdb/land-patterns
+  import ocdb/connects
+  import ocdb/generator-utils
+  import ocdb/debug-utils
+  import ocdb/generic-components
+  import ocdb/bundles
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import jitpcb/visualizer
+
+pcb-component dummy-mcu :
+  pin vdd
+  pin gnd
+  port io : pin[8]
+  val ps = PinSpec $ #TABLE :
+    [Ref   | Int ...  | Dir ]
+    [vdd   | 1        | Up ]
+    [gnd   | 10       | Down ]
+    [io[0] | 2        | Left ]
+    [io[1] | 3        | Left ]
+    [io[2] | 4        | Left ]
+    [io[3] | 5        | Left ]
+    [io[4] | 6        | Right ]
+    [io[5] | 7        | Right ]
+    [io[6] | 8        | Right ]
+    [io[7] | 9        | Right ]
+  make-box-symbol(ps)
+  assign-package(pin-header-pkg(10, 2, 2.54, 2.54), ps)
+
+  supports power :
+    vdd => vdd
+    gnd => gnd
+
+  supports uart :
+    rx => io[7]
+    tx => io[6]
+    
+  ;supports uart4 :
+  ;  cts => io[0]
+  ;  txd => io[1]
+  ;  rxd => io[2]
+  ;  rts => io[3]
+  
+  supports jtag :
+    tms => io[0]
+    tck => io[1]
+    tdo => io[2]
+    tdi => io[3]
+    trstn => io[4]
+
+
+pcb-module my-design :
+  inst r : example-resistor
+  inst r2 : example-resistor
+  inst r3 : example-resistor
+  inst dummy : dummy-mcu
+  net n1 (r.p[1], r2.p[1])
+  val smd-cmp = ocdb/generic-components/top-smd-testpoint-cmp()
+  val hdr-cmp = pin-header(1)
+  val jumper3 = pin-header(3)
+  val jumper2 = pin-header(2)
+  properties :
+    debug => true
+  val ftdi-pwr = db-ftdi-two-comms(dummy)
+  if ftdi-pwr is [Ref, Ref] :
+    val [ftdi-vdd, ftdi-gnd] = ftdi-pwr as [Ref, Ref]
+    db-testpad(ftdi-gnd)
+  ;val ftdi-pwr = db-ftdi-four-comms(dummy)
+  ;if ftdi-pwr is [Ref, Ref] :
+  ;  val [ftdi-vdd, ftdi-gnd] = ftdi-pwr as [Ref, Ref]
+  ;  db-testpad(ftdi-gnd)
+  val jtag-pwr = db-jtag(dummy)
+  if jtag-pwr is [Ref, Ref] :
+    val [jtag-vdd, jtag-gnd] = jtag-pwr as [Ref, Ref]
+    db-testpad(jtag-gnd)
+  db-testpoint(r.p[1], smd-cmp)
+  db-testpoint-persist(r.p[1], smd-cmp)
+  db-testpoint-persist-btm(r.p[1], smd-cmp)
+  db-testpoint([r.p[1] r2.p[1]], smd-cmp)
+  db-testpoint-persist([r.p[1] r2.p[1]], smd-cmp)
+  db-testpoint-persist-btm([r.p[1] r2.p[1]], smd-cmp)
+  db-testpad(n1)
+  db-testpad(r.p[1])
+  db-testpad-persist(r.p[1])
+  db-testpad-persist-btm(r.p[1])
+  db-testpad([r.p[1] r2.p[1]])
+  db-testpad-persist([r.p[1] r2.p[2]])
+  db-testpad-persist-btm([r.p[1] r2.p[2]])
+  db-testheader(r.p[1])
+  db-testheader-persist(r.p[1])
+  db-testheader-persist-btm(r.p[1])
+  db-testheader([r.p[1] r2.p[1]])
+  db-testheader-persist([r.p[1] r2.p[1]])
+  db-testheader-persist-btm([r.p[1] r2.p[1]])
+  db-jumper-mux(r.p[2], [r2.p[2] r3.p[1]], r3.p[1], jumper3)
+  db-jumper-mux(r.p[2], [r2.p[2] r3.p[1]], r3.p[1])
+  db-jumper-mux(n1, [r2.p[2] r3.p[1]], r3.p[1])
+  db-jumper(r.p[2], [r2.p[2] r3.p[1]], jumper2)
+  db-jumper(r.p[2], [r2.p[2] r3.p[1]])
+  db-jumper(r.p[2], r2.p[2])
+  db-zero-res(r.p[2], r2.p[2])
+  db-jumper-persist-zero-res(r.p[1], r2.p[2], jumper2)
+  db-jumper-persist-zero-res(r.p[1], r2.p[2])
+  db-jumper-persist-zero-res(r.p[1], [r2.p[2] r3.p[2]])
+  db-jumper-persist-zero-res([[r2.p[2] r3.p[2]], [r.p[1] r2.p[1]]])
+  db-jumper-persist-zero-res([[r2.p[2] r3.p[2]], [r.p[1] r2.p[1]]], jumper2)
+
+pcb-module top-level :
+  inst m1 : my-design
+  ;package(m1.r) at loc((- 2.0), 0.0) on Top 
+  layout-group(m1) = Debug
+  properties(m1) :
+    debug => true
+  inst m2 : my-design
+  ;package(m2.r) at loc(2.0, 0.0) on Top
+  layout-group(m2) = Production
+  properties(m2) :
+    debug => false
+
+val main-design = default-board(top-level, 4, 100.0, 100.0)
+;view(ocdb/generic-components/top-smd-testpoint-cmp(2.0))
+view(main-design)
+print-esir()
+println(esir/gen/dot)
+
+export-kicad("add-testpoints-test", [`place => true 
+                              `gen-board => true 
+                              `gen-schematic => true 
+                              `fresh => true 
+                              `schematic-version => 2 
+                              `param-configs => [`sketch]] )
