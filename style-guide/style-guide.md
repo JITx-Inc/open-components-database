@@ -19,31 +19,22 @@ pad p[1] : {smd-pad(0.55, 0.45)} at loc(0.0, 0.5)
 pad p[2] : {smd-pad(0.55, 0.45)} at loc(0.5, 0.0)
 ```
 
-#### Group together pins that can be easily named where it makes sense 
-```stanza
-pcb-bundle leds :
-  pin r
-  pin g
-  pin b
-```
-
 #### Use unified generator to create pins where possible
 ```stanza
-port leds : leds
 port p1 : pin[{1 through 4}]
-port p2 : pin[{1 3 5}]
+port p2 : pin[{5 7 9}]
 ```
 
 instead of  
 
 ```stanza
-pin r
-pin g
-pin b
 pin p[1]
 pin p[2]
 pin p[3]
 pin p[4]
+pin p[5]
+pin p[7]
+pin p[9]
 ```
 
 #### Define pins or ports to externally interface with other modules
