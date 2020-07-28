@@ -344,17 +344,65 @@ public defn make-two-sided-pads (start:Tuple<String>, n:Int,
   inside pcb-package :
     val x0 = (- (hor-pitch / 2.0))
     val y0 = (to-double((n / 2) - 1) * pin-pitch) / 2.0
-    val [left, right] = [loc(x0, y0, -90.0), loc((- x0), (- y0), 90.0)]
+    val [left, right] = [loc(x0, y0, 0.0), loc((- x0), (- y0), 180.0)]
     val [l0, l1] = switch(start) :
       ["Top", "Left"] : [left, right]
       ["Bottom", "Right"] : [right, left]
       else :
         fatal("Orientation of pins not supported")
-    val pin-row = to-list(row-locs(W, n / 2, pin-pitch))
+    val pin-row = to-list(col-locs(N, n / 2, pin-pitch))
     for (i in 0 to (n / 2), l in pin-row) do :
       pad p[i + 1] : {smd-pad(pad-y, pad-x)} at l0 * l
     for (i in (n / 2) to n, l in pin-row) do :
       pad p[i + 1] : {smd-pad(pad-y, pad-x)} at l1 * l
+
+public defn make-convex-e-pads (n:Int, pad-x1:Double, pad-x2:Double,
+                                pad-y:Double, hor-pitch:Double, 
+                                pin-pitch:Double, w:Double
+                                court-w:Double, court-h:Double,
+                                f-silk:Shape, pol-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("pol", Top)) = pol-silk 
+    make-convex-e-pads(n, pad-x1, pad-x2, pad-y, hor-pitch, pin-pitch, w,
+                       court-w, court-h, f-silk)
+
+public defn make-convex-e-pads (n:Int, pad-x1:Double, pad-x2:Double,
+                                pad-y:Double, hor-pitch:Double, 
+                                pin-pitch:Double, w:Double
+                                court-w:Double, court-h:Double,
+                                f-silk:Shape) :
+  inside pcb-package :
+    layer(Silkscreen("f-silk", Top)) = f-silk 
+    make-convex-e-pads(n, pad-x1, pad-x2, pad-y, hor-pitch, pin-pitch, w,
+                       court-w, court-h)
+
+public defn make-convex-e-pads (n:Int, pad-x1:Double, pad-x2:Double,
+                                pad-y:Double, hor-pitch:Double, 
+                                pin-pitch:Double, w:Double
+                                court-w:Double, court-h:Double) :
+  inside pcb-package :
+    layer(Courtyard(Top)) = Rectangle(court-w, court-h)
+    make-convex-e-pads(n, pad-x1, pad-x2, pad-y, hor-pitch, pin-pitch, w)
+
+                                
+public defn make-convex-e-pads (n:Int, pad-x1:Double, pad-x2:Double,
+                                pad-y:Double, hor-pitch:Double, 
+                                pin-pitch:Double, w:Double) :
+  inside pcb-package :
+    val x0 = (- (hor-pitch / 2.0))
+    val y0 = (w / 2.0) - (pad-x2 / 2.0)
+    val y1 = (to-double((n / 2) - 3) * pin-pitch) / 2.0
+    val [left, right] = [loc(x0, y1, 0.0), loc((- x0), (- y1), 180.0)]
+    val pin-row = to-list(col-locs(N, (n / 2) - 2, pin-pitch))
+    pad p[1] : {smd-pad(pad-y, pad-x1)} at loc(x0, y0, 0.0)
+    for (i in 1 to ((n / 2) - 1), l in pin-row) do :
+      pad p[i + 1] : {smd-pad(pad-y, pad-x2)} at left * l
+    pad p[(n / 2)] : {smd-pad(pad-y, pad-x1)} at loc(x0, (- y0), 0.0)
+    pad p[((n / 2) + 1)] : {smd-pad(pad-y, pad-x1)} at loc((- x0), (- y0),
+                                                           180.0)
+    for (i in ((n / 2) + 1) to (n - 1), l in pin-row) do :
+      pad p[i + 1] : {smd-pad(pad-y, pad-x2)} at right * l
+    pad p[n] : {smd-pad(pad-y, pad-x1)} at loc((- x0), y0, 180.0)
 
 public defn make-four-sided-pads (start:Tuple<String>, m:Int, n:Int,
                                   pad-x:Double, pad-y:Double, 
@@ -395,72 +443,75 @@ public defn make-four-sided-pads (start:Tuple<String>, m:Int,
   inside pcb-package :
     val x0 = (- (hor-pitch / 2.0))
     val y0 = (to-double(n - 1) * pin-pitch) / 2.0
-    val [left, right] = [loc(x0, y0, -90.0), loc((- x0), (- y0), 90.0)]
-    val [top, bottom] = [loc(y0, (- x0), 180.0), loc((- y0), x0, 0.0)]
-    val m-row = to-list(loc(0.0,0.0,0.0) * row-locs(W, m, pin-pitch))
-    val n-row = to-list(loc(0.0,0.0,0.0) * row-locs(W, n, pin-pitch))
-    val pin-pad = smd-pad(pad-y, pad-x)
+    val x1 = (to-double(m - 1) * pin-pitch) / (- 2.0)
+    val y1 = (vert-pitch / (- 2.0))
+    val [left, right] = [loc(x0, y0, 0.0), loc((- x0), (- y0), 180.0)]
+    val [top, bottom] = [loc((- x1), (- y1), 180.0), loc(x1, y1, 0.0)]
+    val m-row = to-list(row-locs(W, m, pin-pitch))
+    val n-row = to-list(col-locs(N, n, pin-pitch))
     val n-pins = 2 * (m + n)
     ; TODO cleanup and add functions to reduce repetitive code
-    val [l0, l1, l2, l3, row0, row1, p0, p1, p2, p3] = switch(start) :
+    val [l0, l1, l2, l3, row0, row1, p0, p1, p2, p3, w, h] = switch(start) :
       ["Top", "Left"] : [left, bottom, right, top, n-row, m-row,
                      0 to n, n to (n + m), (n + m) to ((2 * n) + m),
-                     ((2 * n) + m) to (2 * (n + m))]
+                     ((2 * n) + m) to (2 * (n + m)), pad-x, pad-y]
       ["Bottom", "Left"] : [bottom, right, top, left, m-row, n-row, 
                      0 to m, m to (m + n), (m + n) to ((2 * m) + n),
-                     ((2 * m) + n) to (2 * (m + n))]
+                     ((2 * m) + n) to (2 * (m + n)), pad-y, pad-x]
       ["Bottom", "Right"] : [right, top, left, bottom, n-row, m-row, 
                      0 to n, n to (n + m), (n + m) to ((2 * n) + m),
-                     ((2 * n) + m) to (2 * (n + m))]
+                     ((2 * n) + m) to (2 * (n + m)), pad-x, pad-y]
       ["Top", "Right"] : [top, left, bottom, right, m-row, n-row, 
                      0 to m, m to (m + n), (m + n) to ((2 * m) + n),
-                     ((2 * m) + n) to n-pins]
+                     ((2 * m) + n) to n-pins, pad-y, pad-x]
       ["Left", "Center"] : 
         if n % 2 == 0 :
           [left, bottom, right, top, n-row, m-row,
-          cat((n-pins - (n / 2)) to n-pins, 0 through (n / 2)),
-          ((n / 2) + 1) through ((n / 2) + m), 
-          ((n / 2) + m + 1) through ((n / 2) + m + n),
-          ((n / 2) + m + n + 1) to (n-pins - (n / 2))]
+          cat((n-pins - (n / 2)) to n-pins, 0 to (n / 2)),
+          (n / 2) to ((n / 2) + m), 
+          ((n / 2) + m) to ((n / 2) + m + n),
+          ((n / 2) + m + n) to (n-pins - (n / 2)), pad-x, pad-y]
         else :
           fatal("Can't determine Center for an even number of pins")
       ["Bottom", "Center"] : 
         if m % 2 == 0 :
           [bottom, right, top, left, m-row, n-row,
-          cat((n-pins - (m / 2)) to n-pins, 0 through (m / 2)),
-          ((m / 2) + 1) through ((m / 2) + n), 
-          ((m / 2) + n + 1) through ((m / 2) + n + m),
-          ((m / 2) + n + m + 1) to (n-pins - (m / 2))]
+          cat((n-pins - (m / 2)) to n-pins, 0 to (m / 2)),
+          (m / 2) to ((m / 2) + n), 
+          ((m / 2) + n) to ((m / 2) + n + m),
+          ((m / 2) + n + m) to (n-pins - (m / 2)), pad-y, pad-x]
         else :
           fatal("Can't determine Center for an even number of pins")
       ["Right", "Center"] :
         if n % 2 == 0 :
           [right, top, left, bottom, n-row, m-row,
-          cat((n-pins - (n / 2)) to n-pins, 0 through (n / 2)),
-          ((n / 2) + 1) through ((n / 2) + m), 
-          ((n / 2) + m + 1) through ((n / 2) + m + n),
-          ((n / 2) + m + n + 1) to (n-pins - (n / 2))]
+          cat((n-pins - (n / 2)) to n-pins, 0 to (n / 2)),
+          (n / 2) to ((n / 2) + m), 
+          ((n / 2) + m) to ((n / 2) + m + n),
+          ((n / 2) + m + n) to (n-pins - (n / 2)), pad-x, pad-y]
         else :
           fatal("Can't determine Center for an even number of pins")
       ["Top", "Center"] : 
         if m % 2 == 0 :
           [top, left, bottom, right, m-row, n-row,
-          cat((n-pins - (m / 2)) to n-pins, 0 through (m / 2)),
-          ((m / 2) + 1) through ((m / 2) + n), 
-          ((m / 2) + n + 1) through ((m / 2) + n + m),
-          ((m / 2) + n + m + 1) to (n-pins - (m / 2))]
+          cat((n-pins - (m / 2)) to n-pins, 0 to (m / 2)),
+          (m / 2) to ((m / 2) + n), 
+          ((m / 2) + n) to ((m / 2) + n + m),
+          ((m / 2) + n + m) to (n-pins - (m / 2)), pad-y, pad-x]
         else :
           fatal("Can't determine Center for an even number of pins")
       else :
         fatal("Orientation of pins not supported")
+    val pin-pad-h = smd-pad(w, h)
+    val pin-pad-v = smd-pad(h, w)
     for (i in p0, l in row0) do :
-      pad p[i + 1] : {pin-pad} at l0 * l
+      pad p[i + 1] : {pin-pad-v} at l0 * l
     for (i in p1, l in row1) do :
-      pad p[i + 1] : {pin-pad} at l1 * l
+      pad p[i + 1] : {pin-pad-h} at l1 * l
     for (i in p2, l in row0) do :
-      pad p[i + 1] : {pin-pad} at l2 * l
+      pad p[i + 1] : {pin-pad-v} at l2 * l
     for (i in p3, l in row1) do :
-      pad p[i + 1] : {pin-pad} at l3 * l
+      pad p[i + 1] : {pin-pad-h} at l3 * l
 
 ;TODO make staggered bga and different pitches generator
 ;public defn make-bga-pads (
