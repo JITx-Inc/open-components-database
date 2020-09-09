@@ -259,3 +259,14 @@ public defn set-power-source (pos:Ref, neg:Ref, v-in:Double):
     properties({pos}):
       power-input => v-in
       gnd-ref => #R({neg})
+
+public defn add-xtal-caps (xtal:Ref, stray-capacitance:Double) :
+  inside pcb-module:
+    val c-load = property(xtal.load-capacitance)
+    val c-bal = 2.0 * (c-load - stray-capacitance)
+    for i in 1 through 2 do :
+      cap-strap(xtal.p[i], xtal.gnd, c-bal)
+
+; Default stray capacitance
+public defn add-xtal-caps (xtal:Ref) :
+  add-xtal-caps(xtal, 5.0e-12)
