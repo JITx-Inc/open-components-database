@@ -52,6 +52,27 @@ public pcb-component example-resistor :
   symbol = {resistor-sym(false)}(p[1] => p[1], p[2] => p[2])
   package = {ipc-two-pin-package("0402")}(p[1] => p[1], p[2] => p[2])
 
+public defn add-xtal-caps (xtal:Ref, stray-capacitance:Double) :
+  inside pcb-module:
+    val c-load = property(xtal.load-capacitance)
+    val c-bal = 2.0 * (c-load - stray-capacitance)
+    for i in 1 through 2 do :
+      cap-strap(xtal.p[i], xtal.gnd, c-bal)
+
+; Default stray capacitance. Should come from analysis of tracelength, stackup.
+public defn add-xtal-caps (xtal:Ref) :
+  add-xtal-caps(xtal, 5.0e-12)
+
+public pcb-connection isolate (a:Ref, b:Ref) :
+  unique inst buf : {ocdb/texas-instruments/ISO1540/component}
+  net ({a}.sda, {buf}.SDA1)
+  net ({a}.scl, {buf}.SCL1)
+  net ({b}.sda, {buf}.SDA2)
+  net ({b}.scl, {buf}.SCL2)
+when :
+  port-type(a) == #PT(i2c) and
+  port-type(b) == #PT(i2c) 
+
 public defn make-voltage-regulator (input:Ref, gnd:Ref, v-out:[Double Double Double]|Double, reg:Ref) -> [Ref, Ref] :
   inside pcb-module :
     val vin = property(input.voltage)
@@ -259,14 +280,3 @@ public defn set-power-source (pos:Ref, neg:Ref, v-in:Double):
     properties({pos}):
       power-input => v-in
       gnd-ref => #R({neg})
-
-public defn add-xtal-caps (xtal:Ref, stray-capacitance:Double) :
-  inside pcb-module:
-    val c-load = property(xtal.load-capacitance)
-    val c-bal = 2.0 * (c-load - stray-capacitance)
-    for i in 1 through 2 do :
-      cap-strap(xtal.p[i], xtal.gnd, c-bal)
-
-; Default stray capacitance
-public defn add-xtal-caps (xtal:Ref) :
-  add-xtal-caps(xtal, 5.0e-12)
