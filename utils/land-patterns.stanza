@@ -82,6 +82,72 @@ public defn pth-pad (anchor:Anchor, drill-r:Double) :
 
 public defn pth-pad (drill-r:Double) :
   pth-pad(C, drill-r)
+  
+pcb-pad pth-ovalcut-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-r:Double, mask-r:Double) :
+  name = to-string("%_ PTH Pad (drill = (%_, %_), pad = %_, mask = %_)" % [
+           anchor, drill-w, drill-h, pad-r, mask-r])
+  type = TH
+  shape = Circle(anchor, pad-r)
+  layer(Cutout()) = Capsule(drill-w, drill-h) when drill-w >= drill-h else
+                    Capsule(drill-h, drill-w, loc(0., 0., 90.))
+  layer(SolderMask(Top)) = Circle(anchor, mask-r)
+  layer(SolderMask(Bottom)) = Circle(anchor, mask-r)
+
+public defn pth-ovalcut-pad (drill-w:Double, drill-h:Double, mask-r:Double) :
+  pth-ovalcut-pad(C, drill-w, drill-h, mask-r, mask-r)
+
+pcb-pad oval-smd-pad (anchor:Anchor, w:Double, h:Double) :
+  name = to-string("%_x%_ %_ Oval SMD Pad" % [w,h,anchor])
+  type = SMD
+  if w >= h :
+    shape = Capsule(anchor, w, h)
+    layer(Paste(Top)) = Capsule(anchor, w, h)
+    layer(SolderMask(Top)) = Capsule(anchor, w, h)
+  else :
+    shape = Capsule(h, w, loc(0., 0., 90.))
+    layer(Paste(Top)) = Capsule(h, w, loc(0., 0., 90.))
+    layer(SolderMask(Top)) = Capsule(h, w, loc(0., 0., 90.))
+
+public defn oval-smd-pad (w:Double, h:Double) :
+  oval-smd-pad(C, w, h)
+
+pcb-pad oval-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
+  name = to-string("%_ Oval PTH Pad (drill = (%_, %_), pad = (%_, %_))" % [
+           anchor, drill-w, drill-h, pad-w, pad-h])
+  type = TH
+  if pad-w >= pad-h :
+    shape = Capsule(anchor, pad-w, pad-h)
+    layer(Cutout()) = Circle(anchor, drill-w) when drill-w == drill-h else
+                      Capsule(anchor, drill-w, drill-h)
+    layer(SolderMask(Top)) = Capsule(anchor, pad-w, pad-h)
+    layer(SolderMask(Bottom)) = Capsule(anchor, pad-w, pad-h)
+  else :
+    shape = Capsule(pad-h, pad-w, loc(0., 0., 90.))
+    layer(Cutout()) = Capsule(drill-h, drill-w, loc(0., 0., 90.))
+    layer(SolderMask(Top)) = Capsule(pad-h, pad-w, loc(0., 0., 90.))
+    layer(SolderMask(Bottom)) = Capsule(pad-h, pad-w, loc(0., 0., 90.))
+
+public defn oval-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
+  oval-pth-pad(C, drill-r, drill-r, pad-w, pad-h)
+
+public defn oval-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
+  oval-pth-pad(C, drill-w, drill-h, pad-w, pad-h)
+
+pcb-pad rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
+  name = to-string("%_ Rect PTH Pad (drill = (%_, %_), pad = (%_, %_))" % [
+           anchor, drill-w, drill-h, pad-w, pad-h])
+  type = TH
+  shape = Rectangle(pad-w, pad-h)
+  layer(Cutout()) = Circle(anchor, drill-w) when drill-w == drill-h else
+                    Capsule(anchor, drill-w, drill-h)
+  layer(SolderMask(Top)) = Rectangle(pad-w, pad-h)
+  layer(SolderMask(Bottom)) = Rectangle(pad-w, pad-h)
+
+public defn rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
+  rect-pth-pad(C, drill-r, drill-r, pad-w, pad-h)
+
+public defn rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
+  rect-pth-pad(C, drill-w, drill-h, pad-w, pad-h)
 
 public pcb-package non-plated-hole-pkg (drill-r:Double, mask-r:Double) :
   layer(Cutout()) = Circle(C, drill-r)
