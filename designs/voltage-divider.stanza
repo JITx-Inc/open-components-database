@@ -14,25 +14,31 @@ defpackage ocdb/demo :
   import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/generic-components
+  import ocdb/design-vars
 
-DESIGN-TEMPERATURE = 70.0
+OPERATING-TEMPERATURE = [0.0, 40.0]
 
 pcb-module demo :
 
   inst fmc : {ocdb/samtec/ASP-134488-01/component}
   net gnd (fmc.gnd)
 
+  ; Add voltage property to vadj pin
   properties(fmc.vadj):
     voltage => [4.95 5.0 5.05]
 
+  ; Create a voltage divider to output a 0.5V that stays within 0.4925 < V < 0.5175. Target current : 1mA, use 0.5% resistors
   ocdb/passive-circuits/make-voltage-divider(fmc.vadj, fmc.la03-n, gnd, [0.4925 0.5 0.5175] 1.0e-3, 0.5)
 
+  ; Same as above, but solve for a resistor tolerance that passes checks
+  ocdb/passive-circuits/make-voltage-divider(fmc.vadj, fmc.la04-n, gnd, [0.4925 0.5 0.5175] 1.0e-3)
 
-
-
+  ; Same as above, but solve for a resistor tolerance that passes checks and use default for divider current
+  ocdb/passive-circuits/make-voltage-divider(fmc.vadj, fmc.la05-n, gnd, [0.4925 0.5 0.5175])
 
 pcb-design main-design :
   module = demo
 
-print-esir("input.esir")
-export-xml("vdiv.xml" [`lowered => true `check-log => "checks-1.txt"])
+; Export design to open JITX ESIR format
+print-esir("vdiv.esir")
+export-xml("vdiv.xml" [`lowered => true `check-log => "v-div-checks.txt"])
