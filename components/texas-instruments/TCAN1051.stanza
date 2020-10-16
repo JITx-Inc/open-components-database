@@ -1,0 +1,64 @@
+#use-added-syntax(esir)
+defpackage ocdb/texas-instruments/TCAN1051 :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  import jitpcb/visualizer
+
+public unique pcb-component component :
+  manufacturer = "Texas Instruments"
+  mpn = "TCAN1051GVDRQ1"
+  description = "1/1 Transceiver Half CANbus 8-SOIC"
+  
+  val ps = PinSpec $ #TABLE :
+  ; [Component pin | Pad number | Symbol pin direction]
+    [Ref   | Int ...   | Dir  ]
+    [VIO   | 5     | Left ]
+    [TXD   | 1     | Left ]
+    [RXD   | 4     | Left ]
+    [S     | 8     | Left ]
+    [GND   | 2     | Down ]
+    [VCC   | 3     | Up ]
+    [CANL  | 6     | Right ]
+    [CANH  | 7     | Right ]
+
+  make-pins(ps)
+  make-box-symbol(ps)
+  assign-package(soic127p-package(8), ps)
+
+    
+public unique pcb-module module:
+  ; Set up ports
+  port can : can
+  port uart : uart
+  pin vcc
+  pin vio
+  pin gnd
+
+  inst xcvr : {ocdb/texas-instruments/TCAN1051/component}
+
+  net (xcvr.GND gnd)
+  net (xcvr.TXD uart.tx)
+  net (xcvr.RXD uart.rx)
+  net (xcvr.VIO vio)
+  net (xcvr.VCC vcc)
+  net (xcvr.CANH, can.canh)
+  net (xcvr.CANL, can.canl)
+
+  cap-strap(xcvr.VCC, gnd, 4.7e-6)
+  cap-strap(xcvr.VCC, gnd, 0.1e-6)
+  cap-strap(xcvr.VIO, gnd, 4.7e-6)
+  cap-strap(xcvr.VIO, gnd, 0.1e-6)
