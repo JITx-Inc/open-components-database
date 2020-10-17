@@ -1,5 +1,5 @@
 #use-added-syntax(esir)
-defpackage ocdb/terminations:
+defpackage ocdb/protection:
   import core
   import collections
   import math
@@ -11,28 +11,15 @@ defpackage ocdb/terminations:
   import ocdb/generator-utils
   import ocdb/checks
   import ocdb/design-vars
+  import ocdb/bundles
 
 
-public defn can (bus:Ref, gnd:Ref, method:String, ctrl:Ref|False) :
+; Attaches TVS diodes to the provided bundle. To be extended with properties, solvers for general use.
+public defn esd-clamp (bundle:Ref, gnd:Ref):
   inside pcb-module:
-    switch(method) :
-      "parallel":
-        res-strap(bus.canh, bus.canl, 120.0)
-      "parallel+common-mode-filter":
-        unique inst c : {gen-cap-cmp(4.7e-9)}
-        res-strap(bus.canh, c.p[1], 60.0)
-        res-strap(bus.canl, c.p[1], 60.0)
-        net (c.p[2], gnd)
-      "switchable":
-        unique inst q : {ocdb/on-semiconductor/FDN352AP/component}[2]
-        res-strap(bus.canh, q[0].s, 56.0)
-        res-strap(bus.canl, q[1].s, 56.0)
-        net ({q}[0].g {q}[1].g)
-        net ({q}[0].d {q}[1].d)
-        res-strap(ctrl, q[0].g, 1.0e3)
-        cap-strap(q[0].d, gnd, 4.7e-9)
-        res-strap(q[0].d, gnd, 100.0e3)
-
-public defn can (bus:Ref, gnd:Ref, method:String) :
-  can(bus, gnd, method, false) :
-
+    if port-type(bundle) == #PT(can) :
+      println(port-type(bundle))
+      unique inst clamp : {ocdb/nxp/PESD1CAN/component}
+      net ({clamp}.c[1] {bundle}.canh)
+      net ({clamp}.c[2] {bundle}.canl)
+      net ({clamp}.common {gnd})
