@@ -22,7 +22,14 @@ public unique pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "TCAN1051GVDRQ1"
   description = "1/1 Transceiver Half CANbus 8-SOIC"
-  
+  pin VIO
+  pin TXD
+  pin RXD
+  pin S
+  pin GND
+  pin VCC
+  pin CANL
+  pin CANH
   val ps = PinSpec $ #TABLE :
   ; [Component pin | Pad number | Symbol pin direction]
     [Ref   | Int ...   | Dir  ]
@@ -35,10 +42,19 @@ public unique pcb-component component :
     [CANL  | 6     | Right ]
     [CANH  | 7     | Right ]
 
-  make-pins(ps)
   make-box-symbol(ps)
   assign-package(soic127p-package(8), ps)
 
+  ; Figure out what the io voltage level is in the design.
+  ; eval-when has-property?(VIO.voltage):
+    ; val vio = property(VIO.voltage)
+  val vio = 5.0
+  properties(TXD):
+    apply-digital-input-params(0.3 * vio, 0.7 * vio)
+  properties(S):
+    apply-digital-input-params(0.3 * vio, 0.7 * vio)
+  properties(RXD):
+    apply-digital-output-params(0.2 * vio, 0.8 * vio)
     
 public unique pcb-module module:
   ; Set up ports

@@ -18,8 +18,31 @@ defpackage ocdb/protection:
 public defn esd-clamp (bundle:Ref, gnd:Ref):
   inside pcb-module:
     if port-type(bundle) == #PT(can) :
-      println(port-type(bundle))
       unique inst clamp : {ocdb/nxp/PESD1CAN/component}
       net ({clamp}.c[1] {bundle}.canh)
       net ({clamp}.c[2] {bundle}.canl)
       net ({clamp}.common {gnd})
+
+; Isolate digital logic pins, associated with power domains A and B. B considered to be distal from A
+public defn isolate-logic (pins-A:Tuple<Ref> pins-B:Tuple<Ref>, pwr-A:Ref, pwr-B:Ref):
+  inside pcb-module:
+    ; Determine directionality for logic pins. Out on A(or in on B) = output. In on A (or out on B) = input.
+    val outputs-vec = Vector<[Ref Ref]>()
+    val inputs-vec = Vector<[Ref Ref]>()
+    if length(pins-A) != length(pins-B):
+      fatal("isoloate-logic requires equal numbers of pins")
+    for i in 0 to length(pins-A) do:
+      if has-property?(pins-A[i].digital-io) is False or has-property?(pins-B[i].digital-io) is False:
+        fatal("isoloate-logic only works for digital-logic pins")
+      if property(pins-A[i].type) == "o" or property(pins-B[i].type) == "i" :
+        add(outputs-vec, [pins-A[i] pins-B[i]]) 
+      else if property(pins-A[i].type) == "i" or property(pins-B[i].type) == "o" :
+        add(inputs-vec, [pins-A[i] pins-B[i]])
+      else:
+        ; Otherwise assume that the connection is an output.
+        println("Assuming that %_ is an output for isolation." % [pins-A[i]])
+        add(outputs-vec, [pins-A[i] pins-B[i]]) 
+    val outputs = to-tuple(outputs-vec)
+    val inputs = to-tuple(inputs-vec)
+    println("Num out:%_ Num in:%_" % [length(outputs) length(inputs)])
+

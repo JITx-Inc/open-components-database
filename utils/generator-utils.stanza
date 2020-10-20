@@ -28,7 +28,6 @@ defpackage ocdb/generator-utils:
   import ocdb/stackups
   import ocdb/symbols
   import ocdb/box-symbol
-;[/strip]
 
 public var DESIGN-TEMPERATURE = 0.0
 
@@ -166,7 +165,6 @@ public defn sch-lay-grp (mods:Tuple<Tuple<Ref>>) :
       for r in m do :
         schematic-group({r}) = {g-name}
         layout-group({r}) = {g-name}
-;[/strip]
 
 ; This function is used to create a package mapping from a PinSpec
 public defn gen-symbol-map (ps:PinSpec, pkg:Ref) :
@@ -175,28 +173,50 @@ public defn gen-symbol-map (ps:PinSpec, pkg:Ref) :
     assign-package(pkg, ps)
 ;[strip]
     make-box-symbol(ps)
-;[/strip]
 
-public defn apply-power-pin-params (vdd:Double, rated-voltage:Tuple<Double>) :
+
+public defn apply-voltage-rating-params (rated-voltage:[Double, Double]) :
+  inside properties:
+    rated-voltage => rated-voltage
+
+public defn apply-power-pin-params (vdd:Double) :
   inside properties:
     power-pin => true
-    rated-voltage => rated-voltage
     vdd => vdd
 
-public defn apply-digital-io-params (rated-voltage:[Double,Double], vil:Double vih:Double vol:Double voh:Double) :
+public defn apply-power-supply-pin-params (vdd:Double, max-current:Double) :
+  inside properties:
+    power-pin => true
+    supply-pin => true
+    vdd => vdd
+    max-current => vdd
+
+public defn apply-digital-io-params (vil:Double vih:Double vol:Double voh:Double) :
   inside properties:
     digital-io => true
     type => "io"
-    rated-voltage => rated-voltage
     vil => vil
     vih => vih
     vol => vol
     voh => voh
 
-public defn apply-lvds-params (rated-voltage:[Double,Double], vol:Double, voh:Double, vo-diff:[Double,Double,Double] vo-cm:[Double,Double,Double] vi-diff:[Double,Double,Double] vi-cm:[Double,Double,Double]) :
+public defn apply-digital-input-params (vil:Double vih:Double) :
+  inside properties:
+    digital-io => true
+    type => "i"
+    vil => vil
+    vih => vih
+
+public defn apply-digital-output-params (vil:Double vih:Double) :
+  inside properties:
+    digital-io => true
+    type => "o"
+    vil => vil
+    vih => vih 
+
+public defn apply-lvds-params (vol:Double, voh:Double, vo-diff:[Double,Double,Double] vo-cm:[Double,Double,Double] vi-diff:[Double,Double,Double] vi-cm:[Double,Double,Double]) :
   inside properties:
     lvds => true
-    rated-voltage => rated-voltage 
     voh => voh 
     vol => vol 
     vo-diff => vo-diff 

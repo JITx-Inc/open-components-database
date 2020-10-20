@@ -12,7 +12,7 @@ defpackage ocdb/terminations:
   import ocdb/checks
   import ocdb/design-vars
 
-
+; Adds termination circuitry for a can bus based on method
 public defn terminate-can (bus:Ref, gnd:Ref, method:String, ctrl:Ref|False) :
   inside pcb-module:
     switch(method) :
@@ -22,18 +22,35 @@ public defn terminate-can (bus:Ref, gnd:Ref, method:String, ctrl:Ref|False) :
         unique inst c : {gen-cap-cmp(4.7e-9)}
         res-strap(bus.canh, c.p[1], 60.0)
         res-strap(bus.canl, c.p[1], 60.0)
-        net ({c}.p[2], gnd)
+        net ({c}.p[2], {gnd})
       "switchable":
+        ; Controllable termination using two p-channel mosfets. Termination disabled by pulling ctrl pin high.
         val ctrl-pin = ctrl as Ref
         unique inst q : {ocdb/on-semiconductor/FDN352AP/component}[2]
         res-strap(bus.canh, q[0].s, 56.0)
         res-strap(bus.canl, q[1].s, 56.0)
+        ; Add EMI filtering caps
+        cap-strap(bus.canl, gnd, 4.7e-12)
+        cap-strap(bus.canh, gnd, 4.7e-12)
         net ({q}[0].g {q}[1].g)
         net ({q}[0].d {q}[1].d)
         res-strap(ctrl-pin, q[0].g, 1.0e3)
         res-strap(q[0].g, gnd,  33.0e3)
         cap-strap(q[0].d, gnd, 4.7e-9)
         res-strap(q[0].d, gnd, 100.0e3)
+      "isolated-switchable":
+        ; Controllable termination using an opto-isolated relay. Termination enabled by pulling ctrl pin high
+        val ctrl-pin = ctrl as Ref
+        unique inst ssr : {ocdb/toshiba/TLP175A/component}
+        ; Find voltage on control pin if it's a digital io, else assume 5v
+        val v-ctrl = if has-property?(ctrl-pin.digital-io): property(ctrl-pin.voh) else: 5.0
+        ; Find a 5% resistor for 5ma current into the led
+        val res = closest-std-val((v-ctrl - property(ssr.forward-voltage)) / 5.0e-3, 5.0)
+        res-strap(ctrl-pin, ssr.a, res)
+        net ({ssr}.c {gnd})
+        ; Shoot for 120 ohms total, including rds-on of ssr
+        res-strap(bus.canh, ssr.drain[2], 120.0 - property(ssr.rds-on))
+        net ({bus}.canl {ssr}.drain[1])
 
 public defn terminate-can (bus:Ref, gnd:Ref, method:String) :
   terminate-can(bus, gnd, method, false)

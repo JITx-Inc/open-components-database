@@ -1,0 +1,47 @@
+#use-added-syntax(esir)
+defpackage ocdb/toshiba/TLP175A:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+public unique pcb-component component :
+  manufacturer = "Silicon Labs"
+  description = "Digital isolators"
+  ; Start with one. TODO: Add the rest of the family, make component parametric.
+  mpn = "SI8641BA-C-IUR"
+
+  val ps = PinSpec $ #TABLE :
+  ; [Component pin | Pad number | Symbol pin direction]
+    [Ref   | Int ...   | Dir  ]
+    [a   | 1     | Left ]
+    [c   | 3     | Left ]
+    [drain[1]   | 4     | Right ]
+    [drain[2]   | 6     | Right ]
+
+  make-pins(ps)
+  make-box-symbol(ps)
+  assign-package(tlp-175, ps)
+  properties:
+    forward-voltage => 1.27
+    forward-voltage => 1.27
+
+pcb-package tlp-175 :
+  for (l in grid-locs(2, 2, 6.5, 2.54), i in [1 6 3 4]) do :
+    pad p[i] : {smd-pad(1.61, 0.57)} at l
+
+  layer(Courtyard(Top)) = Rectangle(8.5, 4.0) 
+  layer(Silkscreen("pol", Top)) = Circle(-4.8, 1.84, 0.25)
+
+  ref-label()
