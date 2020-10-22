@@ -14,7 +14,7 @@ defpackage ocdb/protection:
   import ocdb/bundles
 
 
-; Attaches TVS diodes to the provided bundle. To be extended with properties, solvers for general use.
+; Attach TVS diodes to the provided bundle. To be extended with properties, solvers for general use.
 public defn esd-clamp (bundle:Ref, gnd:Ref):
   inside pcb-module:
     if port-type(bundle) == #PT(can) :
@@ -23,26 +23,91 @@ public defn esd-clamp (bundle:Ref, gnd:Ref):
       net ({clamp}.c[2] {bundle}.canl)
       net ({clamp}.common {gnd})
 
-; Isolate digital logic pins, associated with power domains A and B. B considered to be distal from A
-public defn isolate-logic (pins-A:Tuple<Ref> pins-B:Tuple<Ref>, pwr-A:Ref, pwr-B:Ref):
+; Isolate unidirectional digital logic pins, associated with power domains A and B. B considered to be distal from A
+public defn isolate-logic (pins:Tuple<[Ref Ref]>, pwr-A:Ref, pwr-B:Ref):
   inside pcb-module:
-    ; Determine directionality for logic pins. Out on A(or in on B) = output. In on A (or out on B) = input.
     val outputs-vec = Vector<[Ref Ref]>()
     val inputs-vec = Vector<[Ref Ref]>()
-    if length(pins-A) != length(pins-B):
-      fatal("isoloate-logic requires equal numbers of pins")
-    for i in 0 to length(pins-A) do:
-      if has-property?(pins-A[i].digital-io) is False or has-property?(pins-B[i].digital-io) is False:
+    for i in 0 to length(pins) do:
+      if has-property?(pins[i][0].digital-io) is False or has-property?(pins[i][1].digital-io) is False:
         fatal("isoloate-logic only works for digital-logic pins")
-      if property(pins-A[i].type) == "o" or property(pins-B[i].type) == "i" :
-        add(outputs-vec, [pins-A[i] pins-B[i]]) 
-      else if property(pins-A[i].type) == "i" or property(pins-B[i].type) == "o" :
-        add(inputs-vec, [pins-A[i] pins-B[i]])
+    ; Determine directionality for logic pins. Out on A(or in on B) = output. In on A (or out on B) = input.
+      if property(pins[i][0].type) == "o" or property(pins[i][1].type) == "i" :
+        add(outputs-vec, pins[i]) 
+      else if property(pins[i][0].type) == "i" or property(pins[i][1].type) == "o" :
+        add(inputs-vec, pins[i])
       else:
         ; Otherwise assume that the connection is an output.
-        println("Assuming that %_ is an output for isolation." % [pins-A[i]])
-        add(outputs-vec, [pins-A[i] pins-B[i]]) 
+        println("Assuming that %_ is an output for isolation." % [pins[i][0]])
+        add(outputs-vec, [pins[i][0] pins[i][1]]) 
     val outputs = to-tuple(outputs-vec)
     val inputs = to-tuple(inputs-vec)
-    println("Num out:%_ Num in:%_" % [length(outputs) length(inputs)])
+    ; println("Num out:%_ Num in:%_" % [length(outputs) length(inputs)])
 
+    ; Instantiate Si86xx logic isolators
+    if length(pins) == 1:
+      unique inst iso : {ocdb/si-labs/Si862x/module(0)}  
+      if length(outputs) == 1:
+        net ({pwr-A} {iso}.vdd1)
+        net ({pwr-B} {iso}.vdd2)
+        net (outputs[0][0] {iso}.vdd1-in[0])
+        net (outputs[0][1] {iso}.vdd2-out[0])
+      else if length(inputs) == 1:
+        net ({pwr-B} {iso}.vdd1)
+        net ({pwr-A} {iso}.vdd2)
+        net (inputs[0][1] {iso}.vdd1-in[0])
+        net (inputs[0][0] {iso}.vdd2-out[0])
+    else if length(pins) == 2:
+      if length(outputs) == 2:
+        unique inst iso : {ocdb/si-labs/Si862x/module(0)}  
+        net (outputs[0][0] {iso}.vdd1-in[0])
+        net (outputs[1][0] {iso}.vdd1-in[1])
+        net ({pwr-A} {iso}.vdd1)
+        net (outputs[0][1] {iso}.vdd2-out[0])
+        net (outputs[1][1] {iso}.vdd2-out[1])
+        net ({pwr-B} {iso}.vdd2)
+      else if length(inputs) == 2:
+        unique inst iso : {ocdb/si-labs/Si862x/module(0)}  
+        net (inputs[0][0] {iso}.vdd1-in[0])
+        net (inputs[1][0] {iso}.vdd1-in[1])
+        net ({pwr-B} {iso}.vdd1)
+        net (inputs[0][1] {iso}.vdd2-out[0])
+        net (inputs[1][1] {iso}.vdd2-out[1])
+        net ({pwr-A} {iso}.vdd2)
+      else if length(outputs) == 1 and length(inputs) == 1 :
+        unique inst iso : {ocdb/si-labs/Si862x/module(1)}  
+        net (outputs[0][0] {iso}.vdd1-in[0])
+        net (outputs[0][1] {iso}.vdd2-out[0])
+        net ({pwr-A} {iso}.vdd1)
+        net (inputs[0][1] {iso}.vdd2-in[0])
+        net (inputs[1][1] {iso}.vdd1-out[0])
+        net ({pwr-B} {iso}.vdd2)
+    else if length(pins) > 2 and length(pins) <= 4:
+      if length(outputs) >= length(inputs):
+        unique inst iso : {ocdb/si-labs/Si864x/module(length(inputs))}  
+        net ({pwr-A} {iso}.vdd1)
+        net ({pwr-B} {iso}.vdd2)
+        for (o in outputs, idx in 0 to length(outputs)) do :
+          net ({o}[0] {iso}.vdd1-in[idx])
+          net ({o}[1] {iso}.vdd2-out[idx])
+        for (i in inputs, idx in 0 to length(inputs)) do :
+          net ({i}[0] {iso}.vdd1-out[idx])
+          net ({i}[1] {iso}.vdd2-in[idx])
+      else if length(outputs) < length(inputs):
+        unique inst iso : {ocdb/si-labs/Si864x/module(length(outputs))}  
+        net ({pwr-B} {iso}.vdd1)
+        net ({pwr-A} {iso}.vdd2)
+        for (i in inputs, idx in 0 to length(inputs)) do :
+          net ({i}[1] {iso}.vdd1-in[idx])
+          net ({i}[0] {iso}.vdd2-out[idx])
+        for (o in outputs, idx in 0 to length(outputs)) do :
+          net ({o}[1] {iso}.vdd1-out[idx])
+          net ({o}[0] {iso}.vdd2-in[idx])
+    ; TODO support any number of logic isolators by recursing appropriately.
+
+; Given input rail, returns isolated power rail
+public defn isolate-power (pwr-in:Ref):
+  inside pcb-module:
+    unique inst iso : {ocdb/texas-instruments/SN6501/module}
+    net ({pwr-in} {iso.vin})
+  iso.vout
