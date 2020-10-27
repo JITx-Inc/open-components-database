@@ -207,6 +207,13 @@ public defn apply-digital-input-params (vil:Double vih:Double) :
     vil => vil
     vih => vih
 
+public defn apply-enable-pin-params (enable:Ref) :
+  inside properties:
+    digital-io => true
+    type => "i"
+    enable-pin => true
+    active-ref => enable
+
 public defn apply-digital-output-params (vil:Double vih:Double) :
   inside properties:
     digital-io => true
@@ -250,7 +257,7 @@ public pcb-check final-pass ():
 
 public defn check-design () :
   inside pcb-module:
-    check final-pass()
+    ; check final-pass()
 
     for (instance in all-component-instances(self)) do :
       properties({instance}):
@@ -260,13 +267,25 @@ public defn check-design () :
         check resistor-check(instance)
       if has-property?(instance.capacitor) :
         check capacitor-check(instance)
+      
 
-    ; Check pins
-      for p in ports(instance) do :
-        if has-property?(p.power-pin) :
-          check power-pin(p)
-
+    check enable-pins()
     check io()
+
+public pcb-check enable-pins ():
+  inside pcb-module :
+    for i in all-component-instances(self) do :
+      for p in all-pins(i) do :
+        if has-property?(p.enable-pin) :
+          #CHECK(connected?(p))
+
+public defn default-enable ():
+  inside pcb-module :
+    for i in all-component-instances(self) do :
+      for p in all-pins(i) do :
+        if has-property?(p.enable-pin) :
+          println("Wiring %_ to %_ for enable." % [p property(p.active-ref)])
+          net ({p} {i}.{property(p.active-ref)})
 
 public defn connect-floating-inputs-to-gnd ():
   inside pcb-module :
