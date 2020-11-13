@@ -1,0 +1,90 @@
+#use-added-syntax(esir)
+defpackage ocdb/texas-instruments/TCAN1051 :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  import jitpcb/visualizer
+
+public unique pcb-component component :
+  manufacturer = "Texas Instruments"
+  mpn = "TCAN1051GVDRQ1"
+  description = "1/1 Transceiver Half CANbus 8-SOIC"
+  pin VIO
+  pin TXD
+  pin RXD
+  pin S
+  pin GND
+  pin VCC
+  pin CANL
+  pin CANH
+  val ps = PinSpec $ #TABLE :
+  ; [Component pin | Pad number | Symbol pin direction]
+    [Ref   | Int ...   | Dir  ]
+    [VIO   | 5     | Left ]
+    [TXD   | 1     | Left ]
+    [RXD   | 4     | Left ]
+    [S     | 8     | Left ]
+    [GND   | 2     | Down ]
+    [VCC   | 3     | Up ]
+    [CANL  | 6     | Right ]
+    [CANH  | 7     | Right ]
+
+  make-box-symbol(ps)
+  assign-package(soic127p-package(8), ps)
+
+  ; Figure out what the io voltage level is in the design.
+  ; eval-when has-property?(VIO.voltage):
+    ; val vio = property(VIO.voltage)
+  val vio = 5.0
+  properties(TXD):
+    apply-digital-input-params(0.3 * vio, 0.7 * vio)
+  properties(S):
+    apply-digital-input-params(0.3 * vio, 0.7 * vio)
+  properties(RXD):
+    apply-digital-output-params(0.2 * vio, 0.8 * vio)
+    
+public unique pcb-module module:
+  ; Set up ports
+  port can : can
+  port uart : uart
+  pin s
+  pin vcc
+  pin vio
+  pin gnd
+
+  inst xcvr : {ocdb/texas-instruments/TCAN1051/component}
+
+  net (xcvr.GND gnd)
+  net (xcvr.TXD uart.tx)
+  net (xcvr.RXD uart.rx)
+  net (xcvr.VIO vio)
+  net (xcvr.S s)
+  net (xcvr.VCC vcc)
+  net (xcvr.CANH, can.canh)
+  net (xcvr.CANL, can.canl)
+
+  cap-strap(xcvr.VCC, gnd, 4.7e-6)
+  cap-strap(xcvr.VCC, gnd, 0.1e-6)
+  cap-strap(xcvr.VIO, gnd, 4.7e-6)
+  cap-strap(xcvr.VIO, gnd, 0.1e-6)
+
+  val v = 5.0
+  properties(uart.tx):
+    apply-digital-input-params(0.3 * v, 0.7 * v)
+  properties(s):
+    apply-digital-input-params(0.3 * v, 0.7 * v)
+  properties(uart.rx):
+    apply-digital-output-params(0.2 * v, 0.8 * v)
