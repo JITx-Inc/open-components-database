@@ -27,13 +27,16 @@ pcb-module sensor-mote :
   ; Instantiate NRF52 Module
   inst proc : {ocdb/nordic/nRF52832/module}
 
-  ; Connect thermocouple
+  ; Connect thermocouple sensor
   inst thermocouple : {ocdb/microchip/MCP9600/module}
+
   inst K : {pin-header(2)}
   net (K.p[1], thermocouple.in.N)
   net (K.p[2], thermocouple.in.P)
+
   require data:i2c from proc
   net THERMO (data, thermocouple.i2c)
+
   require alert:gpio[4] from proc
   for i in 0 to 4 do :
     net ALERT[i] (alert[i].gpio, thermocouple.alert[i])
@@ -45,6 +48,7 @@ pcb-module sensor-mote :
   layout-group(thermocouple) = thermocouple
   schematic-group(proc) = proc
   schematic-group(thermocouple) = thermocouple
+
   symbol(gnd) = {ocdb/symbols/ground-sym}
 
 val main-design = default-board(sensor-mote, 4, 32.0,12.0)
