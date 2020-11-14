@@ -1,0 +1,91 @@
+#use-added-syntax(esir)
+defpackage ocdb/amphenol/delta-d :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  import jitpcb/visualizer
+
+public pcb-component component (n:Int, gender:String, mounting:String) :
+  manufacturer = "Amphenol"
+
+  val pn-str = "D%_%_%_4GV00LF"
+  val n-str = switch(n) :
+    9:  "09"
+    15: "15"
+    25: "25"
+    37: "37"
+    else: fatal("Incorrect n-pin for Amphenol D-Sub connector %_." % [n])
+  val g-str = switch(gender) :
+    "male": "P"
+    "female": "S"
+    else: fatal("Incorrect gender for Amphenol D-Sub connector %_." % [gender])
+  val m-str = switch(mounting) :
+    "vertical": "24A"
+    "right-angle": "33E"
+    else: fatal("Incorrect mounting for Amphenol D-Sub connector %_." % [mounting])
+  mpn = to-string(pn-str % [n-str g-str m-str])
+
+  port p : pin[{1 through n}]
+  pin shield
+  
+  val ps = PinSpec $ #TABLE :
+  ; [Component pin | Pad number | Symbol pin direction]
+    [Ref   | Int ...   | Dir  ]
+    for i in 1 through n do:
+      [p[i]  | i     | Left ]  
+    [ shield  | (n + 1) (n + 2) | Left ]  
+
+  make-box-symbol(ps)
+  assign-package(amphenol-delta-d-pkg(n, gender, mounting), ps)
+  reference-prefix = "J"
+
+public pcb-package amphenol-delta-d-pkg (n:Int, gender:String, mounting:String) :  
+  val pin-pitch = if (n > 15) : 1.38 else : 1.37
+
+  val [A,B] = switch(n) :
+    9:  [30.81, 24.99]
+    15: [39.14, 33.32]
+    25: [53.03, 47.04]
+    37: [69.32, 63.50]
+    else: fatal("Incorrect n-pin for Amphenol D-Sub connector %_." % [n])
+  
+  val y0 = to-double(n - 1) * pin-pitch / 2.0
+
+  val half-idx = n / 2 + 1
+
+  switch(gender) :
+    "male" :
+      for i in 0 to half-idx do :
+        pad p[i + 1] : {pth-pad(0.45)} at loc(1.42, y0 - (to-double(2 * i) * pin-pitch))
+      for i in half-idx to n do :
+        pad p[i + 1] : {pth-pad(0.45)} at loc(-1.42, y0 - (to-double(2 * (i - half-idx) + 1) * pin-pitch))
+    "female" :
+      for i in 0 to half-idx do :
+        pad p[i + 1] : {pth-pad(0.45)} at loc(1.42, (to-double(2 * i) * pin-pitch) - y0)
+      for i in half-idx to n do :
+        pad p[i + 1] : {pth-pad(0.45)} at loc(-1.42, (to-double(2 * (i - half-idx) + 1) * pin-pitch) - y0)
+
+  pad p[n + 1] : {pth-pad(3.1 / 2.0)} at loc(0.0, B / 2.0)
+  pad p[n + 2] : {pth-pad(3.1 / 2.0)} at loc(0.0, B / -2.0)
+
+  layer(Courtyard(Bottom)) = Rectangle(5.0, A)
+  switch(mounting) :
+    "vertical":
+      layer(Courtyard(Top)) = Rectangle(12.55, A)
+    "right-angle":
+      layer(Courtyard(Top)) = Rectangle(12.6, A, loc(-3.2,0.0))
+  
+  ref-label()

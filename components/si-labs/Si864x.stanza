@@ -1,0 +1,76 @@
+#use-added-syntax(esir)
+defpackage ocdb/si-labs/Si864x:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  ; Start with one. TODO: Add the rest of the family
+public pcb-component component (num-vdd2-in:Int):
+  manufacturer = "Silicon Labs"
+  description = "Quad channel Digital isolator"
+  mpn = to-string("SI864%_BB-B-IS1" % [num-vdd2-in])
+  if num-vdd2-in < 0 or num-vdd2-in > 2:
+    fatal("Unsupported number of VDD2 inputs: %_ for Si864x" % [num-vdd2-in]) 
+
+  val ps = PinSpec $ #TABLE :
+  ; [Component pin | Pad number | Symbol pin direction]
+    [Ref   | Int ...   | Dir  ]
+    [VDD1   | 1     | Left ]
+    [GND1   | 2 8    | Left ]
+    [VDD2   | 16     | Right ]
+    [GND2   | 15 9   | Right ]
+    for i in 1 through 4 do :
+      [A[i]  | 2 + i     | Left ]
+      [B[i]  | 15 - i     | Right ]
+    [EN2   | 10     | Right ]
+    if num-vdd2-in > 0 :
+      [EN1   | 7     | Left ]
+    else :
+      [NC   | 7     | Left ]
+
+  make-pins(ps)
+  make-box-symbol(ps)
+  assign-package(soic127p-package(16), ps)
+
+public pcb-module module (num-vdd2-in:Int) :
+  port vdd1 : power
+  port vdd2 : power 
+  val num-vdd1-in = 4 - num-vdd2-in
+  port vdd1-in : pin[num-vdd1-in]
+  port vdd2-out : pin[num-vdd1-in]
+  port vdd2-in : pin[num-vdd2-in]
+  port vdd1-out : pin[num-vdd2-in]
+  pin en2
+
+  inst iso : {ocdb/si-labs/Si864x/component(num-vdd2-in)}
+  if num-vdd2-in > 0 :
+    pin en1
+    net (iso.EN1 en1 iso.VDD1)
+
+  cap-strap(iso.VDD1, iso.GND1, 0.1e-6)
+  cap-strap(iso.VDD2, iso.GND2, 0.1e-6)
+  
+  net (iso.EN2 en2 iso.VDD2)
+  net (iso.GND1 vdd1.gnd)
+  net (iso.GND2 vdd2.gnd)
+  net (iso.VDD1 vdd1.vdd)
+  net (iso.VDD2 vdd2.vdd)
+
+  for i in 0 to num-vdd1-in do :
+    net (iso.A[i + 1], vdd1-in[i])
+    net (iso.B[i + 1], vdd2-out[i])
+  for i in 0 to num-vdd2-in do :
+    net (iso.B[i + 1 + num-vdd1-in], vdd2-in[i])
+    net (iso.A[i + 1 + num-vdd1-in], vdd1-out[i])

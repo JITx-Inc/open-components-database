@@ -15,23 +15,19 @@ defpackage ocdb/demo :
   import ocdb/land-patterns
 
   import ocdb/bundles
-;[strip]
   import jitpcb/visualizer
   import ocdb/stackups
   import ocdb/rules
   import ocdb/symbols
   import ocdb/box-symbol
-;[/strip]
 
 pcb-component test-res :
   mpn = "ERJ-2RKF10R0X"
   manufacturer = "Panasonic"
   reference-prefix = "R"
   port p : pin[{1 2}]
-;[strip]
   symbol = {resistor-sym(false)}(p[1] => p[1], p[2] => p[2])
-;[/strip]
-  package = RESC1005X35(p[1] => p[1], p[2] => p[2])
+  package = {ipc-two-pin-package("0402")}(p[1] => p[1], p[2] => p[2])
   properties :
     resistor => true
     type => "thick-film"
@@ -53,10 +49,8 @@ pcb-component test-cap-ceramic :
   reference-prefix = "C"
   port p : pin[{1 2}]
 
-;[strip]
   symbol = {capacitor-sym(false)}(p[1] => p[1], p[2] => p[2])
-;[/strip]
-  package = CAPC1005X55(p[1] => p[1], p[2] => p[2])
+  package = {ipc-two-pin-package("0402")}(p[1] => p[1], p[2] => p[2])
   properties :
     capacitor => true
     type => "ceramic"
@@ -64,8 +58,6 @@ pcb-component test-cap-ceramic :
     tolerance => 10.0
     rated-voltage => 6.3
     rated-temperature => [-55.0 125.0]
-
-
   spice:
     "[C] {p[1]} 1 100u"
     "[R] 1 {p[2]} 0"
@@ -77,10 +69,8 @@ pcb-component test-cap-tantalum-mno2 :
   pin a
   pin c
 
-;[strip]
   symbol = {capacitor-sym(true)}(a => p[1], c => p[2])
-;[/strip]
-  package = CAPC1005X55(a => p[1], c => p[2])
+  package = {ipc-two-pin-package("0402")}(a => p[1], c => p[2])
   properties :
     capacitor => true
     type => "electrolytic"
@@ -105,10 +95,8 @@ pcb-component test-cap-tantalum-polymer :
   pin c
 
   reference-prefix = "C"
-;[strip]
   symbol = {capacitor-sym(true)}(a => p[1], c => p[2])
-;[/strip]
-  package = CAPC1005X55(a => p[1], c => p[2])
+  package = {ipc-two-pin-package("0402")}(a => p[1], c => p[2])
 
   properties :
     capacitor => true
@@ -136,7 +124,6 @@ val brd-outline = Rectangle(w, h)
 
 pcb-module checks :
   ; Design goes here
-
 
   inst r1 : test-res
   inst r2 : test-res
@@ -192,29 +179,20 @@ pcb-module checks :
   check-design()
 
 
-;[strip]
 pcb-board B :
   stackup = sierra-circuits-6-layer-62-mil
   boundary = brd-outline 
   signal-boundary = brd-outline
-;[/strip]
 
 pcb-design main-design :
   module = checks
-;[strip]
   board = B
   rules = sierra-adv-rules
-;[/strip]
-
-; visualize(main-design)
 
 print-esir("input.esir")
 
-;[strip]
 ;Export design to Kicad
 ; export-netlist(checks.gnd, "hello-world.cir")
 export-kicad("checks", [`gen-schematic => true `fresh => true `place => true 
                         `param-configs => [`sketch] `gen-board => true 
                         `check-log => "checks.txt" `ground-reference => checks.gnd])
-; export-kicad("test-card", [`gen-schematic => true `fresh => true])
-;[/strip]

@@ -28,7 +28,6 @@ defpackage ocdb/generator-utils:
   import ocdb/stackups
   import ocdb/symbols
   import ocdb/box-symbol
-;[/strip]
 
 public var DESIGN-TEMPERATURE = 0.0
 
@@ -166,7 +165,6 @@ public defn sch-lay-grp (mods:Tuple<Tuple<Ref>>) :
       for r in m do :
         schematic-group({r}) = {g-name}
         layout-group({r}) = {g-name}
-;[/strip]
 
 ; This function is used to create a package mapping from a PinSpec
 public defn gen-symbol-map (ps:PinSpec, pkg:Ref) :
@@ -175,28 +173,56 @@ public defn gen-symbol-map (ps:PinSpec, pkg:Ref) :
     assign-package(pkg, ps)
 ;[strip]
     make-box-symbol(ps)
-;[/strip]
 
-public defn apply-power-pin-params (vdd:Double, rated-voltage:Tuple<Double>) :
+public defn apply-voltage-rating-params (rated-voltage:[Double, Double]) :
+  inside properties:
+    rated-voltage => rated-voltage
+
+public defn apply-power-pin-params (vdd:Double) :
   inside properties:
     power-pin => true
-    rated-voltage => rated-voltage
     vdd => vdd
 
-public defn apply-digital-io-params (rated-voltage:[Double,Double], vil:Double vih:Double vol:Double voh:Double) :
+public defn apply-power-supply-pin-params (vdd:Double, max-current:Double) :
+  inside properties:
+    power-pin => true
+    supply-pin => true
+    vdd => vdd
+    max-current => vdd
+
+public defn apply-digital-io-params (vil:Double vih:Double vol:Double voh:Double) :
   inside properties:
     digital-io => true
     type => "io"
-    rated-voltage => rated-voltage
     vil => vil
     vih => vih
     vol => vol
     voh => voh
 
-public defn apply-lvds-params (rated-voltage:[Double,Double], vol:Double, voh:Double, vo-diff:[Double,Double,Double] vo-cm:[Double,Double,Double] vi-diff:[Double,Double,Double] vi-cm:[Double,Double,Double]) :
+public defn apply-digital-input-params (vil:Double vih:Double) :
+  inside properties:
+    digital-io => true
+    type => "i"
+    vil => vil
+    vih => vih
+
+public defn apply-enable-pin-params (enable:Ref) :
+  inside properties:
+    digital-io => true
+    type => "i"
+    enable-pin => true
+    active-ref => enable
+
+public defn apply-digital-output-params (vil:Double vih:Double) :
+  inside properties:
+    digital-io => true
+    type => "o"
+    vil => vil
+    vih => vih 
+
+public defn apply-lvds-params (vol:Double, voh:Double, vo-diff:[Double,Double,Double] vo-cm:[Double,Double,Double] vi-diff:[Double,Double,Double] vi-cm:[Double,Double,Double]) :
   inside properties:
     lvds => true
-    rated-voltage => rated-voltage 
     voh => voh 
     vol => vol 
     vo-diff => vo-diff 
@@ -230,7 +256,7 @@ public pcb-check final-pass ():
 
 public defn check-design () :
   inside pcb-module:
-    check final-pass()
+    ; check final-pass()
 
     for (instance in all-component-instances(self)) do :
       properties({instance}):
@@ -240,13 +266,25 @@ public defn check-design () :
         check resistor-check(instance)
       if has-property?(instance.capacitor) :
         check capacitor-check(instance)
+      
 
-    ; Check pins
-      for p in ports(instance) do :
-        if has-property?(p.power-pin) :
-          check power-pin(p)
-
+    check enable-pins()
     check io()
+
+public pcb-check enable-pins ():
+  inside pcb-module :
+    for i in all-component-instances(self) do :
+      for p in all-pins(i) do :
+        if has-property?(p.enable-pin) :
+          #CHECK(connected?(p))
+
+public defn default-enable ():
+  inside pcb-module :
+    for i in all-component-instances(self) do :
+      for p in all-pins(i) do :
+        if has-property?(p.enable-pin) :
+          println("Wiring %_ to %_ for enable." % [p property(p.active-ref)])
+          net ({p} {i}.{property(p.active-ref)})
 
 public defn connect-floating-inputs-to-gnd ():
   inside pcb-module :
@@ -268,7 +306,7 @@ public defn generate-power () :
           val [v a n] = property(p.power-request)
           within (rail) = make-load("Load", v, a, n) :
             net ({p}, {pos(rail)})
-            net ({property(p.gnd-ref)}, {neg(rail)})
+            net ({i}.{property(p.gnd-ref)}, {neg(rail)})
 
     for i in all-component-instances(self) do :
       for p in all-pins(i) do :
