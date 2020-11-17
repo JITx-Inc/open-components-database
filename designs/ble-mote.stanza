@@ -19,20 +19,23 @@ OPERATING-TEMPERATURE = [-20.0 50.0]
 OPTIMIZE-FOR = ["area"]
   
 pcb-module sensor-mote :
-  ; Set up power solver
+  ; Power connector
   inst j : {pin-header(2)}
-  set-power-source(j.p[1], j.p[2], 3.7)
+
+  ; Set up power solver
+  set-power-source(j.p[1], j.p[2], 4.0)
   net gnd (j.p[2])
 
   ; Instantiate NRF52 Module
   inst proc : {ocdb/nordic/nRF52832/module}
+  attach-programming-connector(proc, proc.pow3v0, "swd")
 
-  ; Connect thermocouple sensor
+  ; Add and connect thermocouple sensor
   inst thermocouple : {ocdb/microchip/MCP9600/module}
 
   inst K : {pin-header(2)}
-  net (K.p[1], thermocouple.in.N)
-  net (K.p[2], thermocouple.in.P)
+  net (K.p[1], thermocouple.in.P)
+  net (K.p[2], thermocouple.in.N)
 
   require data:i2c from proc
   net THERMO (data, thermocouple.i2c)
@@ -41,14 +44,12 @@ pcb-module sensor-mote :
   for i in 0 to 4 do :
     net ALERT[i] (alert[i].gpio, thermocouple.alert[i])
 
+  ; Add geometric constraints
   package(proc) at loc(0.0, 0.0) on Top
   package(j) at loc(-14.0, 0.0) on Top
 
-  layout-group(proc) = proc
-  layout-group(thermocouple) = thermocouple
-  schematic-group(proc) = proc
-  schematic-group(thermocouple) = thermocouple
-
+  ; Apply groups to sub-circuits for schematic and layout
+  group-modules([[proc] [thermocouple K]])
   symbol(gnd) = {ocdb/symbols/ground-sym}
 
 val main-design = default-board(sensor-mote, 4, 32.0,12.0)

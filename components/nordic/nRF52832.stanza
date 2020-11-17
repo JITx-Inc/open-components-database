@@ -27,41 +27,37 @@ public unique pcb-component component :
   description = "NRF52 BLE SoC"
   port dec : pin[4]
   port p0 : pin[32]
-  port vdd : pin[3]
+  pin vdd
   pin SWDCLK
   pin SWDIO
   pin ANT
-  port gnd : pin[3]
+  pin gnd
   port xc : pin[2]
   pin dcc
 
   val ps = PinSpec $ #TABLE :
-    [Ref       | Int ...   | Dir]
-    [dec[0] | 1 | Left]
+    [Ref       | Int ...   | Dir | Ref]
+    [dcc    | 47 | Up | power]
+    [dec[0] | 1 | Up | power]
+    [dec[1] | 32 | Up | power]
+    [dec[2] | 33 | Up | power]
+    [dec[3] | 46 | Up | power]
+    [vdd | 13 36 48 | Up | power]
+    [gnd | 31  45  49 | Down | power]
+    [xc[1]  | 35 | Left | io]
+    [xc[0]  | 34 | Left | io]
+    [SWDIO  | 26 | Left | io]
+    [SWDCLK | 25 | Left | io]
+    [ANT    | 30 | Right | io]
     for i in 0 to 11 do : 
-      [p0[i] | i + 2 | Left]
-    [vdd[1] | 36 | Right]
-    [xc[1]  | 35 | Right]
-    [xc[0]  | 34 | Right]
-    [dec[2] | 33 | Right]
-    [dec[1] | 32 | Right]
-    [gnd[0] | 31 | Right]
-    [ANT    | 30 | Right]
-    [p0[24] | 29 | Right]
-    [p0[23] | 28 | Right]
-    [p0[22] | 27 | Right]
-    [SWDIO  | 26 | Right]
-    [SWDCLK | 25 | Right]
-    [vdd[0] | 13 | Down]
+      [p0[i] | i + 2 | Right | io]
     for i in 11 to 22 do : 
-      [p0[i] | i + 3 | Down]
-    [gnd[2] | 49 | Up]
-    [vdd[2] | 48 | Up]
-    [dcc    | 47 | Up]
-    [dec[3] | 46 | Up]
-    [gnd[1] | 45 | Up]
-    for i in 31 to 24 by -1 do : 
-      [p0[i] | i + 12 | Up]
+      [p0[i] | i + 3 | Right | io]
+    [p0[22] | 27 | Right | io]
+    [p0[23] | 28 | Right | io]
+    [p0[24] | 29 | Right | io]
+    for i in 25 to 32 do : 
+      [p0[i] | i + 12 | Right | io]
 
   for i in 0 to 32 do:
     supports io-pin :
@@ -96,24 +92,24 @@ public unique pcb-module module :
   pin gnd
   ; Chip antenna, with lpf, and t-filter matching network
   inst proc : {ocdb/nordic/nRF52832/component}
-  net (gnd, proc.gnd[0], proc.gnd[1], proc.gnd[2], pow3v0.gnd)
-  net (pow3v0.vdd, proc.vdd[0], proc.vdd[1], proc.vdd[2]) 
+  net (gnd, proc.gnd, pow3v0.gnd)
+  net (pow3v0.vdd, proc.vdd) 
   ; ; Decoupling caps
-  cap-strap(proc.vdd[0], gnd, 4.7e-6)
-  cap-strap(proc.vdd[0], gnd, 0.1e-6)
-  cap-strap(proc.vdd[0], gnd, 0.1e-6)
+  cap-strap(proc.vdd, gnd, 4.7e-6)
+  cap-strap(proc.vdd, gnd, 0.1e-6)
+  cap-strap(proc.vdd, gnd, 0.1e-6)
   cap-strap(proc.dec[0], gnd, 0.1e-6)
   cap-strap(proc.dec[2], gnd, 0.1e-9)
   cap-strap(proc.dec[3], gnd, 1.0e-6)
 
-  properties(proc.vdd[0]):
-    power-request => [3.0 0.1 5.0e-5]
-    gnd-ref => #R(gnd[0])
+  properties(proc.vdd):
+    power-request => [3.0 0.1 5.0e-3]
+    gnd-ref => #R(gnd)
 
   ; External oscillator
   inst xtal : {ocdb/abracon/ABM12-32-B2X-T3/component}
-  net XC1 (proc.xc[0], xtal.p[1])
-  net XC2 (proc.xc[1], xtal.p[2])
+  net XC1 (proc.xc[0], xtal.p[2])
+  net XC2 (proc.xc[1], xtal.p[1])
   add-xtal-caps(xtal)
   net (gnd, xtal.gnd)
 
@@ -156,4 +152,7 @@ public unique pcb-module module :
       require pins:io-pin[2] from proc
       tx => pins[0].p
       rx => pins[1].p
+  supports swd :
+    swdio => proc.SWDIO
+    swdclk => proc.SWDCLK
 

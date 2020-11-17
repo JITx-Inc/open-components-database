@@ -12,10 +12,8 @@ defpackage ocdb/generic-components:
   import ocdb/land-patterns
   import ocdb/generator-utils
   ; import db-parts
-;[strip]
   import ocdb/symbols
   import ocdb/box-symbol
-;[/strip]
 
 ; ====== Standard Tolerances and Logarithmic Values ======
 
@@ -141,9 +139,7 @@ public defn gen-cap-cmp (cap:Double) :
 public pcb-component gen-tant-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg:String) :
   pin a 
   pin c
-;[strip]
   symbol = {capacitor-sym(true)}(a => p[1] c => p[2])
-;[/strip]
   emodel = Capacitor(cap, tol, max-v)
   switch(pkg) :
     "0402" : package = CAPT1005X55(a => p[1] c => p[2])
@@ -186,9 +182,7 @@ public pcb-component gen-res-cmp (r-type:String|False, res:Double, tol:Double, p
   ;   port p : pin[{1 2 3}]
   ; else :
   port p : pin[{1 2}]
-;[strip]
   symbol = {resistor-sym(r-type)}(p[1] => p[1], p[2] => p[2])
-;[/strip]
   emodel = Resistor(res,tol,pwr)
   package = {ipc-two-pin-package(pkg)}(p[1] => p[1], p[2] => p[2])
   reference-prefix = "R"
@@ -225,9 +219,7 @@ public pcb-component gen-ind-cmp (ind:Double, tol:Double, max-i:Double) :
   port p : pin[{1 2}]
   emodel = Inductor(ind,tol,max-i)
 
-;[strip]
   symbol = inductor-sym(p[1] => p[1], p[2] => p[2])
-;[/strip]
   package = INDC1005X55(p[1] => p[1], p[2] => p[2]) ;TODO: all inductors 0402
   reference-prefix = "L"
 
@@ -389,6 +381,20 @@ public pcb-component gen-testpad (d:Double) :
   symbol = test-point-sym(tp => p[0])
   package = {testpad(d)}(tp => tp)
 
+
+; Add a tag-connect landing pattern to a processor
+public defn attach-programming-connector (proc:Ref, vio:Ref, intf:String):
+  inside pcb-module:
+    unique inst tag : {ocdb/tag-connect/TC2050-IDC-NL/module}
+    net ({vio}, {tag}.pwr)
+    if intf == "swd" :
+      unique require swd:swd from proc
+      net ({swd} {tag}.swd)
+    else if intf == "jtag" :
+      unique require jtag:jtag from proc
+      net ({jtag} {tag}.jtag)
+
+
 public defn add-testpad (rs:Tuple<Ref>, d:Double) :
   inside pcb-module :
     for r in rs do :
@@ -419,9 +425,7 @@ public defn dip-pull (pins:Tuple<Ref>, power-pin:Ref, gnd-pin:Ref) :
 public pcb-component mounting-hole-cmp (drill-r:Double, pad-r: Double, mask-r:Double) :
   package = {non-plated-hole-pkg(drill-r, mask-r)}()
   reference-prefix = "H"
-;[strip]
   symbol = unplated-hole-sym()
-;[/strip]
 
 public defn mounting-hole-cmp (drill-r:Double, pad-r:Double) :
   mounting-hole-cmp(drill-r, pad-r, pad-r + 0.35)
