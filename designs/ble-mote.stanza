@@ -31,29 +31,35 @@ pcb-module sensor-mote :
   attach-programming-connector(proc, proc.pow3v0, "swd")
 
   ; Add and connect thermocouple sensor
-  inst thermocouple : {ocdb/microchip/MCP9600/module}
-
+  inst thermocouple : {ocdb/microchip/MCP9600/module(0)}
   inst K : {pin-header(2)}
+
   net (K.p[1], thermocouple.in.P)
   net (K.p[2], thermocouple.in.N)
 
   require data:i2c from proc
   net THERMO (data, thermocouple.i2c)
+  add-open-drain-pullups(data, proc.pow3v0.vdd)
 
   require alert:gpio[4] from proc
   for i in 0 to 4 do :
     net ALERT[i] (alert[i].gpio, thermocouple.alert[i])
 
-  ; Add geometric constraints
-  package(proc) at loc(0.0, 0.0) on Top
-  package(j) at loc(-14.0, 0.0) on Top
+  ; Add placement constraints
+  package(proc) at loc(4.0, 0.0) on Top
+  package(j) at loc(-18.0, 0.0) on Top
 
   ; Apply groups to sub-circuits for schematic and layout
   group-modules([[proc] [thermocouple K]])
+  net P3V0 (proc.pow3v0.vdd)
+  net VIN (j.p[1])
   symbol(gnd) = {ocdb/symbols/ground-sym}
+  symbol(P3V0) = {ocdb/symbols/supply-sym}
+  symbol(VIN) = {ocdb/symbols/supply-sym}
 
-val main-design = default-board(sensor-mote, 4, 32.0,12.0)
+val main-design = default-board(sensor-mote, 4, 40.0,10.0)
 
+; Concretize the design and solve for power supplies.
 lower-esir()
 run-user-pass(generate-power)
 

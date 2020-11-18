@@ -28,28 +28,11 @@ defpackage ocdb/generator-utils:
   import ocdb/symbols
   import ocdb/box-symbol
 
-public var DESIGN-TEMPERATURE = 0.0
+; =======================================
+; Ciruit convenience functions
+; =======================================
 
-public pcb-connection isolate (a:Ref, b:Ref) :
-  unique inst buf : {ocdb/texas-instruments/ISO1540/component}
-  net ({a}.sda, {buf}.SDA1)
-  net ({a}.scl, {buf}.SCL1)
-  net ({b}.sda, {buf}.SDA2)
-  net ({b}.scl, {buf}.SCL2)
-when :
-  port-type(a) == #PT(i2c) and
-  port-type(b) == #PT(i2c) 
-  
-public pcb-component example-resistor :
-  manufacturer = "Yageo"
-  mpn = "RC0402FR-071KL"
-  description = "RES SMD 1K OHM 1% 1/16W 0402"
-  reference-prefix = "R"
-  pin p[1]
-  pin p[2]
-  symbol = {resistor-sym(false)}(p[1] => p[1], p[2] => p[2])
-  package = {ipc-two-pin-package("0402")}(p[1] => p[1], p[2] => p[2])
-
+; Add load balancing caps to crystal oscillator
 public defn add-xtal-caps (xtal:Ref, stray-capacitance:Double) :
   inside pcb-module:
     val c-load = property(xtal.load-capacitance)
@@ -57,77 +40,26 @@ public defn add-xtal-caps (xtal:Ref, stray-capacitance:Double) :
     for i in 1 through 2 do :
       cap-strap(xtal.p[i], xtal.gnd, c-bal)
 
-; Default stray capacitance. Should come from analysis of tracelength, stackup.
+; Default stray capacitance assumed 5pf. 
 public defn add-xtal-caps (xtal:Ref) :
   add-xtal-caps(xtal, 5.0e-12)
 
-public pcb-connection isolate (a:Ref, b:Ref) :
-  unique inst buf : {ocdb/texas-instruments/ISO1540/component}
-  net ({a}.sda, {buf}.SDA1)
-  net ({a}.scl, {buf}.SCL1)
-  net ({b}.sda, {buf}.SDA2)
-  net ({b}.scl, {buf}.SCL2)
-when :
-  port-type(a) == #PT(i2c) and
-  port-type(b) == #PT(i2c) 
+; Add pullup resistors to an open-drain bus (like i2c) to vio pin. Specced for minimum power draw meeting speed requirements [TI app note:slva689].
+public defn add-open-drain-pullups (bus:Ref, vio:Ref, clk-rate:Double, bus-capacitance:Double) :
+  inside pcb-module:
+    val rise-time = 0.35 / (clk-rate * 4.0) ; Signal bandwidth~ 4x clock rate for fairly sharp edge
+    val r = closest-std-val(rise-time / (0.8473 * bus-capacitance), 5.0)
+    for p in ports(bus) do :
+      res-strap(p, vio, r)
 
-public defn make-voltage-regulator (input:Ref, gnd:Ref, v-out:[Double Double Double]|Double, reg:Ref) -> [Ref, Ref] :
-  inside pcb-module :
-    val vin = property(input.voltage)
-    unique inst vrm : {reg}
-    net ({input}, {vrm}.vin)
-    properties({vrm}.vout):
-      voltage => v-out
-    [vrm.vout, vrm.en]
+; Default is 100kHz clock rate, 100pF bus capacitance.
+public defn add-open-drain-pullups (bus:Ref, vio:Ref) :
+  add-open-drain-pullups(bus, vio, 100.0e3, 100.0e-12)
 
-public defn make-board-controller (rails:Tuple<Ref>) :
-  inside pcb-module :
-    val vm = make-voltage-monitor(rails)
-    unique inst board-controller : {ocdb/microsemi/A2F200M3F-FGG256I/module}
-
-    val n = length(rails)
-    require mon:gpio[n] from {board-controller}
-    for i in 0 to n do : net (mon[i].gpio, {vm}.out[i])
-
-    board-controller
-
-public pcb-module voltage-monitor (rail-voltages:Tuple<[Double,Double,Double]>) :
-  port src : power 
-  val n = length(rail-voltages)
-  port out : pin[n]
-  port rails : pin[n]
-
-  ; Each monitor has 6 ports so create enough of them
-  var num-mon = (n + 6 - 1) / 6
-
-  ; Instatiate a group of MAX1606X voltage monitors
-  inst mon : {ocdb/maxim/MAX1606x/component}[num-mon]
-
-  for i in 0 to n do :
-    properties(rails[i]):
-      voltage => rail-voltages[i]
-    val [chip-idx, chip-ref, mon-idx] = [i / 6, mon[i / 6], i % 6]
-
-  ; Divide input to match voltage of MAX16061E
-    ocdb/passive-circuits/make-voltage-divider(rails[i], chip-ref.in[mon-idx], src.gnd, [0.3 0.373 0.4], 1.0e-3)
-
-    net (out[i], {chip-ref}.out[mon-idx])
-    net (src.gnd, {chip-ref}.GND, {chip-ref}.PAD, {chip-ref}.TOL)
-    net (src.vdd, {chip-ref}.VCC)
-
-public defn make-voltage-monitor (rails:Tuple<Ref>):
-  inside pcb-module :
-    ; Extract voltage property to tuple of voltages.
-    val rail-voltages = for r in rails map :
-      property(r.voltage)
-    unique inst voltage-monitor : {voltage-monitor(rail-voltages)}
-    val n = length(rails)
-    for i in 0 to n do :
-      net ({voltage-monitor}.rails[i], {rails}[i])
-    voltage-monitor
-
-
-; Piecewise linear function
+; =======================================
+; Piecewise linear functions
+; Example call : PWL([[x0 y0] [x1 y1] ... [xn yn])[x]. Returns interpolated value of y at x
+; =======================================
 public deftype PWL
 public defmulti get (f:PWL, x:Double) -> Double
 public defn PWL (ps:Tuple<[Double,Double]>) -> PWL :
@@ -153,8 +85,9 @@ public defn PWL (ps:Tuple<[Double,Double]>) -> PWL :
       else  :
         fatal("Something is wrong in PWL with x = %_" % [x])
 
+; =======================================
 ; Assign schematic and layout groups
-; sch-lay-grp([[inst0] [i1 i2]])
+; =======================================
 public defn group-modules (mods:Tuple<Tuple<Ref>>) :
   inside pcb-module :
     val g-count = to-seq(0 to false)  
@@ -164,13 +97,18 @@ public defn group-modules (mods:Tuple<Tuple<Ref>>) :
         schematic-group({r}) = {g-name}
         layout-group({r}) = {g-name}
 
-; This function is used to create a package mapping from a PinSpec
+; =======================================
+; This function is used to create a package mapping and box symbol from PinSpec
+; =======================================
 public defn gen-symbol-map (ps:PinSpec, pkg:Ref) :
   inside pcb-component :
     make-pins(ps)
     assign-package(pkg, ps)
     make-box-symbol(ps)
 
+; =======================================
+; Convience functions to add standard pin properties
+; =======================================
 public defn apply-voltage-rating-params (rated-voltage:[Double, Double]) :
   inside properties:
     rated-voltage => rated-voltage
@@ -257,7 +195,7 @@ public defn check-design () :
 
     for (instance in all-component-instances(self)) do :
       properties({instance}):
-        temperature => DESIGN-TEMPERATURE
+        temperature => OPERATING-TEMPERATURE
       ; Check components
       if has-property?(instance.resistor) :
         check resistor-check(instance)
@@ -294,6 +232,9 @@ public defn connect-floating-inputs-to-gnd ():
           println("Connecting floating input %_ to gnd." % [p])
           net ({p}, gnd)
 
+; =======================================
+; Attach the power generator to designs and loads.
+; =======================================
 public defn generate-power () :
   println("JITPCB: Generating power system.")
   inside pcb-module :
