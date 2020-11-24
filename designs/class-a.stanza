@@ -42,9 +42,10 @@ pcb-module demo :
 
   inst power : {power-connector(20.0)}
   inst amp : {class-a-amplifier(2.0e3)}
-
-  net gnd (power.src.gnd)
+  inst j : {pin-header(5)}
+  net gnd (power.src.gnd, j.p[1])
   net (power.src, amp.vin)
+  net vdd (power.src.vdd, j.p[2])
 
   spice:
     "[Vi] {amp.in} {power.src.gnd} SIN(0 1 1k 0 0)"
@@ -56,4 +57,7 @@ pcb-module demo :
 pcb-design main-design :
   module = demo
 
-export-netlist(demo.gnd, "ClassA.cir")
+; export-netlist(demo.gnd, "ClassA.cir")
+let :
+  val lowered = fully-concretize() as Collection<TStmt>
+  jitpcb/spice-export/export-netlist(lowered, demo.gnd, "ClassA.cir")
