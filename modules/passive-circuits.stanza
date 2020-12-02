@@ -17,42 +17,57 @@ public defn voltage-divider-calc (v-in:[Double,Double,Double],
                                   v-out:[Double,Double,Double], 
                                   current:Double, 
                                   tol:Double) -> [Ref, Ref, Double, Double, Double] :
-    val [v-min v v-max] = v-in
-    val goal-r-hi = (v-min - v-out[1]) / current
+    val goal-r-hi = (v-in[1] - v-out[1]) / current
     val goal-r-lo = v-out[1] / current
-    val r-hi = Resistor(["resistance" => goal-r-hi])
-    val r-lo = Resistor(["resistance" => goal-r-lo])
+    val r-hi = Resistor(["resistance" => goal-r-hi,
+                         "tolerance" => tol,
+                         "minimum_quantity" => 1,
+                         "mounting" => PREFERRED-MOUNTING], ["tcr"])
+    val r-lo = Resistor(["resistance" => goal-r-lo, "tolerance" => tol, "min-minimum_quantity" => 1, "mounting" => PREFERRED-MOUNTING], ["tcr"])
 
     ; CHECKS IN THIS SECTION WILL BE OFFLOADED TO SPICE
     ; =====================================================
     ; =====================================================
     ; Calculate OPERATING-TEMPERATURE dependent value of resistor
-    val [lo-tcr, hi-tcr] =
-      if OPERATING-TEMPERATURE[1] >= 25.0 :
-         [positive(TCR(r-lo) as TCR), positive(TCR(r-hi) as TCR)]
-      else :
-        [negative(TCR(r-lo) as TCR), negative(TCR(r-hi) as TCR)]
-    val lo-dr = (OPERATING-TEMPERATURE[1] - 25.0) * lo-tcr
-    val hi-dr = (OPERATING-TEMPERATURE[1] - 25.0) * hi-tcr
-    val r-lo-val = resistance(r-lo)
-    val r-hi-val = resistance(r-hi)
+    val lo-drs = [delta-resistance(r-lo, OPERATING-TEMPERATURE[0]), 0., delta-resistance(r-lo, OPERATING-TEMPERATURE[1])]
+    val hi-drs = [delta-resistance(r-hi, OPERATING-TEMPERATURE[0]), 0., delta-resistance(r-hi, OPERATING-TEMPERATURE[1])]
 
     ; Calculate worst case.
     ; TCR can be + or - here. It's a tolerance, not an absolute change in resistance
-    val lo-tolerance = max(tolerance(r-lo) as MinMaxRange)
-    val hi-tolerance = min(tolerance(r-hi) as MinMaxRange)
-    val vo-min = v-min * (r-lo-val * (1.0 - lo-dr)) * (1.0 - lo-tolerance)
-                       / ( (r-lo-val * (1.0 - lo-dr)) * (1.0 - lo-tolerance)
-                        + (r-hi-val  * (1.0 + hi-dr)) * (1.0 + hi-tolerance))
-    val vo-max = v-max * (r-lo-val * (1.0 + lo-dr)) * (1.0 + lo-tolerance)
-                       / ( (r-lo-val * (1.0 + lo-dr)) * (1.0 + lo-tolerance)
-                       + (r-hi-val  * (1.0 - hi-dr)) * (1.0 - hi-tolerance))
-    val vo-nom = v * (r-lo-val) / ( (r-lo-val) + (r-hi-val) )
-    ; =====================================================
-    ; =====================================================
+    val lo-tolerance = tolerance(r-lo) as MinMaxRange
+    val hi-tolerance = tolerance(r-hi) as MinMaxRange
+    println("Solution: R1=%_, R2=%_, tol1=%_, tol2=%_" % [resistance(r-hi), resistance(r-lo), hi-tolerance, lo-tolerance])
+
+    val [vo-min, vo-nom, vo-max] = compute-output-voltage-range(v-in,
+                                                                resistance(r-lo),
+                                                                resistance(r-hi),
+                                                                min(lo-tolerance),
+                                                                max(lo-tolerance),
+                                                                min(hi-tolerance),
+                                                                max(hi-tolerance),
+                                                                minimum(lo-drs),
+                                                                maximum(lo-drs),
+                                                                minimum(hi-drs),
+                                                                maximum(hi-drs))
 
     ;Return computed achieved v-out
     [to-esir(r-hi), to-esir(r-lo), vo-min, vo-nom, vo-max]
+
+defn compute-output-voltage-range (v-in: [Double, Double, Double],
+                                   r-lo-val, r-hi-val,
+                                   min-lo-tol, max-lo-tol, min-hi-tol, max-hi-tol,
+                                   min-lo-dr, max-lo-dr, min-hi-dr, max-hi-dr) -> [Double, Double, Double] :
+  val [v-min v v-max] = v-in
+  val vo-min = v-min * (r-lo-val * (1.0 + min-lo-dr)) * (1.0 + min-lo-tol)
+                     / ( (r-lo-val * (1.0 + min-lo-dr)) * (1.0 + min-lo-tol)
+                      + (r-hi-val  * (1.0 + max-hi-dr)) * (1.0 + max-hi-tol))
+  val vo-max = v-max * (r-lo-val * (1.0 + max-lo-dr)) * (1.0 + max-lo-tol)
+                     / ( (r-lo-val * (1.0 + max-lo-dr)) * (1.0 + max-lo-tol)
+                     + (r-hi-val  * (1.0 + min-hi-dr)) * (1.0 + min-hi-tol))
+  val vo-nom = v * (r-lo-val) / ( (r-lo-val) + (r-hi-val) )
+
+  [vo-min, vo-nom, vo-max]
+
 
 ; Generator function for voltage-divider module. This gets called at the top level
 ; Parameters
@@ -67,12 +82,14 @@ public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref,
                                   v-out:[Double,Double,Double], 
                                   current:Double, 
                                   tol:Double) :
+  ; Find best resistors matching output requirement
+  val [r-hi-cmp, r-lo-cmp, vo-min, vo-nom, vo-max] =
+      voltage-divider-calc(property(in.voltage), v-out, current, tol / 100.)
+
+  make-voltage-divider-module(in, out, lo, v-out, r-hi-cmp, r-lo-cmp, vo-min, vo-nom, vo-max)
+
+defn make-voltage-divider-module (in: Ref, out: Ref, lo: Ref, v-out: [Double, Double, Double], r-hi-cmp: Ref, r-lo-cmp: Ref, vo-min: Double, vo-nom: Double, vo-max: Double) :
   inside pcb-module :
-
-    ; Find best resistors matching output requirement 
-    val [r-hi-cmp, r-lo-cmp, vo-min, vo-nom, vo-max] = 
-        voltage-divider-calc(property(in.voltage), v-out, current, tol)
-
     properties({out}) :
       voltage => [vo-min vo-nom vo-max]
 
@@ -91,21 +108,31 @@ public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref,
                                   current:Double) :
   ;Extract voltages from input pin
   val [v-min v v-max] = property(in.voltage)
+  val v-in = property(in.voltage)
   ; Look for highest acceptable tolerance in EIA standard values: [20% 10% 5% 2% 1% 0.5% 0.25% 0.1%]
-  val tolerance = for tol in std-tols find :
-    val [R1, R2, vo-min, vo-nom, vo-max] = 
-         voltage-divider-calc(property(in.voltage), v-out, current, tol)
-    (vo-min >= v-out[0]) and (vo-max <= v-out[2])
-  
-  ; If tolerance was found:
-  if tolerance is Double :
-    val tol = tolerance as Double
-    make-voltage-divider(in, out, lo, v-out, current, tol) 
-    ; println("Tolerance: %_" % [tol])
+  label return :
+    for tol in std-tols do :
+      ; std-tols are in % instead of being unitless
+      val tolerance = tol / 100.
+      val goal-r-hi = (v - v-out[1]) / current
+      val goal-r-lo = v-out[1] / current
+      val [vo-min, vo-nom, vo-max] = compute-output-voltage-range(v-in,
+                                                                  goal-r-lo,
+                                                                  goal-r-hi,
+                                                                  (- tolerance), tolerance, (- tolerance), tolerance,
+                                                                  0., 0., 0., 0.)
+      if v-out[0] <= vo-min and vo-max <= v-out[2] :
+        val [R1, R2, vo-min, vo-nom, vo-max] = voltage-divider-calc(v-in, v-out, current, tolerance)
+        println([R1, R2, vo-min, vo-nom, vo-max])
+        if (vo-min >= v-out[0]) and (vo-max <= v-out[2]) :
+          make-voltage-divider-module(in, out, lo, v-out, R1, R2, vo-min, vo-nom, vo-max)
+          return()
+        else :
+          println("Discarding %_, %_" % [vo-min >= v-out[0], vo-max <= v-out[2]])
+      else :
+        println("Ignoring %_, %_" % [v-out, [vo-min, vo-nom, vo-max]])
 
-  else :
     fatal("Could not find acceptable tolerance for resistors in voltage divider.")
-
 
 public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref, v-out:[Double,Double,Double]) :
   ; Target current through divider is 10x input current (if known)
