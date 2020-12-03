@@ -33,21 +33,21 @@ defpackage ocdb/generator-utils:
 ; =======================================
 
 ; Add load balancing caps to crystal oscillator
-public defn add-xtal-caps (xtal:Ref, stray-capacitance:Double) :
+public defn add-xtal-caps (xtal:Ref, gnd:Ref, stray-capacitance:Double) :
   inside pcb-module:
     val c-load = property(xtal.load-capacitance)
     val c-bal = 2.0 * (c-load - stray-capacitance)
-    for i in 1 through 2 do :
-      cap-strap(xtal.p[i], xtal.gnd, c-bal)
-
+    cap-strap(xtal.p[1], gnd, c-bal)
+    val c = cap-strap(xtal.p[2], gnd, c-bal)
+    c 
 ; Default stray capacitance assumed 5pf. 
-public defn add-xtal-caps (xtal:Ref) :
-  add-xtal-caps(xtal, 5.0e-12)
+public defn add-xtal-caps (xtal:Ref, gnd:Ref) :
+  add-xtal-caps(xtal, gnd, 5.0e-12)
 
 ; Add pullup resistors to an open-drain bus (like i2c) to vio pin. Specced for minimum power draw meeting speed requirements [TI app note:slva689].
 public defn add-open-drain-pullups (bus:Ref, vio:Ref, clk-rate:Double, bus-capacitance:Double) :
   inside pcb-module:
-    val rise-time = 0.35 / (clk-rate * 4.0) ; Signal bandwidth~ 4x clock rate for fairly sharp edge
+    val rise-time = 0.35 / (clk-rate * 5.0) ; Signal bandwidth~ 5x clock rate for fairly sharp edge
     val r = closest-std-val(rise-time / (0.8473 * bus-capacitance), 5.0)
     for p in ports(bus) do :
       res-strap(p, vio, r)
@@ -201,10 +201,16 @@ public defn check-design () :
         check resistor-check(instance)
       if has-property?(instance.capacitor) :
         check capacitor-check(instance)
-      
 
     check enable-pins()
     check io()
+
+public defn check-oscillator (o:Ref, intf:Ref, load-cap:Ref) :
+  inside pcb-module:
+    check oscillator-check-frequency(o, intf)
+    check oscillator-check-gain(o, intf, load-cap)
+    check oscillator-check-drive(o, intf, load-cap)
+    check oscillator-check-pullability(o, intf, load-cap)
 
 public pcb-check enable-pins ():
   inside pcb-module :

@@ -26,8 +26,9 @@ public pcb-component example-resistor :
   symbol = {resistor-sym(false)}(p[1] => p[1], p[2] => p[2])
   package = {ipc-two-pin-package("0402")}(p[1] => p[1], p[2] => p[2])
 
+; ========================================================
 ; ====== Standard Tolerances and Logarithmic Values ======
-
+; ========================================================
 public val std-tols = to-list([20.0, 10.0, 5.0, 2.0, 1.0, 0.5, 0.25, 0.1])
 public val std-vals = HashTable<Double, List<Double>>()
 
@@ -96,6 +97,8 @@ val cumulative-std-vals = HashTable<Double, List<Double>>()
 for tol in std-tols do :
   cumulative-std-vals[tol] = union-std-vals(tol)
 
+
+; Returns the closest value to v in the tolerance range specified by tol
 public defn closest-std-val (v:Double, tol:Double) :
   val expon = floor(log10(v))
   val signif = v / (pow(10.0,expon))
@@ -114,8 +117,10 @@ public defn closest-std-val (v:Double, tol:Double) :
 
   match-val * pow(10.0, expon)
 
-; GENERICPASSIVES
 
+; ========================================================
+; ========== Generic passive components ==================
+; ========================================================
 public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg:String) :
   port p : pin[{1 2}]
   symbol = {capacitor-sym(false)}(p[1] => p[1], p[2] => p[2])
@@ -129,7 +134,7 @@ public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg:Stri
     capacitor => true
     type => "ceramic"
     capacitance => cap
-    tolerance => (tol * 0.01)
+    tolerance => tol
     rated-voltage => max-v
     rated-temperature => [-55.0 125.0]
 
@@ -182,9 +187,9 @@ public defn gen-tant-cap-cmp (cap:Double, pkg:String) :
 
 public defn gen-tant-cap-cmp (cap:Double, tol:Double) :
   gen-tant-cap-cmp(cap, tol, 10.0)
+; public defn default-bypass (component:Ref) :
+;   bypass-cap-strap(component.gnd, component.vdd, 0.1)
 
-; 40 is default tolerance due to Yageo cap series 20% tolerance by default
-public defn gen-tant-cap-cmp (cap:Double) :
   gen-tant-cap-cmp(cap, 20.0)
  
 
@@ -233,6 +238,11 @@ public pcb-component gen-ind-cmp (ind:Double, tol:Double, max-i:Double) :
   symbol = inductor-sym(p[1] => p[1], p[2] => p[2])
   package = INDC1005X55(p[1] => p[1], p[2] => p[2]) ;TODO: all inductors 0402
   reference-prefix = "L"
+  properties:
+    inductor => true
+    inductance => ind
+    tolerance => (tol * 0.01)
+    max-current => max-i
 
 public defn gen-ind-cmp (ind:Double, tol:Double) :
   gen-ind-cmp(ind, tol, 0.1)
@@ -240,15 +250,16 @@ public defn gen-ind-cmp (ind:Double, tol:Double) :
 public defn gen-ind-cmp (ind:Double) :
   gen-ind-cmp(ind, 10.0)
 
-; STRAP
+; ========================================================
+; ============ Component strapping functions =============
+; ========================================================
+; These functions attach a passive component between two pins. e.g. strap a pull up resistor between an IO and VDD
+
 public defn bypass-cap-strap ( gnd-pin, power-pin, capacitance ):
   inside pcb-module:
     val cap = cap-strap(gnd-pin, power-pin, capacitance)
     short-trace(cap.p[1], power-pin)
     cap
-
-; public defn default-bypass (component:Ref) :
-;   bypass-cap-strap(component.gnd, component.vdd, 0.1)
 
 public defn bypass-caps (power-pin:Ref|Symbol, gnd-pin:Ref|Symbol, voltage:Double, caps:Tuple<Double>, name:Symbol) :
   inside pcb-module:
@@ -308,6 +319,11 @@ public defn block-cap (in:Ref, out:Ref, cap:Double) :
 
 public defn block-cap (in:Ref, out:Ref) :
   block-cap(in, out, 100.0e-6)
+
+
+; ========================================================
+; =================== Generic connectors =================
+; ========================================================
 
 public defn banana-plug (color:String) :
   inside pcb-module :
@@ -372,6 +388,23 @@ public defn ethernet-jack ():
     net ({c}.shield, gnd)
     c
 
+
+; Add a tag-connect landing pattern to a processor
+public defn attach-programming-connector (proc:Ref, vio:Ref, intf:String):
+  inside pcb-module:
+    unique inst tag : {ocdb/tag-connect/TC2050-IDC-NL/module}
+    net ({vio}, {tag}.pwr)
+    if intf == "swd" :
+      unique require swd:swd from proc
+      net ({swd} {tag}.swd)
+    else if intf == "jtag" :
+      unique require jtag:jtag from proc
+      net ({jtag} {tag}.jtag)
+
+; ========================================================
+; ================== Testpoint functions =================
+; ========================================================
+
 public defn add-testpoint (rs:Tuple<Ref>, method:String) :
   inside pcb-module :
     for r in rs do :
@@ -392,25 +425,29 @@ public pcb-component gen-testpad (d:Double) :
   symbol = test-point-sym(tp => p[0])
   package = {testpad(d)}(tp => tp)
 
-
-; Add a tag-connect landing pattern to a processor
-public defn attach-programming-connector (proc:Ref, vio:Ref, intf:String):
-  inside pcb-module:
-    unique inst tag : {ocdb/tag-connect/TC2050-IDC-NL/module}
-    net ({vio}, {tag}.pwr)
-    if intf == "swd" :
-      unique require swd:swd from proc
-      net ({swd} {tag}.swd)
-    else if intf == "jtag" :
-      unique require jtag:jtag from proc
-      net ({jtag} {tag}.jtag)
-
-
 public defn add-testpad (rs:Tuple<Ref>, d:Double) :
   inside pcb-module :
     for r in rs do :
       unique inst tp : {gen-testpad(d)}
       net ({tp}.tp, {r})
+
+public pcb-component top-smd-testpoint-cmp (d:Double) :
+  pin p
+  symbol = {test-point-sym}(p => p[0])
+  package = {top-smd-testpoint-pkg(d)}(p => p)
+  reference-prefix = "TP"
+
+public pcb-component btm-smd-testpoint-cmp (d:Double) :
+  pin p
+  symbol = {test-point-sym}(p => p[0])
+  package = {btm-smd-testpoint-pkg(d)}(p => p)
+  reference-prefix = "TP"
+
+public defn top-smd-testpoint-cmp () :
+  top-smd-testpoint-cmp(2.0)
+ 
+public defn btm-smd-testpoint-cmp () :
+  btm-smd-testpoint-cmp(2.0)
 
 public defn filter (in:Ref, out:Ref, type:String, params:Tuple<Double>) :
   inside pcb-module:
@@ -462,20 +499,32 @@ public defn board-mounting-holes (w:Double, h:Double, s:String|Double) :
     for (l in grid-locs(2, 2, w - offs, h - offs), i in 0 to 4) do :
       package(holes[i]) at l on Top
 
-public pcb-component top-smd-testpoint-cmp (d:Double) :
-  pin p
-  symbol = {test-point-sym}(p => p[0])
-  package = {top-smd-testpoint-pkg(d)}(p => p)
-  reference-prefix = "TP"
 
-public pcb-component btm-smd-testpoint-cmp (d:Double) :
-  pin p
-  symbol = {test-point-sym}(p => p[0])
-  package = {btm-smd-testpoint-pkg(d)}(p => p)
-  reference-prefix = "TP"
 
-public defn top-smd-testpoint-cmp () :
-  top-smd-testpoint-cmp(2.0)
- 
-public defn btm-smd-testpoint-cmp () :
-  btm-smd-testpoint-cmp(2.0)
+; ========================================================
+; ===================== Antennas =========================
+; ========================================================
+
+pcb-package ant-2GHz4-inverted-f-geom :
+
+  pad launch : {smd-pad(0.5, 0.5)} at loc(0.0, 0.0)
+  pad gnd : {smd-pad(0.9, 0.5)} at loc(-2.1, 0.45)
+
+  copper(LayerIndex(0)) = Line(0.5, [Point(-2.1, 5.15), Point(2.2, 5.15), Point(2.2, 2.51), 
+                                Point(4.7, 2.51),  Point(4.7, 5.15), Point(6.9, 5.15), 
+                                Point(6.9, 2.51),  Point(9.4, 2.51), Point(9.4, 5.15), 
+                                Point(11.6, 5.15), Point(11.6, 0.96)])
+  copper(LayerIndex(0)) = Line(0.5, [Point(0.0, 0.0),   Point(0.0, 5.15)])
+  copper(LayerIndex(0)) = Rectangle(0.9, 5.4, loc(-2.1, 2.7))
+  ; via(0.3, 0.126) on LayerIndex(0)) through layer(1) at loc(-2.1, 0.45)
+  layer(ForbidCopper(LayerIndex(0), LayerIndex(0, Bottom))) = Rectangle(24.0, 5.5, loc(5.0, 3.25))
+  layer(Courtyard(Top)) = Rectangle(24.0, 5.5, loc(5.0, 3.25))
+  layer(Courtyard(Bottom)) = Rectangle(24.0, 5.5, loc(5.0, 3.25))
+  layer(BoardEdge()) = Line(0.0, [Point(17.0, 6.0), Point(-7.0, 6.0)])
+
+public pcb-component trace-antenna :
+  pin launch
+  pin gnd
+  description = "2.4 GHz Inverted F trace antenna"
+  package = ant-2GHz4-inverted-f-geom(launch => launch, gnd => gnd)
+  symbol = {antenna-symbol(1,1)}(launch => p[1], gnd => p[2])

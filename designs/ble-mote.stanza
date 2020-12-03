@@ -25,10 +25,13 @@ pcb-module sensor-mote :
   set-power-source(j.p[1], j.p[2], 4.0)
   net gnd (j.p[2])
 
-  ; Instantiate NRF52 Module
+  ; ; Instantiate NRF52 Module
   inst proc : {ocdb/nordic/nRF52832/module}
-  attach-programming-connector(proc, proc.pow3v0, "swd")
+  ; attach-programming-connector(proc, proc.pow3v0, "swd")
 
+  inst esp : {ocdb/espressif/ESP32-PICO-D4/module}
+  ; inst ant : trace-antenna
+  ; package(ant) at loc(0.0,0.0) on Top
   ; Add and connect thermocouple sensor
   inst thermocouple : {ocdb/microchip/MCP9600/module(0)}
   inst K : {pin-header(2)}
@@ -49,7 +52,7 @@ pcb-module sensor-mote :
   package(j) at loc(-18.0, 0.0) on Top
 
   ; Apply groups to sub-circuits for schematic and layout
-  group-modules([[proc] [thermocouple K]])
+  group-modules([[proc] [esp] [thermocouple K]])
   net P3V0 (proc.pow3v0.vdd)
   net VIN (j.p[1])
   symbol(gnd) = {ocdb/symbols/ground-sym}
@@ -59,9 +62,16 @@ pcb-module sensor-mote :
 val main-design = default-board(sensor-mote, 4, 40.0,10.0)
 
 ; Concretize the design and solve for power supplies.
-lower-esir()
-run-user-pass(generate-power)
+; lower-esir()
+; run-user-pass(generate-power)
 
-view(main-design)
+; export-cad("BLE-mote", "kicad")
 
-export-cad("BLE-mote", "kicad")
+export-kicad("BLE-mote", [`place => true
+                          `check-log => "checks.txt"
+                          `gen-board => true 
+                          `gen-bom => false 
+                          `gen-schematic => true 
+                          `fresh => true 
+                          `schematic-version => 4
+                          `param-configs => [`sketch]] )

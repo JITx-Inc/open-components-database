@@ -143,3 +143,35 @@ public pcb-check capacitor-check (c:Ref) :
     else : println("Unhandled type for capacitor check on %_" % [c])
 
   #CHECK(temp >= property(c.rated-temperature)[0])
+
+; Checks the critical gain and drive level of an oscillator (o) against an interface on an IC (intf)
+public pcb-check oscillator-check-frequency (o:Ref, intf:Ref) :
+  ; Check critical gain point to ensure oscillation
+  #CHECK(has-property?(o.frequency))
+  #CHECK(has-property?(intf.frequency))
+  #CHECK(property(o.frequency) == property(intf.frequency))
+public pcb-check oscillator-check-gain (o:Ref, intf:Ref, load-cap:Ref) :
+  ; Check critical gain point to ensure oscillation
+  #CHECK(has-property?(o.shunt-capacitance))
+  #CHECK(has-property?(o.load-capacitance))
+  #CHECK(has-property?(o.ESR))
+  #CHECK(has-property?(o.frequency))
+  #CHECK(has-property?(intf.max-critical-gain))
+  val gain = 4.0 * property(o.ESR) * pow(2.0 * PI * property(o.frequency), 2.0) * pow(property(o.shunt-capacitance) + property(o.load-capacitance), 2.0)
+  #CHECK(gain < property(intf.max-critical-gain))
+public pcb-check oscillator-check-drive (o:Ref, intf:Ref, load-cap:Ref) :
+  ; Check drive level against crystal maximum
+  #CHECK(has-property?(intf.drive-level))
+  #CHECK(has-property?(o.max-drive-level))
+  #CHECK(property(intf.drive-level) < property(o.max-drive-level))
+  ; Check pullability of crystal to ensure accuracy
+public pcb-check oscillator-check-pullability (o:Ref, intf:Ref, load-cap:Ref) :
+  #CHECK(has-property?(o.motional-capacitance))
+  val pullability = property(o.motional-capacitance) / (2.0 * pow((property(o.shunt-capacitance) + property(o.load-capacitance)), 2.0))
+  #CHECK(has-property?(load-cap.tolerance))
+  #CHECK(has-property?(load-cap.capacitance))
+  val dC = (property(load-cap.capacitance) as Double) * (property(load-cap.tolerance) as Double)
+  val freq-error = (pullability as Double) * (dC as Double)
+  #CHECK(has-property?(o.frequency-tolerance))
+  #CHECK(has-property?(intf.frequency-tolerance))
+  #CHECK(property(o.frequency-tolerance) + freq-error < property(intf.frequency-tolerance))

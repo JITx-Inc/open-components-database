@@ -15,6 +15,7 @@ defpackage ocdb/nordic/nRF52832 :
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
+  import ocdb/checks
 
   import jitpcb/visualizer
 
@@ -26,13 +27,15 @@ public unique pcb-component component :
   mpn ="nRF52832-QFAA-R7"
   description = "NRF52 BLE SoC"
   port dec : pin[4]
-  port p0 : pin[32]
+  ; port p0 : pin[32]
+  port p0 : pin[{2 to 32}]
   pin vdd
   pin SWDCLK
   pin SWDIO
   pin ANT
   pin gnd
-  port xc : pin[2]
+  port osc : crystal
+  port lfosc : low-freq-oscillator
   pin dcc
 
   val ps = PinSpec $ #TABLE :
@@ -46,10 +49,13 @@ public unique pcb-component component :
     [gnd | 31  45  49 | Down | power]
     [SWDIO  | 26 | Left | io]
     [SWDCLK | 25 | Left | io]
-    [xc[1]  | 35 | Left | io]
-    [xc[0]  | 34 | Left | io]
+    [osc.out  | 35 | Left | io]
+    [osc.in  | 34 | Left | io]
     [ANT    | 30 | Right | io]
-    for i in 0 to 11 do : 
+    ; for i in 0 to 11 do : 
+    [lfosc.in |  2 | Right | io]
+    [lfosc.out |  3 | Right | io]
+    for i in 2 to 11 do : 
       [p0[i] | i + 2 | Right | io]
     for i in 11 to 22 do : 
       [p0[i] | i + 3 | Right | io]
@@ -59,7 +65,8 @@ public unique pcb-component component :
     for i in 25 to 32 do : 
       [p0[i] | i + 12 | Right | io]
 
-  for i in 0 to 32 do:
+  ; for i in 0 to 32 do:
+  for i in 2 to 32 do:
     supports io-pin :
       p => p0[i]
   for i in 2 to 5 do :
@@ -71,6 +78,23 @@ public unique pcb-component component :
 
   make-box-symbol(ps)
   assign-package(qfn-package(0.4, 6.0, 48, 0.2, 0.4, [4.6 4.6]), ps)
+
+  properties(osc):
+    ; Max critical gain for oscillator: 4*ESR*(2*PI*F)^2*(c-shunt + c-load)^2
+    ; https://infocenter.nordicsemi.com/pdf/nRF52832_PS_v1.4.pdf -- Section 19.4.2
+    max-critical-gain => 0.003 ; A/V
+    drive-level => 13.0e-6 ; W. 250uA^2*ESR 
+    c => 1.0e-12 ; Internal capacitance
+    frequency-tolerance => 40.0e-6 ; 40ppm allowed from datasheet
+    frequency => 32.0e6 
+
+  properties(lfosc):
+    max-critical-gain => 3.5e-6 ; A/V
+    drive-level => 6.5e-9; W. 0.25uA^2*ESR 
+    c => 4.0e-12 ; Internal capacitance
+    frequency-tolerance => 50.0e-6 ; 50ppm allowed from datasheet
+    frequency => 32.768e3 
+
 
 pcb-module t-filter :
   pin in
@@ -106,12 +130,20 @@ public unique pcb-module module :
     power-request => [3.0 0.1 5.0e-3]
     gnd-ref => #R(gnd)
 
-  ; External oscillator
+  ; External 32 MHz crystal
   inst xtal : {ocdb/abracon/ABM12-32-B2X-T3/component}
-  net XC1 (proc.xc[0], xtal.p[2])
-  net XC2 (proc.xc[1], xtal.p[1])
-  add-xtal-caps(xtal)
   net (gnd, xtal.gnd)
+  net XC1 (proc.osc.in, xtal.p[2])
+  net XC2 (proc.osc.out, xtal.p[1])
+  val load-cap = add-xtal-caps(xtal, gnd)
+  check-oscillator(xtal, proc.osc, load-cap)
+
+  ; External 32.768 kHz crystal
+  inst lfxtal : {ocdb/epson/FC-135/component}
+  net (proc.lfosc.in lfxtal.p[1])
+  net (proc.lfosc.out lfxtal.p[2])
+  val lf-cap = add-xtal-caps(lfxtal, gnd)
+  check-oscillator(lfxtal, proc.lfosc, lf-cap)
 
   inst ant : {ocdb/johanson/2450AT18A100/component}
   inst lpf : {ocdb/johanson/2450FM07A0029/component}
