@@ -3,7 +3,8 @@ defpackage ocdb/passive-circuits:
   import core
   import collections
   import math
-  import esir
+  import esir with :
+    prefix(Resistor) => EModel-
   import esir/utils
   import esir/gen
   import ocdb/tests/default-harness
@@ -13,50 +14,184 @@ defpackage ocdb/passive-circuits:
   import ocdb/design-vars
   import ocdb/db-parts
 
-public defn voltage-divider-calc (v-in:[Double,Double,Double], 
-                                  v-out:[Double,Double,Double], 
-                                  current:Double, 
-                                  tol:Double) -> [Ref, Ref, Double, Double, Double] :
-    val goal-r-hi = (v-in[1] - v-out[1]) / current
-    val goal-r-lo = v-out[1] / current
-    val r-hi = Resistor(["resistance" => goal-r-hi,
-                         "tolerance" => tol,
-                         "minimum_quantity" => 1,
-                         "mounting" => PREFERRED-MOUNTING], ["tcr"])
-    val r-lo = Resistor(["resistance" => goal-r-lo, "tolerance" => tol, "min-minimum_quantity" => 1, "mounting" => PREFERRED-MOUNTING], ["tcr"])
 
-    ; CHECKS IN THIS SECTION WILL BE OFFLOADED TO SPICE
-    ; =====================================================
-    ; =====================================================
-    ; Calculate OPERATING-TEMPERATURE dependent value of resistor
-    val lo-drs = [delta-resistance(r-lo, OPERATING-TEMPERATURE[0]), 0., delta-resistance(r-lo, OPERATING-TEMPERATURE[1])]
-    val hi-drs = [delta-resistance(r-hi, OPERATING-TEMPERATURE[0]), 0., delta-resistance(r-hi, OPERATING-TEMPERATURE[1])]
+defstruct Ratio :
+  high: Double
+  low: Double
+  loss: Double
 
-    ; Calculate worst case.
-    ; TCR can be + or - here. It's a tolerance, not an absolute change in resistance
-    val lo-tolerance = tolerance(r-lo) as MinMaxRange
-    val hi-tolerance = tolerance(r-hi) as MinMaxRange
-    println("Solution: R1=%_, R2=%_, tol1=%_, tol2=%_" % [resistance(r-hi), resistance(r-lo), hi-tolerance, lo-tolerance])
+public defstruct VoltageDividerSolution :
+  r1: Ref
+  r2: Ref
+  vo: [Double, Double, Double]
 
-    val [vo-min, vo-nom, vo-max] = compute-output-voltage-range(v-in,
-                                                                resistance(r-lo),
-                                                                resistance(r-hi),
-                                                                min(lo-tolerance),
-                                                                max(lo-tolerance),
-                                                                min(hi-tolerance),
-                                                                max(hi-tolerance),
-                                                                minimum(lo-drs),
-                                                                maximum(lo-drs),
-                                                                minimum(hi-drs),
-                                                                maximum(hi-drs))
+val PKGS = ["01005", "0201", "02016", "0202", "0303", "0402", "0404", "0503", "0505", "0603", "0612", "0805", "1206",
+            "1210", "1218", "1812", "2010", "2512", "2525", "2615", "2616", "3920", "4122", "4823", "5329", "6030"]
 
-    ;Return computed achieved v-out
-    [to-esir(r-hi), to-esir(r-lo), vo-min, vo-nom, vo-max]
+defn get-valid-pkg-list () :
+  val min-pkg-idx = find({PKGS[_] == MIN-PKG}, 0 to length(PKGS))
+  match(min-pkg-idx: Int) :
+    PKGS[min-pkg-idx to false]
+  else :
+    throw(Exception("Invalid MIN-PKG."))
 
-defn compute-output-voltage-range (v-in: [Double, Double, Double],
-                                   r-lo-val, r-hi-val,
-                                   min-lo-tol, max-lo-tol, min-hi-tol, max-hi-tol,
-                                   min-lo-dr, max-lo-dr, min-hi-dr, max-hi-dr) -> [Double, Double, Double] :
+;======================================================
+;==================== Esir API ========================
+;======================================================
+
+public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref, v-out:[Double,Double,Double]) :
+  ; Target current through divider is 10x input current (if known)
+  if has-property?(out.i-input) :
+    make-voltage-divider(in, out, lo, v-out, property(out.i-input) * 10.0)
+  else :
+  ; Otherwise, set current to be 1ma
+    make-voltage-divider(in, out, lo, v-out, 1.0e-3)
+
+public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref,
+                                  v-out:[Double,Double,Double],
+                                  current:Double) -> VoltageDividerSolution:
+  println("Solving voltage divider [in=%_, out=%_, low=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A]"
+          % [in, out, lo, v-out[0], v-out[1], v-out[2], current])
+  ;Extract voltages from input pin
+  val v-in = property(in.voltage)
+
+  val solution = make-voltage-divider(v-in, v-out, current)
+  match(solution: VoltageDividerSolution) :
+    make-voltage-divider-module(in, out, lo, v-out, r1(solution), r2(solution), vo(solution))
+    solution
+  else :
+    fatal("No solution for voltage divider.")
+
+; Generator function for voltage-divider module. This gets called at the top level
+; Parameters
+; ------------
+; in : input pin, with annotated voltage [min nom max] (V)
+; out : output pin. Gets annotated with [min nom max] (V)
+; lo : low side pin (usually gnd)
+; v-out : Allowable output voltage range [min nom max] (V)
+; current : desired dc current of voltage divider (A) assumes output is connected to high-impedance.
+; tol : desired tolerance of resistor (in %)
+; returns true if fitting resistors were found else false
+public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref,
+                                  v-out:[Double,Double,Double],
+                                  current:Double,
+                                  tol:Double) -> VoltageDividerSolution|False :
+  val current-tol = 10.
+  make-voltage-divider(in, out, lo, v-out, current, tol, current-tol)
+
+; current-tol : Tolerance on the output current (in %)
+public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref,
+                                  v-out:[Double,Double,Double],
+                                  current:Double,
+                                  tol:Double,
+                                  current-tol: Double) -> VoltageDividerSolution|False :
+  println("Solving voltage divider [in=%_, out=%_, low=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A, resistor-tol=%_%%]"
+          % [in, out, lo, v-out[0], v-out[1], v-out[2], current, tol])
+  val tolerance = tol / 100.
+  val current-tolerance = current-tol / 100.
+  val v-in = property(in.voltage)
+
+  val solution = make-voltage-divider(v-in, v-out, current, tolerance, current-tolerance)
+  match(solution: VoltageDividerSolution) :
+    make-voltage-divider-module(in, out, lo, v-out, r1(solution), r2(solution), vo(solution))
+    solution
+  else :
+    fatal("No solution for voltage divider.")
+
+;============================================================
+;=============== Voltage Divider Solver =====================
+;============================================================
+
+public defn make-voltage-divider (v-in: [Double, Double, Double],
+                                  v-out: [Double,Double,Double],
+                                  current: Double) -> VoltageDividerSolution|False:
+  ; Look for highest acceptable tolerance in EIA standard values: [20% 10% 5% 2% 1% 0.5% 0.25% 0.1%]
+  val current-tolerance = 0.1
+  val goal-r-hi = (v-in[1] - v-out[1]) / current
+  val goal-r-lo = v-out[1] / current
+  label<VoltageDividerSolution|False> return :
+    for tol in std-tols do :
+      ; std-tols are in % instead of being unitless
+      val tolerance = tol / 100.
+      if check-output-voltage-range(v-in,
+                                    v-out,
+                                    goal-r-lo,
+                                    goal-r-hi,
+                                    (- tolerance), tolerance, (- tolerance), tolerance,
+                                    0., 0., 0., 0.) :
+        println("-> Tolerance %_%%" % [tol])
+        val solution = make-voltage-divider(v-in, v-out, current, tolerance, current-tolerance)
+        if solution is VoltageDividerSolution :
+          return(solution)
+
+public defn make-voltage-divider (v-in: [Double, Double, Double],
+                                  v-out: [Double,Double,Double],
+                                  current: Double,
+                                  tolerance: Double,
+                                  current-tolerance: Double) -> VoltageDividerSolution|False :
+  val goal-r-hi = (v-in[1] - v-out[1]) / current
+  val goal-r-lo = v-out[1] / current
+  ; Find best resistors matching output requirement
+  val hi-res = get-resistance-values(goal-r-hi, tolerance, current-tolerance)
+  val lo-res = get-resistance-values(goal-r-lo, tolerance, current-tolerance)
+
+  label<VoltageDividerSolution|False> return :
+    for ratio in determine-and-sort-fitting-resistance-pairs(v-in, v-out, tolerance, hi-res, lo-res) do :
+      println("    - Querying resistors for R1=%_Ω R2=%_Ω" % [high(ratio), low(ratio)])
+      val r-his = query-resistors(high(ratio), tolerance)
+      val r-los = query-resistors(low(ratio), tolerance)
+
+      if length(r-his) >= 3 and length(r-los) >= 3 :
+        val r-hi-cmp = r-his[0]
+        val r-lo-cmp = r-los[0]
+        val vo = study-solution(v-in, r-hi-cmp, r-lo-cmp)
+        val [vo-min, vo-nom, vo-max] = vo
+
+        if (vo-min >= v-out[0]) and (vo-max <= v-out[2]) :
+          val r-hi-ref = to-esir(r-hi-cmp)
+          val r-lo-ref = to-esir(r-lo-cmp)
+          println("      Solved: r1=%_, r2=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A"
+                  % [r-hi-ref, r-lo-ref, vo-min, vo-nom, vo-max, v-out[1] / low(ratio)])
+          return(VoltageDividerSolution(r-hi-ref, r-lo-ref, vo))
+        else :
+          println("      Ignoring: not a solution when taking into account TCRs.")
+      else :
+        println("      Ignoring: there must at least 3 resistors of each type")
+
+    println("   No solution.")
+
+defn get-resistance-values (goal-r: Double, r-tol: Double, current-tol: Double) -> Tuple<Double> :
+  query-available-resistance-values(["min-resistance" => (1. - current-tol) * goal-r,
+                                     "max-resistance" => (1. + current-tol) * goal-r,
+                                     "tolerance" => r-tol,
+                                     "minimum_quantity" => 1,
+                                     "mounting" => PREFERRED-MOUNTING,
+                                     "case" => get-valid-pkg-list(),
+                                     "min-stock" => 5 * DESIGN-QUANTITY], ["tcr"])
+
+defn determine-and-sort-fitting-resistance-pairs (v-in: [Double, Double, Double],
+                                                  v-out: [Double, Double, Double],
+                                                  tol: Double,
+                                                  hi-res: Tuple<Double>,
+                                                  lo-res: Tuple<Double>) :
+  qsort{loss, _} $
+    for rh in hi-res seq-cat :
+      for rl in lo-res seq? :
+        val [vo-min, vo-nom, vo-max] = compute-output-voltage-range(v-in,
+                                                                    rl,
+                                                                    rh,
+                                                                    (- tol), tol, (- tol), tol,
+                                                                    0., 0., 0., 0.)
+        if v-out[0] <= vo-min and vo-max <= v-out[2] :
+          val loss = (- abs(v-out[1] - vo-nom))
+          One(Ratio(rh, rl, loss))
+        else :
+          None()
+
+public defn compute-output-voltage-range (v-in: [Double, Double, Double],
+                                          r-lo-val, r-hi-val,
+                                          min-lo-tol, max-lo-tol, min-hi-tol, max-hi-tol,
+                                          min-lo-dr, max-lo-dr, min-hi-dr, max-hi-dr) -> [Double, Double, Double] :
   val [v-min v v-max] = v-in
   val vo-min = v-min * (r-lo-val * (1.0 + min-lo-dr)) * (1.0 + min-lo-tol)
                      / ( (r-lo-val * (1.0 + min-lo-dr)) * (1.0 + min-lo-tol)
@@ -68,30 +203,55 @@ defn compute-output-voltage-range (v-in: [Double, Double, Double],
 
   [vo-min, vo-nom, vo-max]
 
+public defn check-output-voltage-range (v-in: [Double, Double, Double],
+                                        v-out: [Double, Double, Double],
+                                        r-lo-val, r-hi-val,
+                                        min-lo-tol, max-lo-tol, min-hi-tol, max-hi-tol,
+                                        min-lo-dr, max-lo-dr, min-hi-dr, max-hi-dr) -> True|False :
+  val [vo-min, vo-nom, vo-max] = compute-output-voltage-range(v-in,
+                                                              r-lo-val, r-hi-val,
+                                                              min-lo-tol, max-lo-tol, min-hi-tol, max-hi-tol,
+                                                              min-lo-dr, max-lo-dr, min-hi-dr, max-hi-dr)
+  v-out[0] <= vo-min and vo-max <= v-out[2]
 
-; Generator function for voltage-divider module. This gets called at the top level
-; Parameters
-; ------------
-; in : input pin, with annotated voltage [min nom max] (V)
-; out : output pin. Gets annotated with [min nom max] (V)
-; lo : low side pin (usually gnd)
-; v-out : Allowable output voltage range [min nom max] (V)
-; current : desired dc current of voltage divider (A) assumes output is connected to high-impedance.
-; tol : desired tolerance of resistor
-public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref, 
-                                  v-out:[Double,Double,Double], 
-                                  current:Double, 
-                                  tol:Double) :
-  ; Find best resistors matching output requirement
-  val [r-hi-cmp, r-lo-cmp, vo-min, vo-nom, vo-max] =
-      voltage-divider-calc(property(in.voltage), v-out, current, tol / 100.)
+defn query-resistors (resistance: Double, tol: Double) -> Tuple<Resistor> :
+  Resistors(["resistance" => resistance,
+             "tolerance" => tol,
+             "minimum_quantity" => 1,
+             "mounting" => PREFERRED-MOUNTING,
+             "case" => get-valid-pkg-list(),
+             "min-stock" => 5 * DESIGN-QUANTITY], ["tcr"])
 
-  make-voltage-divider-module(in, out, lo, v-out, r-hi-cmp, r-lo-cmp, vo-min, vo-nom, vo-max)
+defn study-solution (v-in: [Double, Double, Double], r-hi: Resistor, r-lo: Resistor) -> [Double, Double, Double] :
+  val lo-drs = [delta-resistance(r-lo, OPERATING-TEMPERATURE[0]), 0., delta-resistance(r-lo, OPERATING-TEMPERATURE[1])]
+  val hi-drs = [delta-resistance(r-hi, OPERATING-TEMPERATURE[0]), 0., delta-resistance(r-hi, OPERATING-TEMPERATURE[1])]
 
-defn make-voltage-divider-module (in: Ref, out: Ref, lo: Ref, v-out: [Double, Double, Double], r-hi-cmp: Ref, r-lo-cmp: Ref, vo-min: Double, vo-nom: Double, vo-max: Double) :
+  ; Calculate worst case.
+  ; TCR can be + or - here. It's a tolerance, not an absolute change in resistance
+  val lo-tolerance = tolerance(r-lo) as MinMaxRange
+  val hi-tolerance = tolerance(r-hi) as MinMaxRange
+  println("      Checking solution for existing components with: tol1=%_, tol2=%_" % [hi-tolerance, lo-tolerance])
+
+  compute-output-voltage-range(v-in,
+                               resistance(r-lo),
+                               resistance(r-hi),
+                               min(lo-tolerance),
+                               max(lo-tolerance),
+                               min(hi-tolerance),
+                               max(hi-tolerance),
+                               minimum(lo-drs),
+                               maximum(lo-drs),
+                               minimum(hi-drs),
+                               maximum(hi-drs))
+
+defn make-voltage-divider-module (in: Ref, out: Ref, lo: Ref,
+                                  v-out: [Double, Double, Double],
+                                  r-hi-cmp: Ref, r-lo-cmp: Ref,
+                                  vo: [Double, Double, Double]) :
+
   inside pcb-module :
     properties({out}) :
-      voltage => [vo-min vo-nom vo-max]
+      voltage => vo
 
     ; Instantiate resistors, create netlist
     unique inst r-hi : {r-hi-cmp}
@@ -102,43 +262,3 @@ defn make-voltage-divider-module (in: Ref, out: Ref, lo: Ref, v-out: [Double, Do
 
     ; Check true output against requirement
     check voltage-levels(out, v-out)
-
-public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref, 
-                                  v-out:[Double,Double,Double], 
-                                  current:Double) :
-  ;Extract voltages from input pin
-  val [v-min v v-max] = property(in.voltage)
-  val v-in = property(in.voltage)
-  ; Look for highest acceptable tolerance in EIA standard values: [20% 10% 5% 2% 1% 0.5% 0.25% 0.1%]
-  label return :
-    for tol in std-tols do :
-      ; std-tols are in % instead of being unitless
-      val tolerance = tol / 100.
-      val goal-r-hi = (v - v-out[1]) / current
-      val goal-r-lo = v-out[1] / current
-      val [vo-min, vo-nom, vo-max] = compute-output-voltage-range(v-in,
-                                                                  goal-r-lo,
-                                                                  goal-r-hi,
-                                                                  (- tolerance), tolerance, (- tolerance), tolerance,
-                                                                  0., 0., 0., 0.)
-      if v-out[0] <= vo-min and vo-max <= v-out[2] :
-        val [R1, R2, vo-min, vo-nom, vo-max] = voltage-divider-calc(v-in, v-out, current, tolerance)
-        println([R1, R2, vo-min, vo-nom, vo-max])
-        if (vo-min >= v-out[0]) and (vo-max <= v-out[2]) :
-          make-voltage-divider-module(in, out, lo, v-out, R1, R2, vo-min, vo-nom, vo-max)
-          return()
-        else :
-          println("Discarding %_, %_" % [vo-min >= v-out[0], vo-max <= v-out[2]])
-      else :
-        println("Ignoring %_, %_" % [v-out, [vo-min, vo-nom, vo-max]])
-
-    fatal("Could not find acceptable tolerance for resistors in voltage divider.")
-
-public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref, v-out:[Double,Double,Double]) :
-  ; Target current through divider is 10x input current (if known)
-  if has-property?(out.i-input) :
-    make-voltage-divider(in, out, lo, v-out, property(out.i-input) * 10.0)
-  else :
-  ; Otherwise, set current to be 1ma
-    make-voltage-divider(in, out, lo, v-out, 1.0e-3)
-    

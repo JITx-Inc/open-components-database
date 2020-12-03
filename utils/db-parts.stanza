@@ -76,7 +76,8 @@ public defn delta-resistance (resistor: Resistor, temperature: Double) -> Double
 
   (temperature - ref-temp) * coeff
 
-public defn Resistor (json: JObject) -> Resistor :
+public defn Resistor (raw-json: JObject) -> Resistor :
+  val json = filter-json(raw-json)
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
 
   Resistor(json["manufacturer"] as String,
@@ -133,7 +134,7 @@ defmethod to-esir (resistor: Resistor) -> VarRef :
       package = {dummy-package(2, [x(resistor) y(resistor)])}(p[1] => p[1], p[2] => p[2])
 
     emodel = EModel-Resistor(resistance(resistor),
-                             max-or-unknown(tolerance(resistor)),
+                             emodel-pourcentage-tolerance(tolerance(resistor)),
                              double-or-unknown(rated-power(resistor)))
     reference-prefix = "R"
     val TCR = TCR(resistor)
@@ -176,8 +177,36 @@ public defn Resistor (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tupl
                                              temperature-properties,
                                              properties])
 
-  val json = dbquery-first(query-properties)
-  Resistor(filter-json(json))
+  val json = dbquery-first(query-properties) as JObject
+  Resistor(json)
+
+public defn Resistors (properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Resistor> :
+  val sort = OPTIMIZE-FOR
+  val temperature-properties = ["max-rated-temperature.min" => OPERATING-TEMPERATURE[0],
+                                "min-rated-temperature.max" => OPERATING-TEMPERATURE[1]]
+
+  val query-properties = to-tuple $ cat-all([["category" => "resistor",
+                                              "_sort" => sort,
+                                              "_exist" => exist],
+                                             temperature-properties,
+                                             properties])
+
+  val jsons = dbquery-all(query-properties) as Tuple<JObject>
+  map(Resistor, jsons)
+
+public defn query-available-resistance-values (properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Double> :
+  val sort = OPTIMIZE-FOR
+  val temperature-properties = ["max-rated-temperature.min" => OPERATING-TEMPERATURE[0],
+                                "min-rated-temperature.max" => OPERATING-TEMPERATURE[1]]
+
+  val query-properties = to-tuple $ cat-all([["category" => "resistor",
+                                              "_sort" => sort,
+                                              "_exist" => exist,
+                                              "_distinct" => "resistance"],
+                                             temperature-properties,
+                                             properties])
+
+  dbquery-all(query-properties) as Tuple<Double>
 
 ;============================================================
 ;===================== Capacitor ============================
@@ -212,7 +241,8 @@ defstruct ESR :
   value: Double
   frequency: Double|False
 
-public defn Capacitor (json: JObject) -> Capacitor :
+public defn Capacitor (raw-json: JObject) -> Capacitor :
+  val json = filter-json(raw-json)
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
 
   Capacitor(json["manufacturer"] as String,
@@ -310,7 +340,7 @@ defmethod to-esir (capacitor: Capacitor) -> VarRef:
           "[C] {p[1]} {p[2]} {capacitance}"
 
     emodel = EModel-Capacitor(capacitance(capacitor),
-                             max-or-unknown(tolerance(capacitor)),
+                             emodel-pourcentage-tolerance(tolerance(capacitor)),
                              double-or-unknown(rated-voltage(capacitor)),
                              pol?,
                              UNKNOWN, ; FIXME: define low-esr? as below a certain threshold on the esr ?
@@ -359,8 +389,8 @@ public defn Capacitor (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tup
                                              temperature-properties,
                                              properties])
 
-  val json = dbquery-first(query-properties)
-  Capacitor(filter-json(json))
+  val json = dbquery-first(query-properties) as JObject
+  Capacitor(json)
 
 ;============================================================
 ;====================== Inductor ============================
@@ -391,7 +421,8 @@ defstruct Inductor <: Component :
   quality-factor: Double|False ; Loss factor inverse - ratio between inductors resistance and inductance (ratio@freq)
   self-resonant-frequency: Double|False ; Frequency at which inductor impedance becomes very high / open circuit (freq in Hz)
 
-public defn Inductor (json: JObject) -> Inductor :
+public defn Inductor (raw-json: JObject) -> Inductor :
+  val json = filter-json(raw-json)
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
 
   Inductor(json["manufacturer"] as String,
@@ -442,7 +473,7 @@ defmethod to-esir (inductor: Inductor) -> VarRef :
 
     val inductance = inductance(inductor)
     emodel = EModel-Inductor(inductance,
-                             max-or-unknown(tolerance(inductor)),
+                             emodel-pourcentage-tolerance(tolerance(inductor)),
                              double-or-unknown(current-rating(inductor)))
     reference-prefix = "L"
     val rated-temperature = rated-temperature(inductor)
@@ -486,8 +517,8 @@ public defn Inductor (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tupl
                                              temperature-properties,
                                              properties])
 
-  val json = dbquery-first(query-properties)
-  Inductor(filter-json(json))
+  val json = dbquery-first(query-properties) as JObject
+  Inductor(json)
 
 ;============================================================
 ;====================== Printer =============================
@@ -579,7 +610,7 @@ defn indented-list (items:Seqable) :
 
 defn filter-json (json: JObject) :
   ; qty and factory-stock seem to be deprecated attributes
-  JObject(to-tuple $ filter(contains?{["qty", "factory-stock"], key(_)}, json))
+  JObject(to-tuple $ filter({not contains?(["qty", "factory-stock"], key(_))}, json))
 
 
 defn parse-dimensions (dimensions: JObject) -> [Double, Double, Double|False] :
@@ -608,11 +639,12 @@ defn parse-tolerance (json: JObject) -> MinMaxRange|False :
       MinMaxRange(tolerance-json["min"] as Double, tolerance-json["max"] as Double)
 
 defn parse-sourcing (json: JObject) -> Sourcing :
-  Sourcing(optional-double(json, "price"), json["minimum_quantity"] as Int, json["stock"] as Int)
+  ; minimum-quantity and stock are float in MongoDB even though the python scraper do gives python ints to pymongo.
+  Sourcing(optional-double(json, "price"), to-int(json["minimum_quantity"] as Double), to-int(json["stock"] as Double))
 
-defn max-or-unknown (value: MinMaxRange|False) -> Double|UNKNOWN :  ; FIXME: Tolerance minmax range not handled properly but emodel is going depricated
+defn emodel-pourcentage-tolerance (value: MinMaxRange|False) -> Double|UNKNOWN :  ; FIXME: Tolerance minmax range not handled properly but emodel is going depricated
   match(value: MinMaxRange) :
-    max(value)
+    100. * max(value)
   else:
     UNKNOWN
 
