@@ -21,8 +21,8 @@ defstruct Ratio :
   loss: Double
 
 public defstruct VoltageDividerSolution :
-  r1: Ref
-  r2: Ref
+  r1: Resistor
+  r2: Resistor
   vo: [Double, Double, Double]
 
 val PKGS = ["01005", "0201", "02016", "0202", "0303", "0402", "0404", "0503", "0505", "0603", "0612", "0805", "1206",
@@ -57,7 +57,7 @@ public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref,
 
   val solution = make-voltage-divider(v-in, v-out, current)
   match(solution: VoltageDividerSolution) :
-    make-voltage-divider-module(in, out, lo, v-out, r1(solution), r2(solution), vo(solution))
+    make-voltage-divider-module(in, out, lo, v-out, to-esir(r1(solution)), to-esir(r2(solution)), vo(solution))
     solution
   else :
     fatal("No solution for voltage divider.")
@@ -93,7 +93,7 @@ public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref,
 
   val solution = make-voltage-divider(v-in, v-out, current, tolerance, current-tolerance)
   match(solution: VoltageDividerSolution) :
-    make-voltage-divider-module(in, out, lo, v-out, r1(solution), r2(solution), vo(solution))
+    make-voltage-divider-module(in, out, lo, v-out, to-esir(r1(solution)), to-esir(r2(solution)), vo(solution))
     solution
   else :
     fatal("No solution for voltage divider.")
@@ -148,11 +148,9 @@ public defn make-voltage-divider (v-in: [Double, Double, Double],
         val [vo-min, vo-nom, vo-max] = vo
 
         if (vo-min >= v-out[0]) and (vo-max <= v-out[2]) :
-          val r-hi-ref = to-esir(r-hi-cmp)
-          val r-lo-ref = to-esir(r-lo-cmp)
-          println("      Solved: r1=%_, r2=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A"
-                  % [r-hi-ref, r-lo-ref, vo-min, vo-nom, vo-max, v-out[1] / low(ratio)])
-          return(VoltageDividerSolution(r-hi-ref, r-lo-ref, vo))
+          println("      Solved: mpn1=%_, mpn2=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A"
+                  % [mpn(r-hi-cmp), mpn(r-lo-cmp), vo-min, vo-nom, vo-max, v-out[1] / low(ratio)])
+          return(VoltageDividerSolution(r-hi-cmp, r-lo-cmp, vo))
         else :
           println("      Ignoring: not a solution when taking into account TCRs.")
       else :
