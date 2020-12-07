@@ -255,10 +255,10 @@ public defn gen-ind-cmp (ind:Double) :
 ; ========================================================
 ; These functions attach a passive component between two pins. e.g. strap a pull up resistor between an IO and VDD
 
-public defn bypass-cap-strap ( gnd-pin, power-pin, capacitance ):
+public defn bypass-cap-strap (power-pin:Ref, gnd-pin:Ref, capacitance:Double ):
   inside pcb-module:
     val cap = cap-strap(gnd-pin, power-pin, capacitance)
-    short-trace(cap.p[1], power-pin)
+    short-trace({cap}.p[1], {power-pin})
     cap
 
 public defn bypass-caps (power-pin:Ref|Symbol, gnd-pin:Ref|Symbol, voltage:Double, caps:Tuple<Double>, name:Symbol) :
@@ -388,6 +388,18 @@ public defn ethernet-jack ():
     net ({c}.shield, gnd)
     c
 
+; USB device connection via USBA MicroB
+public pcb-module micro-usb-connector :
+  port usb-2 : usb-2
+  inst con : {ocdb/amphenol/10103594-0001LF/component}
+  net (usb-2.power.vbus con.VCC)
+  net (usb-2.power.gnd con.GND)
+  ; RC filter connection for chassis gnd
+  res-strap(con.SHIELD, con.GND, 100.0e3)
+  cap-strap(con.SHIELD, con.GND, 0.1e-6)
+  net (usb-2.data.P con.D+)
+  net (usb-2.data.N con.D-)
+  net (usb-2.id con.ID)
 
 ; Add a tag-connect landing pattern to a processor
 public defn attach-programming-connector (proc:Ref, vio:Ref, intf:String):
@@ -507,8 +519,8 @@ public defn board-mounting-holes (w:Double, h:Double, s:String|Double) :
 
 pcb-package ant-2GHz4-inverted-f-geom :
 
-  pad launch : {smd-pad(0.5, 0.5)} at loc(0.0, 0.0)
-  pad gnd : {smd-pad(0.9, 0.5)} at loc(-2.1, 0.45)
+  pad launch : {smd-pad(0.5, 0.5)} at loc(0.0, 0.25)
+  pad gnd : {smd-pad(0.9, 0.5)} at loc(-2.1, 0.25)
 
   copper(LayerIndex(0)) = Line(0.5, [Point(-2.1, 5.15), Point(2.2, 5.15), Point(2.2, 2.51), 
                                 Point(4.7, 2.51),  Point(4.7, 5.15), Point(6.9, 5.15), 
@@ -516,15 +528,33 @@ pcb-package ant-2GHz4-inverted-f-geom :
                                 Point(11.6, 5.15), Point(11.6, 0.96)])
   copper(LayerIndex(0)) = Line(0.5, [Point(0.0, 0.0),   Point(0.0, 5.15)])
   copper(LayerIndex(0)) = Rectangle(0.9, 5.4, loc(-2.1, 2.7))
-  ; via(0.3, 0.126) on LayerIndex(0)) through layer(1) at loc(-2.1, 0.45)
-  layer(ForbidCopper(LayerIndex(0), LayerIndex(0, Bottom))) = Rectangle(24.0, 5.5, loc(5.0, 3.25))
-  layer(Courtyard(Top)) = Rectangle(24.0, 5.5, loc(5.0, 3.25))
-  layer(Courtyard(Bottom)) = Rectangle(24.0, 5.5, loc(5.0, 3.25))
+  via(LayerIndex(0), LayerIndex(0, Bottom), 
+    radius = 0.3, hole-radius = 0.125) 
+    at Point(-2.1, 0.0)
+  layer(ForbidCopper(LayerIndex(0), LayerIndex(0, Bottom))) = Rectangle(18.0, 5.5, loc(5.0, 3.25))
+  layer(Courtyard(Top)) = Rectangle(18.0, 5.5, loc(5.0, 3.25))
+  layer(Courtyard(Bottom)) = Rectangle(18.0, 5.5, loc(5.0, 3.25))
   layer(BoardEdge()) = Line(0.0, [Point(17.0, 6.0), Point(-7.0, 6.0)])
 
-public pcb-component trace-antenna :
+public pcb-component inverted-f-antenna-cmp :
   pin launch
   pin gnd
   description = "2.4 GHz Inverted F trace antenna"
   package = ant-2GHz4-inverted-f-geom(launch => launch, gnd => gnd)
   symbol = {antenna-symbol(1,1)}(launch => p[1], gnd => p[2])
+
+public pcb-module inverted-f-antenna :
+  pin rf-in
+  pin gnd
+  inst ant : inverted-f-antenna-cmp
+  package(ant) at loc(0.0,0.0) on Top
+  ; PI filter
+  inst c0 : {gen-cap-cmp(5.6e-12)}
+  inst c1 : {gen-cap-cmp(2.4e-12)}
+  inst l : {gen-ind-cmp(2.7e-9)}
+  net (gnd, ant.gnd c1.p[1] l.p[1])
+  net (ant.launch c0.p[2] c1.p[2])
+  net (rf-in c0.p[1] l.p[2])
+  package(c1) at loc(-0.5, -0.3) on Top
+  package(c0) at loc(-0.05, -1.45, 90.0) on Top
+  package(l) at loc(-0.5, -2.6) on Top

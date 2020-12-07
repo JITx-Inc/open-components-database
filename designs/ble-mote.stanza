@@ -17,54 +17,69 @@ defpackage design-generator :
 
 OPERATING-TEMPERATURE = [-20.0 50.0]
 OPTIMIZE-FOR = ["area"]
-  
+
+
+pcb-module pms7003 :
+  pin vin
+  pin vin-mcu
+  pin gnd
+  pin reset
+  pin set
+  port uart : uart
+  ; Add and connect PMS7003 particle counter interface via header pins
+  inst header : {ocdb/amphenol/minitek127/component(10)}
+  package(header) at loc(0.0,0.0) on Top
+  net (gnd header.p[3] header.p[4])
+  net (vin header.p[1] header.p[2])
+  net (uart.tx, header.p[10])
+  net (uart.rx, header.p[8])
+  net (reset, header.p[6])
+  net (set, header.p[9])
+  res-strap(vin-mcu, set, 10.0e3)
+  res-strap(vin-mcu, reset, 10.0e3)
+
 pcb-module sensor-mote :
   ; Power connector
-  inst j : {pin-header(2)}
-  ; Set up power solver
-  set-power-source(j.p[1], j.p[2], 4.0)
-  net gnd (j.p[2])
+  inst j : micro-usb-connector
+  net gnd (j.usb-2.power.gnd)
+  symbol(gnd) = {ocdb/symbols/ground-sym}
+  val protected-usb = (ocdb/protection/esd-clamp(j.usb-2, gnd) as Ref)
 
+  inst ft232 : {ocdb/future-designs/FT232RL/module}
+  net (ft232.usb-2, {protected-usb})
+
+  inst ldo : {ocdb/diodes-incorporated/AP2112/module}
   ; ; Instantiate NRF52 Module
-  inst proc : {ocdb/nordic/nRF52832/module}
+  ; inst proc : {ocdb/nordic/nRF52832/module}
   ; attach-programming-connector(proc, proc.pow3v0, "swd")
+  inst proc : {ocdb/espressif/ESP32-PICO-D4/module}
+  inst ant : inverted-f-antenna
+  package(ant) at loc(9.0, 5.0, -90.0) on Top
+  net (proc.lna-in, ant.rf-in)
 
-  inst esp : {ocdb/espressif/ESP32-PICO-D4/module}
-  ; inst ant : trace-antenna
-  ; package(ant) at loc(0.0,0.0) on Top
-  ; Add and connect thermocouple sensor
-  inst thermocouple : {ocdb/microchip/MCP9600/module(0)}
-  inst K : {pin-header(2)}
+  net (proc.uart ft232.uart)
+  
+  inst counter : pms7003
+  package(counter) at loc(-10.0,0.0, 180.0) on Bottom
 
-  net (K.p[1], thermocouple.in.P)
-  net (K.p[2], thermocouple.in.N)
-
-  require data:i2c from proc
-  net THERMO (data, thermocouple.i2c)
-  add-open-drain-pullups(data, proc.pow3v0.vdd)
-
-  require alert:gpio[4] from proc
-  for i in 0 to 4 do :
-    net ALERT[i] (alert[i].gpio, thermocouple.alert[i])
+  inst hum : {ocdb/texas-instruments/HDC1080/module}
+  net (hum.power, proc.power, ldo.vout)
 
   ; Add placement constraints
   package(proc) at loc(4.0, 0.0) on Top
   package(j) at loc(-18.0, 0.0) on Top
 
   ; Apply groups to sub-circuits for schematic and layout
-  group-modules([[proc] [esp] [thermocouple K]])
-  net P3V0 (proc.pow3v0.vdd)
-  net VIN (j.p[1])
-  symbol(gnd) = {ocdb/symbols/ground-sym}
-  symbol(P3V0) = {ocdb/symbols/supply-sym}
-  symbol(VIN) = {ocdb/symbols/supply-sym}
+  group-modules([[proc ant]])
+  ; net P3V0 (proc.pow3v0.vdd)
+  ; net VIN (j.p[1])
+  ; symbol(P3V0) = {ocdb/symbols/supply-sym}
+  ; symbol(VIN) = {ocdb/symbols/supply-sym}
 
-val main-design = default-board(sensor-mote, 4, 40.0,10.0)
+val main-design = default-board(sensor-mote, 4, 30.0,18.0)
 
-; Concretize the design and solve for power supplies.
-; lower-esir()
-; run-user-pass(generate-power)
-
+run-user-pass(connect-gnd-pins)
+view(main-design)
 ; export-cad("BLE-mote", "kicad")
 
 export-kicad("BLE-mote", [`place => true
