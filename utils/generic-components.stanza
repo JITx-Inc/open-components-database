@@ -11,23 +11,27 @@ defpackage ocdb/generic-components:
   import ocdb/pinspec
   import ocdb/land-patterns
   import ocdb/generator-utils
-  ; import db-parts
+
+  import ocdb/db-parts
+  import ocdb/design-vars
   import ocdb/symbols
   import ocdb/box-symbol
 
+; ========================================================
+; ====== Standard packages for the passive solver ========
+; ========================================================
+val PKGS = ["01005", "0201", "02016", "0202", "0303", "0402", "0404", "0503", "0505", "0603", "0612", "0805", "1206",
+            "1210", "1218", "1812", "2010", "2512", "2525", "2615", "2616", "3920", "4122", "4823", "5329", "6030"]
 
-public pcb-component example-resistor :
-  manufacturer = "Yageo"
-  mpn = "RC0402FR-071KL"
-  description = "RES SMD 1K OHM 1% 1/16W 0402"
-  reference-prefix = "R"
-  pin p[1]
-  pin p[2]
-  symbol = {resistor-sym(false)}(p[1] => p[1], p[2] => p[2])
-  package = {ipc-two-pin-package("0402")}(p[1] => p[1], p[2] => p[2])
+public defn get-valid-pkg-list () :
+  val min-pkg-idx = find({PKGS[_] == MIN-PKG}, 0 to length(PKGS))
+  match(min-pkg-idx: Int) :
+    PKGS[min-pkg-idx to false]
+  else :
+    throw(Exception("Invalid MIN-PKG."))
 
 ; ========================================================
-; ====== Standard Tolerances and Logarithmic Values ======
+; ==== EIA Standard Tolerances and Logarithmic Values ====
 ; ========================================================
 public val std-tols = to-list([20.0, 10.0, 5.0, 2.0, 1.0, 0.5, 0.25, 0.1])
 public val std-vals = HashTable<Double, List<Double>>()
@@ -121,6 +125,18 @@ public defn closest-std-val (v:Double, tol:Double) :
 ; ========================================================
 ; ========== Generic passive components ==================
 ; ========================================================
+; Generic ceramic capacitor from database (of 600k options)
+public defn ceramic-cap (params:Tuple<KeyValue>) :
+  val default-params = ["type" => "ceramic" 
+                        "mounting" => "smd" 
+                        "case" => get-valid-pkg-list()
+                        "minimum_quantity" => 1
+                        "min-stock" => 5 * DESIGN-QUANTITY]
+  to-esir(Capacitor(to-tuple $ cat-all([default-params params])))
+
+public defn ceramic-cap (cap:Double) :
+  ceramic-cap(["capacitance" => cap])
+
 public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg:String) :
   port p : pin[{1 2}]
   symbol = {capacitor-sym(false)}(p[1] => p[1], p[2] => p[2])
@@ -265,7 +281,7 @@ public defn bypass-caps (power-pin:Ref|Symbol, gnd-pin:Ref|Symbol, voltage:Doubl
   inside pcb-module:
     val n-caps = length(caps)
     for i in 0 to n-caps do :
-      unique inst c : {gen-cap-cmp(caps[i], voltage)}
+      unique inst c : {ceramic-cap(["capacitance" => caps[i], "voltage" => voltage])}
       match(power-pin) :
         (r:Ref) :
           net ({r}, {c}.p[1])
@@ -290,12 +306,12 @@ public defn res-strap (first-pin:Ref, second-pin:Ref, res:Double, pkg:String ) :
 public defn res-strap (first-pin:Ref, second-pin:Ref, res:Double ) :
   res-strap(first-pin, second-pin, res, "0402")
   
-public defn cap-strap (first-pin:Ref, second-pin:Ref, capacitance ) :
-  cap-strap( first-pin, second-pin, capacitance, "0402" )
+public defn cap-strap (first-pin:Ref, second-pin:Ref, capacitance:Double ) :
+  cap-strap( first-pin, second-pin, ["capacitance" => capacitance] )
 
-public defn cap-strap (first-pin:Ref, second-pin:Ref, capacitance, pkg:String ) :
+public defn cap-strap (first-pin:Ref, second-pin:Ref, params:Tuple<KeyValue>) :
   inside pcb-module:
-    unique inst cap : {gen-cap-cmp(capacitance, pkg)}
+    unique inst cap : {ceramic-cap(params)}
     net ({first-pin}, {cap}.p[1])
     net ({second-pin}, {cap}.p[2])
     cap
@@ -304,7 +320,7 @@ public defn default-bypass (cmp:Ref) :
   inside pcb-module:
     for p in ports(cmp) do :
       if has-property?(p.power-pin) :
-        unique inst cap : {gen-cap-cmp(0.1)}
+        unique inst cap : {ceramic-cap(0.1)}
         properties({cap}):
           bypass => true
         net ({cap}.p[1], {p})
@@ -313,7 +329,7 @@ public defn default-bypass (cmp:Ref) :
 
 public defn block-cap (in:Ref, out:Ref, cap:Double) :
   inside pcb-module :
-    unique inst block : {gen-cap-cmp(cap)}
+    unique inst block : {ceramic-cap(cap)}
     net ({in}, {block}.p[1])
     net ({out}, {block}.p[2])
 
@@ -465,7 +481,7 @@ public defn filter (in:Ref, out:Ref, type:String, params:Tuple<Double>) :
   inside pcb-module:
     if type == "rc-lowpass" :
       unique inst r : {gen-res-cmp(params[0], 1.0)}
-      unique inst c : {gen-cap-cmp(params[1], 20.0)}
+      unique inst c : {ceramic-cap(params[1])}
       net ({in} {r}.p[1])
       net ({out} {r}.p[2] {c}.p[1])
       net (gnd {c}.p[2])
@@ -549,8 +565,8 @@ public pcb-module inverted-f-antenna :
   inst ant : inverted-f-antenna-cmp
   package(ant) at loc(0.0,0.0) on Top
   ; PI filter
-  inst c0 : {gen-cap-cmp(5.6e-12)}
-  inst c1 : {gen-cap-cmp(2.4e-12)}
+  inst c0 : {ceramic-cap(["capacitance" => 5.6e-12])}
+  inst c1 : {ceramic-cap(["capacitance" => 2.4e-12])}
   inst l : {gen-ind-cmp(2.7e-9)}
   net (gnd, ant.gnd c1.p[1] l.p[1])
   net (ant.launch c0.p[2] c1.p[2])
