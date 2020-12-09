@@ -137,10 +137,34 @@ public defn ceramic-cap (params:Tuple<KeyValue>) :
 public defn ceramic-cap (cap:Double) :
   ceramic-cap(["capacitance" => cap])
 
+; Generic chip resistor from database (of 600k options)
+public defn chip-resistor (params:Tuple<KeyValue>) :
+  val default-params = ["mounting" => "smd" 
+                        "case" => get-valid-pkg-list()
+                        "minimum_quantity" => 1
+                        "min-stock" => 5 * DESIGN-QUANTITY]
+  to-esir(Resistor(to-tuple $ cat-all([default-params params])))
+
+public defn chip-resistor (resistance:Double, tolerance:Double) :
+  chip-resistor(["resistance" => resistance "tolerance" => tolerance])
+
+public defn chip-resistor (resistance:Double) :
+  chip-resistor(["resistance" => resistance])
+
+; Generic inductors from database of standard packages (0402, 0603... 10k options)
+public defn smd-inductor (params:Tuple<KeyValue>) :
+  val default-params = ["mounting" => "smd" 
+                        "case" => get-valid-pkg-list()
+                        "minimum_quantity" => 1
+                        "min-stock" => 5 * DESIGN-QUANTITY]
+  to-esir(Inductor(to-tuple $ cat-all([default-params params])))
+
+public defn smd-inductor (ind:Double) :
+  smd-inductor(["inductance" => ind])
+
 public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg:String) :
   port p : pin[{1 2}]
   symbol = {capacitor-sym(false)}(p[1] => p[1], p[2] => p[2])
-  ; emodel = Capacitor(cap, tol, max-v)
   package = {ipc-two-pin-package(pkg)}(p[1] => p[1], p[2] => p[2])
   reference-prefix = "C"
   spice :
@@ -157,14 +181,10 @@ public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg:Stri
 public defn gen-cap-cmp (cap:Double, max-v:Double) :
   gen-cap-cmp(cap, 0.2, max-v, "0402")
 
-; 40 is default tolerance due to Yageo cap series 20% tolerance by default
 public defn gen-cap-cmp (cap:Double, pkg:String) :
-  ; capacitor(["capacitance" => cap "type" => "ceramic"])
   gen-cap-cmp(cap, 0.2, 10.0, pkg)
 
-; 40 is default tolerance due to Yageo cap series 20% tolerance by default
 public defn gen-cap-cmp (cap:Double) :
-  ; capacitor(["capacitance" => cap "type" => "ceramic"])
   gen-cap-cmp(cap, 10.0)
 
 ;Generic Ceramic surface mount capacitors
@@ -208,7 +228,6 @@ public defn gen-tant-cap-cmp (cap:Double, tol:Double) :
 
   gen-tant-cap-cmp(cap, 20.0)
  
-
 public pcb-component gen-res-cmp (r-type:String|False, res:Double, tol:Double, pwr:Double, pkg:String) :
   ; if r-type is Symbol and (r-type as Symbol) == `pot :
   ;   port p : pin[{1 2 3}]
@@ -230,7 +249,6 @@ public pcb-component gen-res-cmp (r-type:String|False, res:Double, tol:Double, p
     resistance => res
   spice :
     "[R] {p[1]} {p[2]} {res}"
-
 
 public defn gen-res-cmp (res:Double, tol:Double, pkg:String) :
   gen-res-cmp(false, res, tol, 0.0625, pkg)
@@ -293,18 +311,18 @@ public defn bypass-caps (power-pin:Ref|Symbol, gnd-pin:Ref|Symbol, voltage:Doubl
         (s:Symbol) :
           net {Ref(s)} ({c}.p[2])
 
-public defn res-strap (first-pin:Ref, second-pin:Ref, res:Double, tol:Double, pkg:String ) :
+public defn res-strap (first-pin:Ref, second-pin:Ref, params:Tuple<KeyValue>) :
   inside pcb-module:
-    unique inst rid : {gen-res-cmp(res, tol, pkg)}
+    unique inst rid : {chip-resistor(params)}
     net ({first-pin}, {rid}.p[1])
     net ({second-pin}, {rid}.p[2])
     rid
 
-public defn res-strap (first-pin:Ref, second-pin:Ref, res:Double, pkg:String ) :
-  res-strap(first-pin, second-pin, res, 2.0, pkg)
+public defn res-strap (first-pin:Ref, second-pin:Ref, res:Double, tol:Double) :
+  res-strap(first-pin, second-pin, ["resistance" => res "tolerance" => tol])
 
 public defn res-strap (first-pin:Ref, second-pin:Ref, res:Double ) :
-  res-strap(first-pin, second-pin, res, "0402")
+  res-strap(first-pin, second-pin, ["resistance" => res])
   
 public defn cap-strap (first-pin:Ref, second-pin:Ref, capacitance:Double ) :
   cap-strap( first-pin, second-pin, ["capacitance" => capacitance] )
@@ -480,7 +498,7 @@ public defn btm-smd-testpoint-cmp () :
 public defn filter (in:Ref, out:Ref, type:String, params:Tuple<Double>) :
   inside pcb-module:
     if type == "rc-lowpass" :
-      unique inst r : {gen-res-cmp(params[0], 1.0)}
+      unique inst r : {chip-resistor(params[0], 0.01)}
       unique inst c : {ceramic-cap(params[1])}
       net ({in} {r}.p[1])
       net ({out} {r}.p[2] {c}.p[1])
@@ -565,9 +583,9 @@ public pcb-module inverted-f-antenna :
   inst ant : inverted-f-antenna-cmp
   package(ant) at loc(0.0,0.0) on Top
   ; PI filter
-  inst c0 : {ceramic-cap(["capacitance" => 5.6e-12])}
-  inst c1 : {ceramic-cap(["capacitance" => 2.4e-12])}
-  inst l : {gen-ind-cmp(2.7e-9)}
+  inst c0 : {ceramic-cap(["capacitance" => 5.6e-12 "temperature-coefficient.code" => "C0G"])}
+  inst c1 : {ceramic-cap(["capacitance" => 2.4e-12 "temperature-coefficient.code" => "C0G"])}
+  inst l : {smd-inductor(["inductance" => 2.7e-9 "min-self-resonant-frequency" => 7.0e6 "min-quality-factor" => 8.0])}
   net (gnd, ant.gnd c1.p[1] l.p[1])
   net (ant.launch c0.p[2] c1.p[2])
   net (rf-in c0.p[1] l.p[2])
