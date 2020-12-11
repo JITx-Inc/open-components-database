@@ -112,12 +112,13 @@ pcb-module t-filter :
   package(c) at loc(-2.8, 0.0) on Top (relative-to l2)
 
 public unique pcb-module module :
-  port pow3v0 : power
+  port power : power
+  pin ant
   pin gnd
   ; Chip antenna, with lpf, and t-filter matching network
   inst proc : {ocdb/nordic/nRF52832/component}
-  net (gnd, proc.gnd, pow3v0.gnd)
-  net (pow3v0.vdd, proc.vdd) 
+  net (gnd, proc.gnd, power.gnd)
+  net (power.vdd, proc.vdd) 
   ; ; Decoupling caps
   bypass-cap-strap(proc.vdd, gnd, 4.7e-6)
   bypass-cap-strap(proc.vdd, gnd, 0.1e-6)
@@ -145,18 +146,19 @@ public unique pcb-module module :
   val lf-cap = add-xtal-caps(lfxtal, gnd)
   check-oscillator(lfxtal, proc.lfosc, lf-cap)
 
-  inst ant : {ocdb/johanson/2450AT18A100/component}
-  inst lpf : {ocdb/johanson/2450FM07A0029/component}
-  net (proc.ANT, lpf.in)
-  inst t : t-filter
-  net (lpf.out, t.in)
-  net (t.out, ant.feed)
-  net (t.gnd, lpf.gnd gnd)
-  package(proc) at loc(0.0, 0.0) on Top
-  package(lpf) at loc(4.7, 0.0) on Top (relative-to proc)
-  package(ant) at loc(12.9, 0.0) on Top (relative-to proc)
-  package(t.l2) at loc(9.6, 0.0) on Top (relative-to proc)
-  layer(Courtyard(Top)) = Rectangle(6.0, 3.0, loc(6.35, 0.0))
+  net (proc.ANT ant)
+  ; inst ant : {ocdb/johanson/2450AT18A100/component}
+  ; inst lpf : {ocdb/johanson/2450FM07A0029/component}
+  ; net (proc.ANT, lpf.in)
+  ; inst t : t-filter
+  ; net (lpf.out, t.in)
+  ; net (t.out, ant.feed)
+  ; net (t.gnd, lpf.gnd gnd)
+  ; package(proc) at loc(0.0, 0.0) on Top
+  ; package(lpf) at loc(4.7, 0.0) on Top (relative-to proc)
+  ; package(ant) at loc(12.9, 0.0) on Top (relative-to proc)
+  ; package(t.l2) at loc(9.6, 0.0) on Top (relative-to proc)
+  ; layer(Courtyard(Top)) = Rectangle(6.0, 3.0, loc(6.35, 0.0))
 
   for i in 0 to 32 do :
     supports gpio :

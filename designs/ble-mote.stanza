@@ -15,14 +15,16 @@ defpackage design-generator :
   import ocdb/generic-components
   import ocdb/power-regulators
   import ocdb/db-parts
+  import ocdb/connects
 
 OPERATING-TEMPERATURE = [-20.0 50.0]
 OPTIMIZE-FOR = ["area"]
+MIN-PKG = "0402"
 
 
 pcb-module pms7003 :
-  pin vin
-  pin vin-mcu
+  port vin : power
+  port vin-mcu : power
   pin gnd
   pin reset
   pin set
@@ -30,64 +32,62 @@ pcb-module pms7003 :
   ; Add and connect PMS7003 particle counter interface via header pins
   inst header : {ocdb/amphenol/minitek127/component(10)}
   package(header) at loc(0.0,0.0) on Top
-  net (gnd header.p[3] header.p[4])
-  net (vin header.p[1] header.p[2])
+  net (gnd vin.gnd vin-mcu.gnd header.p[3] header.p[4])
+  net (vin.vdd header.p[1] header.p[2])
   net (uart.tx, header.p[10])
   net (uart.rx, header.p[8])
   net (reset, header.p[6])
   net (set, header.p[9])
-  res-strap(vin-mcu, set, 10.0e3)
-  res-strap(vin-mcu, reset, 10.0e3)
+  res-strap(vin-mcu.vdd, set, 10.0e3)
+  res-strap(vin-mcu.vdd, reset, 10.0e3)
 
 pcb-module sensor-mote :
-  inst c : {ceramic-cap(["capacitance" => 1.0e-6])}
-  ; Power connector
-  inst j : micro-usb-connector
-  net gnd (j.usb-2.power.gnd)
-  symbol(gnd) = {ocdb/symbols/ground-sym}
-  val protected-usb = (ocdb/protection/esd-clamp(j.usb-2, gnd) as Ref)
+  ; Add USB connector
+  inst usb : micro-usb-connector
+  package(usb.con) at loc(-2.0, -7.3) on Top
 
-  inst ft232 : {ocdb/future-designs/FT232RL/module}
-  net (ft232.usb-2, {protected-usb})
+  ; Define ground net and assign symbol
+  net gnd (usb.usb-2.vbus.gnd)
+  symbol(gnd) = {ocdb/symbols/ground-sym}
+
+  ; Create a protected power and data interface for USB-2
+  val protected-usb = (ocdb/protection/esd-clamp(usb.usb-2, gnd) as Ref)
+  
+  ; Manually define a power regulator
   inst ldo : {ocdb/diodes-incorporated/AP2112/module}
-  ; ; Instantiate NRF52 Module
-  inst prooc : {ocdb/nordic/nRF52832/module}
-  ; attach-programming-connector(proc, proc.pow3v0, "swd")
+  net P5v0 (ldo.vin {protected-usb}.vbus)
+
+  ; Add a Bluetooth SoC
   inst proc : {ocdb/espressif/ESP32-PICO-D4/module}
   inst ant : inverted-f-antenna
+  net (proc.ant, ant.rf-in)
   package(ant) at loc(9.0, 5.0, -90.0) on Top
-  net (proc.lna-in, ant.rf-in)
 
-  net (proc.uart ft232.uart)
+  ; Use a connect statement to interface USB-2 to UART
+  val xcvr = connect ft232 ({protected-usb} proc.uart)
   
-  inst counter : pms7003
-  package(counter) at loc(-10.0,0.0, 180.0) on Bottom
+  inst particle-counter : pms7003
+  package(particle-counter) at loc(-10.0,0.0, 180.0) on Bottom
 
   inst hum : {ocdb/texas-instruments/HDC1080/module}
-  net (hum.power, proc.power, ldo.vout)
 
-  ; Add placement constraints
-  package(proc) at loc(4.0, 0.0) on Top
-  package(j) at loc(-18.0, 0.0) on Top
+  net P3V3 (hum.power, proc.power, ldo.vout)
+  symbol(P3V3) = {ocdb/symbols/supply-sym}
 
   ; Apply groups to sub-circuits for schematic and layout
-  group-modules([[proc ant]])
-  ; net P3V0 (proc.pow3v0.vdd)
-  ; net VIN (j.p[1])
-  ; symbol(P3V0) = {ocdb/symbols/supply-sym}
-  ; symbol(VIN) = {ocdb/symbols/supply-sym}
+  group-modules([[proc  ant hum] [usb particle-counter]])
 
 val main-design = default-board(sensor-mote, 4, 30.0,18.0)
 
 run-user-pass(connect-gnd-pins)
 view(main-design)
-; export-cad("BLE-mote", "kicad")
-print-esir("new-parts.txt")
+
 export-kicad("BLE-mote", [`place => true
                           `check-log => "checks.txt"
                           `gen-board => true 
                           `gen-bom => true 
                           `gen-schematic => true 
+                          `paper => ANSI-A4
                           `fresh => true 
                           `schematic-version => 4
                           `param-configs => [`sketch]] )
