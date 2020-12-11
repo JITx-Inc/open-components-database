@@ -14,25 +14,6 @@ defpackage ocdb/power-regulators :
   import jitpcb/powergen
   import jitpcb/powergen/gen
 
-within (input, output) =
-  add-switching-regulator(
-    "Buck-ti-TLV62130A",
-    1.0,            ;max duty_cycle
-    SwitchedNoise(2.5e6, 2.2e-6, 22.0e-6),  ;Noise(fs, L, C)
-    0.90,           ;efficiency
-    125.0,          ;tjmax
-    46.0,           ;thetaja
-    3.0, 17.0,      ;vin
-    0.9, 5.5,       ;vout
-    0.0, 3.0) :     ;iout
-  inside pcb-module :        
-    unique inst ps : {ocdb/texas-instruments/TLV62130/module(voltage(output))}
-    schematic-group({ps}) = power
-    ;Create nets
-    net ({ps}.gnd, {neg(input)}, {neg(output)})
-    net ({ps}.vin, {pos(input)})
-    net ({ps}.vout, {pos(output)})
-
 val adm7154v = [1.2 1.8 2.5 2.8 3.0 3.3]
 
 for v in adm7154v do:
@@ -50,5 +31,25 @@ for v in adm7154v do:
       schematic-group({ps}) = power
       ;Create nets
       net ({ps}.gnd, {neg(input)}, {neg(output)})
-      net ({ps}.vin, {pos(input)})
+      net ({ps}.vin, {pos(input)}, {ps}.en)
       net ({ps}.vout, {pos(output)})
+
+within (input, output) =
+  add-switching-regulator(
+    "Buck-ti-TLV62130A",
+    1.0,            ;max duty_cycle
+    SwitchedNoise(2.5e6, 2.2e-6, 22.0e-6),  ;Noise(fs, L, C)
+    0.90,           ;efficiency
+    125.0,          ;tjmax
+    46.0,           ;thetaja
+    3.0, 17.0,      ;vin
+    0.9, 5.5,       ;vout
+    0.0, 3.0) :     ;iout
+  inside pcb-module :        
+    unique inst ps : {ocdb/texas-instruments/TLV62130/module(voltage(output))}
+    schematic-group({ps}) = power
+    ;Create nets
+    net ({ps}.gnd, {neg(input)}, {neg(output)})
+    net ({ps}.vin, {pos(input)}, {ps}.en)
+    net ({ps}.vout, {pos(output)})
+

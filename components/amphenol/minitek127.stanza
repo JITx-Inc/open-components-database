@@ -1,0 +1,41 @@
+#use-added-syntax(esir)
+defpackage ocdb/amphenol/minitek127:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+  import ocdb/pinspec
+  import ocdb/land-patterns
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import ocdb/symbols
+  import ocdb/box-symbol
+
+  import jitpcb/visualizer
+  import esir/repl-lib
+
+public pcb-component component (n-pins:Int) :
+  name = to-string("Minitek127 %_x2 Header" % [n-pins / 2])
+  manufacturer = "Amphenol"
+  val n-str = if n-pins < 10 : to-string("0%_" % [n-pins]) else: to-string(n-pins)
+  mpn = to-string("20021321-000%_C4LF" % [n-str])
+  description = "SMD Female 1.27mm pitch header"
+  port p : pin[{1 through n-pins}]
+  package = {amphenol-minitek127-pkg(n-pins)}(for i in 1 through n-pins do: p[i] => p[i])
+  symbol  = {header-symbol(n-pins,2)}(for i in 1 through n-pins do: p[i] => p[i])
+  reference-prefix = "J"
+
+pcb-package amphenol-minitek127-pkg (n-pins:Int) :
+
+  val pitch = 1.27
+  val y = (to-double(n-pins) - 2.0) / 2.0 * pitch + 1.73
+  for (l in grid-locs(n-pins / 2, 2, 3.55, 1.27), i in 1 through n-pins) do :
+    pad p[i] : {smd-pad(2.05, 0.76)} at l
+
+  layer(Courtyard(Top)) = Rectangle(5.6, y)
+  layer(Silkscreen("f-silk", Top)) = Union([symmetric-about-y([Line(0.1, [Point(-1.5, y / 2.0) Point(1.5, y / 2.0)])])])
+  layer(Silkscreen("pol", Top)) = Circle(-3.5, y / 2.0 - 0.865, 0.2)
+  ref-label()

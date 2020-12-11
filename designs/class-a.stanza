@@ -17,14 +17,14 @@ pcb-module class-a-amplifier (r-set:Double) :
   port vin:power
   pin in
   pin out
-  inst r1 : {gen-res-cmp(110.0e3)}
-  inst r2 : {gen-res-cmp(10.0e3)}
-  inst r3 : {gen-res-cmp(10.0e3)}
-  inst r4 : {gen-res-cmp(r-set)}
+  inst r1 : {chip-resistor(110.0e3)}
+  inst r2 : {chip-resistor(10.0e3)}
+  inst r3 : {chip-resistor(10.0e3)}
+  inst r4 : {chip-resistor(r-set)}
 
-  inst c : {gen-cap-cmp(0.1)}
+  inst c : {ceramic-cap(0.1)}
 
-  inst bjt : {ocdb/nxp/PMBT3904/component}
+  inst bjt : {ocdb/nexperia/PMBT3904/component}
 
   net (vin.vdd r1.p[1] r3.p[1])
   net (bjt.c r3.p[2])
@@ -42,19 +42,22 @@ pcb-module demo :
 
   inst power : {power-connector(20.0)}
   inst amp : {class-a-amplifier(2.0e3)}
-
-  net gnd (power.src.gnd)
+  inst j : {pin-header(5)}
+  net gnd (power.src.gnd, j.p[1])
   net (power.src, amp.vin)
+  net vdd (power.src.vdd, j.p[2])
 
   spice:
     "[Vi] {amp.in} {power.src.gnd} SIN(0 1 1k 0 0)"
 
   spice:
     ".temp 80.0"
-    ".inc PMBT3904.lib"
     ".tran 0.01ms 5m"
 
 pcb-design main-design :
   module = demo
 
-export-netlist(demo.gnd, "ClassA.cir")
+; export-netlist(demo.gnd, "ClassA.cir")
+let :
+  val lowered = fully-concretize() as Collection<TStmt>
+  jitpcb/spice-export/export-netlist(lowered, demo.gnd, "ClassA.cir")
