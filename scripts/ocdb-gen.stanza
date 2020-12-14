@@ -1,0 +1,37 @@
+; script used to generate ocdb.stanza
+defpackage ocdb/gen:
+  import core
+  import collections
+
+val ignored-paths = [
+  "designs",
+  "doc",
+  "tests",
+  "style-guide"
+  "ocdb.stanza"
+  "scripts"
+]
+
+defn package-names (path) -> Seq<String>:
+  generate<String>:
+    for file in dir-files(path) do:
+      if not (contains?(ignored-paths, file)) :
+        val next-path = to-string("%_/%_" % [path, file])
+        match(file-type(next-path)):
+          (_:DirectoryType):
+            ; println("descending into %_ ..." % [next-path])
+            for pkg in package-names(next-path) do:
+              yield(pkg)
+          (_:?):
+            if suffix?(next-path, ".stanza"):
+              ; println("extracting from %_ ..." % [next-path])
+              for line in filter(prefix?{_, "defpackage"}, split(slurp(next-path), "\n")) do:
+                val yielded = replace{_, ":", ""} $ replace(line, "defpackage ", "")
+                if yielded != "fig-app ": ; tiny hack 
+                  yield(yielded)
+
+; get current paths
+val sbuf = StringBuffer()
+println(sbuf, "defpackage ocdb:")
+do(println{IndentedStream(sbuf), "import %_" % [_]}, package-names(resolve-path(".")))
+println(to-string(sbuf))
