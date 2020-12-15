@@ -41,7 +41,7 @@ pcb-module pms7003 :
 pcb-module sensor-mote :
   ; Add USB connector
   inst usb : micro-usb-connector
-  package(usb.con) at loc(-2.0, -7.3) on Top
+  package(usb.con) at loc(-10.0, -7.3) on Top
 
   ; Define ground net and assign symbol
   net gnd (usb.usb-2.vbus.gnd)
@@ -70,7 +70,7 @@ pcb-module sensor-mote :
   ; Add a humidty sensor, connect over i2c, add pullups.
   inst hum : {ocdb/texas-instruments/HDC1080/module}
   require i2c:i2c from proc
-  net (i2c, hum.i2c)
+  net H-I2C (i2c, hum.i2c)
   add-open-drain-pullups(i2c, ldo.vout.vdd)
 
   ; Add the particle counter interface and place on bottom, and connect
@@ -91,9 +91,23 @@ pcb-module sensor-mote :
 
   ; Add a BRIGHT 60.0mcd RGB led indicator to the processor
   add-rgb-indicator(60.0, proc, P3V3)
+  
+  ; Add probe loops
+  add-testpoint([ proc.uart.tx 
+                  proc.uart.rx 
+                  hum.i2c.sda 
+                  hum.i2c.scl
+                  proc.en
+                  proc.boot
+                  PC-TX
+                  PC-RX
+                  P5V0
+                  P3V3
+                  gnd gnd gnd
+                  ], "smd-loop")
 
   ; Apply groups to sub-circuits for schematic and layout
-  group-modules([[proc  ant] [hum] [usb particle-counter]])
+  group-modules([[proc  ant] [hum] [usb ldo] [particle-counter]])
 
 val main-design = default-board(sensor-mote, 4, 30.0,18.0)
 

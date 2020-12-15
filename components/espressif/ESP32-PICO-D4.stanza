@@ -96,7 +96,7 @@ public unique pcb-component component :
   assign-package(pqfn50p700x700x104-49n, pinspec)
 
   ; ESP supports crossbarred IO, so use generic supports
-  val reserved-io = [16 17 32 33]
+  val reserved-io = [0 16 17 32 33]
   for i in indices(IO) do :
     if not contains?(reserved-io, i) :
       supports io-pin:
@@ -112,6 +112,8 @@ public unique pcb-module module :
   port power : power
   pin ant
   pin gnd
+  pin en
+  pin boot
   inst mcu : {ocdb/espressif/ESP32-PICO-D4/component}
 
   net (gnd, mcu.GND, power.gnd)
@@ -121,13 +123,13 @@ public unique pcb-module module :
   net (mcu.LNA-IN, ant)
 
   ; UART programming interface using control pins
-  net (mcu.U0RXD, uart.rx)
-  net (mcu.U0TXD, uart.tx)
+  net ESP-RX (mcu.U0RXD, uart.rx)
+  net ESP-TX (mcu.U0TXD, uart.tx)
   inst q : {ocdb/nexperia/PMBT3904/component}[2]
   res-strap(uart.dtr, q[0].b, 10.0e3)
   res-strap(uart.rts, q[1].b, 10.0e3)
-  net (mcu.IO[0], q[1].c)
-  net (mcu.EN, q[0].c)
+  net BOOT (mcu.IO[0], q[1].c boot)
+  net (mcu.EN, q[0].c en)
   net (uart.rts, q[0].e)
   net (uart.dtr, q[1].e)
 

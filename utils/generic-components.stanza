@@ -461,6 +461,12 @@ public defn add-testpoint (rs:Tuple<Ref>, method:String) :
           color = "black"
         unique inst tp : {ocdb/keystone/500xx/component(color)}
         net ({tp}.p, {r})
+      else if method == "smd-loop" :
+        unique inst tp : {ocdb/te-connectivity/RC/component}
+        net ({tp}.p, {r})
+      else if method == "smd-pad" :
+        unique inst tp : {gen-testpad(2.0)}
+        net ({tp}.p, {r})
       else :
         fatal("Unsupported add-testpoint method.")
 
@@ -469,7 +475,7 @@ public defn add-testpoint (rs:Tuple<Ref>) :
 
 public pcb-component gen-testpad (d:Double) :
   pin tp
-  symbol = test-point-sym(tp => p[0])
+  symbol = test-point-sym(tp => p)
   package = {testpad(d)}(tp => tp)
 
 public defn add-testpad (rs:Tuple<Ref>, d:Double) :
@@ -480,13 +486,13 @@ public defn add-testpad (rs:Tuple<Ref>, d:Double) :
 
 public pcb-component top-smd-testpoint-cmp (d:Double) :
   pin p
-  symbol = {test-point-sym}(p => p[0])
+  symbol = {test-point-sym}(p => p)
   package = {top-smd-testpoint-pkg(d)}(p => p)
   reference-prefix = "TP"
 
 public pcb-component btm-smd-testpoint-cmp (d:Double) :
   pin p
-  symbol = {test-point-sym}(p => p[0])
+  symbol = {test-point-sym}(p => p)
   package = {btm-smd-testpoint-pkg(d)}(p => p)
   reference-prefix = "TP"
 
@@ -607,7 +613,6 @@ public defn add-rgb-indicator (brightness:Double, proc:Ref, vin:Ref):
     val vio = 3.3 ; TODO: get this from the vin pin property
     ; Calculate resistance to get appropriate brightness
     defn calc-r (l:Ref, brightness:Double, vio:Double):
-      println(l)
       val i = PWL(property(l.mcd-current))[brightness]
       closest-std-val((vio - property(l.forward-voltage)) / i, 1.0)
     
