@@ -46,8 +46,6 @@ public pcb-module module (v-out:Double):
   pin en
   pin pg
   pin ss
-  val r2 = 180.0e3
-  val r1 = r2 * (v-out / 0.8 - 1.0)
 
   inst buck : {ocdb/texas-instruments/TLV62130/component}
   inst l    : {ocdb/abracon/ASPI-0530HI/component(2.2)}
@@ -65,8 +63,12 @@ public pcb-module module (v-out:Double):
   net (pg buck.PG)
   net (en buck.EN)
   res-strap(l.p[2], buck.PG, 100.0e3)
-  res-strap(l.p[2], buck.FB, r1)
-  res-strap(gnd,    buck.FB, r2)
+
+  properties(l.p[2]):
+    voltage => [(v-out * 0.99) v-out ( v-out * 1.01)]
+
+  ; Create a voltage divider to output 0.8V. Target current : 5uA
+  ocdb/passive-circuits/make-voltage-divider(l.p[2], buck.FB, gnd, [0.78 0.8 0.82] 5.0e-6)
 
   cap-strap(vout, gnd, 22.0e-6)
 

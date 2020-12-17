@@ -1,5 +1,5 @@
 #use-added-syntax(esir)
-defpackage design-generator :
+defpackage ocdb/ble-mote :
   import core
   import collections
   import math
@@ -20,17 +20,16 @@ OPERATING-TEMPERATURE = [-20.0 50.0]
 OPTIMIZE-FOR = ["area"]
 MIN-PKG = "0402"
 
+; PMS7003 particle counter interface via header pins
 pcb-module pms7003 :
   port vin : power
   port vin-mcu : power
-  pin gnd
   pin reset
   pin set
   port uart : uart
-  ; Add and connect PMS7003 particle counter interface via header pins
   inst header : {ocdb/amphenol/minitek127/component(10)}
   package(header) at loc(0.0,0.0) on Top
-  net (gnd vin.gnd vin-mcu.gnd header.p[3] header.p[4])
+  net (vin.gnd vin-mcu.gnd header.p[3] header.p[4])
   net (vin.vdd header.p[1] header.p[2])
   net (uart.tx, header.p[10])
   net (uart.rx, header.p[8])
@@ -42,7 +41,7 @@ pcb-module pms7003 :
 pcb-module sensor-mote :
   ; Add USB connector
   inst usb : micro-usb-connector
-  package(usb.con) at loc(-2.0, -7.3) on Top
+  package(usb.con) at loc(-10.0, -7.3) on Top
 
   ; Define ground net and assign symbol
   net gnd (usb.usb-2.vbus.gnd)
@@ -51,9 +50,13 @@ pcb-module sensor-mote :
   ; Create a protected power and data interface for USB-2
   val protected-usb = (ocdb/protection/esd-clamp(usb.usb-2, gnd) as Ref)
   
-  ; Manually define a power regulator
+  ; Specify a power regulator and name power nets
   inst ldo : {ocdb/diodes-incorporated/AP2112/module}
-  net P5v0 (ldo.vin {protected-usb}.vbus)
+  net (ldo.vin {protected-usb}.vbus)
+  net P5V0 (ldo.vin.vdd ldo.en)
+  net P3V3 (ldo.vout.vdd)
+  symbol(P5V0) = {ocdb/symbols/supply-sym}
+  symbol(P3V3) = {ocdb/symbols/supply-sym}
 
   ; Add a Bluetooth SoC
   inst proc : {ocdb/espressif/ESP32-PICO-D4/module}
@@ -62,23 +65,59 @@ pcb-module sensor-mote :
   package(ant) at loc(9.0, 5.0, -90.0) on Top
 
   ; Use a connect statement to interface USB-2 to UART
-  val xcvr = connect ft232 ({protected-usb} proc.uart)
+  connect ft232 ({protected-usb} proc.uart)
   
-  inst particle-counter : pms7003
-  package(particle-counter) at loc(-10.0,0.0, 180.0) on Bottom
-
+  ; Add a humidty sensor, connect over i2c, add pullups.
   inst hum : {ocdb/texas-instruments/HDC1080/module}
+  require i2c:i2c from proc
+  net H-I2C (i2c, hum.i2c)
+  add-open-drain-pullups(i2c, ldo.vout.vdd)
 
-  net (hum.power, proc.power, ldo.vout)
-  net P3V3 (ldo.vout.vdd)
-  symbol(P3V3) = {ocdb/symbols/supply-sym}
+  ; Add the particle counter interface and place on bottom, and connect
+  inst particle-counter : pms7003
+  package(particle-counter) at loc(-10.0,5.0, 180.0) on Bottom
+
+  require pc-ctrl:gpio[2] from proc
+  net PC-RESET (pc-ctrl[0].gpio, particle-counter.reset)
+  net PC-SET (pc-ctrl[1].gpio, particle-counter.set)
+
+  require pc-uart:uart from proc
+  net PC-TX (pc-uart.rx particle-counter.uart.tx)
+  net PC-RX (pc-uart.tx particle-counter.uart.rx)
+
+  ; Connect power to proc and sensors
+  net (hum.power, particle-counter.vin-mcu, proc.power, ldo.vout)
+  net ({protected-usb}.vbus particle-counter.vin)
+
+  ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
+  add-rgb-indicator(60.0, proc, P3V3)
+  
+  ; Add probe loops
+  add-testpoint([ proc.uart.tx 
+                  proc.uart.rx 
+                  hum.i2c.sda 
+                  hum.i2c.scl
+                  proc.en
+                  proc.boot
+                  PC-TX
+                  PC-RX
+                  P5V0
+                  P3V3
+                  gnd gnd gnd
+                  ], "smd-loop")
+
+  ; Add a ground plane
+  geom(gnd):
+    copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = Rectangle(30.0, 18.0)
 
   ; Apply groups to sub-circuits for schematic and layout
-  group-modules([[proc  ant] [hum] [usb particle-counter]])
+  group-modules([[proc  ant] [hum] [usb ldo] [particle-counter]])
 
 val main-design = default-board(sensor-mote, 4, 30.0,18.0)
 
+; Net up any gnd pins that we missed.
 run-user-pass(connect-gnd-pins)
+
 view(main-design)
 
 export-kicad("BLE-mote", [`place => true
