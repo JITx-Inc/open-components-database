@@ -41,10 +41,11 @@ public unique pcb-component component :
   make-box-symbol(ps)
   assign-package(qfn-package(0.65, 5.0, 20, 0.3, 0.4, [3.25 3.25]), ps)
 
-public unique pcb-module module :
+public pcb-module module (i2c-addr:Int):
   port power : power
   port i2c : i2c
   port alert : pin[4]
+  pin addr
   port in : diff-pair
 
   inst therm : {ocdb/microchip/MCP9600/component}
@@ -53,13 +54,21 @@ public unique pcb-module module :
   cap-strap(therm.Vdd, gnd, 1.0e-6)
 
   properties(therm.Vdd):
-    power-request => [3.0 0.005 5.0e-5]
+    power-request => [3.0 0.005 5.0e-3]
     gnd-ref => #R(GND)
 
+  net (i2c.sda, therm.SDA)
+  net (i2c.scl, therm.SCL)
   net (alert[0], therm.Alert1)
   net (alert[1], therm.Alert2)
   net (alert[2], therm.Alert3)
   net (alert[3], therm.Alert4)
+  net (addr, therm.ADDR)
   net (therm.Vin- in.N)
   net (therm.Vin+ in.P)
+
+  switch(i2c-addr) :
+    0 :  net (therm.ADDR, gnd)
+    7 :  net (therm.ADDR, therm.Vdd)
+    else : fatal("Unsupported address for MCP9600: %_" % [i2c-addr])
 

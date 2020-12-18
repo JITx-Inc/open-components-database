@@ -252,10 +252,10 @@ public defn make-ipc-two-pin-package (part-name:String, courtyard?:True|False, p
     val [Z, G, X, nr, nc] = switch(part-name) :
       "008004":[0.35, 0.10, 0.14, 0.35, 0.14]
       "01005": [0.56, 0.20, 0.23, 0.56, 0.23]
-      "0201" : [1.12, 0.20, 0.42, 1.42, 0.92]
-      "0402" : [1.53, 0.39, 0.62, 1.84, 0.92]
-      "0603" : [2.55, 0.65, 1.00, 3.10, 1.50]
-      "0805" : [2.90, 0.90, 2.00, 3.40, 2.00]
+      "0201" : [1.12, 0.20, 0.42, 1.12, 0.42]
+      "0402" : [1.53, 0.39, 0.62, 1.53, 0.62]
+      "0603" : [2.55, 0.65, 1.00, 2.55, 1.00]
+      "0805" : [2.90, 0.90, 2.00, 2.90, 2.00]
       "1206" : [4.05, 1.65, 1.80, 4.60, 2.30]
       "1210" : [4.40, 1.20, 2.70, 5.00, 3.00]
       "2010" : [6.20, 2.60, 2.70, 7.00, 3.00]
@@ -329,10 +329,9 @@ public pcb-package soic127p-package (n:Int, hs:[Double, Double]) :
   pad p[n + 1] : {smd-pad(hs[0], hs[1])} at loc(0.0, 0.0)
 
 ; See SOP_JEDEC_MO-153F.pdf for reference
-public defn make-sop65-package (n:Int) :
+public defn make-sop65-package (n:Int, lead-span:Double) :
   inside pcb-package :
 
-    val lead-span = 6.4
     val pin-pitch = 0.65
 
     val x0 = (- ((lead-span / 2.0) - 0.5))
@@ -348,27 +347,20 @@ public defn make-sop65-package (n:Int) :
     for (i in (n / 2 + 1) through n, l in pin-row) do :
       pad p[i] : {smd-pad(0.39, 1.4)} at l1 * l
     
-    val pkg-height = switch(n) :
-      8 : 3.0
-      14 : 5.0
-      16 : 5.0
-      20 : 6.5
-      24 : 7.8
-      28 : 9.7
-      else :
-        to-double((n / 2) - 1) * pin-pitch + 1.1
+    val pkg-height = to-double((n / 2) - 1) * pin-pitch + 0.4
     
-    val c-w = lead-span + 1.5
+    val c-w = lead-span + 0.45
     val c-h = pkg-height
     layer(Courtyard(Top)) = Rectangle(c-w, c-h)
 
     name = to-string("SOP65 with %_ pins." % [n])
-    layer(Silkscreen("f-silk", Top)) = LineRectangle(c-w, c-h)
-    layer(Silkscreen("pol", Top)) = Circle(x0 - 2.0, y0, 0.254)
+    layer(Silkscreen("pol", Top)) = Circle(x0 - 0.5, y0, 0.2)
     ref-label()
 
+public pcb-package sop65-package (n:Int, lead-span:Double) :
+  make-sop65-package(n, lead-span)
 public pcb-package sop65-package (n:Int) :
-  make-sop65-package(n)
+  make-sop65-package(n, 6.4)
 
 public defn make-qfn-package (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
   inside pcb-package :
@@ -547,8 +539,8 @@ public pcb-package SOT95P280X100-3N :
   pad p[2] : {smd-pad(0.6, 0.7)} at loc((- x0), y0)
   pad p[3] : {smd-pad(0.6, 0.7)} at loc(0.0, (- y0))
 
-  layer(Courtyard(Top)) = Rectangle(3.3, 3.0)
-  layer(Silkscreen("f-silk", Top)) = LineRectangle(3.3, 3.0)  
+  layer(Courtyard(Top)) = Rectangle(3.3, 2.8)
+  layer(Silkscreen("pol", Top)) = Circle(x0, y0 - 1.0, 0.2)
   ref-label()
 
 public pcb-package SC-70-3 :
@@ -560,7 +552,6 @@ public pcb-package SC-70-3 :
   pad p[3] : {smd-pad(0.6, 0.7)} at loc(0.0, (- y0))
 
   layer(Courtyard(Top)) = Rectangle(2.65, 2.35)
-  ; layer(Silkscreen("f-silk", Top)) = LineRectangle(3.3, 3.0)  
   ref-label()
 
 public defn SOT23 () :
@@ -576,7 +567,22 @@ public pcb-package SOT95P280X145-5N :
   pad p[5] : {smd-pad(0.6, 1.05)} at loc(x0, (- y0))
 
   layer(Courtyard(Top)) = Rectangle(2.7, 3.95)  
-  layer(Silkscreen("f-silk", Top)) = LineRectangle(2.7, 3.95)
+  layer(Silkscreen("pol", Top)) = Circle(x0, y0 - 1.0, 0.2)
+  
+  ref-label()
+
+public pcb-package SOT95P280X145-6N :
+  val x0 = -0.95
+  val y0 = 2.7 / -2.0
+  pad p[1] : {smd-pad(0.6, 1.05)} at loc(x0,y0)
+  pad p[2] : {smd-pad(0.6, 1.05)} at loc(0.0, y0)
+  pad p[3] : {smd-pad(0.6, 1.05)} at loc((- x0), y0)
+  pad p[4] : {smd-pad(0.6, 1.05)} at loc((- x0), (- y0))
+  pad p[5] : {smd-pad(0.6, 1.05)} at loc(0.0, (- y0))
+  pad p[6] : {smd-pad(0.6, 1.05)} at loc(x0, (- y0))
+
+  layer(Silkscreen("pol", Top)) = Circle(x0, y0 - 1.0, 0.2)
+  layer(Courtyard(Top)) = Rectangle(2.7, 3.95)  
   
   ref-label()
 

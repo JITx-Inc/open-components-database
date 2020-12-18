@@ -1,5 +1,5 @@
 #use-added-syntax(esir)
-defpackage design-generator :
+defpackage ocdb/ble-mote :
   import core
   import collections
   import math
@@ -14,48 +14,118 @@ defpackage design-generator :
   import ocdb/design-vars
   import ocdb/generic-components
   import ocdb/power-regulators
+  import ocdb/connects
 
 OPERATING-TEMPERATURE = [-20.0 50.0]
 OPTIMIZE-FOR = ["area"]
-  
+MIN-PKG = "0402"
+
+; PMS7003 particle counter interface via header pins
+pcb-module pms7003 :
+  port vin : power
+  port vin-mcu : power
+  pin reset
+  pin set
+  port uart : uart
+  inst header : {ocdb/amphenol/minitek127/component(10)}
+  package(header) at loc(0.0,0.0) on Top
+  net (vin.gnd vin-mcu.gnd header.p[3] header.p[4])
+  net (vin.vdd header.p[1] header.p[2])
+  net (uart.tx, header.p[10])
+  net (uart.rx, header.p[8])
+  net (reset, header.p[6])
+  net (set, header.p[9])
+  res-strap(vin-mcu.vdd, set, 10.0e3)
+  res-strap(vin-mcu.vdd, reset, 10.0e3)
+
 pcb-module sensor-mote :
-  ; Set up power solver
-  inst j : {pin-header(2)}
-  set-power-source(j.p[1], j.p[2], 3.7)
-  net gnd (j.p[2])
+  ; Add USB connector
+  inst usb : micro-usb-connector
+  package(usb.con) at loc(-10.0, -7.3) on Top
 
-  ; Instantiate NRF52 Module
-  inst proc : {ocdb/nordic/nRF52832/module}
-
-  ; Connect thermocouple sensor
-  inst thermocouple : {ocdb/microchip/MCP9600/module}
-
-  inst K : {pin-header(2)}
-  net (K.p[1], thermocouple.in.N)
-  net (K.p[2], thermocouple.in.P)
-
-  require data:i2c from proc
-  net THERMO (data, thermocouple.i2c)
-
-  require alert:gpio[4] from proc
-  for i in 0 to 4 do :
-    net ALERT[i] (alert[i].gpio, thermocouple.alert[i])
-
-  package(proc) at loc(0.0, 0.0) on Top
-  package(j) at loc(-14.0, 0.0) on Top
-
-  layout-group(proc) = proc
-  layout-group(thermocouple) = thermocouple
-  schematic-group(proc) = proc
-  schematic-group(thermocouple) = thermocouple
-
+  ; Define ground net and assign symbol
+  net gnd (usb.usb-2.vbus.gnd)
   symbol(gnd) = {ocdb/symbols/ground-sym}
 
-val main-design = default-board(sensor-mote, 4, 32.0,12.0)
+  ; Create a protected power and data interface for USB-2
+  val protected-usb = (ocdb/protection/esd-clamp(usb.usb-2, gnd) as Ref)
+  
+  ; Specify a power regulator and name power nets
+  inst ldo : {ocdb/diodes-incorporated/AP2112/module}
+  net (ldo.vin {protected-usb}.vbus)
+  net P5V0 (ldo.vin.vdd ldo.en)
+  net P3V3 (ldo.vout.vdd)
+  symbol(P5V0) = {ocdb/symbols/supply-sym}
+  symbol(P3V3) = {ocdb/symbols/supply-sym}
 
-lower-esir()
-run-user-pass(generate-power)
+  ; Add a Bluetooth SoC
+  inst proc : {ocdb/espressif/ESP32-PICO-D4/module}
+  inst ant : inverted-f-antenna
+  net (proc.ant, ant.rf-in)
+  package(ant) at loc(9.0, 5.0, -90.0) on Top
+
+  ; Use a connect statement to interface USB-2 to UART
+  connect ft232 ({protected-usb} proc.uart)
+  
+  ; Add a humidty sensor, connect over i2c, add pullups.
+  inst hum : {ocdb/texas-instruments/HDC1080/module}
+  require i2c:i2c from proc
+  net H-I2C (i2c, hum.i2c)
+  add-open-drain-pullups(i2c, ldo.vout.vdd)
+
+  ; Add the particle counter interface and place on bottom, and connect
+  inst particle-counter : pms7003
+  package(particle-counter) at loc(-10.0,5.0, 180.0) on Bottom
+
+  require pc-ctrl:gpio[2] from proc
+  net PC-RESET (pc-ctrl[0].gpio, particle-counter.reset)
+  net PC-SET (pc-ctrl[1].gpio, particle-counter.set)
+
+  require pc-uart:uart from proc
+  net PC-TX (pc-uart.rx particle-counter.uart.tx)
+  net PC-RX (pc-uart.tx particle-counter.uart.rx)
+
+  ; Connect power to proc and sensors
+  net (hum.power, particle-counter.vin-mcu, proc.power, ldo.vout)
+  net ({protected-usb}.vbus particle-counter.vin)
+
+  ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
+  add-rgb-indicator(60.0, proc, P3V3)
+  
+  ; Add probe loops
+  add-testpoint([ proc.uart.tx 
+                  proc.uart.rx 
+                  hum.i2c.sda 
+                  hum.i2c.scl
+                  proc.en
+                  proc.boot
+                  PC-TX
+                  PC-RX
+                  P5V0
+                  P3V3
+                  gnd gnd gnd
+                  ], "smd-loop")
+
+  ; Add a ground plane
+  geom(gnd):
+    copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = Rectangle(30.0, 18.0)
+
+  ; Apply groups to sub-circuits for schematic and layout
+  group-modules([[proc  ant] [hum] [usb ldo] [particle-counter]])
+
+val main-design = default-board(sensor-mote, 4, 30.0,18.0)
+
+; Net up any gnd pins that we missed.
+run-user-pass(connect-gnd-pins)
 
 view(main-design)
 
-export-cad("BLE-mote", "kicad")
+export-kicad("BLE-mote", [`place => true
+                          `check-log => "checks.txt"
+                          `gen-board => true 
+                          `gen-bom => true 
+                          `gen-schematic => true 
+                          `paper => ANSI-A4
+                          `fresh => true 
+                          `schematic-version => 4
+                          `param-configs => [`sketch]] )

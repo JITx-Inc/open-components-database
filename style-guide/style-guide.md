@@ -49,9 +49,9 @@ public unique pcb-module lower-level-module :
   port rgb-led : rgb-led 
   pin vcc
 
-  inst r-res : {gen-res-cmp(470.0)}
-  inst g-res : {gen-res-cmp(330.0)}
-  inst b-res : {gen-res-cmp(100.0)}
+  inst r-res : {chip-resistor(470.0)}
+  inst g-res : {chip-resistor(330.0)}
+  inst b-res : {chip-resistor(100.0)}
 
   net (rgb-led.r, r-res.p[2])
   net (rgb-led.g, g-res.p[2])
@@ -60,7 +60,7 @@ public unique pcb-module lower-level-module :
 
 public unique pcb-module top-level-module :
   inst lower : lower-level-module
-  inst r : {gen-res-cmp(100.0)}
+  inst r : {chip-resistor(100.0)}
   net (lower.rgb-led.r, r.p[1])
 ```
 
@@ -74,9 +74,9 @@ public unique pcb-module lower-level-module :
   pin a
   pin vcc
 
-  inst r-res : {gen-res-cmp(470.0)}
-  inst g-res : {gen-res-cmp(330.0)}
-  inst b-res : {gen-res-cmp(100.0)}
+  inst r-res : {chip-resistor(470.0)}
+  inst g-res : {chip-resistor(330.0)}
+  inst b-res : {chip-resistor(100.0)}
 
   net r (r-res.p[2])
   net g (g-res.p[2])
@@ -85,7 +85,7 @@ public unique pcb-module lower-level-module :
 
 public unique pcb-module top-level-module :
   inst lower : lower-level-module
-  inst r : {gen-res-cmp(100.0)}
+  inst r : {chip-resistor(100.0)}
   net (lower.r, r.p[1])
 ```
 

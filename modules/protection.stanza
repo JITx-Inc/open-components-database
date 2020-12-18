@@ -13,15 +13,22 @@ defpackage ocdb/protection:
   import ocdb/design-vars
   import ocdb/bundles
 
-
 ; Attach TVS diodes to the provided bundle. To be extended with properties, solvers for general use.
-public defn esd-clamp (bundle:Ref, gnd:Ref):
+public defn esd-clamp (bundle:Ref, gnd:Ref) :
   inside pcb-module:
     if port-type(bundle) == #PT(can) :
-      unique inst clamp : {ocdb/nxp/PESD1CAN/component}
+      unique inst clamp : {ocdb/nexperia/PESD1CAN/component}
       net ({clamp}.c[1] {bundle}.canh)
       net ({clamp}.c[2] {bundle}.canl)
       net ({clamp}.common {gnd})
+      bundle
+    ; ESD clamp and power protection for usb
+    else if port-type(bundle) == #PT(usb-2) :
+      unique inst clamp : {ocdb/texas-instruments/TPD3S0x4/module}
+      net ({bundle}, {clamp}.usb-in)
+      net ({clamp}.usb-in.vbus.vdd, {clamp}.en)
+      ; Return protected port
+      clamp.usb-out
 
 ; Isolate unidirectional digital logic pins, associated with power domains A and B. B considered to be distal from A
 public defn isolate-logic (pins:Tuple<[Ref Ref]>, pwr-A:Ref, pwr-B:Ref):

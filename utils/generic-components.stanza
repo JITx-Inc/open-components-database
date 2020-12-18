@@ -11,14 +11,28 @@ defpackage ocdb/generic-components:
   import ocdb/pinspec
   import ocdb/land-patterns
   import ocdb/generator-utils
-  ; import db-parts
-;[strip]
+
+  import ocdb/db-parts
+  import ocdb/design-vars
   import ocdb/symbols
   import ocdb/box-symbol
-;[/strip]
 
-; ====== Standard Tolerances and Logarithmic Values ======
+; ========================================================
+; ====== Standard packages for the passive solver ========
+; ========================================================
+val PKGS = ["01005", "0201", "02016", "0202", "0303", "0402", "0404", "0503", "0505", "0603", "0612", "0805", "1206",
+            "1210", "1218", "1812", "2010", "2512", "2525", "2615", "2616", "3920", "4122", "4823", "5329", "6030"]
 
+public defn get-valid-pkg-list () :
+  val min-pkg-idx = find({PKGS[_] == MIN-PKG}, 0 to length(PKGS))
+  match(min-pkg-idx: Int) :
+    PKGS[min-pkg-idx to false]
+  else :
+    throw(Exception("Invalid MIN-PKG."))
+
+; ========================================================
+; ==== EIA Standard Tolerances and Logarithmic Values ====
+; ========================================================
 public val std-tols = to-list([20.0, 10.0, 5.0, 2.0, 1.0, 0.5, 0.25, 0.1])
 public val std-vals = HashTable<Double, List<Double>>()
 
@@ -87,6 +101,8 @@ val cumulative-std-vals = HashTable<Double, List<Double>>()
 for tol in std-tols do :
   cumulative-std-vals[tol] = union-std-vals(tol)
 
+
+; Returns the closest value to v in the tolerance range specified by tol
 public defn closest-std-val (v:Double, tol:Double) :
   val expon = floor(log10(v))
   val signif = v / (pow(10.0,expon))
@@ -105,12 +121,51 @@ public defn closest-std-val (v:Double, tol:Double) :
 
   match-val * pow(10.0, expon)
 
-; GENERICPASSIVES
+
+; ========================================================
+; ========== Generic passive components ==================
+; ========================================================
+; Generic ceramic capacitor from database (of 600k options)
+public defn ceramic-cap (params:Tuple<KeyValue>) :
+  val default-params = ["type" => "ceramic" 
+                        "mounting" => "smd" 
+                        "case" => get-valid-pkg-list()
+                        "minimum_quantity" => 1
+                        "min-rated-voltage" => MIN-CAP-VOLTAGE
+                        "min-stock" => 5 * DESIGN-QUANTITY]
+  to-esir(Capacitor(to-tuple $ to-hashtable<String, ?> $ cat(default-params params)))
+
+public defn ceramic-cap (cap:Double) :
+  ceramic-cap(["capacitance" => cap])
+
+; Generic chip resistor from database (of 600k options)
+public defn chip-resistor (params:Tuple<KeyValue>) :
+  val default-params = ["mounting" => "smd" 
+                        "case" => get-valid-pkg-list()
+                        "minimum_quantity" => 1
+                        "min-stock" => 5 * DESIGN-QUANTITY]
+  to-esir(Resistor(to-tuple $ to-hashtable<String, ?> $ cat(default-params params)))
+
+public defn chip-resistor (resistance:Double, tolerance:Double) :
+  chip-resistor(["resistance" => resistance "tolerance" => tolerance])
+
+public defn chip-resistor (resistance:Double) :
+  chip-resistor(["resistance" => resistance])
+
+; Generic inductors from database of standard packages (0402, 0603... 10k options)
+public defn smd-inductor (params:Tuple<KeyValue>) :
+  val default-params = ["mounting" => "smd" 
+                        "case" => get-valid-pkg-list()
+                        "minimum_quantity" => 1
+                        "min-stock" => 5 * DESIGN-QUANTITY]
+  to-esir(Inductor(to-tuple $ to-hashtable<String, ?> $ cat(default-params params)))
+
+public defn smd-inductor (ind:Double) :
+  smd-inductor(["inductance" => ind])
 
 public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg:String) :
   port p : pin[{1 2}]
   symbol = {capacitor-sym(false)}(p[1] => p[1], p[2] => p[2])
-  ; emodel = Capacitor(cap, tol, max-v)
   package = {ipc-two-pin-package(pkg)}(p[1] => p[1], p[2] => p[2])
   reference-prefix = "C"
   spice :
@@ -120,30 +175,24 @@ public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg:Stri
     capacitor => true
     type => "ceramic"
     capacitance => cap
-    tolerance => (tol * 0.01)
+    tolerance => tol
     rated-voltage => max-v
     rated-temperature => [-55.0 125.0]
 
 public defn gen-cap-cmp (cap:Double, max-v:Double) :
   gen-cap-cmp(cap, 0.2, max-v, "0402")
 
-; 40 is default tolerance due to Yageo cap series 20% tolerance by default
 public defn gen-cap-cmp (cap:Double, pkg:String) :
-  ; capacitor(["capacitance" => cap "type" => "ceramic"])
   gen-cap-cmp(cap, 0.2, 10.0, pkg)
 
-; 40 is default tolerance due to Yageo cap series 20% tolerance by default
 public defn gen-cap-cmp (cap:Double) :
-  ; capacitor(["capacitance" => cap "type" => "ceramic"])
   gen-cap-cmp(cap, 10.0)
 
 ;Generic Ceramic surface mount capacitors
 public pcb-component gen-tant-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg:String) :
   pin a 
   pin c
-;[strip]
   symbol = {capacitor-sym(true)}(a => p[1] c => p[2])
-;[/strip]
   emodel = Capacitor(cap, tol, max-v)
   switch(pkg) :
     "0402" : package = CAPT1005X55(a => p[1] c => p[2])
@@ -175,20 +224,17 @@ public defn gen-tant-cap-cmp (cap:Double, pkg:String) :
 
 public defn gen-tant-cap-cmp (cap:Double, tol:Double) :
   gen-tant-cap-cmp(cap, tol, 10.0)
+; public defn default-bypass (component:Ref) :
+;   bypass-cap-strap(component.gnd, component.vdd, 0.1)
 
-; 40 is default tolerance due to Yageo cap series 20% tolerance by default
-public defn gen-tant-cap-cmp (cap:Double) :
   gen-tant-cap-cmp(cap, 20.0)
  
-
 public pcb-component gen-res-cmp (r-type:String|False, res:Double, tol:Double, pwr:Double, pkg:String) :
   ; if r-type is Symbol and (r-type as Symbol) == `pot :
   ;   port p : pin[{1 2 3}]
   ; else :
   port p : pin[{1 2}]
-;[strip]
   symbol = {resistor-sym(r-type)}(p[1] => p[1], p[2] => p[2])
-;[/strip]
   emodel = Resistor(res,tol,pwr)
   package = {ipc-two-pin-package(pkg)}(p[1] => p[1], p[2] => p[2])
   reference-prefix = "R"
@@ -204,7 +250,6 @@ public pcb-component gen-res-cmp (r-type:String|False, res:Double, tol:Double, p
     resistance => res
   spice :
     "[R] {p[1]} {p[2]} {res}"
-
 
 public defn gen-res-cmp (res:Double, tol:Double, pkg:String) :
   gen-res-cmp(false, res, tol, 0.0625, pkg)
@@ -225,11 +270,14 @@ public pcb-component gen-ind-cmp (ind:Double, tol:Double, max-i:Double) :
   port p : pin[{1 2}]
   emodel = Inductor(ind,tol,max-i)
 
-;[strip]
   symbol = inductor-sym(p[1] => p[1], p[2] => p[2])
-;[/strip]
   package = INDC1005X55(p[1] => p[1], p[2] => p[2]) ;TODO: all inductors 0402
   reference-prefix = "L"
+  properties:
+    inductor => true
+    inductance => ind
+    tolerance => (tol * 0.01)
+    max-current => max-i
 
 public defn gen-ind-cmp (ind:Double, tol:Double) :
   gen-ind-cmp(ind, tol, 0.1)
@@ -237,21 +285,22 @@ public defn gen-ind-cmp (ind:Double, tol:Double) :
 public defn gen-ind-cmp (ind:Double) :
   gen-ind-cmp(ind, 10.0)
 
-; STRAP
-public defn bypass-cap-strap ( gnd-pin, power-pin, capacitance ):
+; ========================================================
+; ============ Component strapping functions =============
+; ========================================================
+; These functions attach a passive component between two pins. e.g. strap a pull up resistor between an IO and VDD
+
+public defn bypass-cap-strap (power-pin:Ref, gnd-pin:Ref, capacitance:Double ):
   inside pcb-module:
     val cap = cap-strap(gnd-pin, power-pin, capacitance)
-    short-trace(cap.p[1], power-pin)
+    short-trace({cap}.p[1], {power-pin})
     cap
-
-; public defn default-bypass (component:Ref) :
-;   bypass-cap-strap(component.gnd, component.vdd, 0.1)
 
 public defn bypass-caps (power-pin:Ref|Symbol, gnd-pin:Ref|Symbol, voltage:Double, caps:Tuple<Double>, name:Symbol) :
   inside pcb-module:
     val n-caps = length(caps)
     for i in 0 to n-caps do :
-      unique inst c : {gen-cap-cmp(caps[i], voltage)}
+      unique inst c : {ceramic-cap(["capacitance" => caps[i], "min-rated-voltage" => voltage])}
       match(power-pin) :
         (r:Ref) :
           net ({r}, {c}.p[1])
@@ -263,25 +312,25 @@ public defn bypass-caps (power-pin:Ref|Symbol, gnd-pin:Ref|Symbol, voltage:Doubl
         (s:Symbol) :
           net {Ref(s)} ({c}.p[2])
 
-public defn res-strap (first-pin:Ref, second-pin:Ref, res:Double, tol:Double, pkg:String ) :
+public defn res-strap (first-pin:Ref, second-pin:Ref, params:Tuple<KeyValue>) :
   inside pcb-module:
-    unique inst rid : {gen-res-cmp(res, tol, pkg)}
+    unique inst rid : {chip-resistor(params)}
     net ({first-pin}, {rid}.p[1])
     net ({second-pin}, {rid}.p[2])
     rid
 
-public defn res-strap (first-pin:Ref, second-pin:Ref, res:Double, pkg:String ) :
-  res-strap(first-pin, second-pin, res, 2.0, pkg)
+public defn res-strap (first-pin:Ref, second-pin:Ref, res:Double, tol:Double) :
+  res-strap(first-pin, second-pin, ["resistance" => res "tolerance" => tol])
 
 public defn res-strap (first-pin:Ref, second-pin:Ref, res:Double ) :
-  res-strap(first-pin, second-pin, res, "0402")
+  res-strap(first-pin, second-pin, ["resistance" => res])
   
-public defn cap-strap (first-pin:Ref, second-pin:Ref, capacitance ) :
-  cap-strap( first-pin, second-pin, capacitance, "0402" )
+public defn cap-strap (first-pin:Ref, second-pin:Ref, capacitance:Double ) :
+  cap-strap( first-pin, second-pin, ["capacitance" => capacitance] )
 
-public defn cap-strap (first-pin:Ref, second-pin:Ref, capacitance, pkg:String ) :
+public defn cap-strap (first-pin:Ref, second-pin:Ref, params:Tuple<KeyValue>) :
   inside pcb-module:
-    unique inst cap : {gen-cap-cmp(capacitance, pkg)}
+    unique inst cap : {ceramic-cap(params)}
     net ({first-pin}, {cap}.p[1])
     net ({second-pin}, {cap}.p[2])
     cap
@@ -290,7 +339,7 @@ public defn default-bypass (cmp:Ref) :
   inside pcb-module:
     for p in ports(cmp) do :
       if has-property?(p.power-pin) :
-        unique inst cap : {gen-cap-cmp(0.1)}
+        unique inst cap : {ceramic-cap(0.1)}
         properties({cap}):
           bypass => true
         net ({cap}.p[1], {p})
@@ -299,12 +348,17 @@ public defn default-bypass (cmp:Ref) :
 
 public defn block-cap (in:Ref, out:Ref, cap:Double) :
   inside pcb-module :
-    unique inst block : {gen-cap-cmp(cap)}
+    unique inst block : {ceramic-cap(cap)}
     net ({in}, {block}.p[1])
     net ({out}, {block}.p[2])
 
 public defn block-cap (in:Ref, out:Ref) :
   block-cap(in, out, 100.0e-6)
+
+
+; ========================================================
+; =================== Generic connectors =================
+; ========================================================
 
 public defn banana-plug (color:String) :
   inside pcb-module :
@@ -369,6 +423,35 @@ public defn ethernet-jack ():
     net ({c}.shield, gnd)
     c
 
+; USB device connection via USBA MicroB
+public pcb-module micro-usb-connector :
+  port usb-2 : usb-2
+  inst con : {ocdb/amphenol/10103594-0001LF/component}
+  net VBUS (usb-2.vbus.vdd con.VCC)
+  net (usb-2.vbus.gnd con.GND)
+  ; RC filter connection for chassis gnd
+  res-strap(con.SHIELD, con.GND, 100.0e3)
+  cap-strap(con.SHIELD, con.GND, 0.1e-6)
+  net D+ (usb-2.data.P con.D+)
+  net D- (usb-2.data.N con.D-)
+  net ID (usb-2.id con.ID)
+
+; Add a tag-connect landing pattern to a processor
+public defn attach-programming-connector (proc:Ref, vio:Ref, intf:String):
+  inside pcb-module:
+    unique inst tag : {ocdb/tag-connect/TC2050-IDC-NL/module}
+    net ({vio}, {tag}.pwr)
+    if intf == "swd" :
+      unique require swd:swd from proc
+      net ({swd} {tag}.swd)
+    else if intf == "jtag" :
+      unique require jtag:jtag from proc
+      net ({jtag} {tag}.jtag)
+
+; ========================================================
+; ================== Testpoint functions =================
+; ========================================================
+
 public defn add-testpoint (rs:Tuple<Ref>, method:String) :
   inside pcb-module :
     for r in rs do :
@@ -378,6 +461,12 @@ public defn add-testpoint (rs:Tuple<Ref>, method:String) :
           color = "black"
         unique inst tp : {ocdb/keystone/500xx/component(color)}
         net ({tp}.p, {r})
+      else if method == "smd-loop" :
+        unique inst tp : {ocdb/te-connectivity/RC/component}
+        net ({tp}.p, {r})
+      else if method == "smd-pad" :
+        unique inst tp : {gen-testpad(2.0)}
+        net ({tp}.p, {r})
       else :
         fatal("Unsupported add-testpoint method.")
 
@@ -386,7 +475,7 @@ public defn add-testpoint (rs:Tuple<Ref>) :
 
 public pcb-component gen-testpad (d:Double) :
   pin tp
-  symbol = test-point-sym(tp => p[0])
+  symbol = test-point-sym(tp => p)
   package = {testpad(d)}(tp => tp)
 
 public defn add-testpad (rs:Tuple<Ref>, d:Double) :
@@ -395,11 +484,29 @@ public defn add-testpad (rs:Tuple<Ref>, d:Double) :
       unique inst tp : {gen-testpad(d)}
       net ({tp}.tp, {r})
 
+public pcb-component top-smd-testpoint-cmp (d:Double) :
+  pin p
+  symbol = {test-point-sym}(p => p)
+  package = {top-smd-testpoint-pkg(d)}(p => p)
+  reference-prefix = "TP"
+
+public pcb-component btm-smd-testpoint-cmp (d:Double) :
+  pin p
+  symbol = {test-point-sym}(p => p)
+  package = {btm-smd-testpoint-pkg(d)}(p => p)
+  reference-prefix = "TP"
+
+public defn top-smd-testpoint-cmp () :
+  top-smd-testpoint-cmp(2.0)
+ 
+public defn btm-smd-testpoint-cmp () :
+  btm-smd-testpoint-cmp(2.0)
+
 public defn filter (in:Ref, out:Ref, type:String, params:Tuple<Double>) :
   inside pcb-module:
     if type == "rc-lowpass" :
-      unique inst r : {gen-res-cmp(params[0], 1.0)}
-      unique inst c : {gen-cap-cmp(params[1], 20.0)}
+      unique inst r : {chip-resistor(params[0], 0.01)}
+      unique inst c : {ceramic-cap(params[1])}
       net ({in} {r}.p[1])
       net ({out} {r}.p[2] {c}.p[1])
       net (gnd {c}.p[2])
@@ -419,9 +526,7 @@ public defn dip-pull (pins:Tuple<Ref>, power-pin:Ref, gnd-pin:Ref) :
 public pcb-component mounting-hole-cmp (drill-r:Double, pad-r: Double, mask-r:Double) :
   package = {non-plated-hole-pkg(drill-r, mask-r)}()
   reference-prefix = "H"
-;[strip]
   symbol = unplated-hole-sym()
-;[/strip]
 
 public defn mounting-hole-cmp (drill-r:Double, pad-r:Double) :
   mounting-hole-cmp(drill-r, pad-r, pad-r + 0.35)
@@ -447,20 +552,73 @@ public defn board-mounting-holes (w:Double, h:Double, s:String|Double) :
     for (l in grid-locs(2, 2, w - offs, h - offs), i in 0 to 4) do :
       package(holes[i]) at l on Top
 
-public pcb-component top-smd-testpoint-cmp (d:Double) :
-  pin p
-  symbol = {test-point-sym}(p => p[0])
-  package = {top-smd-testpoint-pkg(d)}(p => p)
-  reference-prefix = "TP"
 
-public pcb-component btm-smd-testpoint-cmp (d:Double) :
-  pin p
-  symbol = {test-point-sym}(p => p[0])
-  package = {btm-smd-testpoint-pkg(d)}(p => p)
-  reference-prefix = "TP"
 
-public defn top-smd-testpoint-cmp () :
-  top-smd-testpoint-cmp(2.0)
- 
-public defn btm-smd-testpoint-cmp () :
-  btm-smd-testpoint-cmp(2.0)
+; ========================================================
+; ===================== Antennas =========================
+; ========================================================
+
+pcb-package ant-2GHz4-inverted-f-geom :
+
+  pad launch : {smd-pad(0.5, 0.5)} at loc(0.0, 0.25)
+  pad gnd : {smd-pad(0.9, 0.5)} at loc(-2.1, 0.25)
+
+  copper(LayerIndex(0)) = Line(0.5, [Point(-2.1, 5.15), Point(2.2, 5.15), Point(2.2, 2.51), 
+                                Point(4.7, 2.51),  Point(4.7, 5.15), Point(6.9, 5.15), 
+                                Point(6.9, 2.51),  Point(9.4, 2.51), Point(9.4, 5.15), 
+                                Point(11.6, 5.15), Point(11.6, 0.96)])
+  copper(LayerIndex(0)) = Line(0.5, [Point(0.0, 0.0),   Point(0.0, 5.15)])
+  copper(LayerIndex(0)) = Rectangle(0.9, 5.4, loc(-2.1, 2.7))
+  via(LayerIndex(0), LayerIndex(0, Bottom), 
+    radius = 0.3, hole-radius = 0.125) 
+    at Point(-2.1, 0.0)
+  layer(ForbidCopper(LayerIndex(0), LayerIndex(0, Bottom))) = Rectangle(18.0, 5.5, loc(5.0, 3.25))
+  layer(Courtyard(Top)) = Rectangle(18.0, 5.5, loc(5.0, 3.25))
+  layer(Courtyard(Bottom)) = Rectangle(18.0, 5.5, loc(5.0, 3.25))
+  layer(BoardEdge()) = Line(0.0, [Point(17.0, 6.0), Point(-7.0, 6.0)])
+
+public pcb-component inverted-f-antenna-cmp :
+  pin launch
+  pin gnd
+  description = "2.4 GHz Inverted F trace antenna"
+  package = ant-2GHz4-inverted-f-geom(launch => launch, gnd => gnd)
+  symbol = {antenna-symbol(1,1)}(launch => p[1], gnd => p[2])
+
+public pcb-module inverted-f-antenna :
+  pin rf-in
+  pin gnd
+  inst ant : inverted-f-antenna-cmp
+  package(ant) at loc(0.0,0.0) on Top
+  ; PI filter
+  inst c0 : {ceramic-cap(["capacitance" => 5.6e-12 "temperature-coefficient.code" => "C0G"])}
+  inst c1 : {ceramic-cap(["capacitance" => 2.4e-12 "temperature-coefficient.code" => "C0G"])}
+  inst l : {smd-inductor(["inductance" => 2.7e-9 "min-self-resonant-frequency" => 7.0e6 "min-quality-factor" => 8.0])}
+  net (gnd, ant.gnd c1.p[1] l.p[1])
+  net (ant.launch c0.p[2] c1.p[2])
+  net (rf-in c0.p[1] l.p[2])
+  package(c1) at loc(-0.5, -0.3) on Top
+  package(c0) at loc(-0.05, -1.45, 90.0) on Top
+  package(l) at loc(-0.5, -2.6) on Top
+
+; ========================================================
+; =================== Indicators =========================
+; ========================================================
+
+; 50 - 200 mcd for daylight
+; 4 - 10 mcd for indoor
+
+; Adds an RGB led to a processor using PWM pins
+public defn add-rgb-indicator (brightness:Double, proc:Ref, vin:Ref):
+  inside pcb-module:
+    val vio = 3.3 ; TODO: get this from the vin pin property
+    ; Calculate resistance to get appropriate brightness
+    defn calc-r (l:Ref, brightness:Double, vio:Double):
+      val i = PWL(property(l.mcd-current))[brightness]
+      closest-std-val((vio - property(l.forward-voltage)) / i, 1.0)
+    
+    unique inst led : {ocdb/foshan-optoelectronics/FM-B2020RGBA-HG/component} ; TODO: make generic
+    require pwm:pwm[3] from {proc}
+    res-strap(pwm[0].pwm, led.l.r, calc-r(led.l.r, brightness, vio))
+    res-strap(pwm[1].pwm, led.l.g, calc-r(led.l.g, brightness, vio))
+    res-strap(pwm[2].pwm, led.l.b, calc-r(led.l.b, brightness, vio))
+    net ({vin}, {led}.l.a)

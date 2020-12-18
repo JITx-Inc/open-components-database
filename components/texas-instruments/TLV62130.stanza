@@ -22,18 +22,18 @@ public unique pcb-component component :
   description = "TLV62130x 3-V to 17-V 3-A Step-Down Converter In 3x3 QFN"
   val ps = PinSpec $ #TABLE :
     [Ref | Int ...   | Dir  ]
-    [AGND | 6     | Down ]
-    [AVIN | 10    | Left ]
-    [DEF  | 8     | Left ]
-    [EN   | 13    | Left ]
-    [FB   | 5     | Left ]
-    [FSW  | 7     | Left ]
-    [PG   | 4     | Right]
-    [PGND | 15 16 | Down ]
     [PVIN | 11 12 | Left ]
+    [AVIN | 10    | Left ]
+    [EN   | 13    | Left ]
     [SS   | 9     | Left ]
+    [DEF  | 8     | Left ]
+    [FSW  | 7     | Left ]
     [SW   | 1 2 3 | Right]
-    [VOS  | 14    | Left ]
+    [VOS  | 14    | Right]
+    [PG   | 4     | Right]
+    [FB   | 5     | Right]
+    [AGND | 6     | Down ]
+    [PGND | 15 16 | Down ]
     [PAD  | 17    | Down ]
   gen-symbol-map(ps, qfn-package(0.5, 3.0, 16, 0.24, 0.5, [1.68, 1.68]))
 
@@ -46,8 +46,6 @@ public pcb-module module (v-out:Double):
   pin en
   pin pg
   pin ss
-  val r2 = 180.0e3
-  val r1 = r2 * (v-out / 0.8 - 1.0)
 
   inst buck : {ocdb/texas-instruments/TLV62130/component}
   inst l    : {ocdb/abracon/ASPI-0530HI/component(2.2)}
@@ -63,9 +61,14 @@ public pcb-module module (v-out:Double):
   net sw (l.p[1] buck.SW)
   net (vout l.p[2] buck.VOS)
   net (pg buck.PG)
+  net (en buck.EN)
   res-strap(l.p[2], buck.PG, 100.0e3)
-  res-strap(l.p[2], buck.FB, r1)
-  res-strap(gnd,    buck.FB, r2)
+
+  properties(l.p[2]):
+    voltage => [(v-out * 0.99) v-out ( v-out * 1.01)]
+
+  ; Create a voltage divider to output 0.8V. Target current : 5uA
+  ocdb/passive-circuits/make-voltage-divider(l.p[2], buck.FB, gnd, [0.78 0.8 0.82] 5.0e-6)
 
   cap-strap(vout, gnd, 22.0e-6)
 
