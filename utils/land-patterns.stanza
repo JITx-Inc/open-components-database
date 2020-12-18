@@ -1,13 +1,12 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/land-patterns :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/utils
   import esir/fonts
-  import esir/repl-lib
+  import esir2/repl-lib
 
 ; ====== Reference Label Helpers ===============================================
 
@@ -192,7 +191,7 @@ public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Dou
     
     for i in 0 to n-col do :
       for j in 0 to n-row do :
-        pad p[n-row * i + j + 1] : {pad-ref} at l0 * loc(to-double(j) * row-pitch, (- to-double(i) * pin-pitch))
+        pad p[n-row * i + j + 1] : pad-ref at l0 * loc(to-double(j) * row-pitch, (- to-double(i) * pin-pitch))
     
 public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
   make-pin-grid(n-pin, n-row, pin-pitch, row-pitch, pth-pad(0.5))
@@ -201,7 +200,7 @@ public defn make-pin-grid (n-pin:Int) :
   make-pin-grid(n-pin, 1, 2.54, 2.54)
 
 public pcb-package testpad (d:Double) :
-  pad tp : {testpoint-pad(d)} at loc(0.0,0.0)
+  pad tp : testpoint-pad(d) at loc(0.0,0.0)
 
 ; ====== Package Family Generators ================================================
 ; TODO: Unify These.
@@ -209,7 +208,7 @@ public pcb-package dummy-package (n:Int, courtyard:[Double,Double]):
   val r = (max(courtyard[0], courtyard[1]) - 0.2) / 2.0
   for i in 0 to n do :
     var theta = (2.0 * PI / to-double(n)) * to-double(i) + PI
-    pad p[i + 1] : {bga-pad(0.05)} at loc(r * cos(theta), r * sin(theta))
+    pad p[i + 1] : bga-pad(0.05) at loc(r * cos(theta), r * sin(theta))
 
   layer(Courtyard(Top)) = Rectangle(courtyard[0], courtyard[1])
   layer(Silkscreen("f-silk", Top)) = LineRectangle(courtyard[0], courtyard[1])
@@ -225,16 +224,16 @@ public defn make-two-pin-package (Z:Double, G:Double, X:Double, w:Double, h:Doub
     val Y = (Z - G) / 2.0 ; width of pad
     val C2 = (G + Y) / 2.0 ; distance between pad center and package centerline
     if polarized? :
-      pad c : {smd-pad(Y,X)} at loc((- C2), 0.0)
-      pad a : {smd-pad(Y,X)} at loc(C2, 0.0)
+      pad c : smd-pad(Y,X) at loc((- C2), 0.0)
+      pad a : smd-pad(Y,X) at loc(C2, 0.0)
       val he = h / 2.0 + 0.25
       val we = w / 2.0 + 0.3
       layer(Silkscreen("pol", Top)) = Line(0.12, [Point(w / 2.0, (- he)) Point((- we), (- he))])
       layer(Silkscreen("pol", Top)) = Line(0.12, [Point((- we), he) Point(w / 2.0, he) ])
       layer(Silkscreen("pol", Top)) = Line(0.30, [Point((- we), (- he)) Point((- we), he)])
     else:
-      pad p[1] : {smd-pad(Y,X)} at loc((- C2), 0.0)
-      pad p[2] : {smd-pad(Y,X)} at loc(C2, 0.0)
+      pad p[1] : smd-pad(Y,X) at loc((- C2), 0.0)
+      pad p[2] : smd-pad(Y,X) at loc(C2, 0.0)
     if courtyard? : 
       layer(Courtyard(Top)) = Rectangle(w, h)
 
@@ -303,10 +302,10 @@ public defn make-soic127p-package (n:Int, lead-span:Double) :
     val pin-row = to-list(row-locs(W, n / 2, pin-pitch))
 
     for (i in 0 to (n / 2), l in pin-row) do :
-      pad p[i + 1] : {smd-pad(0.6, 1.5)} at l0 * l
+      pad p[i + 1] : smd-pad(0.6, 1.5) at l0 * l
     
     for (i in (n / 2) to n, l in pin-row) do :
-      pad p[i + 1] : {smd-pad(0.6, 1.5)} at l1 * l
+      pad p[i + 1] : smd-pad(0.6, 1.5) at l1 * l
     
     val pkg-height = to-double((n / 2) - 1) * pin-pitch + 1.1
     val c-w = lead-span + 1.5
@@ -326,7 +325,7 @@ public pcb-package soic127p-package (n:Int) :
 
 public pcb-package soic127p-package (n:Int, hs:[Double, Double]) :
   make-soic127p-package(n, 6.0)
-  pad p[n + 1] : {smd-pad(hs[0], hs[1])} at loc(0.0, 0.0)
+  pad p[n + 1] : smd-pad(hs[0], hs[1]) at loc(0.0, 0.0)
 
 ; See SOP_JEDEC_MO-153F.pdf for reference
 public defn make-sop65-package (n:Int, lead-span:Double) :
@@ -342,10 +341,10 @@ public defn make-sop65-package (n:Int, lead-span:Double) :
     val pin-row = to-list(row-locs(W, n / 2, pin-pitch))
 
     for (i in 1 through (n / 2), l in pin-row) do :
-      pad p[i] : {smd-pad(0.39, 1.4)} at l0 * l
+      pad p[i] : smd-pad(0.39, 1.4) at l0 * l
     
     for (i in (n / 2 + 1) through n, l in pin-row) do :
-      pad p[i] : {smd-pad(0.39, 1.4)} at l1 * l
+      pad p[i] : smd-pad(0.39, 1.4) at l1 * l
     
     val pkg-height = to-double((n / 2) - 1) * pin-pitch + 0.4
     
@@ -377,16 +376,16 @@ public defn make-qfn-package (pin-pitch:Double, lead-span:Double, n-pins:Int, pa
 
     val pin-pad = smd-pad(S, pad-width, pad-length + 0.3)
     for (i in 0 to n, l in row-pos) do :
-      pad p[i + 1] : {pin-pad} at loc(x0, y0, -90.0) * l
+      pad p[i + 1] : pin-pad at loc(x0, y0, -90.0) * l
 
     for (i in n to (n * 2), l in row-pos) do :
-      pad p[i + 1] : {pin-pad} at loc((- y0), x0, 0.0) * l
+      pad p[i + 1] : pin-pad at loc((- y0), x0, 0.0) * l
 
     for (i in (n * 2) to (n * 3), l in row-pos) do :
-      pad p[i + 1] : {pin-pad} at loc((- x0), (- y0), 90.0) * l
+      pad p[i + 1] : pin-pad at loc((- x0), (- y0), 90.0) * l
 
     for (i in (n * 3) to (n * 4), l in row-pos) do :
-      pad p[i + 1] : {pin-pad} at loc((y0), (- x0), 180.0) * l
+      pad p[i + 1] : pin-pad at loc((y0), (- x0), 180.0) * l
 
     val c-w = (lead-span + 0.3 * 2.0)
     layer(Courtyard(Top)) = Rectangle(c-w, c-w)
@@ -399,7 +398,7 @@ public pcb-package qfn-package (pin-pitch:Double, lead-span:Double, n-pins:Int, 
 
 public pcb-package qfn-package (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double, hs:[Double,Double]) :
   make-qfn-package(pin-pitch, lead-span, n-pins, pad-width, pad-length)
-  pad p[n-pins + 1] : {smd-pad(hs[0],hs[1])} at loc(0.0, 0.0)  
+  pad p[n-pins + 1] : smd-pad(hs[0],hs[1]) at loc(0.0, 0.0)  
 
 
 public defn make-dfn-package (
@@ -422,10 +421,10 @@ public defn make-dfn-package (
     val pin-row = to-list(row-locs(W, n-side, pad-pitch))
 
     for (i in 0 to n-side, l in pin-row) do :
-      pad p[i + 1] : {pin-pad} at l0 * l
+      pad p[i + 1] : pin-pad at l0 * l
 
     for (i in n-side to n-pad, l in pin-row) do :
-      pad p[i + 1] : {pin-pad} at ln2 * l
+      pad p[i + 1] : pin-pad at ln2 * l
 
     val pad-x0-abs = abs(pad-x0)
     val pad-x0-dir = pad-x0 / pad-x0-abs
@@ -444,7 +443,7 @@ public pcb-package dfn-package ( n-pad:Int, pad-pitch:Double, pad-dims:[Double,D
 
 public pcb-package dfn-package ( n-pad:Int, pad-pitch:Double, pad-dims:[Double,Double], pad-x0:Double, body-dims:[Double,Double], hs:[Double,Double]) :
   make-dfn-package(n-pad,pad-pitch,pad-dims,pad-x0,body-dims)
-  pad p[n-pad + 1] : {smd-pad(hs[0],hs[1])} at loc(0.0, 0.0)  
+  pad p[n-pad + 1] : smd-pad(hs[0],hs[1]) at loc(0.0, 0.0)  
 
 
 ;TODO: Until added to core
@@ -469,7 +468,7 @@ public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], court
       val name = Ref(letter)[c + 1]
 
       if not contains?(omit-pads, name) :
-        pad {name} : {pin-pad} at loc(x,y)
+        pad name : pin-pad at loc(x,y)
 
     for c in 0 to n-pads[0] do :
       for r in 0 to n-pads[1] do :
@@ -524,20 +523,20 @@ public pcb-package DIOM-4539X220 :
 public pcb-package QFN50P715X715X80-48 :
   name = "QFN50P715X715X80-48"
   make-qfn-package(0.5, 7.15, 48, 0.3, 0.5)
-  pad p[49] : {smd-pad(5.1,5.1)} at loc(0.0, 0.0)
+  pad p[49] : smd-pad(5.1,5.1) at loc(0.0, 0.0)
 
 public pcb-package QFN50P400X400X85-24 :
   name = "QFN50P400X400X85-24"
   make-qfn-package(0.5, 4.0, 24, 0.25, 0.4)
-  pad p[25] : {smd-pad(2.5,2.5)} at loc(0.0, 0.0)  
+  pad p[25] : smd-pad(2.5,2.5) at loc(0.0, 0.0)  
 
 public pcb-package SOT95P280X100-3N :
   
   val x0 = -0.95
   val y0 = -1.0
-  pad p[1] : {smd-pad(0.6, 0.7)} at loc(x0,y0)
-  pad p[2] : {smd-pad(0.6, 0.7)} at loc((- x0), y0)
-  pad p[3] : {smd-pad(0.6, 0.7)} at loc(0.0, (- y0))
+  pad p[1] : smd-pad(0.6, 0.7) at loc(x0,y0)
+  pad p[2] : smd-pad(0.6, 0.7) at loc((- x0), y0)
+  pad p[3] : smd-pad(0.6, 0.7) at loc(0.0, (- y0))
 
   layer(Courtyard(Top)) = Rectangle(3.3, 2.8)
   layer(Silkscreen("pol", Top)) = Circle(x0, y0 - 1.0, 0.2)
@@ -547,9 +546,9 @@ public pcb-package SC-70-3 :
   
   val x0 = -1.85 / 2.0
   val y0 = -1.3 / 2.0
-  pad p[1] : {smd-pad(0.6, 0.7)} at loc(x0,y0)
-  pad p[2] : {smd-pad(0.6, 0.7)} at loc((- x0), y0)
-  pad p[3] : {smd-pad(0.6, 0.7)} at loc(0.0, (- y0))
+  pad p[1] : smd-pad(0.6, 0.7) at loc(x0,y0)
+  pad p[2] : smd-pad(0.6, 0.7) at loc((- x0), y0)
+  pad p[3] : smd-pad(0.6, 0.7) at loc(0.0, (- y0))
 
   layer(Courtyard(Top)) = Rectangle(2.65, 2.35)
   ref-label()
@@ -560,11 +559,11 @@ public defn SOT23 () :
 public pcb-package SOT95P280X145-5N :
   val x0 = -0.95
   val y0 = 2.7 / -2.0
-  pad p[1] : {smd-pad(0.6, 1.05)} at loc(x0,y0)
-  pad p[2] : {smd-pad(0.6, 1.05)} at loc(0.0, y0)
-  pad p[3] : {smd-pad(0.6, 1.05)} at loc((- x0), y0)
-  pad p[4] : {smd-pad(0.6, 1.05)} at loc((- x0), (- y0))
-  pad p[5] : {smd-pad(0.6, 1.05)} at loc(x0, (- y0))
+  pad p[1] : smd-pad(0.6, 1.05) at loc(x0,y0)
+  pad p[2] : smd-pad(0.6, 1.05) at loc(0.0, y0)
+  pad p[3] : smd-pad(0.6, 1.05) at loc((- x0), y0)
+  pad p[4] : smd-pad(0.6, 1.05) at loc((- x0), (- y0))
+  pad p[5] : smd-pad(0.6, 1.05) at loc(x0, (- y0))
 
   layer(Courtyard(Top)) = Rectangle(2.7, 3.95)  
   layer(Silkscreen("pol", Top)) = Circle(x0, y0 - 1.0, 0.2)
@@ -574,12 +573,12 @@ public pcb-package SOT95P280X145-5N :
 public pcb-package SOT95P280X145-6N :
   val x0 = -0.95
   val y0 = 2.7 / -2.0
-  pad p[1] : {smd-pad(0.6, 1.05)} at loc(x0,y0)
-  pad p[2] : {smd-pad(0.6, 1.05)} at loc(0.0, y0)
-  pad p[3] : {smd-pad(0.6, 1.05)} at loc((- x0), y0)
-  pad p[4] : {smd-pad(0.6, 1.05)} at loc((- x0), (- y0))
-  pad p[5] : {smd-pad(0.6, 1.05)} at loc(0.0, (- y0))
-  pad p[6] : {smd-pad(0.6, 1.05)} at loc(x0, (- y0))
+  pad p[1] : smd-pad(0.6, 1.05) at loc(x0,y0)
+  pad p[2] : smd-pad(0.6, 1.05) at loc(0.0, y0)
+  pad p[3] : smd-pad(0.6, 1.05) at loc((- x0), y0)
+  pad p[4] : smd-pad(0.6, 1.05) at loc((- x0), (- y0))
+  pad p[5] : smd-pad(0.6, 1.05) at loc(0.0, (- y0))
+  pad p[6] : smd-pad(0.6, 1.05) at loc(x0, (- y0))
 
   layer(Silkscreen("pol", Top)) = Circle(x0, y0 - 1.0, 0.2)
   layer(Courtyard(Top)) = Rectangle(2.7, 3.95)  
@@ -601,13 +600,13 @@ public pcb-package pin-header-pkg (n-pin:Int, n-row:Int, pin-pitch:Double, row-p
   ref-label()
 
 public pcb-package top-smd-testpoint-pkg (d:Double) :
-  pad p : {top-smd-testpoint-pad(d)} at loc(0.0, 0.0)
+  pad p : top-smd-testpoint-pad(d) at loc(0.0, 0.0)
   layer(Courtyard(Top)) = Circle(d / 2.0)
   layer(Silkscreen("f-silk", Top)) = Circle(d / 2.0)
   ref-label()
 
 public pcb-package btm-smd-testpoint-pkg (d:Double) :
-  pad p : {btm-smd-testpoint-pad(d)} at loc(0.0, 0.0)
+  pad p : btm-smd-testpoint-pad(d) at loc(0.0, 0.0)
   layer(Courtyard(Bottom)) = Circle(d / 2.0)
   layer(Silkscreen("f-silk", Bottom)) = Circle(d / 2.0)
   ref-label()
