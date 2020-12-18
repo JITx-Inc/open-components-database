@@ -1,18 +1,17 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/power-regulators :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/repl-lib
   import ocdb/tests/default-harness
   import ocdb/generator-utils
   import ocdb/generic-components
   import ocdb/bundles
   import ocdb/design-vars
   import jitpcb/powergen
-  import jitpcb/powergen/gen
+  import powergen2/gen
 
 val adm7154v = [1.2 1.8 2.5 2.8 3.0 3.3]
 
@@ -27,12 +26,12 @@ for v in adm7154v do:
             v, v,    ;vout
             0.0, 0.6) : ;iout
     inside pcb-module :        
-      unique inst ps : {ocdb/analog-devices/ADM7154/module(voltage(output))}
-      schematic-group({ps}) = power
+      inst ps : ocdb/analog-devices/ADM7154/module(voltage(output))
+      schematic-group(ps) = (power)
       ;Create nets
-      net ({ps}.gnd, {neg(input)}, {neg(output)})
-      net ({ps}.vin, {pos(input)}, {ps}.en)
-      net ({ps}.vout, {pos(output)})
+      net (ps.gnd, neg(input), neg(output))
+      net (ps.vin, pos(input), ps.en)
+      net (ps.vout, pos(output))
 
 within (input, output) =
   add-switching-regulator(
@@ -46,10 +45,10 @@ within (input, output) =
     0.9, 5.5,       ;vout
     0.0, 3.0) :     ;iout
   inside pcb-module :        
-    unique inst ps : {ocdb/texas-instruments/TLV62130/module(voltage(output))}
-    schematic-group({ps}) = power
+    inst ps : ocdb/texas-instruments/TLV62130/module(voltage(output))
+    schematic-group(ps) = (power)
     ;Create nets
-    net ({ps}.gnd, {neg(input)}, {neg(output)})
-    net ({ps}.vin, {pos(input)}, {ps}.en)
-    net ({ps}.vout, {pos(output)})
+    net (ps.gnd, neg(input), neg(output))
+    net (ps.vin, pos(input), ps.en)
+    net (ps.vout, pos(output))
 
