@@ -1,11 +1,9 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/connects :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
   import ocdb/tests/default-harness
   import ocdb/pinspec
   import ocdb/land-patterns
@@ -13,15 +11,17 @@ defpackage ocdb/connects :
   import ocdb/generic-components
   import ocdb/bundles
   import ocdb/symbols
-  import ocdb/box-symbol
+  import ocdb/box-symbol2
+
+; [TODO] pcb-connection
 
 public pcb-connection isolate (a:Ref, b:Ref) :
-  unique inst buf : {ocdb/texas-instruments/ISO1540/component}
-  net ({a}.sda, {buf}.SDA1)
-  net ({a}.scl, {buf}.SCL1)
-  net ({b}.sda, {buf}.SDA2)
-  net ({b}.scl, {buf}.SCL2)
-  properties({buf}.VCC1):
+  inst buf : ocdb/texas-instruments/ISO1540/component
+  net (a.sda, buf.SDA1)
+  net (a.scl, buf.SCL1)
+  net (b.sda, buf.SDA2)
+  net (b.scl, buf.SCL2)
+  properties(buf.VCC1):
     requires-power => true
     power-request => [3.3 0.3 0.05]
 when :
@@ -29,18 +29,18 @@ when :
   port-type(b) == #PT(i2c) 
 
 public pcb-connection phy (x:Ref, y:Ref) :
-  unique inst phy : {ocdb/marvell/88E1510-A0-NNB2C000/module}
-  net ({x}, {phy}.rgmii)
-  net ({y}.mdi, {phy}.mdi)
-  schematic-group({phy}) = phy
+  inst phy : ocdb/marvell/88E1510-A0-NNB2C000/module
+  net (x, phy.rgmii)
+  net (y.mdi, phy.mdi)
+  schematic-group(phy) = (phy)
 when :
   port-type(x) == #PT(rgmii) and port-type(y) == #PT(ethernet-1000)
 
 public pcb-connection ft232 (x:Ref, y:Ref) :
-  unique inst xcvr : {ocdb/future-designs/FT232RL/module}
-  net ({x}, {xcvr}.usb-2)
-  net ({y}.tx, {xcvr}.uart.rx)
-  net ({y}.rx, {xcvr}.uart.tx)
-  schematic-group({xcvr}) = xcvr
+  inst xcvr : ocdb/future-designs/FT232RL/module
+  net (x, xcvr.usb-2)
+  net (y.tx, xcvr.uart.rx)
+  net (y.rx, xcvr.uart.tx)
+  schematic-group(xcvr) = (xcvr)
 when :
-  port-type(x) == #PT(usb-2) and port-type(y) == #PT({uart-with([#R(dtr) #R(rts)])})
+  port-type(x) == #PT(usb-2) and port-type(y) == #PT(uart-with([#R(dtr) #R(rts)]))

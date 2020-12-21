@@ -1,45 +1,40 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/texas-instruments/TPD3S0x4 :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/repl-lib
   import ocdb/tests/default-harness
 
   import ocdb/land-patterns
   import ocdb/symbols
-  import ocdb/box-symbol
-  import ocdb/pinspec
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
+  import ocdb/box-symbol2
 
-  import jitpcb/visualizer
-
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "TPD3S014DBVR"
   description = "USB power and data protection"
-  val ps = PinSpec $ #TABLE :
-    [Ref     | Int ...   | Dir]
-    [GND | 2 | Down]
-    [IN | 3 | Left]
-    [OUT  | 4 | Right]
-    [EN  | 1 | Left]
-    [D1  | 5 | Right]
-    [D2  | 6 | Right]
-  make-pins(ps)
-  make-box-symbol(ps)
-  assign-package(SOT95P280X145-6N, ps)
+  pin-properties :
+    [pin:Ref | pads:Int | side:Dir]
+    [GND     | 2        | Down    ]
+    [IN      | 3        | Left    ]
+    [OUT     | 4        | Right   ]
+    [EN      | 1        | Left    ]
+    [D1      | 5        | Right   ]
+    [D2      | 6        | Right   ]
+  assign-package(SOT95P280X145-6N)
+  make-box-symbol()
 
-public unique pcb-module module :
-  port usb-in : usb-2
-  port usb-out : usb-2
-  pin en
+public pcb-module module :
+  public port usb-in : usb-2
+  public port usb-out : usb-2
+  public pin en
 
-  inst tpd : {ocdb/texas-instruments/TPD3S0x4/component} 
+  public inst tpd : ocdb/texas-instruments/TPD3S0x4/component
   net (usb-in.vbus.vdd tpd.IN)
   net (usb-in.vbus.gnd tpd.GND usb-out.vbus.gnd)
   net (usb-out.vbus.vdd tpd.OUT)

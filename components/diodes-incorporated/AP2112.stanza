@@ -1,53 +1,49 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/diodes-incorporated/AP2112:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/repl-lib
   import ocdb/tests/default-harness
-  import ocdb/pinspec
   import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/generic-components
   import ocdb/bundles
   import ocdb/symbols
-  import ocdb/box-symbol
+  import ocdb/box-symbol2
 
-public unique pcb-component component :
-  pin VEN
-  pin GND
-  pin VIN
-  pin VOUT
-  pin nc
+public pcb-component component :
+  public pin VEN
+  public pin GND
+  public pin VIN
+  public pin VOUT
+  public pin nc
   name = "AP2112"
   manufacturer = "Diodes Incorporated"
   description = "600-mA, Low-Dropout Regulator"
   mpn = "AP2112K-3.3TRG1"
-  val ps = PinSpec $ #TABLE :
-    [Ref     | Int ...   | Dir]
-    [GND | 2 | Down]
-    [VOUT | 5 | Right]
-    [VIN  | 1 | Left]
-    [VEN  | 3 | Left]
-    [nc  | 4 | Down]
-  make-box-symbol(ps)
-  assign-package(SOT95P280X145-5N, ps)
+  pin-properties :
+    [pin:Ref | pads:Int | side:Dir]
+    [GND     | 2        | Down    ]
+    [VOUT    | 5        | Right   ]
+    [VIN     | 1        | Left    ]
+    [VEN     | 3        | Left    ]
+    [nc      | 4        | Down    ]
+  make-box-symbol()
+  assign-package(SOT95P280X145-5N)
 
-  properties(VIN):
-    power-pin => true
-    rated-voltage => [2.5 6.0]
-  properties(VOUT):
-    supply-pin => true
-    voltage => 3.3
+  property(VIN.power-pin) = true
+  property(VIN.rated-voltage) = [2.5 6.0]
+  property(VOUT.supply-pin) = true
+  property(VOUT.voltage) = 3.3
 
-public unique pcb-module module : 
-  port vin : power
-  port vout : power
-  pin gnd
-  pin en
-  inst ps : {ocdb/diodes-incorporated/AP2112/component}
+public pcb-module module : 
+  public port vin : power
+  public port vout : power
+  public pin gnd
+  public pin en
+  public inst ps : ocdb/diodes-incorporated/AP2112/component
   bypass-cap-strap(ps.VIN, gnd, 1.0e-6)
   bypass-cap-strap(ps.VOUT, gnd, 1.0e-6)
   net (vin.vdd, ps.VIN)
