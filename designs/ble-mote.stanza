@@ -8,12 +8,12 @@ defpackage ocdb/ble-mote :
   import esir/gen
   import esir/repl-lib
   import jitpcb/visualizer
+
   import ocdb/tests/default-harness
   import ocdb/generator-utils
   import ocdb/bundles
   import ocdb/design-vars
   import ocdb/generic-components
-  import ocdb/power-regulators
   import ocdb/connects
 
 OPERATING-TEMPERATURE = [-20.0 50.0]
@@ -85,24 +85,24 @@ pcb-module sensor-mote :
   net PC-TX (pc-uart.rx particle-counter.uart.tx)
   net PC-RX (pc-uart.tx particle-counter.uart.rx)
 
+  ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
+  add-rgb-indicator(60.0, proc, P3V3)
+  
   ; Connect power to proc and sensors
   net (hum.power, particle-counter.vin-mcu, proc.power, ldo.vout)
   net ({protected-usb}.vbus particle-counter.vin)
 
-  ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
-  add-rgb-indicator(60.0, proc, P3V3)
-  
   ; Add probe loops
-  add-testpoint([ proc.uart.tx 
-                  proc.uart.rx 
-                  hum.i2c.sda 
+  add-testpoint([ hum.i2c.sda 
                   hum.i2c.scl
-                  proc.en
-                  proc.boot
                   PC-TX
                   PC-RX
                   P5V0
                   P3V3
+                  proc.uart.tx 
+                  proc.uart.rx 
+                  proc.en
+                  proc.boot
                   gnd gnd gnd
                   ], "smd-loop")
 
@@ -111,7 +111,7 @@ pcb-module sensor-mote :
     copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = Rectangle(30.0, 18.0)
 
   ; Apply groups to sub-circuits for schematic and layout
-  group-modules([[proc  ant] [hum] [usb ldo] [particle-counter]])
+  group-modules([[proc  ant] [usb ldo] [particle-counter] [hum]])
 
 val main-design = default-board(sensor-mote, 4, 30.0,18.0)
 
