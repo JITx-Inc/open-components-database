@@ -1,11 +1,10 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/checks:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/repl-lib
   import ocdb/tests/default-harness
   import ocdb/space-derating
   import ocdb/generator-utils
@@ -49,13 +48,13 @@ public pcb-check io () :
       #CHECK(property(p[1].vo-diff)[0] >= property(p[0].vi-diff)[0])
 
 ; Checks a power pin located on a component
-public pcb-check power-pin (p:Ref) :
+public pcb-check power-pin (p:JITObject) :
   #CHECK(has-property?(p.power-pin))
   #CHECK(has-property?(p.voltage))
   if has-property?(p.voltage):
     check-rated-voltage(p)
 
-defn check-rated-voltage (p:Ref) :
+defn check-rated-voltage (p:JITObject) :
   val rating = property(p.rated-voltage)
   val v = property(p.voltage)
   match(rating, v):
@@ -69,13 +68,13 @@ defn check-rated-voltage (p:Ref) :
     (r, v) : false
 
 ; Checks if voltage on a pin is within acceptable limits
-public pcb-check voltage-levels (p:Ref, range:[Double,Double,Double]) :
+public pcb-check voltage-levels (p:JITObject, range:[Double,Double,Double]) :
   #CHECK(has-property?(p.voltage))
   #CHECK(property(p.voltage)[0] >= range[0])
   #CHECK(property(p.voltage)[2] <= range[2])
 
 ; Checks resistors agains operating point and environment
-public pcb-check resistor-check (r:Ref) :
+public pcb-check resistor-check (r:JITObject) :
   #CHECK(has-property?(r.resistor))
   #CHECK(has-property?(r.operating-point))
   val [vpk i temp] = [lookup(property(r.operating-point), `voltage-pk) lookup(property(r.operating-point), `current-rms) property(r.temperature)]
@@ -90,7 +89,7 @@ public pcb-check resistor-check (r:Ref) :
   else :
     #CHECK(property(r.rated-power) * DERATE-RESISTOR-POWER > power)
 
-public pcb-check capacitor-check (c:Ref) :
+public pcb-check capacitor-check (c:JITObject) :
   #CHECK(has-property?(c.capacitor))
   #CHECK(has-property?(c.operating-point))
   val [vpk temp] = [lookup(property(c.operating-point), `voltage-pk) property(c.temperature)]
@@ -145,12 +144,12 @@ public pcb-check capacitor-check (c:Ref) :
   #CHECK(temp >= property(c.rated-temperature)[0])
 
 ; Checks the critical gain and drive level of an oscillator (o) against an interface on an IC (intf)
-public pcb-check oscillator-check-frequency (o:Ref, intf:Ref) :
+public pcb-check oscillator-check-frequency (o:JITObject, intf:JITObject) :
   ; Check critical gain point to ensure oscillation
   #CHECK(has-property?(o.frequency))
   #CHECK(has-property?(intf.frequency))
   #CHECK(property(o.frequency) == property(intf.frequency))
-public pcb-check oscillator-check-gain (o:Ref, intf:Ref, load-cap:Ref) :
+public pcb-check oscillator-check-gain (o:JITObject, intf:JITObject, load-cap:JITObject) :
   ; Check critical gain point to ensure oscillation
   #CHECK(has-property?(o.shunt-capacitance))
   #CHECK(has-property?(o.load-capacitance))
@@ -159,13 +158,13 @@ public pcb-check oscillator-check-gain (o:Ref, intf:Ref, load-cap:Ref) :
   #CHECK(has-property?(intf.max-critical-gain))
   val gain = 4.0 * property(o.ESR) * pow(2.0 * PI * property(o.frequency), 2.0) * pow(property(o.shunt-capacitance) + property(o.load-capacitance), 2.0)
   #CHECK(gain < property(intf.max-critical-gain))
-public pcb-check oscillator-check-drive (o:Ref, intf:Ref, load-cap:Ref) :
+public pcb-check oscillator-check-drive (o:JITObject, intf:JITObject, load-cap:JITObject) :
   ; Check drive level against crystal maximum
   #CHECK(has-property?(intf.drive-level))
   #CHECK(has-property?(o.max-drive-level))
   #CHECK(property(intf.drive-level) < property(o.max-drive-level))
   ; Check pullability of crystal to ensure accuracy
-public pcb-check oscillator-check-pullability (o:Ref, intf:Ref, load-cap:Ref) :
+public pcb-check oscillator-check-pullability (o:JITObject, intf:JITObject, load-cap:JITObject) :
   #CHECK(has-property?(o.motional-capacitance))
   val pullability = property(o.motional-capacitance) / (2.0 * pow((property(o.shunt-capacitance) + property(o.load-capacitance)), 2.0))
   #CHECK(has-property?(load-cap.tolerance))

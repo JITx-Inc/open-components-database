@@ -326,25 +326,21 @@ public defn connect-gnd-pins ():
 ; =======================================
 public defn generate-power () :
   println("JITPCB: Generating power system.")
-  ;<power>
   inside pcb-module :
-    for i in all-component-instances(self) do :
-      for p in all-pins(i) do :
+    for i in component-instances(self) do :
+      for p in pins(i) do : ; [TODO] public-pins or pins?
         if has-property?(p.power-request) :
           val [v a n] = property(p.power-request)
           within (rail) = make-load("Load", v, a, n) :
             net (p, pos(rail))
-            net (i.property(p.gnd-ref), neg(rail))
+            net (property(i.p.gnd-ref), neg(rail))
 
-    for i in all-component-instances(self) do :
-      for p in all-pins(i) do :
+    for i in component-instances(self) do :
+      for p in pins(i) do : ; [TODO] public-pins or pins?
         if has-property?(p.power-input) :
           generate-power-system(property(p.power-input), OPERATING-TEMPERATURE[1], p, property(p.gnd-ref))
-  ;<power>
 
-;<powersource>
-public defn set-power-source (pos:Ref, neg:Ref, v-in:Double):
+public defn set-power-source (pos:JITObject, neg:JITObject, v-in:Double):
   inside pcb-module:
     property(pos.power-input) = v-in
     property(pos.gnd-ref) = #R(neg)
-;<powersource>
