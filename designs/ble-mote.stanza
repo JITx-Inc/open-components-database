@@ -50,7 +50,7 @@ pcb-module sensor-mote :
   package(usb.con) at loc(-10.0, -7.3) on Top
 
   ; Define ground net and assign symbol
-  net gnd (usb.usb-2.vbus.gnd)
+  public net gnd (usb.usb-2.vbus.gnd)
   ; symbol(gnd) = ocdb/symbols/ground-sym
 
   ; Create a protected power and data interface for USB-2
@@ -73,9 +73,8 @@ pcb-module sensor-mote :
   net (proc.ant, ant.rf-in)
   package(ant) at loc(9.0, 5.0, -90.0) on Top
 
-  ; ; Use a connect statement to interface USB-2 to UART
-  ; connect ft232 (protected-usb proc.uart)
-  ft232(protected-usb, proc.uart)
+  ; Use a connect statement to interface USB-2 to UART
+  connect-ft232(protected-usb, proc.uart)
   
   ; Add a humidty sensor, connect over i2c, add pullups.
   public inst hum : ocdb/texas-instruments/HDC1080/module
@@ -126,12 +125,15 @@ pcb-module sensor-mote :
 ; val main-design = default-board(sensor-mote, 4, 30.0,18.0)
 
 ; Net up any gnd pins that we missed.
-; run-user-pass(connect-gnd-pins)
+var sensor-mote* = transform-module(connect-gnd-pins, sensor-mote)
+
+; Run evals
+sensor-mote* = run-evals(sensor-mote*)
 
 ; view(main-design)
 set-rules(bay-area-circuits-std-rules)
 set-board(default-board(4, 30.0,18.0))
-set-main-module(sensor-mote)
+set-main-module(sensor-mote*)
 export-kicad("BLE-mote", [`preplaced => false,
                           `gen-board => true,
                           `gen-schematic => true])
