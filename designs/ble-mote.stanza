@@ -1,20 +1,26 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/ble-mote :
   import core
   import collections
   import math
-  import esir ;
-  import esir/utils ;
-  import esir/gen ;
-  import esir/repl-lib ;
+  import esir2
+  import esir2/repl-lib
   ; import jitpcb/visualizer
   import ocdb/tests/default-harness
   import ocdb/generator-utils
   import ocdb/bundles
   import ocdb/design-vars
-  ; import ocdb/generic-components
+  import ocdb/generic-components
+  import ocdb/rules
   import ocdb/power-regulators
   import ocdb/connects
+
+;<TODO>
+1. After master merge: Uncomment net-symbols
+2. connect
+3. run-user-pass
+4. At the end: view
+;<TODO>
 
 OPERATING-TEMPERATURE = [-20.0 50.0]
 OPTIMIZE-FOR = ["area"]
@@ -22,12 +28,12 @@ MIN-PKG = "0402"
 
 ; PMS7003 particle counter interface via header pins
 pcb-module pms7003 :
-  port vin : power
-  port vin-mcu : power
-  pin reset
-  pin set
-  port uart : uart
-  inst header : {ocdb/amphenol/minitek127/component(10)}
+  public port vin : power
+  public port vin-mcu : power
+  public pin reset
+  public pin set
+  public port uart : uart
+  public inst header : ocdb/amphenol/minitek127/component(10)
   package(header) at loc(0.0,0.0) on Top
   net (vin.gnd vin-mcu.gnd header.p[3] header.p[4])
   net (vin.vdd header.p[1] header.p[2])
@@ -40,41 +46,45 @@ pcb-module pms7003 :
 
 pcb-module sensor-mote :
   ; Add USB connector
-  inst usb : micro-usb-connector
+  public inst usb : micro-usb-connector
   package(usb.con) at loc(-10.0, -7.3) on Top
 
   ; Define ground net and assign symbol
   net gnd (usb.usb-2.vbus.gnd)
-  symbol(gnd) = {ocdb/symbols/ground-sym}
+  ; symbol(gnd) = ocdb/symbols/ground-sym
 
   ; Create a protected power and data interface for USB-2
-  val protected-usb = (ocdb/protection/esd-clamp(usb.usb-2, gnd) as Ref)
+  public inst clamp : ocdb/texas-instruments/TPD3S0x4/module
+  net (usb.usb-2, clamp.usb-in)
+  net (clamp.usb-in.vbus.vdd, clamp.en)
+  val protected-usb = clamp.usb-out
   
   ; Specify a power regulator and name power nets
-  inst ldo : {ocdb/diodes-incorporated/AP2112/module}
-  net (ldo.vin {protected-usb}.vbus)
+  public inst ldo : ocdb/diodes-incorporated/AP2112/module
+  net (ldo.vin protected-usb.vbus)
   net P5V0 (ldo.vin.vdd ldo.en)
   net P3V3 (ldo.vout.vdd)
-  symbol(P5V0) = {ocdb/symbols/supply-sym}
-  symbol(P3V3) = {ocdb/symbols/supply-sym}
+  ; symbol(P5V0) = ocdb/symbols/supply-sym
+  ; symbol(P3V3) = ocdb/symbols/supply-sym
 
   ; Add a Bluetooth SoC
-  inst proc : {ocdb/espressif/ESP32-PICO-D4/module}
-  inst ant : inverted-f-antenna
+  public inst proc : ocdb/espressif/ESP32-PICO-D4/module
+  public inst ant : inverted-f-antenna
   net (proc.ant, ant.rf-in)
   package(ant) at loc(9.0, 5.0, -90.0) on Top
 
-  ; Use a connect statement to interface USB-2 to UART
-  connect ft232 ({protected-usb} proc.uart)
+  ; ; Use a connect statement to interface USB-2 to UART
+  ; connect ft232 (protected-usb proc.uart)
+  ft232(protected-usb, proc.uart)
   
   ; Add a humidty sensor, connect over i2c, add pullups.
-  inst hum : {ocdb/texas-instruments/HDC1080/module}
+  public inst hum : ocdb/texas-instruments/HDC1080/module
   require i2c:i2c from proc
   net H-I2C (i2c, hum.i2c)
   add-open-drain-pullups(i2c, ldo.vout.vdd)
 
   ; Add the particle counter interface and place on bottom, and connect
-  inst particle-counter : pms7003
+  public inst particle-counter : pms7003
   package(particle-counter) at loc(-10.0,5.0, 180.0) on Bottom
 
   require pc-ctrl:gpio[2] from proc
@@ -87,7 +97,7 @@ pcb-module sensor-mote :
 
   ; Connect power to proc and sensors
   net (hum.power, particle-counter.vin-mcu, proc.power, ldo.vout)
-  net ({protected-usb}.vbus particle-counter.vin)
+  net (protected-usb.vbus particle-counter.vin)
 
   ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
   add-rgb-indicator(60.0, proc, P3V3)
@@ -113,13 +123,15 @@ pcb-module sensor-mote :
   ; Apply groups to sub-circuits for schematic and layout
   group-modules([[proc  ant] [hum] [usb ldo] [particle-counter]])
 
-val main-design = default-board(sensor-mote, 4, 30.0,18.0)
+; val main-design = default-board(sensor-mote, 4, 30.0,18.0)
 
 ; Net up any gnd pins that we missed.
-run-user-pass(connect-gnd-pins)
+; run-user-pass(connect-gnd-pins)
 
-view(main-design)
-
+; view(main-design)
+set-rules(bay-area-circuits-std-rules)
+set-board(default-board(4, 30.0,18.0))
+set-main-module(sensor-mote)
 export-kicad("BLE-mote", [`preplaced => false,
                           `gen-board => true,
                           `gen-schematic => true])

@@ -1,42 +1,42 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/abracon/ABM12-32-B2X-T3:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/repl-lib
+  import esir2/utils
   import ocdb/tests/default-harness
 
   import ocdb/land-patterns
   import ocdb/symbols
-  import ocdb/box-symbol
-  import ocdb/pinspec
+  import ocdb/box-symbol2
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
 
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Abracon"
   mpn = "ABM12-32.000MHZ-B2X-T3"
   description = "32MHz ±20ppm Crystal 8pF 200 Ohms 4-SMD, No Lead"
-  port p : pin[{1 2}]
-  pin gnd
-  symbol = {crystal-sym(2)}((p[1] => p[1], p[2] => p[2], gnd => gnd))
-  package = XTAL-TSX-3225(p[1] => p[2], p[2] => p[3], gnd => p[1], gnd => p[4])
+  public port p : pin[[1 2]]
+  public pin gnd
+  val sym = crystal-sym(2)
+  val pkg = XTAL-TSX-3225
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2], gnd => sym.gnd)
+  package = pkg(p[1] => pkg.p[2], p[2] => pkg.p[3], gnd => pkg.p[1], gnd => pkg.p[4])
   reference-prefix = "X"
 
-  properties:
-    load-capacitance => 8.0e-12
-    shunt-capacitance => 5.0e-12
-    motional-capacitance => 20.0e-15 ; Not specified by Abracon - be conservative.
-    ESR => 200.0
-    frequency => 32.0e6
-    frequency-tolerance => 50.0e-6
-    max-drive-level => 100.0e-6 
+  property(self.load-capacitance) = 8.0e-12
+  property(self.shunt-capacitance) = 5.0e-12
+  property(self.motional-capacitance) = 20.0e-15 ; Not specified by Abracon - be conservative.
+  property(self.ESR) = 200.0
+  property(self.frequency) = 32.0e6
+  property(self.frequency-tolerance) = 50.0e-6
+  property(self.max-drive-level) = 100.0e-6 
 
 pcb-package XTAL-TSX-3225 :
   for (i in 0 to 4, l in grid-locs(C, 2, 2, 2.2, 1.6)) do :
-    pad p[i + 1] : {smd-pad(1.4, 1.15)} at loc(0.0, 0.0) * l
+    pad p[i + 1] : smd-pad(1.4, 1.15) at loc(0.0, 0.0) * l
   layer(Courtyard(Top))  = Rectangle(3.6, 2.8)
   ref-label()

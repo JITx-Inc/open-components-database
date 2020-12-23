@@ -1,38 +1,36 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/cts/219:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/repl-lib
   import ocdb/tests/default-harness
-  import ocdb/pinspec
   import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/generic-components
   import ocdb/bundles
+  import ocdb/box-symbol2
 ;[strip]
   import ocdb/symbols
-  import ocdb/box-symbol
 ;[/strip]
 
 public pcb-component component (n-sw:Int):
   manufacturer = "CTS Electrocomponents"
   mpn = to-string("219-%_MSTR"%[n-sw])
   description = "SWITCH SLIDE DIP SPST 100MA 20V"
-  val ps = PinSpec $ #TABLE :
-    [Ref     | Int ...   | Dir]
+  pin-properties :
+    [pin:Ref     | pads:Int ...   | side:Dir]
     for i in 0 to n-sw do :
       [sw[i][0] | (2 * i + 1) | Left]
       [sw[i][1] | (2 * i + 2) | Right]
 
-  gen-symbol-map(ps, cts-219-pkg(n-sw))
+  ; gen-symbol-map(ps, cts-219-pkg(n-sw))
 
   for i in 0 to n-sw do :
     supports SPST :
-      p => sw[i][0]
-      t => sw[i][1]
+      SPST.p => self.sw[i][0]
+      SPST.t => self.sw[i][1]
   reference-prefix = "SW"
 
 pcb-package cts-219-pkg (n-sw:Int) : 
@@ -46,7 +44,7 @@ pcb-package cts-219-pkg (n-sw:Int) :
   
   for i in 0 to n-col do :
     for j in 0 to n-row do :
-      pad p[n-row * i + j + 1] : {smd-pad(2.44, 1.13)} at l0 * loc(to-double(j) * row-pitch, (- to-double(i) * pin-pitch))
+      pad p[n-row * i + j + 1] : smd-pad(2.44, 1.13) at l0 * loc(to-double(j) * row-pitch, (- to-double(i) * pin-pitch))
 
   val c-w = 11.04
   val c-h = to-double(n-col - 1) * 2.54 + 1.13 + 5.14

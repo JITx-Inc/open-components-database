@@ -1,16 +1,15 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/passive-circuits:
   import core
   import collections
   import math
-  import esir with :
+  import esir2 with :
     prefix(Resistor) => EModel-
-  import esir/utils
-  import esir/gen
+  import esir2/repl-lib
   import ocdb/tests/default-harness
   import ocdb/generic-components
   import ocdb/generator-utils
-  import ocdb/checks
+  ; import ocdb/checks
   import ocdb/design-vars
   import ocdb/db-parts
 
@@ -29,7 +28,7 @@ public defstruct VoltageDividerSolution :
 ;==================== Esir API ========================
 ;======================================================
 
-public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref, v-out:[Double,Double,Double]) :
+public defn make-voltage-divider (in:JITObject, out:JITObject, lo:JITObject, v-out:[Double,Double,Double]) :
   ; Target current through divider is 10x input current (if known)
   if has-property?(out.i-input) :
     make-voltage-divider(in, out, lo, v-out, property(out.i-input) * 10.0)
@@ -37,7 +36,7 @@ public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref, v-out:[Double,Double,
   ; Otherwise, set current to be 1ma
     make-voltage-divider(in, out, lo, v-out, 1.0e-3)
 
-public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref,
+public defn make-voltage-divider (in:JITObject, out:JITObject, lo:JITObject,
                                   v-out:[Double,Double,Double],
                                   current:Double) -> VoltageDividerSolution:
   println("Solving voltage divider [in=%_, out=%_, low=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A]"
@@ -62,7 +61,7 @@ public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref,
 ; current : desired dc current of voltage divider (A) assumes output is connected to high-impedance.
 ; tol : desired tolerance of resistor (in %)
 ; returns true if fitting resistors were found else false
-public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref,
+public defn make-voltage-divider (in:JITObject, out:JITObject, lo:JITObject,
                                   v-out:[Double,Double,Double],
                                   current:Double,
                                   tol:Double) -> VoltageDividerSolution|False :
@@ -70,7 +69,7 @@ public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref,
   make-voltage-divider(in, out, lo, v-out, current, tol, current-tol)
 
 ; current-tol : Tolerance on the output current (in %)
-public defn make-voltage-divider (in:Ref, out:Ref, lo:Ref,
+public defn make-voltage-divider (in:JITObject, out:JITObject, lo:JITObject,
                                   v-out:[Double,Double,Double],
                                   current:Double,
                                   tol:Double,
@@ -232,21 +231,21 @@ defn study-solution (v-in: [Double, Double, Double], r-hi: Resistor, r-lo: Resis
                                minimum(hi-drs),
                                maximum(hi-drs))
 
-defn make-voltage-divider-module (in: Ref, out: Ref, lo: Ref,
+defn make-voltage-divider-module (in: JITObject, out: JITObject, lo: JITObject,
                                   v-out: [Double, Double, Double],
-                                  r-hi-cmp: Ref, r-lo-cmp: Ref,
+                                  r-hi-cmp: JITComponentType, r-lo-cmp: JITComponentType,
                                   vo: [Double, Double, Double]) :
 
   inside pcb-module :
-    properties({out}) :
-      voltage => vo
+    property(out.voltage) => vo
 
     ; Instantiate resistors, create netlist
-    unique inst r-hi : {r-hi-cmp}
-    unique inst r-lo : {r-lo-cmp}
-    net ({r-hi}.p[1] {in})
-    net ({r-lo}.p[1] {r-hi}.p[2] {out})
-    net ({r-lo}.p[2] {lo})
+    public inst r-hi : r-hi-cmp
+    public inst r-lo : r-lo-cmp
+    net (r-hi.p[1] in)
+    net (r-lo.p[1] r-hi.p[2] out)
+    net (r-lo.p[2] lo)
 
-    ; Check true output against requirement
-    check voltage-levels(out, v-out)
+    ; [TODO] check. voltage-levels and other check.stanza functions already adapted for JITObjects.
+    ; ; Check true output against requirement
+    ; check voltage-levels(out, v-out)
