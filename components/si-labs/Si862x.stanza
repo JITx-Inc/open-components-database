@@ -1,17 +1,15 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/si-labs/Si862x:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/repl-lib
   import ocdb/tests/default-harness
 
   import ocdb/land-patterns
   import ocdb/symbols
-  import ocdb/box-symbol
-  import ocdb/pinspec
+  import ocdb/box-symbol2
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
@@ -24,20 +22,18 @@ public pcb-component component (num-vdd2-in:Int):
   if num-vdd2-in < 0 or num-vdd2-in > 1:
     fatal("Unsupported number of VDD2 inputs: %_ for Si862x" % [num-vdd2-in]) 
 
-  val ps = PinSpec $ #TABLE :
-  ; [Component pin | Pad number | Symbol pin direction]
-    [Ref   | Int ...   | Dir  ]
-    [VDD1   | 1     | Left ]
-    [GND1   | 4    | Left ]
-    [VDD2   | 8     | Right ]
-    [GND2   | 5   | Right ]
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir]
+    [VDD1    | 1            | Left    ]
+    [GND1    | 4            | Left    ]
+    [VDD2    | 8            | Right   ]
+    [GND2    | 5            | Right   ]
     for i in 1 through 2 do :
-      [A[i]  | 1 + i     | Left ]
-      [B[i]  | 8 - i     | Right ]
+      [A[i]  | 1 + i        | Left  ]
+      [B[i]  | 8 - i        | Right ]
 
-  make-pins(ps)
-  make-box-symbol(ps)
-  assign-package(soic127p-package(8), ps)
+  make-box-symbol()
+  assign-package(soic127p-package(8))
 
 public pcb-module module (num-vdd2-in:Int) :
   port vdd1 : power
@@ -48,7 +44,7 @@ public pcb-module module (num-vdd2-in:Int) :
   port vdd2-in : pin[num-vdd2-in]
   port vdd1-out : pin[num-vdd2-in]
 
-  inst iso : {ocdb/si-labs/Si862x/component(num-vdd2-in)}
+  inst iso : ocdb/si-labs/Si862x/component(num-vdd2-in)
 
   cap-strap(iso.VDD1, iso.GND1, 0.1e-6)
   cap-strap(iso.VDD2, iso.GND2, 0.1e-6)

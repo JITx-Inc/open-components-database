@@ -1,40 +1,41 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/protection:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/repl-lib
   import ocdb/tests/default-harness
   import ocdb/generic-components
   import ocdb/generator-utils
-  import ocdb/checks
+  ; import ocdb/checks
   import ocdb/design-vars
   import ocdb/bundles
 
 ; Attach TVS diodes to the provided bundle. To be extended with properties, solvers for general use.
-public defn esd-clamp (bundle:Ref, gnd:Ref) :
+public defn esd-clamp (bundle:JITObject, gnd:JITObject) :
   inside pcb-module:
-    if port-type(bundle) == #PT(can) :
-      unique inst clamp : {ocdb/nexperia/PESD1CAN/component}
-      net ({clamp}.c[1] {bundle}.canh)
-      net ({clamp}.c[2] {bundle}.canl)
-      net ({clamp}.common {gnd})
-      bundle
-    ; ESD clamp and power protection for usb
-    else if port-type(bundle) == #PT(usb-2) :
-      unique inst clamp : {ocdb/texas-instruments/TPD3S0x4/module}
-      net ({bundle}, {clamp}.usb-in)
-      net ({clamp}.usb-in.vbus.vdd, {clamp}.en)
-      ; Return protected port
-      clamp.usb-out
+    match(port-type(bundle)) :
+      (pb:JITBundle) :
+        if pb == can :
+          inst clamp : ocdb/nexperia/PESD1CAN/component
+          net (clamp.c[1] bundle.canh)
+          net (clamp.c[2] bundle.canl)
+          net (clamp.common gnd)
+          bundle
+        ; ESD clamp and power protection for usb
+        else if pb == usb-2 :
+          inst clamp : ocdb/texas-instruments/TPD3S0x4/module
+          net (bundle, clamp.usb-in)
+          net (clamp.usb-in.vbus.vdd, clamp.en)
+          ; Return protected port
+          clamp.usb-out
 
 ; Isolate unidirectional digital logic pins, associated with power domains A and B. B considered to be distal from A
-public defn isolate-logic (pins:Tuple<[Ref Ref]>, pwr-A:Ref, pwr-B:Ref):
+public defn isolate-logic (pins:Tuple<[JITObject JITObject]>, pwr-A:JITObject, pwr-B:JITObject):
   inside pcb-module:
-    val outputs-vec = Vector<[Ref Ref]>()
-    val inputs-vec = Vector<[Ref Ref]>()
+    val outputs-vec = Vector<[JITObject JITObject]>()
+    val inputs-vec = Vector<[JITObject JITObject]>()
     for i in 0 to length(pins) do:
       if has-property?(pins[i][0].digital-io) is False or has-property?(pins[i][1].digital-io) is False:
         fatal("isoloate-logic only works for digital-logic pins")
@@ -53,68 +54,68 @@ public defn isolate-logic (pins:Tuple<[Ref Ref]>, pwr-A:Ref, pwr-B:Ref):
 
     ; Instantiate Si86xx logic isolators
     if length(pins) == 1:
-      unique inst iso : {ocdb/si-labs/Si862x/module(0)}  
+      inst iso : ocdb/si-labs/Si862x/module(0)  
       if length(outputs) == 1:
-        net ({pwr-A} {iso}.vdd1)
-        net ({pwr-B} {iso}.vdd2)
-        net (outputs[0][0] {iso}.vdd1-in[0])
-        net (outputs[0][1] {iso}.vdd2-out[0])
+        net (pwr-A iso.vdd1)
+        net (pwr-B iso.vdd2)
+        net (outputs[0][0] iso.vdd1-in[0])
+        net (outputs[0][1] iso.vdd2-out[0])
       else if length(inputs) == 1:
-        net ({pwr-B} {iso}.vdd1)
-        net ({pwr-A} {iso}.vdd2)
-        net (inputs[0][1] {iso}.vdd1-in[0])
-        net (inputs[0][0] {iso}.vdd2-out[0])
+        net (pwr-B iso.vdd1)
+        net (pwr-A iso.vdd2)
+        net (inputs[0][1] iso.vdd1-in[0])
+        net (inputs[0][0] iso.vdd2-out[0])
     else if length(pins) == 2:
       if length(outputs) == 2:
-        unique inst iso : {ocdb/si-labs/Si862x/module(0)}  
-        net (outputs[0][0] {iso}.vdd1-in[0])
-        net (outputs[1][0] {iso}.vdd1-in[1])
-        net ({pwr-A} {iso}.vdd1)
-        net (outputs[0][1] {iso}.vdd2-out[0])
-        net (outputs[1][1] {iso}.vdd2-out[1])
-        net ({pwr-B} {iso}.vdd2)
+        inst iso : ocdb/si-labs/Si862x/module(0)  
+        net (outputs[0][0] iso.vdd1-in[0])
+        net (outputs[1][0] iso.vdd1-in[1])
+        net (pwr-A iso.vdd1)
+        net (outputs[0][1] iso.vdd2-out[0])
+        net (outputs[1][1] iso.vdd2-out[1])
+        net (pwr-B iso.vdd2)
       else if length(inputs) == 2:
-        unique inst iso : {ocdb/si-labs/Si862x/module(0)}  
-        net (inputs[0][0] {iso}.vdd1-in[0])
-        net (inputs[1][0] {iso}.vdd1-in[1])
-        net ({pwr-B} {iso}.vdd1)
-        net (inputs[0][1] {iso}.vdd2-out[0])
-        net (inputs[1][1] {iso}.vdd2-out[1])
-        net ({pwr-A} {iso}.vdd2)
+        inst iso : ocdb/si-labs/Si862x/module(0)  
+        net (inputs[0][0] iso.vdd1-in[0])
+        net (inputs[1][0] iso.vdd1-in[1])
+        net (pwr-B iso.vdd1)
+        net (inputs[0][1] iso.vdd2-out[0])
+        net (inputs[1][1] iso.vdd2-out[1])
+        net (pwr-A iso.vdd2)
       else if length(outputs) == 1 and length(inputs) == 1 :
-        unique inst iso : {ocdb/si-labs/Si862x/module(1)}  
-        net (outputs[0][0] {iso}.vdd1-in[0])
-        net (outputs[0][1] {iso}.vdd2-out[0])
-        net ({pwr-A} {iso}.vdd1)
-        net (inputs[0][1] {iso}.vdd2-in[0])
-        net (inputs[1][1] {iso}.vdd1-out[0])
-        net ({pwr-B} {iso}.vdd2)
+        inst iso : ocdb/si-labs/Si862x/module(1)  
+        net (outputs[0][0] iso.vdd1-in[0])
+        net (outputs[0][1] iso.vdd2-out[0])
+        net (pwr-A iso.vdd1)
+        net (inputs[0][1] iso.vdd2-in[0])
+        net (inputs[1][1] iso.vdd1-out[0])
+        net (pwr-B iso.vdd2)
     else if length(pins) > 2 and length(pins) <= 4:
       if length(outputs) >= length(inputs):
-        unique inst iso : {ocdb/si-labs/Si864x/module(length(inputs))}  
-        net ({pwr-A} {iso}.vdd1)
-        net ({pwr-B} {iso}.vdd2)
+        inst iso : ocdb/si-labs/Si864x/module(length(inputs))  
+        net (pwr-A iso.vdd1)
+        net (pwr-B iso.vdd2)
         for (o in outputs, idx in 0 to length(outputs)) do :
-          net ({o}[0] {iso}.vdd1-in[idx])
-          net ({o}[1] {iso}.vdd2-out[idx])
+          net (o[0] iso.vdd1-in[idx])
+          net (o[1] iso.vdd2-out[idx])
         for (i in inputs, idx in 0 to length(inputs)) do :
-          net ({i}[0] {iso}.vdd1-out[idx])
-          net ({i}[1] {iso}.vdd2-in[idx])
+          net (i[0] iso.vdd1-out[idx])
+          net (i[1] iso.vdd2-in[idx])
       else if length(outputs) < length(inputs):
-        unique inst iso : {ocdb/si-labs/Si864x/module(length(outputs))}  
-        net ({pwr-B} {iso}.vdd1)
-        net ({pwr-A} {iso}.vdd2)
+        inst iso : ocdb/si-labs/Si864x/module(length(outputs))  
+        net (pwr-B iso.vdd1)
+        net (pwr-A iso.vdd2)
         for (i in inputs, idx in 0 to length(inputs)) do :
-          net ({i}[1] {iso}.vdd1-in[idx])
-          net ({i}[0] {iso}.vdd2-out[idx])
+          net (i[1] iso.vdd1-in[idx])
+          net (i[0] iso.vdd2-out[idx])
         for (o in outputs, idx in 0 to length(outputs)) do :
-          net ({o}[1] {iso}.vdd1-out[idx])
-          net ({o}[0] {iso}.vdd2-in[idx])
+          net (o[1] iso.vdd1-out[idx])
+          net (o[0] iso.vdd2-in[idx])
     ; TODO support any number of logic isolators by recursing appropriately.
 
 ; Given input rail, returns isolated power rail
-public defn isolate-power (pwr-in:Ref):
+public defn isolate-power (pwr-in:JITObject):
   inside pcb-module:
-    unique inst iso : {ocdb/texas-instruments/SN6501/module}
-    net ({pwr-in} {iso.vin})
+    inst iso : ocdb/texas-instruments/SN6501/module
+    net (pwr-in iso.vin)
   iso.vout

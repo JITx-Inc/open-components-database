@@ -1,51 +1,45 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/texas-instruments/SN6501 :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/repl-lib
   import ocdb/tests/default-harness
 
   import ocdb/land-patterns
   import ocdb/symbols
-  import ocdb/box-symbol
-  import ocdb/pinspec
+  import ocdb/box-symbol2
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
 
-  import jitpcb/visualizer
-
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "SN6501DBVT"
   description = "Transformer Driver PMIC SOT-23-5"
-  val ps = PinSpec $ #TABLE :
-  ; [Component pin | Pad number | Symbol pin direction]
-    [Ref   | Int ...   | Dir  ]
-    [D[2]  | 3     | Right ]
-    [D[1]  | 1     | Right ]
-    [VCC   | 2     | Up ]
-    [GND   | 4 5   | Down ]
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir]
+    [D[2]    | 3            | Right   ]
+    [D[1]    | 1            | Right   ]
+    [VCC     | 2            | Up      ]
+    [GND     | 4 5          | Down    ]
 
-  make-pins(ps)
-  make-box-symbol(ps)
-  assign-package(SOT95P280X145-5N, ps)
+  make-box-symbol()
+  assign-package(SOT95P280X145-5N)
 
 ; Module set up for isolated 1:1 voltage levels, 2.5kv isolation
-public unique pcb-module module:
+public pcb-module module:
   ; Set up ports
   port vin: power
   port vout: power
-  inst drv : {ocdb/texas-instruments/SN6501/component}
+  inst drv : ocdb/texas-instruments/SN6501/component
 
   cap-strap(drv.VCC, vin.gnd, 1.0e-6)
   net (vin.gnd, drv.GND)
   cap-strap(vout.vdd, vout.gnd, 1.0e-6)
-  inst xfrmr : {ocdb/wurth/760390012/component}
-  inst d : {ocdb/on-semiconductor/MBR0520L/component}[2]
+  inst xfrmr : ocdb/wurth/760390012/component
+  inst d : ocdb/on-semiconductor/MBR0520L/component[2]
   net (drv.D[2] xfrmr.p[1])
   net (drv.D[1] xfrmr.p[3])
   net (vin.vdd drv.VCC xfrmr.p[2])

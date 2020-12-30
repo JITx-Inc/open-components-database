@@ -54,10 +54,7 @@ pcb-module sensor-mote :
   ; symbol(gnd) = ocdb/symbols/ground-sym
 
   ; Create a protected power and data interface for USB-2
-  public inst clamp : ocdb/texas-instruments/TPD3S0x4/module
-  net (usb.usb-2, clamp.usb-in)
-  net (clamp.usb-in.vbus.vdd, clamp.en)
-  val protected-usb = clamp.usb-out
+  val protected-usb = ocdb/protection/esd-clamp(usb.usb-2, gnd) as JITObject
   
   ; Specify a power regulator and name power nets
   public inst ldo : ocdb/diodes-incorporated/AP2112/module
@@ -131,10 +128,10 @@ var sensor-mote* = transform-module(connect-gnd-pins, sensor-mote)
 sensor-mote* = run-evals(sensor-mote*)
 
 ; view(main-design)
-set-rules(bay-area-circuits-std-rules)
+set-rules(sierra-adv-rules)
 set-board(default-board(4, 30.0,18.0))
 set-main-module(sensor-mote*)
-export-kicad("BLE-mote", [`preplaced => false,
+export-kicad("BLE-mote-test", [`preplaced => false,
                           `gen-board => true,
                           `gen-schematic => true])
 
