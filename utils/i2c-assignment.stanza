@@ -1,0 +1,92 @@
+defpackage ocdb/i2c-assignment:
+  import core
+  import collections
+
+defstruct I2CDevice:
+  id: Int
+  possible-addresses: Tuple<Int>
+
+; Searches the space of possible assignments
+;
+; returns IntTable<Int> which maps device IDs to I2C Addresses
+defn solve-i2c-assignments (c:Collection<I2CDevice>) -> False|IntTable<Int>:
+  ; variables: 
+  ;   set of i2c devices to be assigned an address
+  ; domain: 
+  ;   set of possible addresses each device may be assigned
+  ; constraints:
+  ;   no two devices may be assigned the same address
+  val domain = IntTable<Tuple<Int>>()
+  for device in c do:
+    if get?(domain, id(device)) is-not False:
+      fatal("[i2c solver] no i2c devices may share IDs")
+    domain[id(device)] = possible-addresses(device)
+  
+  val initial-variables = to-inttable<False|Int> $
+    for device in c seq: 
+      id(device) => false
+  
+  defn is-complete? (solution:IntTable<False|Int>): 
+    label<True|False> return: 
+      for kv in solution do: 
+        if value(kv) is False: 
+          return(false)
+      true
+  
+  defn is-consistent? (solution:IntTable<Int|False>):
+    val marked? = IntTable<True>()
+    label<True|False> return:
+      for kv in solution do:
+        val address = value(kv)
+        match(address:Int):
+          if get?(marked?, address):
+            return(false)
+          marked?[address] = true
+      true
+  
+  ; search for a solution
+  defn search (variables: IntTable<False|Int>):
+    label<IntTable<False|Int>|False> return:
+      if is-complete?(variables):
+        return(variables)
+      else: 
+        val next-variable = find!({value(_) is False}, variables)
+        for d in domain[key(next-variable)] do: 
+          variables[key(next-variable)] = d
+          if is-consistent?(variables):
+            return(search(variables))
+          else:
+            variables[key(next-variable)] = false
+
+  ; do the searching and flatten the result
+  match(search(initial-variables)):
+    (_:False): false
+    (table:IntTable<False|Int>): 
+      to-inttable<Int> $ 
+        for kv in table seq: 
+          key(kv) => value(kv) as Int
+
+public defstruct I2CAssignment: 
+  assign: Byte -> False
+  addresses: Tuple<Byte>
+
+public defn assign-i2c-addresses (devices: Collection<I2CAssignment>):
+  val assignment-table = IntTable<I2CAssignment>()
+  val id       = to-seq(1 to false)
+  val devices* = to-tuple $ 
+    for device in devices seq:
+      I2CDevice(
+        next(id)
+        to-tuple(seq(to-int, addresses(device)))
+      )
+
+  match(solve-i2c-assignments(devices*)):
+    (_:False):
+      fatal("i2c assignment failed: no solution exists")
+    (table:IntTable<Int>):
+      for kv in table do: 
+        val device-id = value(kv)
+        val address   = to-byte(value(kv))
+        val device-assignment = assignment-table[device-id]
+
+        (assign(device-assignment))(address)
