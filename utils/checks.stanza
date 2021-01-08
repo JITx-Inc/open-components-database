@@ -9,43 +9,59 @@ defpackage ocdb/checks:
   import ocdb/space-derating
   import ocdb/generator-utils
 
-public pcb-check io () :
-  for n in nets(self) do :
-    ; Check compatibility between two single-ended logic pins (bi directional checks)
-    if (length(refs(n))  == 2) and all?(has-property?{_.digital-io}, refs(n)) : 
-      val p = refs(n)
-      if property(p[0].type) == "io" and 
-         property(p[1].type) == "io" :
-        #CHECK(property(p[0].vOH) >= property(p[1].vIH))
-        #CHECK(property(p[0].vOH) <= property(p[1].rated-voltage)[1])
-        #CHECK(property(p[0].vOL) <= property(p[1].vIL))
-        #CHECK(property(p[0].vOL) >= property(p[1].rated-voltage)[0])
-        #CHECK(property(p[1].vOH) >= property(p[0].vIH))
-        #CHECK(property(p[1].vOH) <= property(p[0].rated-voltage)[1])
-        #CHECK(property(p[1].vOL) <= property(p[0].vIL))
-        #CHECK(property(p[1].vOL) >= property(p[0].rated-voltage)[0])
-      else if property(p[0].type) == "i" and 
-              property(p[1].type) == "o" :
-        #CHECK(property(p[1].vOH) >= property(p[0].vIH))
-        #CHECK(property(p[1].vOH) <= property(p[0].rated-voltage)[1])
-        #CHECK(property(p[1].vOL) <= property(p[0].vIL))
-        #CHECK(property(p[1].vOL) >= property(p[0].rated-voltage)[0])
-      else if property(p[0].type) == "o" and 
-              property(p[1].type) == "i" :
-        #CHECK(property(p[0].vOH) >= property(p[1].vIH))
-        #CHECK(property(p[0].vOH) <= property(p[1].rated-voltage)[1])
-        #CHECK(property(p[0].vOL) <= property(p[1].vIL))
-        #CHECK(property(p[0].vOL) >= property(p[1].rated-voltage)[0])
-      else :
-        println("Invalid logic connection between: %_ and %_" % [property(p[0].type) property(p[1].type)])
-        #CHECK(false)
-    ; Check compatibility between lvds pairs (bi directional checks)
-    if (length(refs(n))  == 2) and all?(has-property?{_.lvds}, refs(n)) : 
-      val p = refs(n)
-      #CHECK(property(p[0].vo-cm)[2]   <= property(p[1].vi-cm)[2])
-      #CHECK(property(p[0].vo-diff)[0] >= property(p[1].vi-diff)[0])
-      #CHECK(property(p[1].vo-cm)[2]   <= property(p[0].vi-cm)[2])
-      #CHECK(property(p[1].vo-diff)[0] >= property(p[0].vi-diff)[0])
+
+
+;<notes>
+
+io :
+  nets on self isnt allowed
+  has-property?{_.digital-io} syntax -- does this work?
+
+resistor-check :
+  lookup - spice?
+
+pcb-check can only be called from a module.
+change macro to set "inside pcb-module" implicitly
+
+;<notes>
+
+; public pcb-check io () :
+;   for n in nets(self) do :
+;     ; Check compatibility between two single-ended logic pins (bi directional checks)
+;     if (length(refs(n))  == 2) and all?(has-property?{_.digital-io}, refs(n)) : 
+;       val p = refs(n)
+;       if property(p[0].type) == "io" and 
+;          property(p[1].type) == "io" :
+;         #CHECK(property(p[0].vOH) >= property(p[1].vIH))
+;         #CHECK(property(p[0].vOH) <= property(p[1].rated-voltage)[1])
+;         #CHECK(property(p[0].vOL) <= property(p[1].vIL))
+;         #CHECK(property(p[0].vOL) >= property(p[1].rated-voltage)[0])
+;         #CHECK(property(p[1].vOH) >= property(p[0].vIH))
+;         #CHECK(property(p[1].vOH) <= property(p[0].rated-voltage)[1])
+;         #CHECK(property(p[1].vOL) <= property(p[0].vIL))
+;         #CHECK(property(p[1].vOL) >= property(p[0].rated-voltage)[0])
+;       else if property(p[0].type) == "i" and 
+;               property(p[1].type) == "o" :
+;         #CHECK(property(p[1].vOH) >= property(p[0].vIH))
+;         #CHECK(property(p[1].vOH) <= property(p[0].rated-voltage)[1])
+;         #CHECK(property(p[1].vOL) <= property(p[0].vIL))
+;         #CHECK(property(p[1].vOL) >= property(p[0].rated-voltage)[0])
+;       else if property(p[0].type) == "o" and 
+;               property(p[1].type) == "i" :
+;         #CHECK(property(p[0].vOH) >= property(p[1].vIH))
+;         #CHECK(property(p[0].vOH) <= property(p[1].rated-voltage)[1])
+;         #CHECK(property(p[0].vOL) <= property(p[1].vIL))
+;         #CHECK(property(p[0].vOL) >= property(p[1].rated-voltage)[0])
+;       else :
+;         println("Invalid logic connection between: %_ and %_" % [property(p[0].type) property(p[1].type)])
+;         #CHECK(false)
+;     ; Check compatibility between lvds pairs (bi directional checks)
+;     if (length(refs(n))  == 2) and all?(has-property?{_.lvds}, refs(n)) : 
+;       val p = refs(n)
+;       #CHECK(property(p[0].vo-cm)[2]   <= property(p[1].vi-cm)[2])
+;       #CHECK(property(p[0].vo-diff)[0] >= property(p[1].vi-diff)[0])
+;       #CHECK(property(p[1].vo-cm)[2]   <= property(p[0].vi-cm)[2])
+;       #CHECK(property(p[1].vo-diff)[0] >= property(p[0].vi-diff)[0])
 
 ; Checks a power pin located on a component
 public pcb-check power-pin (p:JITObject) :
