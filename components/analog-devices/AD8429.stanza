@@ -1,29 +1,25 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/analog-devices/AD8429:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/utils
   import ocdb/tests/default-harness
-  import ocdb/pinspec
   import ocdb/land-patterns
   import ocdb/generic-components
   import ocdb/generator-utils
-;[strip]
   import ocdb/symbols
-  import ocdb/box-symbol
-;[/strip]
+  import ocdb/box-symbol2
 
 ; Amplifiers
-public unique pcb-component component :
+public pcb-component component :
   name = "AD8429"
   manufacturer = "Analog Devices"
   mpn = "AD8429BRZ-R7"
   description = "SP Amp INSTR Amp Single ±18V 8-Pin SOIC N T/R"
-  val ps = PinSpec $ #TABLE :
-    [Ref | Int ...   | Dir  ]
+  pin-properties :
+    [pin:Ref | pads:Int ...   | side:Dir  ]
     [in- | 1 | Left]
     [rg0 | 2 | Left]
     [rg1 | 3 | Left]
@@ -41,12 +37,12 @@ public pcb-module module (gain:Double) :
   pin in-
   pin vout
   pin ref
-  inst opa : {ocdb/analog-devices/AD8429/component}
+  inst opa : ocdb/analog-devices/AD8429/component
   if gain < 1.0 :
     fatal("Unsupported gain %_ for AD8429" % [gain])
   else if gain != 1.0 :
     val rg-val = 6.0e3 / (gain - 1.0)
-    inst rg : {chip-resistor(rg-val, 0.001)}
+    inst rg : chip-resistor(rg-val, 0.001)
     net (opa.rg0, rg.p[1])
     net (opa.rg1, rg.p[2])
   bypass-caps(vs+, ref, 35.0, [10.0 0.1e-3], `vs+)

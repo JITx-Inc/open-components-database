@@ -1,19 +1,17 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/idt/5PB11xx:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/utils
   import ocdb/tests/default-harness
-  import ocdb/pinspec
   import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/generic-components
   import ocdb/bundles
   import ocdb/symbols
-  import ocdb/box-symbol
+  import ocdb/box-symbol2
 
 public pcb-component component (n:Int) :
   description = "1.8V to 3.3V LVCMOS High Performance Clock Buffer Family"
@@ -27,8 +25,8 @@ public pcb-component component (n:Int) :
     else : fatal("Incorrect number of channels for idt-5PB11x %_" % [n])
   mpn = to-string("5PB11%_" % [code])
 
-  val ps = PinSpec $ #TABLE :
-    [Ref    | Int ...   | Dir]
+  pin-properties :
+    [pin:Ref    | pads:Int ...   | side:Dir]
     [clkin  | clkin-p | Left]
     [en  | en-p    | Left]
     [vdd | vdd-p | Up]
@@ -37,12 +35,10 @@ public pcb-component component (n:Int) :
       [clkout[i] | p | Right]
   gen-symbol-map(ps, pkg)
 
-  properties :
-    rated-temperature => [-40.0 105.0]
+  property(self.rated-temperature) => [-40.0 105.0]
 
-  properties(vdd):
-    power-pin => true
-    rated-voltage => [1.71, 3.465]
+  property(self.vdd.power-pin) => true
+  property(self.vdd.rated-voltage) => [1.71, 3.465]
   
   ; eval when has-property?(vdd.voltage) :
   ;   val vdd-v = property(vdd.voltage)
@@ -77,7 +73,7 @@ public pcb-module module (n:Int) :
   port src : power
   pin clkin
   port clkout : pin[n]
-  inst buffer : {ocdb/idt/5PB11xx/component(n)}
+  inst buffer : ocdb/idt/5PB11xx/component(n)
   default-bypass(buffer)
   net (buffer.clkin, clkin)
   net (buffer.clkout, clkout)
