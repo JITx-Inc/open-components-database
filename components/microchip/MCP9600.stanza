@@ -1,30 +1,26 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/microchip/MCP9600:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/utils
   import ocdb/tests/default-harness
 
   import ocdb/land-patterns
   import ocdb/symbols
-  import ocdb/box-symbol
-  import ocdb/pinspec
+  import ocdb/box-symbol2
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
-
-  import jitpcb/visualizer
 
 public unique pcb-component component :
   manufacturer = "Microchip"
   mpn = "MCP9600"
   description = "Thermocouple EMF to Temperature Converter, ±1.5°C Maximum Accuracy"
   
-  val ps = PinSpec $ #TABLE :
-    [Ref      | Int ...         | Dir     ]
+  pin-properties :
+    [pin:Ref      | pads:Int ...         | side:Dir     ]
     [GND      | 1, 3, 5, 6, 7, 9, 10, 13, 17, 18, 21 | Down  ]
     [Vin+     | 2               | Right   ]
     [Vin-     | 4               | Right   ]
@@ -48,14 +44,13 @@ public pcb-module module (i2c-addr:Int):
   pin addr
   port in : diff-pair
 
-  inst therm : {ocdb/microchip/MCP9600/component}
+  inst therm : ocdb/microchip/MCP9600/component
   net gnd (therm.GND power.gnd)
   net (power.vdd, therm.Vdd)
   cap-strap(therm.Vdd, gnd, 1.0e-6)
 
-  properties(therm.Vdd):
-    power-request => [3.0 0.005 5.0e-3]
-    gnd-ref => #R(GND)
+  property(self.therm.Vdd.power-request) => [3.0 0.005 5.0e-3]
+  property(self.therm.Vdd.gnd-ref) => #R(GND)
 
   net (i2c.sda, therm.SDA)
   net (i2c.scl, therm.SCL)
