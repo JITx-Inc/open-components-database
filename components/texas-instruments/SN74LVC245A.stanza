@@ -1,13 +1,11 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/texas-instruments/SN74LVC245A:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/repl-lib
   import ocdb/tests/default-harness
-  import ocdb/pinspec
   import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/generic-components
@@ -21,8 +19,8 @@ public pcb-component component (pkg-dwg:String) :
   description = "Octal Bus Transceiver with 3-State Outputs"
   pin  DIR
   pin  OEn
-  port A : pin[{1 through 8}] 
-  port B : pin[{1 through 8}] 
+  port A : pin[1 through 8] 
+  port B : pin[1 through 8] 
   pin  VCC
   pin  GND
   val       [mpn               pkg-type    dir-p oen-p A-p                              B-p                              vcc-p gnd-p pkg] = switch(pkg-dwg) :
@@ -35,57 +33,52 @@ public pcb-component component (pkg-dwg:String) :
     ; "RGY" : ["SN74LVC245ARGYR" "VQFN"      1     19    [2, 3, 4, 5, 6, 7, 8, 9]         [18, 17, 16, 15, 14, 13, 12, 11] 20    10    vqfn-package(20) ] 
     ; "ZQN" : ["SN74LVC245AZQNR" "BGA-MICRO" "A2"  "A4"  ["A1" "B3" "B1" "C2" "C1" "D3" "D1" "E2"] ["B4" "B2" "C4" "C3" "D4" "D2" "E4" "E3"] "A3"  "E1"  make-bga-pkg(0.65, 0.4, [4, 5], [3.1, 4.1]) ] 
 
-  val ps = PinSpec $ #TABLE :
-    [Ref    | Int ... | Dir]
-    [DIR    | dir-p   | Left]
-    [OEn    | oen-p   | Left]
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir]
+    [DIR     | dir-p        | Left    ]
+    [OEn     | oen-p        | Left    ]
     for (p in A-p, i in 1 to false) do:
-      [A[i] | p       | Left]
+      [A[i]  | p            | Left  ]
     for (p in B-p, i in 1 to false) do:
-      [B[i] | p       | Right]
-    [VCC    | vcc-p   | Up]
-    [GND    | gnd-p   | Down]
+      [B[i]  | p            | Right ]
+    [VCC     | vcc-p        | Up      ]
+    [GND     | gnd-p        | Down    ]
 
-  make-box-symbol(ps)
-  assign-package(pkg, ps)
+  make-box-symbol()
+  assign-package(pkg)
 
   eval-when has-property?(VCC.voltage):
-    val v = property(VCC.voltage)
-    properties(VCC):
-      power-pin => true
-      vVxx-absmax => [-0.5 6.5]
-      vVxx-op => [1.65 3.6]
-      ; TODO: Evaluate max or min or both voltage cases
-      iOH => PWL([[1.65 -4.0e-3], [2.30 -8.0e-3], [2.70 -12.0e-3], [3.0 -24.0e-3], [3.6 -24.0e-3]])[v[0]]
-      iOL => PWL([[1.65  4.0e-3], [2.30  8.0e-3], [2.70  12.0e-3], [3.0  24.0e-3], [3.6  24.0e-3]])[v[0]]
+    val v = property(self.VCC.voltage)
+    property(self.VCC.power-pin) = true
+    property(self.VCC.vVxx-absmax) = [-0.5 6.5]
+    property(self.VCC.vVxx-op) = [1.65 3.6]
+    ; TODO: Evaluate max or min or both voltage cases
+    property(self.VCC.iOH) = PWL([[1.65 -4.0e-3], [2.30 -8.0e-3], [2.70 -12.0e-3], [3.0 -24.0e-3], [3.6 -24.0e-3]])[v[0]]
+    property(self.VCC.iOL) = PWL([[1.65  4.0e-3], [2.30  8.0e-3], [2.70  12.0e-3], [3.0  24.0e-3], [3.6  24.0e-3]])[v[0]]
    
   eval-when connected-table-calculated?() :
     val v = property(VCC.voltage)
     if connected?(DIR, VCC) :
       for i in 1 through 8 do :
-        properties(B[i]):
-          digital-io => true
-          type => "o"
-          vOH => v[0] - 0.2
-          vOL => 0.1
-          rated-voltage => [0.0 v[0]]
-        properties(A[i]):
-          digital-io => true
-          type => "i"
-          vIH => PWL([[1.65 0.65 * v[0]] [1.95 0.65 * v[0]] [2.3 1.7] [2.7 2.0]])[v[0]]
-          vIL => PWL([[1.65 0.35 * v[0]] [1.95 0.35 * v[0]] [2.3 0.7] [2.7 0.8]])[v[0]]
-          rated-voltage => [0.0 5.5]
+        property(B[i].digital-io) = true
+        property(B[i].type) = "o"
+        property(B[i].vOH) = v[0] - 0.2
+        property(B[i].vOL) = 0.1
+        property(B[i].rated-voltage) = [0.0 v[0]]
+        property(A[i].digital-io) = true
+        property(A[i].type) = "i"
+        property(A[i].vIH) = PWL([[1.65 0.65 * v[0]] [1.95 0.65 * v[0]] [2.3 1.7] [2.7 2.0]])[v[0]]
+        property(A[i].vIL) = PWL([[1.65 0.35 * v[0]] [1.95 0.35 * v[0]] [2.3 0.7] [2.7 0.8]])[v[0]]
+        property(A[i].rated-voltage) = [0.0 5.5]
     else if connected?(DIR, GND) :
       for i in 1 through 8 do :
-        properties(A[i]):
-          digital-io => true
-          type => "o"
-          vOH => v[0] - 0.2
-          vOL => 0.1
-          rated-voltage => [0.0 v[0]]
-        properties(B[i]):
-          digital-io => true
-          type => "i"
-          vIH => PWL([[1.65 0.65 * v[0]] [1.95 0.65 * v[0]] [2.3 1.7] [2.7 2.0]])[v[0]]
-          vIL => PWL([[1.65 0.35 * v[0]] [1.95 0.35 * v[0]] [2.3 0.7] [2.7 0.8]])[v[0]]
-          rated-voltage => [0.0 5.5]
+        property(A[i].digital-io) = true
+        property(A[i].type) = "o"
+        property(A[i].vOH) = v[0] - 0.2
+        property(A[i].vOL) = 0.1
+        property(A[i].rated-voltage) = [0.0 v[0]]
+        property(B[i].digital-io) = true
+        property(B[i].type) = "i"
+        property(B[i].vIH) = PWL([[1.65 0.65 * v[0]] [1.95 0.65 * v[0]] [2.3 1.7] [2.7 2.0]])[v[0]]
+        property(B[i].vIL) = PWL([[1.65 0.35 * v[0]] [1.95 0.35 * v[0]] [2.3 0.7] [2.7 0.8]])[v[0]]
+        property(B[i].rated-voltage) = [0.0 5.5]

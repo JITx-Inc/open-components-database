@@ -1,84 +1,79 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/texas-instruments/CC2640 :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/repl-lib
   import ocdb/tests/default-harness
 
   import ocdb/land-patterns
   import ocdb/symbols
-  import ocdb/box-symbol
-  import ocdb/pinspec
+  import ocdb/box-symbol2
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
 
-  import jitpcb/visualizer
-
 pcb-bundle analog :
-  pin analog
+  public pin analog
 
 pcb-bundle high-drive :
-  pin high-drive
+  public pin high-drive
 
 pcb-bundle sensor-ctrl : 
-  pin sensor-ctrl
+  public pin sensor-ctrl
 
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "CC2640F128Rxx"
   description = "SimpleLink™ 32-bit Arm Cortex-M3 Bluetooth® Low Energy wireless MCU with 128kB Flash"
   
-  val ps = PinSpec $ #TABLE :
-    [Ref       | Int ...   | Dir   | Ref  ]
-    [VDDR      | 45     | Right | base ]
-    [VDDR_RF   | 48     | Right | base ]
-    [VDDS      | 44     | Right | base ]
-    [VDDS2     | 13     | Right | base ]
-    [VDDS3     | 22     | Right | base ]
-    [VDDS_DCDC | 34     | Right | base ]
-    [DCDC_SW   | 33     | Right | base ]
-    [DCOUPL    | 23     | Right | base ]
-    [EGP       | 49     | Right | base ]
-    for i in 0 to 8 do :
-      [DIO_[i] | i + 5  | Left  | gpio ]
-    for i in 8 to 16 do :
-      [DIO_[i] | i + 6  | Left  | gpio ]
-    for i in 16 to 23 do :
-      [DIO_[i] | i + 10 | Right | gpio ]
-    for i in 23 to 31 do :
-      [DIO_[i] | i + 13 | Right | gpio ]
-    [JTAG_TMSC | 24     | Left  | base ]
-    [JTAG_TCKC | 25     | Left  | base ]
-    [RESET_N   | 35     | Left  | base ]
-    [RF_P      | 1      | Left  | base ]
-    [RF_N      | 2      | Left  | base ]
-    [X32K_Q1   | 3      | Left  | base ]
-    [X32K_Q2   | 4      | Left  | base ]
-    [X24M_N    | 46     | Left  | base ]
-    [X24M_P    | 47     | Left  | base ]
+  pin-properties :
+    [pin:Ref   | pads:Int ... | side:Dir | ref:Ref]
+    [VDDR      | 45           | Right    | base   ]
+    [VDDR_RF   | 48           | Right    | base   ]
+    [VDDS      | 44           | Right    | base   ]
+    [VDDS2     | 13           | Right    | base   ]
+    [VDDS3     | 22           | Right    | base   ]
+    [VDDS_DCDC | 34           | Right    | base   ]
+    [DCDC_SW   | 33           | Right    | base   ]
+    [DCOUPL    | 23           | Right    | base   ]
+    [EGP       | 49           | Right    | base   ]
+    for i in 0 to 8 do :        
+      [DIO_[i] | i + 5        | Left     | gpio ]
+    for i in 8 to 16 do :   
+      [DIO_[i] | i + 6        | Left     | gpio ]
+    for i in 16 to 23 do :   
+      [DIO_[i] | i + 10       | Right    | gpio ]
+    for i in 23 to 31 do :   
+      [DIO_[i] | i + 13       | Right    | gpio ]
+    [JTAG_TMSC | 24           | Left     | base   ]
+    [JTAG_TCKC | 25           | Left     | base   ]
+    [RESET_N   | 35           | Left     | base   ]
+    [RF_P      | 1            | Left     | base   ]
+    [RF_N      | 2            | Left     | base   ]
+    [X32K_Q1   | 3            | Left     | base   ]
+    [X32K_Q2   | 4            | Left     | base   ]
+    [X24M_N    | 46           | Left     | base   ]
+    [X24M_P    | 47           | Left     | base   ]
     
-  make-pins(ps)
-  make-box-symbol(ps)
-  assign-package(qfn-package(0.5, 7.0, 48, 0.25, 0.4, [5.15 5.15]), ps)
+  make-box-symbol()
+  assign-package(qfn-package(0.5, 7.0, 48, 0.25, 0.4, [5.15 5.15]))
 
-  unique pcb-bundle io-pin : (pin p)
+  pcb-bundle io-pin : (pin p)
   for i in 0 to 31 do :
-    supports {io-pin} :
-      p => DIO_[i]
+    supports io-pin :
+      io-pin.p => DIO_[i]
 
   for i in 23 to 31 do :
     supports analog :
-      analog => DIO_[i]
+      analog.analog => DIO_[i]
     supports sensor-ctrl :
       sensor-ctrl => DIO_[i]
 
   for i in 0 to 8 do :
     supports sensor-ctrl :
-      sensor-ctrl => DIO_[i]
+      sensor-ctrl.sensor-ctrl => DIO_[i]
 
   ; Use io-pin to map bundles to peripherals
   ; There are 2 SPI peripherals
@@ -97,33 +92,33 @@ public unique pcb-component component :
   ;   scl   =>    pins[1].p
 
   supports uart:
-    require pins:{io-pin}[2]
-    rx    =>    pins[0].p
-    tx    =>    pins[1].p
+    require pins:io-pin[2]
+    uart.rx    =>    pins[0].p
+    uart.tx    =>    pins[1].p
 
   supports jtag:
-    require pins:{io-pin}[3]
-    tms => JTAG_TMSC
-    tck => JTAG_TCKC
-    tdi => pins[0].p
-    tdo => pins[1].p
-    trstn => pins[2].p
+    require pins:io-pin[3]
+    jtag.tms => JTAG_TMSC
+    jtag.tck => JTAG_TCKC
+    jtag.tdi => pins[0].p
+    jtag.tdo => pins[1].p
+    jtag.trstn => pins[2].p
 
   for i in 0 to 31 do:
     supports gpio:
-      require pins:{io-pin}
-      gpio => pins.p
+      require pins:io-pin
+      gpio.gpio => pins.p
 
   for i in 5 to 8 do :
     supports high-drive :
-      high-drive => DIO_[i]
+      high-drive.high-drive => DIO_[i]
 
   supports high-drive :
-    high-drive => DIO_[16]
+    high-drive.high-drive => DIO_[16]
   supports high-drive :
-    high-drive => DIO_[17]
+    high-drive.high-drive => DIO_[17]
     
-public unique pcb-module module:
+public pcb-module module:
   ; define ports
   port i2c-node : i2c
   port spi-master : spi
@@ -133,7 +128,7 @@ public unique pcb-module module:
   pin vcc
 
   ; start with the CC2640 mcu
-  inst mcu : {ocdb/texas-instruments/CC2640/component}
+  inst mcu : ocdb/texas-instruments/CC2640/component
   ; set up primary power nets
   net (gnd, mcu.EGP)
   net (vdds, mcu.VDDS, mcu.VDDS2, mcu.VDDS3, mcu.VDDS_DCDC)
@@ -148,10 +143,10 @@ public unique pcb-module module:
   cap-strap(vddr, gnd, 10.0e-6)
   cap-strap(vddr, gnd, 0.1e-6)
   cap-strap(vddr, gnd, 0.1e-6)
-  inst l1 : {ocdb/murata/BLM18HE152SN1D/component}
+  inst l1 : ocdb/murata/BLM18HE152SN1D/component
   net (vcc, l1.p[1])
   net (l1.p[2], vdds)
-  inst l2 : {smd-inductor(10.0e-6)}
+  inst l2 : smd-inductor(10.0e-6)
   net (mcu.DCDC_SW, l2.p[1])
   net (mcu.VDDR, l2.p[2])
 
@@ -162,16 +157,16 @@ public unique pcb-module module:
   cap-strap(mcu.RESET_N, gnd, 0.1e-6)
 
   ; add RF section
-  inst balun : {ocdb/johanson/2450BM14G0011/component}
-  inst ant : {ocdb/johanson/2450AT18D0100/component}
-  inst jsc : {ocdb/murata/MM5829-2700R/component}
+  inst balun : ocdb/johanson/2450BM14G0011/component
+  inst ant : ocdb/johanson/2450AT18D0100/component
+  inst jsc : ocdb/murata/MM5829-2700R/component
   net (mcu.RF_N, balun.BAL1)
   net (mcu.RF_P, balun.BAL2)
   net (gnd, balun.GND)
   ; add tuning network
-  inst rfr1 : {chip-resistor(0.0)}
-  inst rfr2 : {chip-resistor(0.0)}
-  inst rfrjsc : {chip-resistor(0.0)}
+  inst rfr1 : chip-resistor(0.0)
+  inst rfr2 : chip-resistor(0.0)
+  inst rfrjsc : chip-resistor(0.0)
   net (rfrjsc.p[1], balun.UBAL, rfr1.p[1])
   net (jsc.g[1], gnd)
   net (jsc.p[1], rfrjsc.p[2])
@@ -182,8 +177,8 @@ public unique pcb-module module:
   net (rfr2.p[2], ant.p[1])
 
   ; add XTALS
-  inst x1 : {ocdb/epson/FC-135/component}
-  inst x2 : {ocdb/epson/TSX-3225/component}
+  inst x1 : ocdb/epson/FC-135/component
+  inst x2 : ocdb/epson/TSX-3225/component
 
   net (x1.p[1], mcu.X32K_Q1)
   net (x1.p[2], mcu.X32K_Q2)

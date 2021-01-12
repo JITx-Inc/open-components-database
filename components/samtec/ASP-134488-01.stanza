@@ -1,20 +1,18 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/samtec/ASP-134488-01:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/repl-lib
   import ocdb/tests/default-harness
-  import ocdb/pinspec
   import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/generic-components
   import ocdb/bundles
 ;[strip]
   import ocdb/symbols
-  import ocdb/box-symbol
+  import ocdb/box-symbol2
 ;[/strip]
 
 ; Land Patterns
@@ -34,7 +32,7 @@ public defn samtec-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], cou
       val name = Ref(letter)[c + 1]
 
       if not contains?(omit-pads, name) :
-        pad {name} : pin-pad at loc(x,y)
+        pad name : pin-pad at loc(x,y)
 
     for c in 0 to n-pads[0] do :
       for r in 0 to n-pads[1] do :
@@ -68,14 +66,14 @@ pcb-package ASP-134488-01-pkg :
 
 ; Components
 
-public unique pcb-component component :
+public pcb-component component :
   name = "ASP-134488-01"
   description = "Vita 57.1 HPC FMC connector"
   manufacturer = "Samtec"
   mpn = "ASP-134488-01"
 
-  val ps = PinSpec $ #TABLE :
-    [Ref | Ref ...   | Dir | Int ]
+  pin-properties :
+    [pin:Ref | pads:Ref ... | side:Dir | int:Int]
     [dp0-c2m-n | C[3]  | Right | 0] [dp0-c2m-p | C[2]  | Right | 0] [dp0-m2c-n | C[7]  | Right | 0] [dp0-m2c-p | C[6]  | Right | 0]
     [dp1-c2m-n | A[23] | Right | 0] [dp1-c2m-p | A[22] | Right | 0] [dp1-m2c-n | A[3]  | Right | 0] [dp1-m2c-p | A[2]  | Right | 0]
     [dp2-c2m-n | A[27] | Right | 0] [dp2-c2m-p | A[26] | Right | 0] [dp2-m2c-n | A[7]  | Right | 0] [dp2-m2c-p | A[6]  | Right | 0]
@@ -123,30 +121,29 @@ public unique pcb-component component :
     [v3p3vaux | D[32] | Up | 3]
     [vadj |  E[39] G[39] F[40] H[40] |  Up | 3]
 
-  gen-symbol-map(ps, ASP-134488-01-pkg)
+    assign-package(ASP-134488-01-pkg)
+    make-box-symbol()
 
   ;Create LVDS supports between all things *-p* and *-n*
   for apin in ports(self) do :
     val pin-name = to-string(apin)
     if substring?(pin-name, "-p") :
       val n-name = replace(pin-name, "-p", "-n")
-      val n-ref = Ref(n-name)
+      val n-sym = to-symbol(n-name)
+      val n-obj = self.n-sym
       supports gpio :
-        gpio => {apin}
-        properties({apin}):
-          apply-digital-io-params((0.35 * 1.8), (0.65 * 1.8) (0.45) (1.8 - 0.45))
-          apply-voltage-rating-params([-0.2 2.0])
+        gpio.gpio => apin
+        apply-digital-io-params(apin, (0.35 * 1.8), (0.65 * 1.8) (0.45) (1.8 - 0.45))
+        apply-voltage-rating-params(apin, [-0.2 2.0])
       supports gpio :
-        gpio => {n-ref}
-        properties({n-ref}):
-          apply-digital-io-params((0.35 * 1.8), (0.65 * 1.8) (0.45) (1.8 - 0.45))
-          apply-voltage-rating-params([-0.2 2.0])
+        gpio.gpio => n-obj
+        apply-digital-io-params(n-obj, (0.35 * 1.8), (0.65 * 1.8) (0.45) (1.8 - 0.45))
+        apply-voltage-rating-params(n-obj, [-0.2 2.0])
       supports lvds :
-        P => {apin}
-        properties({apin}):
-          apply-lvds-params(0.825, 1.675, [0.247 0.350 0.600], [1.000 1.250 1.425], [0.100 0.350 0.600], [0.300 1.200 1.425])
-          apply-voltage-rating-params([-0.2 2.0])
-        N => {n-ref}
+        lvds.P => apin
+        apply-lvds-params(apin, 0.825, 1.675, [0.247 0.350 0.600], [1.000 1.250 1.425], [0.100 0.350 0.600], [0.300 1.200 1.425])
+        apply-voltage-rating-params(apin, [-0.2 2.0])
+        lvds.N => n-obj
   supports i2c :
-    sda => sda
-    scl => scl
+    i2c.sda => self.sda
+    i2c.scl => self.scl

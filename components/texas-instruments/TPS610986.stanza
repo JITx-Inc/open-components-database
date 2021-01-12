@@ -1,56 +1,51 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/texas-instruments/TPS610986 :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/repl-lib
   import ocdb/tests/default-harness
 
   import ocdb/land-patterns
   import ocdb/symbols
-  import ocdb/box-symbol
-  import ocdb/pinspec
+  import ocdb/box-symbol2
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
 
-  import jitpcb/visualizer
-
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "TPS610986DSE"
   description = "Ultra-Low Quiescent Current Synchronous Boost with Integrated LDO/Load Switch"
 
-  val ps = PinSpec $ #TABLE :
-    [Ref      | Int ...  | Dir  ]
-    [VMAIN    | 1        | Left ]
-    [SW       | 2        | Left ]
-    [VIN      | 3        | Left ]
-    [MODE     | 4        | Right]
-    [VSUB     | 5        | Right]
-    [GND      | 6        | Right]
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir]
+    [VMAIN   | 1            | Left    ]
+    [SW      | 2            | Left    ]
+    [VIN     | 3            | Left    ]
+    [MODE    | 4            | Right   ]
+    [VSUB    | 5            | Right   ]
+    [GND     | 6            | Right   ]
 
-  make-pins(ps)
-  make-box-symbol(ps)
-  assign-package(dfn-package(6, 0.5, [0.25 0.5], 0.5, [1.5 1.5]), ps)
+  make-box-symbol()
+  assign-package(dfn-package(6, 0.5, [0.25 0.5], 0.5, [1.5 1.5]))
 
-public unique pcb-module module :
+public pcb-module module :
   pin gnd
   pin vbat
   pin v-boost
   pin v-sw
   pin sw
 
-  inst boost : {ocdb/texas-instruments/TPS610986/component}
+  inst boost : ocdb/texas-instruments/TPS610986/component
   net (gnd, boost.GND)
   ; decoupling caps
   cap-strap(gnd, boost.VIN, 0.1e-6)
   cap-strap(gnd, boost.VSUB, 10.0e-6)
   cap-strap(gnd, boost.VMAIN, 10.0e-6)
-  inst r : {chip-resistor(390.0)}
-  inst l : {smd-inductor(["inductance" => 4.7e-6 "min-saturation-current" => 0.9])}
+  inst r : chip-resistor(390.0)
+  inst l : smd-inductor(["inductance" => 4.7e-6 "min-saturation-current" => 0.9])
 
   net (l.p[1], boost.SW)
   net (vbat, l.p[2],r.p[1])
