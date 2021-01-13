@@ -5,6 +5,7 @@ defpackage ocdb/microchip/MCP9600:
   import math
   import esir2
   import esir2/utils
+  import esir2/repl-lib
   import ocdb/tests/default-harness
 
   import ocdb/land-patterns
@@ -14,7 +15,7 @@ defpackage ocdb/microchip/MCP9600:
   import ocdb/generator-utils
   import ocdb/generic-components
 
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Microchip"
   mpn = "MCP9600"
   description = "Thermocouple EMF to Temperature Converter, ±1.5°C Maximum Accuracy"
@@ -33,9 +34,8 @@ public unique pcb-component component :
     [SCL      | 19              | Left    ]
     [SDA      | 20              | Left    ]
 
-  make-pins(ps)
-  make-box-symbol(ps)
-  assign-package(qfn-package(0.65, 5.0, 20, 0.3, 0.4, [3.25 3.25]), ps)
+  make-box-symbol()
+  assign-package(qfn-package(0.65, 5.0, 20, 0.3, 0.4, [3.25 3.25]))
 
 public pcb-module module (i2c-addr:Int):
   port power : power
@@ -49,8 +49,8 @@ public pcb-module module (i2c-addr:Int):
   net (power.vdd, therm.Vdd)
   cap-strap(therm.Vdd, gnd, 1.0e-6)
 
-  property(self.therm.Vdd.power-request) => [3.0 0.005 5.0e-3]
-  property(self.therm.Vdd.gnd-ref) => #R(GND)
+  property(therm.Vdd.power-request) = [3.0 0.005 5.0e-3]
+  property(therm.Vdd.gnd-ref) = #R(GND)
 
   net (i2c.sda, therm.SDA)
   net (i2c.scl, therm.SCL)
@@ -67,3 +67,5 @@ public pcb-module module (i2c-addr:Int):
     7 :  net (therm.ADDR, therm.Vdd)
     else : fatal("Unsupported address for MCP9600: %_" % [i2c-addr])
 
+public pcb-module module () :
+  inst i : module(0)

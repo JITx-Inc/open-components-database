@@ -1,4 +1,4 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/analog-devices/ADM7150:
   import core
   import collections
@@ -12,6 +12,7 @@ defpackage ocdb/analog-devices/ADM7150:
   import ocdb/bundles
   import ocdb/symbols
   import ocdb/box-symbol2
+  import esir2/repl-lib
 
 doc: \<s>
 800 mA Ultralow Noise, High PSRR, RF Linear Regulator
@@ -32,7 +33,7 @@ public pcb-component component (v-out:Double) :
     else : fatal("Invalid output voltage for ADM7150 %_" % [v-out])
   mpn = to-string("ADM7150ARDZ-%_-R7" % [a-code])
   pin-properties :
-    [pin:Ref | pads:Int ...   | side:Dir  ]
+    [pin:Ref | pads:Int ...   | side:Dir]
     [vin  | 8 | Left]
     [en   | 7 | Left]
     [vreg | 1 | Left]
@@ -41,7 +42,10 @@ public pcb-component component (v-out:Double) :
     [ref       | 6 | Right] 
     [ref-sense | 5 | Right]
     [gnd | 4 9 | Down]
-  gen-symbol-map(ps, soic127p-package(8, [2.3 3.0]))
+
+  make-box-symbol()
+
+  assign-package(soic127p-package(8, [2.3 3.0]))
 
 doc: \<s>
 Example Usage:
@@ -59,7 +63,7 @@ doc: \<s>
 The module is an implementation of the circuit from the datasheet, with Cbyp = 100uF. `v-out` is the specified output voltage of the voltage regulator in volts. Valid values are `3.0`, `3.3`, and `5.0`.
 <s>
 
-public pcb-module module (v-out) :
+public pcb-module module (v-out:Double) :
   port dst : power
   port src : power
   pin vin
@@ -90,3 +94,6 @@ inst ldo : {ocdb/analog-devices/ADM7150/module(3.0)}
 ```
 <img src=FIG:(gen-ocdb-app, svg, view(URL, single-module-design(ocdb/analog-devices/ADM7150/module(3.0), default-board(4, 10.0, 10.0)))) height="400">
 <s>
+
+public pcb-module module () :
+  inst i : module(3.0)
