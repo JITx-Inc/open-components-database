@@ -1,17 +1,14 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/ethernet-fmc :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
+  import esir2
+  import esir2/repl-lib
   import ocdb/tests/default-harness
-  import esir/repl-lib
-  import jitpcb/visualizer
   import ocdb/generator-utils
   import ocdb/generic-components
-  import ocdb/calculate-connected
+  ; import ocdb/calculate-connected
   import ocdb/connects
   import ocdb/bundles
   import ocdb/design-vars
@@ -25,9 +22,9 @@ OPTIMIZE-FOR = ["area"]
 pcb-module my-design :
 
   ; Instantiate devices
-  inst fmc : {ocdb/samtec/ASP-134488-01/component}
-  inst ethernet-jack : {ocdb/pulse-electronics/J0G-0009NL/component}[2]
-  inst fpga : {ocdb/microsemi/A2F200M3F-FGG256I/module}
+  inst fmc : ocdb/samtec/ASP-134488-01/component
+  inst ethernet-jack : ocdb/pulse-electronics/J0G-0009NL/component[2]
+  inst fpga : ocdb/microsemi/A2F200M3F-FGG256I/module
 
   ; Set up power
   set-power-source(fmc.v12p0, fmc.gnd, 12.0)
@@ -41,29 +38,21 @@ pcb-module my-design :
 
   require rgmii:rgmii[2] from fpga
   require eth-0:ethernet-1000 from ethernet-jack[0]
-  connect phy (rgmii[0], eth-0)
+  connect-phy(rgmii[0], eth-0)
   require eth-1:ethernet-1000 from ethernet-jack[1]
-  connect phy (rgmii[1], eth-1)
+  connect-phy(rgmii[1], eth-1)
 
-  schematic-group(fmc) = fmc
-  schematic-group(ethernet-jack) = ethernet-jack
-  schematic-group(fpga) = fpga
+  ; schematic-group(fmc) = fmc
+  ; schematic-group(ethernet-jack) = ethernet-jack
+  ; schematic-group(fpga) = fpga
 
   ; Geometry constraints
   package(fmc) at loc(-18.5, 0.0, 90.0) on Top
   package(ethernet-jack[0]) at loc(15.0, 22.0, 270.0) on Top
   package(ethernet-jack[1]) at loc(15.0, -22.0, 270.0) on Top
 
-val main-design = default-board(my-design, 4, 60.0, 69.0)
-
-lower-esir()
-
-run-user-pass(generate-power)
-
-view(main-design)
-export-kicad("ethernet-fmc", [`place => true 
-                          `gen-board => true 
-                          `gen-schematic => true 
-                          `fresh => true 
-                          `schematic-version => 4
-                          `param-configs => [`sketch]] )
+val my-design* = transform-module(generate-power, my-design)
+make-default-board(my-design*, 4, 60.0, 69.0)
+set-export-board?(true)
+set-export-schematic?(true)
+export-cad()
