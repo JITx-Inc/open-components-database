@@ -169,7 +169,7 @@ public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg-name
   package = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
   reference-prefix = "C"
   spice :
-    "[C] {p[1]} tmp cap"
+    "[C] {p[1]} tmp {cap}"
     "[R] tmp {p[2]} 0.01"
   property(self.capacitor) = true
   property(self.type) = "ceramic"
@@ -202,7 +202,7 @@ public pcb-component gen-tant-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg
     else : fatal("Incorrect capacitor package %_." % [pkg])
   reference-prefix = "C"
   spice :
-    "[C] {a} tmp cap"
+    "[C] {a} tmp {cap}"
     "[R] tmp {c} 2.0"
   property(self.capacitor) = true
   property(self.type) = "electrolytic"
@@ -249,7 +249,7 @@ public pcb-component gen-res-cmp (r-type:String|False, res:Double, tol:Double, p
   property(self.tolerance) = (tol * 0.01)
   property(self.resistance) = res
   spice :
-    "[R] {p[1]} {p[2]} res"
+    "[R] {p[1]} {p[2]} {res}"
 
 public defn gen-res-cmp (res:Double, tol:Double, pkg:String) :
   gen-res-cmp(false, res, tol, 0.0625, pkg)
@@ -270,8 +270,8 @@ public pcb-component gen-ind-cmp (ind:Double, tol:Double, max-i:Double) :
   public port p : pin[1 through 2]
   emodel = Inductor(ind,tol,max-i)
 
-  symbol = inductor-sym(p[1] => p[1], p[2] => p[2])
-  package = INDC1005X55(p[1] => p[1], p[2] => p[2]) ;TODO: all inductors 0402
+  symbol = inductor-sym(p[1] => inductor-sym.p[1], p[2] => inductor-sym.p[2])
+  package = INDC1005X55(p[1] => INDC1005X55.p[1], p[2] => INDC1005X55.p[2]) ;TODO: all inductors 0402
   reference-prefix = "L"
   property(self.inductor) = true
   property(self.inductance) = ind
@@ -313,7 +313,7 @@ public defn bypass-caps (power-pin:JITObject|Symbol, gnd-pin:JITObject|Symbol, v
 
 public defn res-strap (first-pin:JITObject, second-pin:JITObject, params:Tuple<KeyValue>) :
   inside pcb-module:
-    public inst rid : chip-resistor(params)
+    inst rid : chip-resistor(params)
     net (first-pin, rid.p[1])
     net (second-pin, rid.p[2])
     rid
@@ -329,7 +329,7 @@ public defn cap-strap (first-pin:JITObject, second-pin:JITObject, capacitance:Do
 
 public defn cap-strap (first-pin:JITObject, second-pin:JITObject, params:Tuple<KeyValue>) :
   inside pcb-module:
-    public inst cap : ceramic-cap(params)
+    inst cap : ceramic-cap(params)
     net (first-pin, cap.p[1])
     net (second-pin, cap.p[2])
     cap
@@ -460,13 +460,13 @@ public defn add-testpoint (rs:Tuple<JITObject>, method:String) :
         var color = "yellow"
         ; if r == #R(gnd):
         ;   color = "black"
-        public inst tp : ocdb/keystone/500xx/component(color)
+        inst tp : ocdb/keystone/500xx/component(color)
         net (tp.p, r)
       else if method == "smd-loop" :
-        public inst tp : ocdb/te-connectivity/RC/component
+        inst tp : ocdb/te-connectivity/RC/component
         net (tp.p, r)
       else if method == "smd-pad" :
-        public inst tp : gen-testpad(2.0)
+        inst tp : gen-testpad(2.0)
         net (tp.p, r)
       else :
         fatal("Unsupported add-testpoint method.")
@@ -533,9 +533,9 @@ public defn dip-pull (pins:Tuple<JITObject>, power-pin:JITObject, gnd-pin:JITObj
 ; [TODO] pin-less symbol
 public pcb-component mounting-hole-cmp (drill-r:Double, pad-r:Double, mask-r:Double) :
   val pkg = non-plated-hole-pkg(drill-r, mask-r)
-  package = pkg([])
+  package = pkg()
   reference-prefix = "H"
-  symbol = unplated-hole-sym([])
+  symbol = unplated-hole-sym()
 
 public defn mounting-hole-cmp (drill-r:Double, pad-r:Double) :
   mounting-hole-cmp(drill-r, pad-r, pad-r + 0.35)
