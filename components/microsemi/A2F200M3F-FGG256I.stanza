@@ -403,8 +403,8 @@ public pcb-component component :
       fpga-diff.P => p
       apply-lvds-params(p, 0.9, 1.25, [0.25 0.350 0.450], [1.125 1.250 1.375], [0.100 0.350 0.600], [0.05 1.25 2.35])
       apply-voltage-rating-params(p, [0.0 2.925])
-  for apin in ports(self) do :
-    val s = to-string(apin)
+  for apin in pins(self) do :
+    val s = to-string(ref(apin))
     if prefix?(s, "IO") :
       val n = length(s)
       val is-p? = (n > 4) and s[4] == 'P'
@@ -416,8 +416,8 @@ public pcb-component component :
           if hyphen is Int : s[0 to (hyphen as Int)]
           else : s
         val twin-part = replace-at(first-part, 4, 'N')
-        val twin-port = for p in ports(self) find! :
-          prefix?(to-string(p), twin-part)
+        val twin-port = for p in pins(self) find! :
+          prefix?(to-string(ref(p)), twin-part)
         assign-diff(apin, twin-port)
       assign-se(apin)
   spice:
@@ -447,19 +447,19 @@ public pcb-module module :
   inst fpga : ocdb/microsemi/A2F200M3F-FGG256I/component
   pin gnd 
   net (gnd src-1V5.gnd, src-3V3.gnd, src-io.gnd)
-  for p in ports(fpga) do :
-    val pin-name = to-string(p)
+  for p in pins(fpga) do :
+    val pin-name = to-string(ref(p))
     if substring?(pin-name, "GND") : net (gnd, p)
     for n in ["VCCFPGAIOB" "VCCMSSIOB"] do : if substring?(pin-name, n) : net (src-io.vdd, p)
     for n in ["VCC15A" "VCC15ADC"] do : if substring?(pin-name, n) : net (src-1V5.vdd, p, fpga.VCC)
     for n in ["VPP" "VCC33A" "VCC33ADC" "VCC33AP" "VCC33SDD" "VCCMAINXTAL" "VCCLPXTAL"] do : if substring?(pin-name, n) : net (src-3V3.vdd, p)
   
   property(fpga.VCCFPGAIOB[0].power-request) = [1.8 0.1 5.0e-5]
-  property(fpga.VCCFPGAIOB[0].gnd-ref) = #R(GND)
+  property(fpga.VCCFPGAIOB[0].gnd-ref) = fpga.GND
   property(fpga.VCC15A.power-request) = [1.5 0.7 5.0e-2]
-  property(fpga.VCC15A.gnd-ref) = #R(GND)
+  property(fpga.VCC15A.gnd-ref) = fpga.GND
   property(fpga.VPP.power-request) = [3.3 0.05 5.0e-2]
-  property(fpga.VPP.gnd-ref) = #R(GND)
+  property(fpga.VPP.gnd-ref) = fpga.GND
 
   net (sys-i2c[0].sda, fpga.I2C_0_SDA-GPIO[22])
   net (sys-i2c[0].scl, fpga.I2C_0_SCL-GPIO[23])
