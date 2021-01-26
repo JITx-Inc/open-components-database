@@ -113,13 +113,27 @@ pcb-module sensor-mote :
 
 ; val main-design = default-board(sensor-mote, 4, 30.0,18.0)
 
+println("RUNNING")
+
 ; Net up any gnd pins that we missed.
-var sensor-mote* = transform-module(connect-gnd-pins, sensor-mote)
+val ref-timer = MillisecondTimer("REF")
+val timer = MillisecondTimer("TRANSFORM")
+start(timer)
+var sensor-mote* = transform-module(connect-gnd-pins{ ref-timer }, sensor-mote)
+stop(timer)
+
+println("TRANSFORMED %_ REF %_" % [timer, ref-timer])
 
 ; Run evals
 sensor-mote* = run-evals(sensor-mote*)
 
+println("EVALED")
+
 make-default-board(sensor-mote*, 4, 30.0, 18.0)
-set-export-board?(true)
-set-export-schematic?(true)
+println("DEFAULT BOARD MADE")
+
+; set-export-board?(true)
+; set-export-schematic?(true)
+println("VIEWING")
 view-board()
+view-schematic()
