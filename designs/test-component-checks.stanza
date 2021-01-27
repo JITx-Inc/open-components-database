@@ -1,44 +1,39 @@
-#use-added-syntax(esir)
+#use-added-syntax(esir2)
 defpackage ocdb/demo :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import esir/fonts
-  import esir/repl-lib
+  import esir2
+  import esir2/repl-lib
   import ocdb/tests/default-harness
-  import ocdb/pinspec
   import ocdb/checks
   import ocdb/generator-utils
   import ocdb/land-patterns
 
   import ocdb/bundles
-  import jitpcb/visualizer
   import ocdb/stackups
   import ocdb/rules
   import ocdb/symbols
-  import ocdb/box-symbol
+  import ocdb/box-symbol2
 
 pcb-component test-res :
   mpn = "ERJ-2RKF10R0X"
   manufacturer = "Panasonic"
   reference-prefix = "R"
-  port p : pin[{1 2}]
-  symbol = {resistor-sym(false)}(p[1] => p[1], p[2] => p[2])
-  package = {ipc-two-pin-package("0402")}(p[1] => p[1], p[2] => p[2])
-  properties :
-    resistor => true
-    type => "thick-film"
-    rated-voltage => 50.0
-    rated-power => 0.063
-    derating => [[-60.0 1.0] [70.0 1.0] [155.0 0.0]]
-    TCR => 100.0
-    rated-temperature => [-55.0 155.0]
-    resistance => 10.0
-    tolerance => 0.01
-
+  port p : pin[[1 2]]
+  val sym = resistor-sym(false)
+  val pkg = ipc-two-pin-package("0402")
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+  package = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+  property(self.resistor) = true
+  property(self.type) = "thick-film"
+  property(self.rated-voltage) = 50.0
+  property(self.rated-power) = 0.063
+  property(self.derating) = [[-60.0 1.0] [70.0 1.0] [155.0 0.0]]
+  property(self.TCR) = 100.0
+  property(self.rated-temperature) = [-55.0 155.0]
+  property(self.resistance) = 10.0
+  property(self.tolerance) = 0.01
 
   spice:
     "[R] {p[1]} {p[2]} 10"
@@ -47,17 +42,19 @@ pcb-component test-cap-ceramic :
   mpn = "GRM155R70J105KA12D"
   manufacturer = "Murata"
   reference-prefix = "C"
-  port p : pin[{1 2}]
+  port p : pin[[1 2]]
 
-  symbol = {capacitor-sym(false)}(p[1] => p[1], p[2] => p[2])
-  package = {ipc-two-pin-package("0402")}(p[1] => p[1], p[2] => p[2])
-  properties :
-    capacitor => true
-    type => "ceramic"
-    capacitance => 1.0e-6
-    tolerance => 10.0
-    rated-voltage => 6.3
-    rated-temperature => [-55.0 125.0]
+  val sym = capacitor-sym(false)
+  val pkg = ipc-two-pin-package("0402")
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+  package = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+  property(self.capacitor) = true
+  property(self.type) = "ceramic"
+  property(self.capacitance) = 1.0e-6
+  property(self.tolerance) = 10.0
+  property(self.rated-voltage) = 6.3
+  property(self.rated-temperature) = [-55.0 125.0]
+
   spice:
     "[C] {p[1]} 1 100u"
     "[R] 1 {p[2]} 0"
@@ -69,20 +66,20 @@ pcb-component test-cap-tantalum-mno2 :
   pin a
   pin c
 
-  symbol = {capacitor-sym(true)}(a => p[1], c => p[2])
-  package = {ipc-two-pin-package("0402")}(a => p[1], c => p[2])
-  properties :
-    capacitor => true
-    type => "electrolytic"
-    anode => "tantalum"
-    electrolyte => "manganese-dioxide"
-    capacitance => 1.0e-6
-    tolerance => 20.0
-    rated-voltage => 20.0
-    rated-current-pk => 0.147
-    rated-current-rms => [[25.0 0.091] [85.0 0.082] [125.0 0.036]]
-    rated-temperature => [-55.0 125.0]
-
+  val sym = capacitor-sym(true)
+  val pkg = ipc-two-pin-package("0402")
+  symbol = sym(a => sym.p[1], c => sym.p[2])
+  package = pkg(a => pkg.p[1], c => pkg.p[2])
+  property(self.capacitor) = true
+  property(self.type) = "electrolytic"
+  property(self.anode) = "tantalum"
+  property(self.electrolyte) = "manganese-dioxide"
+  property(self.capacitance) = 1.0e-6
+  property(self.tolerance) = 20.0
+  property(self.rated-voltage) = 20.0
+  property(self.rated-current-pk) = 0.147
+  property(self.rated-current-rms) = [[25.0 0.091] [85.0 0.082] [125.0 0.036]]
+  property(self.rated-temperature) = [-55.0 125.0]
 
   spice :  
     "[C] {a} 1 100u"
@@ -95,20 +92,21 @@ pcb-component test-cap-tantalum-polymer :
   pin c
 
   reference-prefix = "C"
-  symbol = {capacitor-sym(true)}(a => p[1], c => p[2])
-  package = {ipc-two-pin-package("0402")}(a => p[1], c => p[2])
+  val sym = capacitor-sym(true)
+  val pkg = ipc-two-pin-package("0402")
+  symbol = sym(a => sym.p[1], c => sym.p[2])
+  package = pkg(a => pkg.p[1], c => pkg.p[2])
 
-  properties :
-    capacitor => true
-    type => "electrolytic"
-    anode => "tantalum"
-    electrolyte => "polymer"
-    capacitance => 100.0e-6
-    rated-voltage => 10.0
-    tolerance => 20.0
-    rated-current-pk => 3.7
-    rated-current-rms => [[25.0 0.298] [85.0 0.268] [125.0 0.119]]
-    rated-temperature => [-55.0 125.0]
+  property(self.capacitor) = true
+  property(self.type) = "electrolytic"
+  property(self.anode) = "tantalum"
+  property(self.electrolyte) = "polymer"
+  property(self.capacitance) = 100.0e-6
+  property(self.rated-voltage) = 10.0
+  property(self.tolerance) = 20.0
+  property(self.rated-current-pk) = 3.7
+  property(self.rated-current-rms) = [[25.0 0.298] [85.0 0.268] [125.0 0.119]]
+  property(self.rated-temperature) = [-55.0 125.0]
 
   spice:
    "[C] {a} 1 100u"
@@ -137,19 +135,19 @@ pcb-module checks :
   net (r2.p[2], tant-mno.a, r3.p[1])
   net (r3.p[2], tant-poly.a)
 
-  inst ldo : {ocdb/texas-instruments/TLV743P/component(2.5)}
-  inst fmc : {ocdb/samtec/ASP-134488-01/component}
+  inst ldo : ocdb/texas-instruments/TLV743P/component(2.5)
+  inst fmc : ocdb/samtec/ASP-134488-01/component
 
-  spice: 
-    "[V] {fmc.v3p3} {fmc.gnd} 3.3"
+  ; spice: 
+  ;   "[V] {fmc.v3p3} {fmc.gnd} 3.3"
+    
   net gnd (ceramic.p[2] tant-poly.c tant-mno.c, ldo.gnd fmc.gnd)
 
   net (fmc.v3p3 ldo.in ldo.en)
   net (r4.p[1] ldo.out)
 
-  properties(fmc.v3p3):
-    supply-pin => true
-    voltage => [3.0 3.3 6.0]
+  property(fmc.v3p3.supply-pin) = true
+  property(fmc.v3p3.voltage) = [3.0 3.3 6.0]
 
   require out:gpio[10] from fmc
   require in:gpio[10] from fmc
@@ -159,24 +157,24 @@ pcb-module checks :
   require in-d:lvds[10] from fmc
   net (in-d out-d)
 
-  spice:
-    ".tran 0.001ms 5m"
-    "[V] {r1.p[1]} {tant-mno.c} 5"
-    "[S] {r4.p[2]} {ldo.gnd} c {ldo.gnd} switch1"
-    ".model switch1 sw vt=0 vh=0.1 ron=0.1 roff=100k"
-    "[Vs] c {ldo.gnd} pulse(-1.0 1.0 1000u 100u 1000u 1000u 3000u)"
+  ; spice:
+  ;   ".tran 0.001ms 5m"
+  ;   "[V] {r1.p[1]} {tant-mno.c} 5"
+  ;   "[S] {r4.p[2]} {ldo.gnd} c {ldo.gnd} switch1"
+  ;   ".model switch1 sw vt=0 vh=0.1 ron=0.1 roff=100k"
+  ;   "[Vs] c {ldo.gnd} pulse(-1.0 1.0 1000u 100u 1000u 1000u 3000u)"
 
-  spice:
-    ".inc PMBT3904.lib"
-    ".inc TLV74315P_TRANS.LIB"
-    ".inc TLV74325P_TRANS.LIB"
-    ".inc TLV74333P_TRANS.LIB"
-    ".options gmin=1e-10"
-    ".options abstol=1e-7"
-    ".options reltol=0.003"
-    ".options cshunt=1e-15"
+  ; spice:
+  ;   ".inc PMBT3904.lib"
+  ;   ".inc TLV74315P_TRANS.LIB"
+  ;   ".inc TLV74325P_TRANS.LIB"
+  ;   ".inc TLV74333P_TRANS.LIB"
+  ;   ".options gmin=1e-10"
+  ;   ".options abstol=1e-7"
+  ;   ".options reltol=0.003"
+  ;   ".options cshunt=1e-15"
 
-  check-design()
+  ; check-design()
 
 
 pcb-board B :
@@ -184,15 +182,15 @@ pcb-board B :
   boundary = brd-outline 
   signal-boundary = brd-outline
 
-pcb-design main-design :
-  module = checks
-  board = B
-  rules = sierra-adv-rules
-
-print-esir("input.esir")
+set-main-module(checks)
+set-board(B)
+set-rules(sierra-adv-rules)
 
 ;Export design to Kicad
 ; export-netlist(checks.gnd, "hello-world.cir")
-export-kicad("checks", [`gen-schematic => true `fresh => true `place => true 
-                        `param-configs => [`sketch] `gen-board => true 
-                        `check-log => "checks.txt" `ground-reference => checks.gnd])
+set-export-board?(true)
+set-export-schematic?(true)
+export-cad()
+; export-kicad("checks", [`gen-schematic => true `fresh => true `place => true 
+;                         `param-configs => [`sketch] `gen-board => true 
+;                         `check-log => "checks.txt" `ground-reference => checks.gnd])
