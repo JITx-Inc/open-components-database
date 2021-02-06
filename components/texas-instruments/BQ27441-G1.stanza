@@ -1,0 +1,64 @@
+#use-added-syntax(esir)
+defpackage ocdb/texas-instruments/BQ27441-G1 :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  import jitpcb/visualizer
+
+public unique pcb-component component :
+  manufacturer = "Texas Instruments"
+  mpn = "BQ27441-G1"
+  description = "System-Side Impedance Track™ Fuel Gauge"
+
+  val ps = PinSpec $ #TABLE :
+    [Ref    | Int ...   | Dir   | Ref   ]
+    [BAT    | 6         | Left  | base  ]
+    [BIN    | 10        | Right | base  ]
+    [GPOUT  | 12        | Right | base  ]
+    [NC     | 4, 9, 11  | Left  | base  ]
+    [SCL    | 2         | Right | base  ]
+    [SDA    | 1         | Right | base  ]
+    [SRN    | 7         | Left  | base  ]
+    [SRP    | 8         | Left  | base  ]
+    [VDD    | 5         | Right | base  ]
+    [VSS    | 3         | Left  | base  ]
+    [TP     | 13        | Left  | base  ]
+
+  make-pins(ps)
+  make-box-symbol(ps)
+  assign-package(dfn-package(12, 0.4, [0.2, 0.85], -1.975, [4.0, 2.5], [2.45, 1.95]), ps)
+
+  supports i2c :
+    sda => SDA
+    scl => SCL
+  
+public unique pcb-module module :
+  inst ic : {ocdb/texas-instruments/BQ27441-G1/component}
+  pin gnd
+  pin batt-in
+  pin batt-out
+  port i2c-node : i2c
+
+  require i2c-port : i2c from ic
+  net (i2c-node, i2c-port)
+
+  net (gnd, ic.TP, ic.VSS)
+  net (batt-in, ic.SRP, ic.BAT)
+  net (batt-out, ic.SRN)
+
+  res-strap(batt-in, batt-out, 1.0e-2)
+  res-strap(batt-in, ic.GPOUT, 10.0e3)
+  cap-strap(ic.VDD, gnd, 0.47e-6)

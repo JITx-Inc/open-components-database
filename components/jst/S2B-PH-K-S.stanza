@@ -1,0 +1,46 @@
+#use-added-syntax(esir)
+defpackage ocdb/jst/S2B-PH-K-S:
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  import jitpcb/visualizer
+
+public unique pcb-component component :
+  pin p[1]
+  pin p[2]
+
+  symbol = {header-symbol(2, 1)}(p[1] => p[1], p[2] => p[2])
+
+  package = {jst-2-pkg}(p[1] => p[1], p[2] => p[2])
+
+
+pcb-package jst-2-pkg :
+  val n-pin = 2
+  val n-row = 2
+  val pin-pitch = 2.0
+  val row-pitch = 2.0
+  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch, pth-pad(0.7))
+
+  val n-col = to-int(ceil(to-double(n-pin) / to-double(n-row)))
+
+  val c-w = to-double(n-row) * row-pitch
+  val c-h = to-double(n-col) * pin-pitch
+
+  layer(Courtyard(Top)) = Rectangle(6.0, 8.0, loc(0.0, 2.2))
+  layer(Courtyard(Bottom)) = Rectangle(c-w, c-h)
+  layer(Silkscreen("f-silk", Top)) = LineRectangle(c-w, c-h)
+  
+  ref-label()

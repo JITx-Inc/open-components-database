@@ -1,0 +1,89 @@
+#use-added-syntax(esir)
+defpackage ocdb/texas-instruments/FDC2214 :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  import jitpcb/visualizer
+
+public unique pcb-component component :
+  manufacturer = "Texas Instruments"
+  mpn = "FDC2214QRGH"
+  description = "EMI-Resistant 28-Bit,12-Bit Capacitance-to-Digital Converter for Proximity and Level Sensing Applications"
+
+  val ps = PinSpec $ #TABLE :
+    [Ref    | Int ...   | Dir   | Ref   ]
+    [SCL    | 1         | Left  | base  ]
+    [SDA    | 2         | Left  | base  ]
+    [CLKIN  | 3         | Left  | base  ]
+    [ADDR   | 4         | Left  | base  ]
+    [INTB   | 5         | Left  | base  ]
+    [SD     | 6         | Left  | base  ]
+    [VDD    | 7         | Left  | base  ]
+    [GND    | 8         | Left  | base  ]
+    [IN0A   | 9         | Right | base  ]
+    [IN0B   | 10        | Right | base  ]
+    [IN1A   | 11        | Right | base  ]
+    [IN1B   | 12        | Right | base  ]
+    [IN2A   | 13        | Right | base  ]
+    [IN2B   | 14        | Right | base  ]
+    [IN3A   | 15        | Right | base  ]
+    [IN3B   | 16        | Right | base  ]
+
+  make-pins(ps)
+  make-box-symbol(ps)
+  assign-package(qfn-package(0.5, 3.8, 16, 0.25, 0.4, [2.6 2.6]), ps)
+
+  supports i2c :
+    sda => SDA
+    scl => SCL
+  
+public unique pcb-module module :
+  port i2c-node : i2c
+  pin gnd
+  pin vcc
+
+  inst cdc : {ocdb/texas-instruments/FDC2214/component}
+  inst clk : {ocdb/kyocera/KC2520B/module(40.0)}
+
+  net (gnd, cdc.GND)
+  net (vcc, cdc.VDD)
+
+  require i2c-port : i2c from cdc
+  net (i2c-node, i2c-port)
+
+  net (clk.clkout, cdc.CLKIN)
+  
+  cap-strap(cdc.IN0A, cdc.IN0B, 33.0e-12)
+  cap-strap(cdc.IN1A, cdc.IN1B, 33.0e-12)
+  cap-strap(cdc.IN2A, cdc.IN2B, 33.0e-12)
+  cap-strap(cdc.IN3A, cdc.IN3B, 33.0e-12)
+
+  inst l1 : {ocdb/bourns/CMH322522/component(18.0e-6)}
+  inst l2 : {ocdb/bourns/CMH322522/component(18.0e-6)}
+  inst l3 : {ocdb/bourns/CMH322522/component(18.0e-6)}
+  inst l4 : {ocdb/bourns/CMH322522/component(18.0e-6)}
+
+  net (cdc.IN0A, l1.p[1])
+  net (cdc.IN0B, l1.p[2])
+
+  net (cdc.IN1A, l2.p[1])
+  net (cdc.IN1B, l2.p[2])
+
+  net (cdc.IN2B, l3.p[1])
+  net (cdc.IN2B, l3.p[2])
+
+  net (cdc.IN3A, l4.p[1])
+  net (cdc.IN3A, l4.p[2])
