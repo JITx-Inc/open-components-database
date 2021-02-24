@@ -288,52 +288,52 @@ public defn gen-ind-cmp (ind:Double) :
 ; ========================================================
 ; These functions attach a passive component between two pins. e.g. strap a pull up resistor between an IO and VDD
 
-public defn bypass-cap-strap (power-pin:JITObject, gnd-pin:JITObject, capacitance:Double ):
+public defn bypass-cap-strap (power-pin:JITXObject, gnd-pin:JITXObject, capacitance:Double ):
   inside pcb-module:
     val cap = cap-strap(gnd-pin, power-pin, capacitance)
     short-trace(cap.p[2], power-pin)
     cap
 
-public defn bypass-caps (power-pin:JITObject|Symbol, gnd-pin:JITObject|Symbol, voltage:Double, caps:Tuple<Double>, name:Symbol) :
+public defn bypass-caps (power-pin:JITXObject|Symbol, gnd-pin:JITXObject|Symbol, voltage:Double, caps:Tuple<Double>, name:Symbol) :
   inside pcb-module:
     val n-caps = length(caps)
     for i in 0 to n-caps do :
       public inst c : ceramic-cap(["capacitance" => caps[i], "min-rated-voltage" => voltage])
       match(power-pin) :
-        (r:JITObject) :
+        (r:JITXObject) :
           net (r, c.p[1])
         (s:Symbol) :
           make-net(s, false, [c.p[1]], false)
       match(gnd-pin) :
-        (r:JITObject) :
+        (r:JITXObject) :
           net (r, c.p[2])
         (s:Symbol) :
           make-net(s, false, [c.p[2]], false)
 
-public defn res-strap (first-pin:JITObject, second-pin:JITObject, params:Tuple<KeyValue>) :
+public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple<KeyValue>) :
   inside pcb-module:
     inst rid : chip-resistor(params)
     net (first-pin, rid.p[1])
     net (second-pin, rid.p[2])
     rid
 
-public defn res-strap (first-pin:JITObject, second-pin:JITObject, res:Double, tol:Double) :
+public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, res:Double, tol:Double) :
   res-strap(first-pin, second-pin, ["resistance" => res "tolerance" => tol])
 
-public defn res-strap (first-pin:JITObject, second-pin:JITObject, res:Double ) :
+public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, res:Double ) :
   res-strap(first-pin, second-pin, ["resistance" => res])
   
-public defn cap-strap (first-pin:JITObject, second-pin:JITObject, capacitance:Double ) :
+public defn cap-strap (first-pin:JITXObject, second-pin:JITXObject, capacitance:Double ) :
   cap-strap( first-pin, second-pin, ["capacitance" => capacitance] )
 
-public defn cap-strap (first-pin:JITObject, second-pin:JITObject, params:Tuple<KeyValue>) :
+public defn cap-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple<KeyValue>) :
   inside pcb-module:
     inst cap : ceramic-cap(params)
     net (first-pin, cap.p[1])
     net (second-pin, cap.p[2])
     cap
 
-public defn default-bypass (cmp:JITObject) :
+public defn default-bypass (cmp:JITXObject) :
   inside pcb-module:
     for p in ports(cmp) do :
       if has-property?(p.power-pin) :
@@ -343,13 +343,13 @@ public defn default-bypass (cmp:JITObject) :
         short-trace(cap.p[1], p)
         net (cap.p[2], cmp.gnd)
 
-public defn block-cap (in:JITObject, out:JITObject, cap:Double) :
+public defn block-cap (in:JITXObject, out:JITXObject, cap:Double) :
   inside pcb-module :
     public inst block : ceramic-cap(cap)
     net (in, block.p[1])
     net (out, block.p[2])
 
-public defn block-cap (in:JITObject, out:JITObject) :
+public defn block-cap (in:JITXObject, out:JITXObject) :
   block-cap(in, out, 100.0e-6)
 
 
@@ -396,7 +396,7 @@ public defn pin-header (n-pin: Int, n-row: Int, pin-pitch:Double) :
 
 ; [TODO] is gnd from self? Yes, it is from self. Add in when this area is uncommented.
 ;<gnd>
-public defn sma-connector (sig:JITObject, launch:String) :
+public defn sma-connector (sig:JITXObject, launch:String) :
   inside pcb-module :
     if launch == "end-launch":
       public inst c : ocdb/johnson/142-0761-881/component
@@ -406,7 +406,7 @@ public defn sma-connector (sig:JITObject, launch:String) :
     else :
       fatal("Unsupported SMA Connector type")
 
-public defn bnc-connector (sig:JITObject, launch:String) :
+public defn bnc-connector (sig:JITXObject, launch:String) :
   inside pcb-module :
     if launch == "end-launch":
       public inst c : ocdb/amphenol/112640/component
@@ -437,7 +437,7 @@ public pcb-module micro-usb-connector :
   net ID (usb-2.id con.ID)
 
 ; Add a tag-connect landing pattern to a processor
-public defn attach-programming-connector (proc:JITObject, vio:JITObject, intf:String):
+public defn attach-programming-connector (proc:JITXObject, vio:JITXObject, intf:String):
   inside pcb-module:
     public inst tag : ocdb/tag-connect/TC2050-IDC-NL/module
     net (vio, tag.pwr)
@@ -452,7 +452,7 @@ public defn attach-programming-connector (proc:JITObject, vio:JITObject, intf:St
 ; ================== Testpoint functions =================
 ; ========================================================
 
-public defn add-testpoint (rs:Tuple<JITObject>, method:String) :
+public defn add-testpoint (rs:Tuple<JITXObject>, method:String) :
   inside pcb-module :
     for r in rs do :
       if method == "pth-loop" :
@@ -470,7 +470,7 @@ public defn add-testpoint (rs:Tuple<JITObject>, method:String) :
       else :
         fatal("Unsupported add-testpoint method.")
 
-public defn add-testpoint (rs:Tuple<JITObject>) :
+public defn add-testpoint (rs:Tuple<JITXObject>) :
   add-testpoint(rs, "pth-loop")
 
 public pcb-component gen-testpad (d:Double) :
@@ -479,7 +479,7 @@ public pcb-component gen-testpad (d:Double) :
   val pkg = testpad(d)
   package = pkg(tp => pkg.tp)
 
-public defn add-testpad (rs:Tuple<JITObject>, d:Double) :
+public defn add-testpad (rs:Tuple<JITXObject>, d:Double) :
   inside pcb-module :
     for r in rs do :
       public inst tp : gen-testpad(d)
@@ -506,7 +506,7 @@ public defn btm-smd-testpoint-cmp () :
   btm-smd-testpoint-cmp(2.0)
 
 ;<gnd>
-public defn filter (in:JITObject, out:JITObject, type:String, params:Tuple<Double>) :
+public defn filter (in:JITXObject, out:JITXObject, type:String, params:Tuple<Double>) :
   inside pcb-module:
     if type == "rc-lowpass" :
       public inst r : chip-resistor(params[0], 0.01)
@@ -518,7 +518,7 @@ public defn filter (in:JITObject, out:JITObject, type:String, params:Tuple<Doubl
       fatal("Unsupported add-testpoint method.")
 ;<gnd>
 
-public defn dip-pull (pins:Tuple<JITObject>, power-pin:JITObject, gnd-pin:JITObject) :
+public defn dip-pull (pins:Tuple<JITXObject>, power-pin:JITXObject, gnd-pin:JITXObject) :
   inside pcb-module :
     val n = length(pins)
     public inst dip : ocdb/cts/219/component(n)
@@ -617,11 +617,11 @@ public pcb-module inverted-f-antenna :
 ; 4 - 10 mcd for indoor
 
 ; Adds an RGB led to a processor using PWM pins
-public defn add-rgb-indicator (brightness:Double, proc:JITObject, vin:JITObject):
+public defn add-rgb-indicator (brightness:Double, proc:JITXObject, vin:JITXObject):
   inside pcb-module:
     val vio = 3.3 ; TODO: get this from the vin pin property
     ; Calculate resistance to get appropriate brightness
-    defn calc-r (l:JITObject, brightness:Double, vio:Double):
+    defn calc-r (l:JITXObject, brightness:Double, vio:Double):
       val i = PWL(property(l.mcd-current))[brightness]
       closest-std-val((vio - property(l.forward-voltage)) / i, 1.0)
     

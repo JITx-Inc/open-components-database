@@ -11,7 +11,7 @@ defpackage ocdb/box-symbol :
 ;============================================================
 
 public defn box-symbol (input-width:Double, input-height:Double,
-                        num-left:Int, num-right:Int, num-top:Int, num-bottom:Int) -> JITSymbol :
+                        num-left:Int, num-right:Int, num-top:Int, num-bottom:Int) -> SchematicSymbol :
   ;Snapping behaviour
   defn snap-grid-up (x:Double, units:Double) :
     val spacing = grid(units)
@@ -122,13 +122,13 @@ The algorithm first groups all the pins on a given side:
    Up => p[0], p[2], p[3] ...
    Down => p[4]
 Then generates a new box symbol suitable for displaying the given
-entries and returns [box-sym, pin-mappings], where box-sym is the JITSymbol
+entries and returns [box-sym, pin-mappings], where box-sym is the SchematicSymbol
 corresponding to the newly generated box symbol, and pin-mappings is the mappings
 between the component pins and symbol pins.
 ;======================================================================
 ;=================================================================<doc>
 
-defn generate-box-symbol-unit (all-entries:Vector<KeyValue<Dir,JITPin>>) -> [JITSymbol, Vector<KeyValue<JITPin,JITSymbolPin>>] :
+defn generate-box-symbol-unit (all-entries:Vector<KeyValue<Dir,Pin>>) -> [SchematicSymbol, Vector<KeyValue<Pin,SymbolPin>>] :
   ;Pitch between pins
   val spacing = grid(1.0)
 
@@ -140,7 +140,7 @@ defn generate-box-symbol-unit (all-entries:Vector<KeyValue<Dir,JITPin>>) -> [JIT
     math/floor(x / spacing) * spacing    
 
   ;Retrieve entries
-  defn get-pins (dir:Dir) -> Tuple<JITPin> :
+  defn get-pins (dir:Dir) -> Tuple<Pin> :
     to-tuple(seq(value, filter({key(_) == dir}, all-entries)))
   defn num-pins (dir:Dir) :
     count({key(_) == dir}, all-entries)
@@ -151,7 +151,7 @@ defn generate-box-symbol-unit (all-entries:Vector<KeyValue<Dir,JITPin>>) -> [JIT
     val ps = get-pins(dir)
     val n = length(ps)
     val total-pitch = max(0.0, snap-grid-up(grid(1.0) * to-double(n - 1)))
-    defn text-length (pin:JITPin) :
+    defn text-length (pin:Pin) :
       val r = ref(pin)
       val string = to-string(r) ;to-string(flatten(KicadFlattener(), r))
       kicad-string-length(string, 0.762) + grid(0.5)
@@ -187,10 +187,10 @@ defn generate-box-symbol-unit (all-entries:Vector<KeyValue<Dir,JITPin>>) -> [JIT
                            num-pins(Down))
   
   ;Create pin mappings
-  val pin-mappings = Vector<KeyValue<JITPin,JITSymbolPin>>()
+  val pin-mappings = Vector<KeyValue<Pin,SymbolPin>>()
   defn assign-pins (dir:Dir, sympin:Ref) :
     for (p in get-pins(dir), i in 0 to false) do :
-      add(pin-mappings, p => dot(box-sym, IndexRef(sympin,i)) as JITSymbolPin)
+      add(pin-mappings, p => dot(box-sym, IndexRef(sympin,i)) as SymbolPin)
   assign-pins(Left, VarRef(`L))
   assign-pins(Right, VarRef(`R))
   assign-pins(Up, VarRef(`T))
@@ -203,7 +203,7 @@ defn generate-box-symbol-unit (all-entries:Vector<KeyValue<Dir,JITPin>>) -> [JIT
 ;======== Public Interface: Create a Single Box Unit ========
 ;============================================================
 
-public defn make-box-symbol (entries:Seqable<KeyValue<Dir, JITObject|Seqable<JITObject>>>) :
+public defn make-box-symbol (entries:Seqable<KeyValue<Dir, JITXObject|Seqable<JITXObject>>>) :
   val [sym, mapping] = generate-box-symbol-unit(flatten-pin-entries(entries))
   inside pcb-component :
     symbol = sym(
@@ -215,7 +215,7 @@ public defn make-box-symbol (entries:Seqable<KeyValue<Dir, JITObject|Seqable<JIT
 ;============================================================
 
 public defstruct BoxBank :
-  entries: Collection<KeyValue<Dir,JITObject|Seqable<JITObject>>>
+  entries: Collection<KeyValue<Dir,JITXObject|Seqable<JITXObject>>>
 
 public defn make-box-symbol (banks:Seqable<BoxBank>) :
   inside pcb-component :
@@ -244,7 +244,7 @@ public defn make-box-symbol (banks:Seqable<BoxBank>) :
 ;=======================================================<doc>
 
 public defn make-box-symbol () :
-  defn ensure-good-sides! (pins:Tuple<JITObject>, sides:Tuple<Maybe>) -> Tuple<Dir> :
+  defn ensure-good-sides! (pins:Tuple<JITXObject>, sides:Tuple<Maybe>) -> Tuple<Dir> :
     ;Check that all pins.side is either Dir or not given.
     for (p in pins, s in sides) do :
       if value?(s) is-not Dir|False :
@@ -259,7 +259,7 @@ public defn make-box-symbol () :
         if empty?(s) : One(ref(p))
         else : None()
       throw(MissingSideProperty(to-tuple(ps)))      
-  defn ensure-good-banks! (pins:Tuple<JITObject>, banks:Tuple<Maybe>) :
+  defn ensure-good-banks! (pins:Tuple<JITXObject>, banks:Tuple<Maybe>) :
     ;Check that all pins.banks is either Int|Ref or not given.
     for (p in pins, b in banks) do :
       if value?(b) is-not Int|Ref|False :
@@ -307,18 +307,18 @@ public defn make-box-symbol () :
 ;======================= Utilities ==========================
 ;============================================================
 
-defn flatten-pin-entries (es:Seqable<KeyValue<Dir,JITObject|Seqable<JITObject>>>) -> Vector<KeyValue<Dir,JITPin>> :
-  val entries = Vector<KeyValue<Dir,JITPin>>()
+defn flatten-pin-entries (es:Seqable<KeyValue<Dir,JITXObject|Seqable<JITXObject>>>) -> Vector<KeyValue<Dir,Pin>> :
+  val entries = Vector<KeyValue<Dir,Pin>>()
   for e in es do :
     match(value(e)) :
-      (p:JITPin) : add(entries, key(e) => p)
-      (ps:Seqable<JITPin>) : do(add{entries, key(e) => _}, ps)
+      (p:Pin) : add(entries, key(e) => p)
+      (ps:Seqable<Pin>) : do(add{entries, key(e) => _}, ps)
   entries
 
 ;============================================================
 ;====================== Errors ==============================
 ;============================================================
-public pcb-struct ocdb/box-symbol2/IncorrectSideProperty <: Exception :
+public pcb-struct ocdb/box-symbol/IncorrectSideProperty <: Exception :
   pin: Ref
   actual-type: String
   
@@ -326,13 +326,13 @@ defmethod print (o:OutputStream, e:IncorrectSideProperty) :
   print(o, "Property %_.side is expected to be a Dir object but is instead of type %_." % [
     pin(e), actual-type(e)])
   
-public pcb-struct ocdb/box-symbol2/MissingSideProperty <: Exception :
+public pcb-struct ocdb/box-symbol/MissingSideProperty <: Exception :
   pins: Tuple<Ref>
 
 defmethod print (o:OutputStream, e:MissingSideProperty) :
   print(o, "Pins %, do not have a .side property." % [pins(e)])
   
-public pcb-struct ocdb/box-symbol2/IncorrectBankProperty <: Exception :
+public pcb-struct ocdb/box-symbol/IncorrectBankProperty <: Exception :
   pin: Ref
   actual-type: String
 
@@ -340,7 +340,7 @@ defmethod print (o:OutputStream, e:IncorrectBankProperty) :
   print(o, "Property %_.bank is expected to be a Int|Ref object but is instead of type %_." % [
     pin(e), actual-type(e)])
   
-public pcb-struct ocdb/box-symbol2/MissingBankProperty <: Exception :
+public pcb-struct ocdb/box-symbol/MissingBankProperty <: Exception :
   pins: Tuple<Ref>
 
 defmethod print (o:OutputStream, e:MissingBankProperty) :
