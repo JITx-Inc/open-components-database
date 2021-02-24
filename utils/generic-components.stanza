@@ -165,7 +165,7 @@ public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg-name
   val sym = capacitor-sym(false)
   val pkg = ipc-two-pin-package(pkg-name)
   symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
-  package = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+  landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
   reference-prefix = "C"
   spice :
     "[C] {p[1]} tmp {cap}"
@@ -194,10 +194,10 @@ public pcb-component gen-tant-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg
   symbol = sym(a => sym.p[1], c => sym.p[2])
   emodel = Capacitor(cap, tol, max-v)
   switch(pkg) :
-    "0402" : package = CAPT1005X55(a => CAPT1005X55.p[1] c => CAPT1005X55.p[2])
-    "0603" : package = CAPT1608X80(a => CAPT1608X80.p[1] c => CAPT1608X80.p[2])
-    "0805" : package = CAPT2012X125(a => CAPT2012X125.p[1] c => CAPT2012X125.p[2])
-    "1206" : package = CAPT3216X160(a => CAPT3216X160.p[1] c => CAPT3216X160.p[2])
+    "0402" : landpattern = CAPT1005X55(a => CAPT1005X55.p[1] c => CAPT1005X55.p[2])
+    "0603" : landpattern = CAPT1608X80(a => CAPT1608X80.p[1] c => CAPT1608X80.p[2])
+    "0805" : landpattern = CAPT2012X125(a => CAPT2012X125.p[1] c => CAPT2012X125.p[2])
+    "1206" : landpattern = CAPT3216X160(a => CAPT3216X160.p[1] c => CAPT3216X160.p[2])
     else : fatal("Incorrect capacitor package %_." % [pkg])
   reference-prefix = "C"
   spice :
@@ -235,7 +235,7 @@ public pcb-component gen-res-cmp (r-type:String|False, res:Double, tol:Double, p
   val sym = resistor-sym(r-type)
   val pkg = ipc-two-pin-package(pkg-name)
   symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
-  package = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+  landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
   emodel = Resistor(res,tol,pwr)
   reference-prefix = "R"
   property(self.resistor) = true
@@ -270,7 +270,7 @@ public pcb-component gen-ind-cmp (ind:Double, tol:Double, max-i:Double) :
   emodel = Inductor(ind,tol,max-i)
 
   symbol = inductor-sym(p[1] => inductor-sym.p[1], p[2] => inductor-sym.p[2])
-  package = INDC1005X55(p[1] => INDC1005X55.p[1], p[2] => INDC1005X55.p[2]) ;TODO: all inductors 0402
+  landpattern = INDC1005X55(p[1] => INDC1005X55.p[1], p[2] => INDC1005X55.p[2]) ;TODO: all inductors 0402
   reference-prefix = "L"
   property(self.inductor) = true
   property(self.inductance) = ind
@@ -477,7 +477,7 @@ public pcb-component gen-testpad (d:Double) :
   pin tp
   symbol = test-point-sym(tp => test-point-sym.p)
   val pkg = testpad(d)
-  package = pkg(tp => pkg.tp)
+  landpattern = pkg(tp => pkg.tp)
 
 public defn add-testpad (rs:Tuple<JITXObject>, d:Double) :
   inside pcb-module :
@@ -489,14 +489,14 @@ public pcb-component top-smd-testpoint-cmp (d:Double) :
   pin p
   symbol = test-point-sym(p => test-point-sym.p)
   val pkg = top-smd-testpoint-pkg(d)
-  package = pkg(p => pkg.p)
+  landpattern = pkg(p => pkg.p)
   reference-prefix = "TP"
 
 public pcb-component btm-smd-testpoint-cmp (d:Double) :
   pin p
   symbol = test-point-sym(p => p)
   val pkg = btm-smd-testpoint-pkg(d)
-  package = pkg(p => pkg.p)
+  landpattern = pkg(p => pkg.p)
   reference-prefix = "TP"
 
 public defn top-smd-testpoint-cmp () :
@@ -530,7 +530,7 @@ public defn dip-pull (pins:Tuple<JITXObject>, power-pin:JITXObject, gnd-pin:JITX
 
 public pcb-component mounting-hole-cmp (drill-r:Double, pad-r:Double, mask-r:Double) :
   val pkg = non-plated-hole-pkg(drill-r, mask-r)
-  package = pkg()
+  landpattern = pkg()
   reference-prefix = "H"
   symbol = unplated-hole-sym()
 
@@ -564,7 +564,7 @@ public defn board-mounting-holes (w:Double, h:Double, s:String|Double) :
 ; ===================== Antennas =========================
 ; ========================================================
 
-pcb-package ant-2GHz4-inverted-f-geom :
+pcb-landpattern ant-2GHz4-inverted-f-geom :
 
   pad launch : smd-pad(0.5, 0.5) at loc(0.0, 0.25)
   pad gnd : smd-pad(0.9, 0.5) at loc(-2.1, 0.25)
@@ -589,7 +589,7 @@ public pcb-component inverted-f-antenna-cmp :
   description = "2.4 GHz Inverted F trace antenna"
   val pkg = ant-2GHz4-inverted-f-geom
   val sym = antenna-symbol(1,1)
-  package = pkg(launch => pkg.launch, gnd => pkg.gnd)
+  landpattern = pkg(launch => pkg.launch, gnd => pkg.gnd)
   symbol = sym(launch => sym.p[1], gnd => sym.p[2])
 
 
