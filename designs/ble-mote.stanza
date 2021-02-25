@@ -5,14 +5,13 @@ defpackage ocdb/designs/ble-mote :
   import math
   import jitx
   import jitx/commands
-  import ocdb/defaults
-  import ocdb/generator-utils
+
   import ocdb/bundles
-  import ocdb/design-vars
-  import ocdb/generic-components
-  import ocdb/rules
-  import ocdb/power-regulators
   import ocdb/connects
+  import ocdb/defaults
+  import ocdb/design-vars
+  import ocdb/generator-utils
+  import ocdb/generic-components
 
 OPERATING-TEMPERATURE = [-20.0 50.0]
 OPTIMIZE-FOR = ["area"]
@@ -38,6 +37,7 @@ pcb-module pms7003 :
 
 pcb-module sensor-mote :
   ; Add USB connector
+  pin barfo
   public inst usb : micro-usb-connector
   package(usb.con) at loc(-10.0, -7.3) on Top
 
@@ -111,14 +111,25 @@ pcb-module sensor-mote :
   ; Apply groups to sub-circuits for schematic and layout
   group-modules([[proc  ant] [hum] [usb ldo] [particle-counter]])
 
-; val main-design = default-board(sensor-mote, 4, 30.0,18.0)
-
+; Run a function to programmatically connect all gnd pins
 var sensor-mote* = transform-module(connect-gnd-pins, sensor-mote)
 
-; Run evals
-sensor-mote* = run-evals(sensor-mote*)
+; === Setup visualizations and exports ===
+; Set the active design directory for CAD
+set-design("ble-mote")
 
+; Configure design to have a default 4-layer stackup and design rules.
 make-default-board(sensor-mote*, 4, 30.0, 18.0)
 
+; Show the Schematic and PCB for the design
 view-board()
 view-schematic()
+
+; Export CAD
+set-export-board?(true)
+set-export-schematic?(true)
+set-export-backend(`kicad)
+export-cad()
+
+; Solve and export Bill of Materials
+export-bom()
