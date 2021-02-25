@@ -13,10 +13,10 @@ defpackage ocdb/protection:
   import ocdb/bundles
 
 ; Attach TVS diodes to the provided bundle. To be extended with properties, solvers for general use.
-public defn esd-clamp (bundle:JITObject, gnd:JITObject) :
+public defn esd-clamp (bundle:JITXObject, gnd:JITXObject) :
   inside pcb-module:
     match(port-type(bundle)) :
-      (pb:JITBundle) :
+      (pb:Bundle) :
         if pb == can :
           inst clamp : ocdb/nexperia/PESD1CAN/component
           net (clamp.c[1] bundle.canh)
@@ -32,10 +32,10 @@ public defn esd-clamp (bundle:JITObject, gnd:JITObject) :
           clamp.usb-out
 
 ; Isolate unidirectional digital logic pins, associated with power domains A and B. B considered to be distal from A
-public defn isolate-logic (pins:Tuple<[JITObject JITObject]>, pwr-A:JITObject, pwr-B:JITObject):
+public defn isolate-logic (pins:Tuple<[JITXObject JITXObject]>, pwr-A:JITXObject, pwr-B:JITXObject):
   inside pcb-module:
-    val outputs-vec = Vector<[JITObject JITObject]>()
-    val inputs-vec = Vector<[JITObject JITObject]>()
+    val outputs-vec = Vector<[JITXObject JITXObject]>()
+    val inputs-vec = Vector<[JITXObject JITXObject]>()
     for i in 0 to length(pins) do:
       if has-property?(pins[i][0].digital-io) is False or has-property?(pins[i][1].digital-io) is False:
         fatal("isoloate-logic only works for digital-logic pins")
@@ -114,7 +114,7 @@ public defn isolate-logic (pins:Tuple<[JITObject JITObject]>, pwr-A:JITObject, p
     ; TODO support any number of logic isolators by recursing appropriately.
 
 ; Given input rail, returns isolated power rail
-public defn isolate-power (pwr-in:JITObject):
+public defn isolate-power (pwr-in:JITXObject):
   inside pcb-module:
     inst iso : ocdb/texas-instruments/SN6501/module
     net (pwr-in iso.vin)

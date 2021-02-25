@@ -18,7 +18,7 @@ defpackage ocdb/generator-utils:
 ; =======================================
 
 ; Add load balancing caps to crystal oscillator
-public defn add-xtal-caps (xtal:JITObject, gnd:JITObject, stray-capacitance:Double) :
+public defn add-xtal-caps (xtal:JITXObject, gnd:JITXObject, stray-capacitance:Double) :
   inside pcb-module:
     val c-load = property(xtal.load-capacitance)
     val c-bal = 2.0 * (c-load - stray-capacitance)
@@ -26,11 +26,11 @@ public defn add-xtal-caps (xtal:JITObject, gnd:JITObject, stray-capacitance:Doub
     val c = cap-strap(xtal.p[2], gnd, c-bal)
     c 
 ; Default stray capacitance assumed 5pf. 
-public defn add-xtal-caps (xtal:JITObject, gnd:JITObject) :
+public defn add-xtal-caps (xtal:JITXObject, gnd:JITXObject) :
   add-xtal-caps(xtal, gnd, 5.0e-12)
 
 ; Add pullup resistors to an open-drain bus (like i2c) to vio pin. Specced for minimum power draw meeting speed requirements [TI app note:slva689].
-public defn add-open-drain-pullups (bus:JITObject, vio:JITObject, clk-rate:Double, bus-capacitance:Double) :
+public defn add-open-drain-pullups (bus:JITXObject, vio:JITXObject, clk-rate:Double, bus-capacitance:Double) :
   inside pcb-module:
     val rise-time = 0.35 / (clk-rate * 5.0) ; Signal bandwidth~ 5x clock rate for fairly sharp edge
     val r = closest-std-val(rise-time / (0.8473 * bus-capacitance), 10.0)
@@ -38,7 +38,7 @@ public defn add-open-drain-pullups (bus:JITObject, vio:JITObject, clk-rate:Doubl
       res-strap(p, vio, r)
 
 ; Default is 100kHz clock rate, 100pF bus capacitance.
-public defn add-open-drain-pullups (bus:JITObject, vio:JITObject) :
+public defn add-open-drain-pullups (bus:JITXObject, vio:JITXObject) :
   add-open-drain-pullups(bus, vio, 100.0e3, 100.0e-12)
 
 ; =======================================
@@ -73,7 +73,7 @@ public defn PWL (ps:Tuple<[Double,Double]>) -> PWL :
 ; =======================================
 ; Assign schematic and layout groups
 ; =======================================
-public defn group-modules (mods:Tuple<Tuple<JITObject>>) :
+public defn group-modules (mods:Tuple<Tuple<JITXObject>>) :
   inside pcb-module :
     val g-count = to-seq(0 to false)  
     for m in mods do :
@@ -162,23 +162,23 @@ public defn apply-lvds-params (vol:Double, voh:Double, vo-diff:[Double,Double,Do
 
 ; [TODO] replace usages of the above functions with the ones below
 
-public defn apply-voltage-rating-params (obj:JITObject, rated-voltage:[Double, Double]) :
+public defn apply-voltage-rating-params (obj:JITXObject, rated-voltage:[Double, Double]) :
   inside pcb-module :
     property(obj.rated-voltage) = rated-voltage
 
-public defn apply-power-pin-params (obj:JITObject, vdd:Double) :
+public defn apply-power-pin-params (obj:JITXObject, vdd:Double) :
   inside pcb-module :
     property(obj.power-pin) = true
     property(obj.vdd) = vdd
 
-public defn apply-power-supply-pin-params (obj:JITObject, vdd:Double, max-current:Double) :
+public defn apply-power-supply-pin-params (obj:JITXObject, vdd:Double, max-current:Double) :
   inside pcb-module :
     property(obj.power-pin) = true
     property(obj.supply-pin) = true
     property(obj.vdd) = vdd
     property(obj.max-current) = vdd
 
-public defn apply-digital-io-params (obj:JITObject, vil:Double vih:Double vol:Double voh:Double) :
+public defn apply-digital-io-params (obj:JITXObject, vil:Double vih:Double vol:Double voh:Double) :
   inside pcb-module :
     property(obj.digital-io) = true
     property(obj.type) = "io"
@@ -187,28 +187,28 @@ public defn apply-digital-io-params (obj:JITObject, vil:Double vih:Double vol:Do
     property(obj.vol) = vol
     property(obj.voh) = voh
 
-public defn apply-digital-input-params (obj:JITObject, vil:Double vih:Double) :
+public defn apply-digital-input-params (obj:JITXObject, vil:Double vih:Double) :
   inside pcb-module :
     property(obj.digital-io) = true
     property(obj.type) = "i"
     property(obj.vil) = vil
     property(obj.vih) = vih
 
-public defn apply-enable-pin-params (obj:JITObject, enable:JITObject) :
+public defn apply-enable-pin-params (obj:JITXObject, enable:JITXObject) :
   inside pcb-module :
     property(obj.digital-io) = true
     property(obj.type) = "i"
     property(obj.enable-pin) = true
     property(obj.active-ref) = enable
 
-public defn apply-digital-output-params (obj:JITObject, vil:Double vih:Double) :
+public defn apply-digital-output-params (obj:JITXObject, vil:Double vih:Double) :
   inside pcb-module :
     property(obj.digital-io) = true
     property(obj.type) = "o"
     property(obj.vil) = vil
     property(obj.vih) = vih
 
-public defn apply-lvds-params (obj:JITObject, vol:Double, voh:Double, vo-diff:[Double,Double,Double] vo-cm:[Double,Double,Double] vi-diff:[Double,Double,Double] vi-cm:[Double,Double,Double]) :
+public defn apply-lvds-params (obj:JITXObject, vol:Double, voh:Double, vo-diff:[Double,Double,Double] vo-cm:[Double,Double,Double] vi-diff:[Double,Double,Double] vi-cm:[Double,Double,Double]) :
   inside pcb-module :
     property(obj.lvds) = true
     property(obj.voh) = voh 
@@ -259,7 +259,7 @@ public defn check-design () :
     check io()
 ;<checks>
 
-public defn check-oscillator (o:JITObject, intf:JITObject, load-cap:JITObject) :
+public defn check-oscillator (o:JITXObject, intf:JITXObject, load-cap:JITXObject) :
   inside pcb-module:
     check oscillator-check-frequency(o, intf)
     check oscillator-check-gain(o, intf, load-cap)
@@ -321,7 +321,7 @@ public defn generate-power () :
         if has-property?(p.power-input) :
           generate-power-system(property(p.power-input), OPERATING-TEMPERATURE[1], p, property(p.gnd-ref))
 
-public defn set-power-source (pos:JITObject, neg:JITObject, v-in:Double):
+public defn set-power-source (pos:JITXObject, neg:JITXObject, v-in:Double):
   inside pcb-module:
     property(pos.power-input) = v-in
     property(pos.gnd-ref) = neg

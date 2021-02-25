@@ -19,7 +19,7 @@ defpackage ocdb/passive-circuits:
 ;================= Voltage Divider ====================
 ;======================================================
 
-public defn make-voltage-divider (in:JITObject, out:JITObject, lo:JITObject,
+public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
                                   v-out:[Double,Double,Double]) :
   ; Target current through divider is 10x input current (if known), otherwise set current to be 1ma
   val current =
@@ -27,7 +27,7 @@ public defn make-voltage-divider (in:JITObject, out:JITObject, lo:JITObject,
     else : 1.0e-3
   make-voltage-divider(in, out, lo, v-out, current)
 
-public defn make-voltage-divider (in:JITObject, out:JITObject, lo:JITObject,
+public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
                                   v-out:[Double,Double,Double],
                                   current:Double) :
   println("Solving voltage divider [in=%_, out=%_, low=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A]"
@@ -51,7 +51,7 @@ public defn make-voltage-divider (in:JITObject, out:JITObject, lo:JITObject,
 ; current : desired dc current of voltage divider (A) assumes output is connected to high-impedance.
 ; tol : desired tolerance of resistor (in %)
 ; returns true if fitting resistors were found else false
-public defn make-voltage-divider (in:JITObject, out:JITObject, lo:JITObject,
+public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
                                   v-out:[Double,Double,Double],
                                   current:Double,
                                   tol:Double) :
@@ -59,7 +59,7 @@ public defn make-voltage-divider (in:JITObject, out:JITObject, lo:JITObject,
   make-voltage-divider(in, out, lo, v-out, current, tol, current-tol)
 
 ; current-tol : Tolerance on the output current (in %)
-public defn make-voltage-divider (in:JITObject, out:JITObject, lo:JITObject,
+public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
                                   v-out:[Double,Double,Double],
                                   current:Double,
                                   tol:Double,
@@ -77,9 +77,9 @@ public defn make-voltage-divider (in:JITObject, out:JITObject, lo:JITObject,
   else :
     fatal("No solution for voltage divider.")
 
-defn make-voltage-divider-module (in: JITObject, out: JITObject, lo: JITObject,
+defn make-voltage-divider-module (in: JITXObject, out: JITXObject, lo: JITXObject,
                                   v-out: [Double, Double, Double],
-                                  r-hi-cmp: JITComponentType, r-lo-cmp: JITComponentType,
+                                  r-hi-cmp: InstantiableType, r-lo-cmp: InstantiableType,
                                   vo: [Double, Double, Double]) :
 
   inside pcb-module :
@@ -92,6 +92,6 @@ defn make-voltage-divider-module (in: JITObject, out: JITObject, lo: JITObject,
     net (r-lo.p[1] r-hi.p[2] out)
     net (r-lo.p[2] lo)
 
-    ; [TODO] check. voltage-levels and other check.stanza functions already adapted for JITObjects.
+    ; [TODO] check. voltage-levels and other check.stanza functions already adapted for JITXObjects.
     ; Check true output against requirement
     check voltage-levels(out, v-out)

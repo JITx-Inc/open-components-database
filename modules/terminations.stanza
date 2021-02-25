@@ -12,7 +12,7 @@ defpackage ocdb/terminations:
   import ocdb/design-vars
 
 ; Adds termination circuitry for a can bus based on method
-public defn terminate-can (bus:JITObject, gnd:JITObject, method:String, ctrl:JITObject|False) :
+public defn terminate-can (bus:JITXObject, gnd:JITXObject, method:String, ctrl:JITXObject|False) :
   inside pcb-module:
     switch(method) :
       "parallel":
@@ -24,7 +24,7 @@ public defn terminate-can (bus:JITObject, gnd:JITObject, method:String, ctrl:JIT
         net (c.p[2], gnd)
       "switchable":
         ; Controllable termination using two p-channel mosfets. Termination disabled by pulling ctrl pin high.
-        val ctrl-pin = ctrl as JITObject
+        val ctrl-pin = ctrl as JITXObject
         inst q : ocdb/on-semiconductor/FDN352AP/component[2]
         res-strap(bus.canh, q[0].s, 56.0)
         res-strap(bus.canl, q[1].s, 56.0)
@@ -39,7 +39,7 @@ public defn terminate-can (bus:JITObject, gnd:JITObject, method:String, ctrl:JIT
         res-strap(q[0].d, gnd, 100.0e3)
       "isolated-switchable":
         ; Controllable termination using an opto-isolated relay. Termination enabled by pulling ctrl pin high
-        val ctrl-pin = ctrl as JITObject
+        val ctrl-pin = ctrl as JITXObject
         inst ssr : ocdb/toshiba/TLP175A/component
         ; Find voltage on control pin if it's a digital io, else assume 5v
         val v-ctrl = if has-property?(ctrl-pin.digital-io): property(ctrl-pin.voh) else: 5.0
@@ -51,6 +51,6 @@ public defn terminate-can (bus:JITObject, gnd:JITObject, method:String, ctrl:JIT
         res-strap(bus.canh, ssr.drain[2], 120.0 - property(ssr.rds-on))
         net (bus.canl ssr.drain[1])
 
-public defn terminate-can (bus:JITObject, gnd:JITObject, method:String) :
+public defn terminate-can (bus:JITXObject, gnd:JITXObject, method:String) :
   terminate-can(bus, gnd, method, false)
 

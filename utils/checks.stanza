@@ -64,13 +64,13 @@ change macro to set "inside pcb-module" implicitly
 ;       #CHECK(property(p[1].vo-diff)[0] >= property(p[0].vi-diff)[0])
 
 ; Checks a power pin located on a component
-public pcb-check power-pin (p:JITObject) :
+public pcb-check power-pin (p:JITXObject) :
   #CHECK(has-property?(p.power-pin))
   #CHECK(has-property?(p.voltage))
   if has-property?(p.voltage):
     check-rated-voltage(p)
 
-defn check-rated-voltage (p:JITObject) :
+defn check-rated-voltage (p:JITXObject) :
   val rating = property(p.rated-voltage)
   val v = property(p.voltage)
   match(rating, v):
@@ -84,13 +84,13 @@ defn check-rated-voltage (p:JITObject) :
     (r, v) : false
 
 ; Checks if voltage on a pin is within acceptable limits
-public pcb-check voltage-levels (p:JITObject, range:[Double,Double,Double]) :
+public pcb-check voltage-levels (p:JITXObject, range:[Double,Double,Double]) :
   #CHECK(has-property?(p.voltage))
   #CHECK(property(p.voltage)[0] >= range[0])
   #CHECK(property(p.voltage)[2] <= range[2])
 
 ; Checks resistors agains operating point and environment
-public pcb-check resistor-check (r:JITObject) :
+public pcb-check resistor-check (r:JITXObject) :
   #CHECK(has-property?(r.resistor))
   #CHECK(has-property?(r.operating-point))
   val [vpk i temp] = [lookup(property(r.operating-point), `voltage-pk) lookup(property(r.operating-point), `current-rms) property(r.temperature)]
@@ -105,7 +105,7 @@ public pcb-check resistor-check (r:JITObject) :
   else :
     #CHECK(property(r.rated-power) * DERATE-RESISTOR-POWER > power)
 
-public pcb-check capacitor-check (c:JITObject) :
+public pcb-check capacitor-check (c:JITXObject) :
   #CHECK(has-property?(c.capacitor))
   #CHECK(has-property?(c.operating-point))
   val [vpk temp] = [lookup(property(c.operating-point), `voltage-pk) property(c.temperature)]
@@ -160,12 +160,12 @@ public pcb-check capacitor-check (c:JITObject) :
   #CHECK(temp >= property(c.rated-temperature)[0])
 
 ; Checks the critical gain and drive level of an oscillator (o) against an interface on an IC (intf)
-public pcb-check oscillator-check-frequency (o:JITObject, intf:JITObject) :
+public pcb-check oscillator-check-frequency (o:JITXObject, intf:JITXObject) :
   ; Check critical gain point to ensure oscillation
   #CHECK(has-property?(o.frequency))
   #CHECK(has-property?(intf.frequency))
   #CHECK(property(o.frequency) == property(intf.frequency))
-public pcb-check oscillator-check-gain (o:JITObject, intf:JITObject, load-cap:JITObject) :
+public pcb-check oscillator-check-gain (o:JITXObject, intf:JITXObject, load-cap:JITXObject) :
   ; Check critical gain point to ensure oscillation
   #CHECK(has-property?(o.shunt-capacitance))
   #CHECK(has-property?(o.load-capacitance))
@@ -174,13 +174,13 @@ public pcb-check oscillator-check-gain (o:JITObject, intf:JITObject, load-cap:JI
   #CHECK(has-property?(intf.max-critical-gain))
   val gain = 4.0 * property(o.ESR) * pow(2.0 * PI * property(o.frequency), 2.0) * pow(property(o.shunt-capacitance) + property(o.load-capacitance), 2.0)
   #CHECK(gain < property(intf.max-critical-gain))
-public pcb-check oscillator-check-drive (o:JITObject, intf:JITObject, load-cap:JITObject) :
+public pcb-check oscillator-check-drive (o:JITXObject, intf:JITXObject, load-cap:JITXObject) :
   ; Check drive level against crystal maximum
   #CHECK(has-property?(intf.drive-level))
   #CHECK(has-property?(o.max-drive-level))
   #CHECK(property(intf.drive-level) < property(o.max-drive-level))
   ; Check pullability of crystal to ensure accuracy
-public pcb-check oscillator-check-pullability (o:JITObject, intf:JITObject, load-cap:JITObject) :
+public pcb-check oscillator-check-pullability (o:JITXObject, intf:JITXObject, load-cap:JITXObject) :
   #CHECK(has-property?(o.motional-capacitance))
   val pullability = property(o.motional-capacitance) / (2.0 * pow((property(o.shunt-capacitance) + property(o.load-capacitance)), 2.0))
   #CHECK(has-property?(load-cap.tolerance))

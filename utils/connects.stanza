@@ -13,11 +13,11 @@ defpackage ocdb/connects :
   import ocdb/symbols
   import ocdb/box-symbol
 
-public defn connect-isolate (a:JITObject, b:JITObject) :
+public defn connect-isolate (a:JITXObject, b:JITXObject) :
   inside pcb-module :
     eval-when true :
       match(port-type(a), port-type(b)) :
-        (pa:JITBundle, pb:JITBundle) :
+        (pa:Bundle, pb:Bundle) :
           if pa == i2c and pb == i2c :
             inst buf : ocdb/texas-instruments/ISO1540/component
             net (a.sda, buf.SDA1)
@@ -27,22 +27,22 @@ public defn connect-isolate (a:JITObject, b:JITObject) :
             property(buf.VCC1.requires-power) = true
             property(buf.VCC1.power-request) = [3.3 0.3 0.05]
 
-public defn connect-phy (x:JITObject, y:JITObject) :
+public defn connect-phy (x:JITXObject, y:JITXObject) :
   inside pcb-module :
     eval-when true :
       match(port-type(x), port-type(y)) :
-        (px:JITBundle, py:JITBundle) :
+        (px:Bundle, py:Bundle) :
           if px == rgmii and py == ethernet-1000 :
             inst phy : ocdb/marvell/88E1510-A0-NNB2C000/module
             net (x, phy.rgmii)
             net (y.mdi, phy.mdi)
             schematic-group(phy) = phy
 
-public defn connect-ft232 (x:JITObject, y:JITObject) :
+public defn connect-ft232 (x:JITXObject, y:JITXObject) :
   inside pcb-module :
     eval-when true :
       match(port-type(x), port-type(y)) :
-        (px:JITBundle, py:JITBundle) :
+        (px:Bundle, py:Bundle) :
           if px == usb-2 and py == uart-with([`dtr `rts]) :
             public inst xcvr : ocdb/future-designs/FT232RL/module
             net (x, xcvr.usb-2)

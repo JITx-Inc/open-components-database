@@ -21,13 +21,13 @@ deftype Component
 public defmulti x (component: Component) -> Double
 public defmulti y (component: Component) -> Double
 public defmulti area (component: Component) -> Double
-public defmulti to-esir (component: Component) -> JITComponent
-public defmulti generate-esir (component: Component) -> JITComponent
+public defmulti to-esir (component: Component) -> Instantiable
+public defmulti generate-esir (component: Component) -> Instantiable
 
 defmethod area (component: Component) -> Double :
   x(component) * y(component)
 
-defmethod generate-esir (cmp: Component) -> JITComponent :
+defmethod generate-esir (cmp: Component) -> Instantiable :
   val esir-cmp = to-esir(cmp)
   ; ensure-generated(esir-cmp)
   esir-cmp
@@ -107,7 +107,7 @@ public defstruct TCR :
   positive: Double
   negative: Double
 
-defmethod to-esir (resistor: Resistor) -> JITComponent :
+defmethod to-esir (resistor: Resistor) -> Instantiable :
   pcb-component my-resistor :
     val manufacturer-string = manufacturer(resistor)
     match(manufacturer-string: String) :
@@ -126,13 +126,13 @@ defmethod to-esir (resistor: Resistor) -> JITComponent :
     match(case: String) :
       if all?(digit?, to-seq(case)) :
         val pkg = ipc-two-pin-package(case)
-        package = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+        landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
       else :  ; example: case = "Axial"
         val pkg = dummy-package(2, [x(resistor) y(resistor)])
-        package = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+        landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
     else :
       val pkg = dummy-package(2, [x(resistor) y(resistor)])
-      package = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+      landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
 
     emodel = EModel-Resistor(resistance(resistor),
                              emodel-pourcentage-tolerance(tolerance(resistor)),
@@ -285,7 +285,7 @@ defn capacitor-temperature-coefficient (json: JObject) -> String|False :
   match(temperature-coefficient-json: JObject) :
     temperature-coefficient-json["code"] as String
 
-defmethod to-esir (capacitor: Capacitor) -> JITComponent :
+defmethod to-esir (capacitor: Capacitor) -> Instantiable :
   pcb-component my-capacitor :
     val manufacturer-string = manufacturer(capacitor)
     match(manufacturer-string: String) :
@@ -311,13 +311,13 @@ defmethod to-esir (capacitor: Capacitor) -> JITComponent :
       match(case: String) :
         if all?(digit?, to-seq(case)) :
           val pkg = ipc-two-pin-package(case)
-          package = pkg(a => pkg.a, c => pkg.c)
+          landpattern = pkg(a => pkg.a, c => pkg.c)
         else :
           val pkg = dummy-package(2, [x(capacitor) y(capacitor)])
-          package = pkg(a => pkg.p[1], c => pkg.p[2])
+          landpattern = pkg(a => pkg.p[1], c => pkg.p[2])
       else :
         val pkg = dummy-package(2, [x(capacitor) y(capacitor)])
-        package = pkg(a => pkg.p[1], c => pkg.p[2])
+        landpattern = pkg(a => pkg.p[1], c => pkg.p[2])
 
       match(esr: ESR) :
         val esr-value = value(esr)
@@ -337,13 +337,13 @@ defmethod to-esir (capacitor: Capacitor) -> JITComponent :
       match(case: String) :
         if all?(digit?, to-seq(case)) :
           val pkg = ipc-two-pin-package(case)
-          package = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+          landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
         else :
           val pkg = dummy-package(2, [x(capacitor) y(capacitor)])
-          package = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+          landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
       else :
         val pkg = dummy-package(2, [x(capacitor) y(capacitor)])
-        package = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+        landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
 
       match(esr: ESR) :
         val esr-value = value(esr)
@@ -463,7 +463,7 @@ public defn Inductor (raw-json: JObject) -> Inductor :
            optional-double(json, "quality-factor"),
            optional-double(json, "self-resonant-frequency"))
 
-defmethod to-esir (inductor: Inductor) -> JITComponent :
+defmethod to-esir (inductor: Inductor) -> Instantiable :
   pcb-component my-inductor :
     val manufacturer-string = manufacturer(inductor)
     match(manufacturer-string: String) :
@@ -481,13 +481,13 @@ defmethod to-esir (inductor: Inductor) -> JITComponent :
     match(case: String) :
       if all?(digit?, to-seq(case)) :
         val pkg = ipc-two-pin-package(case)
-        package = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+        landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
       else :  ; example: case = "Axial"
         val pkg = dummy-package(2, [x(inductor) y(inductor)])
-        package = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+        landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
     else :
       val pkg = dummy-package(2, [x(inductor) y(inductor)])
-      package = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+      landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
 
     val inductance = inductance(inductor)
     emodel = EModel-Inductor(inductance,
