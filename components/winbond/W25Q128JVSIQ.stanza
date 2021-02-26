@@ -1,53 +1,48 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/windbond/W25Q128JVSIQ :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import esir/repl-lib
-  import jitpcb/visualizer
+  import jitx
+  import jitx/commands
 
-  import ocdb/tests/default-harness
+  import ocdb/defaults
   import ocdb/land-patterns
   import ocdb/symbols
   import ocdb/symbol-utils
   import ocdb/generic-components
 
-  import ocdb/pinspec
   import ocdb/box-symbol
   import ocdb/bundles
 
 
-public unique pcb-component component :
+public pcb-component component :
 
-  val pinspec = PinSpec $ #TABLE :
-    [Ref | Int ... | Dir]
-    [nWP | 3 | Left]
-    [nHOLD | 7 | Left]
-    [nCS | 1 | Left]
-    [DO | 2 | Left]
-    [DI | 5 | Left]
-    [GND | 4 | Down]
-    [CLK | 6 | Left]
-    [VCC | 8 | Up]
+  pin-properties :
+    [pin:Ref   | pads:Int ...  | side:Dir]
+    [nWP       | 3             | Left    ]
+    [nHOLD     | 7             | Left    ]
+    [nCS       | 1             | Left    ]
+    [DO        | 2             | Left    ]
+    [DI        | 5             | Left    ]
+    [GND       | 4             | Down    ]
+    [CLK       | 6             | Left    ]
+    [VCC       | 8             | Up      ]
   
-  make-pins(pinspec)
-  make-box-symbol(pinspec)
-  assign-package(soic127p-package(8), pinspec)
+  make-box-symbol()
+  assign-landpattern(soic127p-landpattern(8))
 
   mpn = "W25Q128JVSIQ"
   manufacturer = "Winbond Electronics"
   description = "FLASH - NOR Memory IC  SPI - Quad I/O, QPI, DTR 133MHz  8-SOIC"
 
-public unique pcb-module module:
+public pcb-module module:
   port power : power
   port spi : spi
   pin wp
   pin hold
 
-  inst flash : {ocdb/windbond/W25Q128JVSIQ/component}
+  inst flash : ocdb/windbond/W25Q128JVSIQ/component
   cap-strap(flash.VCC, flash.GND, 0.1e-6)
   net (power.vdd, flash.VCC)
   net (power.gnd, flash.GND)

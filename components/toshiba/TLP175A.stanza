@@ -1,39 +1,38 @@
-#use-added-syntax(esir)
-defpackage ocdb/toshiba/TLP175A:
+#use-added-syntax(jitx)
+defpackage ocdb/toshiba/TLP175A :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
 
   import ocdb/land-patterns
   import ocdb/symbols
   import ocdb/box-symbol
-  import ocdb/pinspec
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
 
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "ON Semiconductor"
   description = "SSR RELAY SPST-NO 100MA 0-60V"
   mpn = "TLP175A(TPL,E"
 
   pin a 
   pin c 
-  port drain : pin[{1 2}]
+  port drain : pin[[1 2]]
 
-  symbol = TLP175A-symbol(a => a, c => c, drain[1] => drain[1], drain[2] => drain[2])
-  package = tlp-175(a => p[1], c => p[3], drain[1] => p[6], drain[2] => p[4])
-  properties:
-    forward-voltage => 1.27
-    rds-on => 20.0
+  val sym = TLP175A-symbol
+  val pkg = tlp-175
+  symbol = sym(a => sym.a, c => sym.c, drain[1] => sym.drain[1], drain[2] => sym.drain[2])
+  landpattern = pkg(a => pkg.p[1], c => pkg.p[3], drain[1] => pkg.p[6], drain[2] => pkg.p[4])
+  property(self.forward-voltage) = 1.27
+  property(self.rds-on) = 20.0
 
-pcb-package tlp-175 :
+pcb-landpattern tlp-175 :
   for (l in grid-locs(2, 2, 6.5, 2.54), i in [1 6 3 4]) do :
-    pad p[i] : {smd-pad(1.61, 0.57)} at l
+    pad p[i] : smd-pad(1.61, 0.57) at l
 
   layer(Courtyard(Top)) = Rectangle(8.1, 4.0) 
   layer(Silkscreen("pol", Top)) = Circle(-4.8, 1.75, 0.254)
@@ -126,3 +125,6 @@ pcb-symbol TLP175A-symbol :
   layer("foreground") = Line(0.152, [Point(6.35, -1.27), Point(5.08, -1.27)])
   layer("foreground") = Line(0.152, [Point(6.35, -6.35), Point(5.08, -6.35)])
   layer("foreground") = Line(0.152, [Point(3.302, -1.27), Point(5.08, -1.27)])
+
+public pcb-module module :
+  inst c : component

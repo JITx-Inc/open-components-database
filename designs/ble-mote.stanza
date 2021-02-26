@@ -1,20 +1,17 @@
-#use-added-syntax(esir)
-defpackage ocdb/ble-mote :
+#use-added-syntax(jitx)
+defpackage ocdb/designs/ble-mote :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import esir/repl-lib
-  import jitpcb/visualizer
+  import jitx
+  import jitx/commands
 
-  import ocdb/tests/default-harness
-  import ocdb/generator-utils
   import ocdb/bundles
-  import ocdb/design-vars
-  import ocdb/generic-components
   import ocdb/connects
+  import ocdb/defaults
+  import ocdb/design-vars
+  import ocdb/generator-utils
+  import ocdb/generic-components
 
 OPERATING-TEMPERATURE = [-20.0 50.0]
 OPTIMIZE-FOR = ["area"]
@@ -27,8 +24,8 @@ pcb-module pms7003 :
   pin reset
   pin set
   port uart : uart
-  inst header : {ocdb/amphenol/minitek127/component(10)}
-  package(header) at loc(0.0,0.0) on Top
+  inst header : ocdb/amphenol/minitek127/component(10)
+  place(header) at loc(0.0,0.0) on Top
   net (vin.gnd vin-mcu.gnd header.p[3] header.p[4])
   net (vin.vdd header.p[1] header.p[2])
   net (uart.tx, header.p[10])
@@ -40,42 +37,43 @@ pcb-module pms7003 :
 
 pcb-module sensor-mote :
   ; Add USB connector
-  inst usb : micro-usb-connector
-  package(usb.con) at loc(-10.0, -7.3) on Top
+  pin barfo
+  public inst usb : micro-usb-connector
+  place(usb.con) at loc(-10.0, -7.3) on Top
 
   ; Define ground net and assign symbol
-  net gnd (usb.usb-2.vbus.gnd)
-  symbol(gnd) = {ocdb/symbols/ground-sym}
+  public net gnd (usb.usb-2.vbus.gnd)
+  symbol(gnd) = ocdb/symbols/ground-sym
 
   ; Create a protected power and data interface for USB-2
-  val protected-usb = (ocdb/protection/esd-clamp(usb.usb-2, gnd) as Ref)
+  val protected-usb = ocdb/protection/esd-clamp(usb.usb-2, gnd) as JITXObject
   
   ; Specify a power regulator and name power nets
-  inst ldo : {ocdb/diodes-incorporated/AP2112/module}
-  net (ldo.vin {protected-usb}.vbus)
+  public inst ldo : ocdb/diodes-incorporated/AP2112/module
+  net (ldo.vin protected-usb.vbus)
   net P5V0 (ldo.vin.vdd ldo.en)
   net P3V3 (ldo.vout.vdd)
-  symbol(P5V0) = {ocdb/symbols/supply-sym}
-  symbol(P3V3) = {ocdb/symbols/supply-sym}
+  symbol(P5V0) = ocdb/symbols/supply-sym
+  symbol(P3V3) = ocdb/symbols/supply-sym
 
   ; Add a Bluetooth SoC
-  inst proc : {ocdb/espressif/ESP32-PICO-D4/module}
-  inst ant : inverted-f-antenna
+  public inst proc : ocdb/espressif/ESP32-PICO-D4/module
+  public inst ant : inverted-f-antenna
   net (proc.ant, ant.rf-in)
-  package(ant) at loc(9.0, 5.0, -90.0) on Top
+  place(ant) at loc(9.0, 5.0, -90.0) on Top
 
   ; Use a connect statement to interface USB-2 to UART
-  connect ft232 ({protected-usb} proc.uart)
+  connect-ft232(protected-usb, proc.uart)
   
   ; Add a humidty sensor, connect over i2c, add pullups.
-  inst hum : {ocdb/texas-instruments/HDC1080/module}
+  public inst hum : ocdb/texas-instruments/HDC1080/module
   require i2c:i2c from proc
   net H-I2C (i2c, hum.i2c)
   add-open-drain-pullups(i2c, ldo.vout.vdd)
 
   ; Add the particle counter interface and place on bottom, and connect
-  inst particle-counter : pms7003
-  package(particle-counter) at loc(-10.0,5.0, 180.0) on Bottom
+  public inst particle-counter : pms7003
+  place(particle-counter) at loc(-10.0,5.0, 180.0) on Bottom
 
   require pc-ctrl:gpio[2] from proc
   net PC-RESET (pc-ctrl[0].gpio, particle-counter.reset)
@@ -85,24 +83,24 @@ pcb-module sensor-mote :
   net PC-TX (pc-uart.rx particle-counter.uart.tx)
   net PC-RX (pc-uart.tx particle-counter.uart.rx)
 
+  ; Connect power to proc and sensors
+  net (hum.power, particle-counter.vin-mcu, proc.power, ldo.vout)
+  net (protected-usb.vbus particle-counter.vin)
+
   ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
   add-rgb-indicator(60.0, proc, P3V3)
   
-  ; Connect power to proc and sensors
-  net (hum.power, particle-counter.vin-mcu, proc.power, ldo.vout)
-  net ({protected-usb}.vbus particle-counter.vin)
-
   ; Add probe loops
-  add-testpoint([ hum.i2c.sda 
+  add-testpoint([ proc.uart.tx 
+                  proc.uart.rx 
+                  hum.i2c.sda 
                   hum.i2c.scl
+                  proc.en
+                  proc.boot
                   PC-TX
                   PC-RX
                   P5V0
                   P3V3
-                  proc.uart.tx 
-                  proc.uart.rx 
-                  proc.en
-                  proc.boot
                   gnd gnd gnd
                   ], "smd-loop")
 
@@ -111,21 +109,27 @@ pcb-module sensor-mote :
     copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = Rectangle(30.0, 18.0)
 
   ; Apply groups to sub-circuits for schematic and layout
-  group-modules([[proc  ant] [usb ldo] [particle-counter] [hum]])
+  group-modules([[proc  ant] [hum] [usb ldo] [particle-counter]])
 
-val main-design = default-board(sensor-mote, 4, 30.0,18.0)
+; Run a function to programmatically connect all gnd pins
+var sensor-mote* = transform-module(connect-gnd-pins, sensor-mote)
 
-; Net up any gnd pins that we missed.
-run-user-pass(connect-gnd-pins)
+; === Setup visualizations and exports ===
+; Set the active design directory for CAD
+set-design("ble-mote")
 
-view(main-design)
+; Configure design to have a default 4-layer stackup and design rules.
+make-default-board(sensor-mote*, 4, 30.0, 18.0)
 
-export-kicad("BLE-mote", [`place => true
-                          `check-log => "checks.txt"
-                          `gen-board => true 
-                          `gen-bom => true 
-                          `gen-schematic => true 
-                          `paper => ANSI-A4
-                          `fresh => true 
-                          `schematic-version => 4
-                          `param-configs => [`sketch]] )
+; Show the Schematic and PCB for the design
+view-board()
+view-schematic()
+
+; Export CAD
+set-export-board?(true)
+set-export-schematic?(true)
+set-export-backend(`kicad)
+export-cad()
+
+; Solve and export Bill of Materials
+export-bom()

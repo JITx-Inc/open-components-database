@@ -1,39 +1,34 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/microchip/MCP7381x:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
 
   import ocdb/land-patterns
   import ocdb/symbols
   import ocdb/box-symbol
-  import ocdb/pinspec
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
 
-  import jitpcb/visualizer
-
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Microchip"
   mpn = "MCP73812"
   description = "IC LI-ION/LI-POLY CTRLR SOT23-5"
   
-  val ps = PinSpec $ #TABLE :
-    [Ref  | Int ... | Dir   ]
+  pin-properties :
+    [pin:Ref  | pads:Int ... | side:Dir   ]
     [CE   | 1       | Left  ]
     [VSS  | 2       | Down  ]
     [VBAT | 3       | Right ]
     [VDD  | 4       | Up    ]
     [PROG | 5       | Left  ]
 
-  make-pins(ps)
-  make-box-symbol(ps)
-  assign-package(SOT95P280X145-5N, ps)
+  make-box-symbol()
+  assign-landpattern(SOT95P280X145-5N)
 
 public pcb-module module (chrg-rate:Double):
   port power : power
@@ -41,7 +36,7 @@ public pcb-module module (chrg-rate:Double):
   pin gnd
   pin vbat
 
-  inst mgr : {ocdb/microchip/MCP7381x/component}
+  inst mgr : ocdb/microchip/MCP7381x/component
   net (power.vdd, mgr.VDD)
   net (power.gnd, gnd, mgr.VSS)
 
@@ -54,3 +49,6 @@ public pcb-module module (chrg-rate:Double):
 
   cap-strap(mgr.VDD, gnd, 1.0e-6)
   cap-strap(mgr.VBAT, gnd, 1.0e-6)
+
+public pcb-module module () :
+  inst i : module(1000.0 / 10.0e3)

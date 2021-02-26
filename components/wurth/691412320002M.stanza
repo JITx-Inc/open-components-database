@@ -1,35 +1,36 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/wurth/691412320002M :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
 
   import ocdb/land-patterns
   import ocdb/symbols
   import ocdb/box-symbol
-  import ocdb/pinspec
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
 
-  import jitpcb/visualizer
-
-pcb-package header-package :
+pcb-landpattern header-landpattern :
   val offset = loc(0.595, 1.2)
-  pad p[1] : {pth-pad(1.0)} at loc(1.905, 2.5) * offset
-  pad p[2] : {pth-pad(1.0)} at loc((- 1.905), (- 2.5)) * offset
+  pad p[1] : pth-pad(1.0) at loc(1.905, 2.5) * offset
+  pad p[2] : pth-pad(1.0) at loc((- 1.905), (- 2.5)) * offset
   layer(Courtyard(Top)) = Rectangle(9.12, 12.0)
   ref-label()
 
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Wurth Elektronik"
   mpn = "691412320002M"
   description = "TERM BLOCK 2POS 45DEG 3.81MM PCB"
   
-  port p : pin[{1 2}]
-  package = header-package(p[1] => p[1], p[2] => p[2])
-  symbol = {header-symbol(2)}(p[1] => p[1], p[2] => p[2])
+  port p : pin[[1 2]]
+  val pkg = header-landpattern
+  val sym = header-symbol(2)
+  landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+
+public pcb-module module :
+  inst c : component

@@ -1,18 +1,16 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/land-patterns :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import esir/fonts
-  import esir/repl-lib
+  import jitx
+  import jitx/fonts
+  import jitx/commands
 
 ; ====== Reference Label Helpers ===============================================
 
 public defn ref-label (x:Double, y:Double, a:Anchor) :
-  inside pcb-package :
+  inside pcb-landpattern :
     layer(Silkscreen("values", Top)) = Text(">REF", 0.7056, a, loc(x,y))
     
 public defn ref-label (x:Double, y:Double) :
@@ -149,7 +147,7 @@ public defn rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
 public defn rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
   rect-pth-pad(C, drill-w, drill-h, pad-w, pad-h)
 
-public pcb-package non-plated-hole-pkg (drill-r:Double, mask-r:Double) :
+public pcb-landpattern non-plated-hole-pkg (drill-r:Double, mask-r:Double) :
   layer(Cutout()) = Circle(C, drill-r)
   layer(SolderMask(Top)) = Circle(C, mask-r)
   layer(SolderMask(Bottom)) = Circle(C, mask-r)
@@ -184,7 +182,7 @@ public defn PlusSymbol (x:Double, y:Double) :
 
 ; 2D array of pins
 public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double, pad-ref) :
-  inside pcb-package:
+  inside pcb-landpattern:
     
     val n-col = to-int(ceil(to-double(n-pin) / to-double(n-row)))
 
@@ -192,7 +190,7 @@ public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Dou
     
     for i in 0 to n-col do :
       for j in 0 to n-row do :
-        pad p[n-row * i + j + 1] : {pad-ref} at l0 * loc(to-double(j) * row-pitch, (- to-double(i) * pin-pitch))
+        pad p[n-row * i + j + 1] : pad-ref at l0 * loc(to-double(j) * row-pitch, (- to-double(i) * pin-pitch))
     
 public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
   make-pin-grid(n-pin, n-row, pin-pitch, row-pitch, pth-pad(0.5))
@@ -200,16 +198,16 @@ public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Dou
 public defn make-pin-grid (n-pin:Int) :
   make-pin-grid(n-pin, 1, 2.54, 2.54)
 
-public pcb-package testpad (d:Double) :
-  pad tp : {testpoint-pad(d)} at loc(0.0,0.0)
+public pcb-landpattern testpad (d:Double) :
+  pad tp : testpoint-pad(d) at loc(0.0,0.0)
 
 ; ====== Package Family Generators ================================================
 ; TODO: Unify These.
-public pcb-package dummy-package (n:Int, courtyard:[Double,Double]):
+public pcb-landpattern dummy-landpattern (n:Int, courtyard:[Double,Double]):
   val r = (max(courtyard[0], courtyard[1]) - 0.2) / 2.0
   for i in 0 to n do :
     var theta = (2.0 * PI / to-double(n)) * to-double(i) + PI
-    pad p[i + 1] : {bga-pad(0.05)} at loc(r * cos(theta), r * sin(theta))
+    pad p[i + 1] : bga-pad(0.05) at loc(r * cos(theta), r * sin(theta))
 
   layer(Courtyard(Top)) = Rectangle(courtyard[0], courtyard[1])
   layer(Silkscreen("f-silk", Top)) = LineRectangle(courtyard[0], courtyard[1])
@@ -220,35 +218,35 @@ public pcb-package dummy-package (n:Int, courtyard:[Double,Double]):
 ; G - width between inner pad edges
 ; X - pad height
 ; w, h - width and height of courtyard in mm
-public defn make-two-pin-package (Z:Double, G:Double, X:Double, w:Double, h:Double, courtyard?:True|False, polarized?:True|False) :
-  inside pcb-package :
+public defn make-two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double, courtyard?:True|False, polarized?:True|False) :
+  inside pcb-landpattern :
     val Y = (Z - G) / 2.0 ; width of pad
     val C2 = (G + Y) / 2.0 ; distance between pad center and package centerline
     if polarized? :
-      pad c : {smd-pad(Y,X)} at loc((- C2), 0.0)
-      pad a : {smd-pad(Y,X)} at loc(C2, 0.0)
+      pad c : smd-pad(Y,X) at loc((- C2), 0.0)
+      pad a : smd-pad(Y,X) at loc(C2, 0.0)
       val he = h / 2.0 + 0.25
       val we = w / 2.0 + 0.3
       layer(Silkscreen("pol", Top)) = Line(0.12, [Point(w / 2.0, (- he)) Point((- we), (- he))])
       layer(Silkscreen("pol", Top)) = Line(0.12, [Point((- we), he) Point(w / 2.0, he) ])
       layer(Silkscreen("pol", Top)) = Line(0.30, [Point((- we), (- he)) Point((- we), he)])
     else:
-      pad p[1] : {smd-pad(Y,X)} at loc((- C2), 0.0)
-      pad p[2] : {smd-pad(Y,X)} at loc(C2, 0.0)
+      pad p[1] : smd-pad(Y,X) at loc((- C2), 0.0)
+      pad p[2] : smd-pad(Y,X) at loc(C2, 0.0)
     if courtyard? : 
       layer(Courtyard(Top)) = Rectangle(w, h)
 
 
-public defn make-two-pin-package (Z:Double, G:Double, X:Double, w:Double, h:Double):
-  make-two-pin-package(Z,G,X,w,h,true,false)
+public defn make-two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
+  make-two-pin-landpattern(Z,G,X,w,h,true,false)
 
-public pcb-package two-pin-package (Z:Double, G:Double, X:Double, w:Double, h:Double):
-  make-two-pin-package(Z,G,X,w,h,true,false)
-public pcb-package two-pin-polarized-package (Z:Double, G:Double, X:Double, w:Double, h:Double):
-  make-two-pin-package(Z,G,X,w,h,true,true)
+public pcb-landpattern two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
+  make-two-pin-landpattern(Z,G,X,w,h,true,false)
+public pcb-landpattern two-pin-polarized-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
+  make-two-pin-landpattern(Z,G,X,w,h,true,true)
 
-public defn make-ipc-two-pin-package (part-name:String, courtyard?:True|False, polarized?:True|False) :
-  inside pcb-package :
+public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False) :
+  inside pcb-landpattern :
     val [Z, G, X, nr, nc] = switch(part-name) :
       "008004":[0.35, 0.10, 0.14, 0.35, 0.14]
       "01005": [0.56, 0.20, 0.23, 0.56, 0.23]
@@ -274,24 +272,27 @@ public defn make-ipc-two-pin-package (part-name:String, courtyard?:True|False, p
         val nr = Z
         val nc = X
         [Z, G, X, nr, nc]
-    make-two-pin-package(Z, G, X, nr, nc, courtyard?, polarized?)
+    make-two-pin-landpattern(Z, G, X, nr, nc, courtyard?, polarized?)
     external-names = ([part-name])
     ref-label()
 
-public defn make-ipc-two-pin-package (part-name:String) :
-  make-ipc-two-pin-package(part-name, true, false)
+public defn make-ipc-two-pin-landpattern (part-name:String) :
+  make-ipc-two-pin-landpattern(part-name, true, false)
 
-public pcb-package ipc-two-pin-package (part-name:String) :
-  make-ipc-two-pin-package(part-name, true, false)
+public pcb-landpattern ipc-two-pin-landpattern (part-name:String) :
+  make-ipc-two-pin-landpattern(part-name, true, false)
+  ref-label()
 
-public pcb-package ipc-two-pin-package (part-name:String, pol?:True|False) :
-  make-ipc-two-pin-package(part-name, true, pol?)
+public pcb-landpattern ipc-two-pin-landpattern (part-name:String, pol?:True|False) :
+  make-ipc-two-pin-landpattern(part-name, true, pol?)
+  ref-label()
 
-public pcb-package ipc-two-pin-pol-package (part-name:String) :
-  make-ipc-two-pin-package(part-name, true, true)
+public pcb-landpattern ipc-two-pin-pol-landpattern (part-name:String) :
+  make-ipc-two-pin-landpattern(part-name, true, true)
+  ref-label()
 
-public defn make-soic127p-package (n:Int, lead-span:Double) :
-  inside pcb-package :  
+public defn make-soic127p-landpattern (n:Int, lead-span:Double) :
+  inside pcb-landpattern :  
 
     val pin-pitch = 1.27
 
@@ -303,10 +304,10 @@ public defn make-soic127p-package (n:Int, lead-span:Double) :
     val pin-row = to-list(row-locs(W, n / 2, pin-pitch))
 
     for (i in 0 to (n / 2), l in pin-row) do :
-      pad p[i + 1] : {smd-pad(0.6, 1.5)} at l0 * l
+      pad p[i + 1] : smd-pad(0.6, 1.5) at l0 * l
     
     for (i in (n / 2) to n, l in pin-row) do :
-      pad p[i + 1] : {smd-pad(0.6, 1.5)} at l1 * l
+      pad p[i + 1] : smd-pad(0.6, 1.5) at l1 * l
     
     val pkg-height = to-double((n / 2) - 1) * pin-pitch + 1.1
     val c-w = lead-span + 1.5
@@ -318,19 +319,19 @@ public defn make-soic127p-package (n:Int, lead-span:Double) :
     layer(Silkscreen("pol", Top)) = Circle(x0 - 2.0, y0, 0.254)
     ref-label()
 
-public defn make-soic127p-package (n:Int) :
-  make-soic127p-package(n, 6.0)
+public defn make-soic127p-landpattern (n:Int) :
+  make-soic127p-landpattern(n, 6.0)
 
-public pcb-package soic127p-package (n:Int) :
-  make-soic127p-package(n, 6.0)
+public pcb-landpattern soic127p-landpattern (n:Int) :
+  make-soic127p-landpattern(n, 6.0)
 
-public pcb-package soic127p-package (n:Int, hs:[Double, Double]) :
-  make-soic127p-package(n, 6.0)
-  pad p[n + 1] : {smd-pad(hs[0], hs[1])} at loc(0.0, 0.0)
+public pcb-landpattern soic127p-landpattern (n:Int, hs:[Double, Double]) :
+  make-soic127p-landpattern(n, 6.0)
+  pad p[n + 1] : smd-pad(hs[0], hs[1]) at loc(0.0, 0.0)
 
 ; See SOP_JEDEC_MO-153F.pdf for reference
-public defn make-sop65-package (n:Int, lead-span:Double) :
-  inside pcb-package :
+public defn make-sop65-landpattern (n:Int, lead-span:Double) :
+  inside pcb-landpattern :
 
     val pin-pitch = 0.65
 
@@ -342,10 +343,10 @@ public defn make-sop65-package (n:Int, lead-span:Double) :
     val pin-row = to-list(row-locs(W, n / 2, pin-pitch))
 
     for (i in 1 through (n / 2), l in pin-row) do :
-      pad p[i] : {smd-pad(0.39, 1.4)} at l0 * l
+      pad p[i] : smd-pad(0.39, 1.4) at l0 * l
     
     for (i in (n / 2 + 1) through n, l in pin-row) do :
-      pad p[i] : {smd-pad(0.39, 1.4)} at l1 * l
+      pad p[i] : smd-pad(0.39, 1.4) at l1 * l
     
     val pkg-height = to-double((n / 2) - 1) * pin-pitch + 0.4
     
@@ -357,36 +358,36 @@ public defn make-sop65-package (n:Int, lead-span:Double) :
     layer(Silkscreen("pol", Top)) = Circle(x0 - 0.5, y0, 0.2)
     ref-label()
 
-public pcb-package sop65-package (n:Int, lead-span:Double) :
-  make-sop65-package(n, lead-span)
-public pcb-package sop65-package (n:Int) :
-  make-sop65-package(n, 6.4)
+public pcb-landpattern sop65-landpattern (n:Int, lead-span:Double) :
+  make-sop65-landpattern(n, lead-span)
+public pcb-landpattern sop65-landpattern (n:Int) :
+  make-sop65-landpattern(n, 6.4)
 
-public defn make-qfn-package (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
-  inside pcb-package :
+public defn make-qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
+  inside pcb-landpattern :
     var n = -1
     if n-pins % 4 == 0 :
       n = n-pins / 4
     else :
-      fatal("make-qfn-package is only for symmetric 4-sided qfns.")
+      fatal("make-qfn-landpattern is only for symmetric 4-sided qfns.")
 
     val x0 = (- (lead-span / 2.0 + 0.3))
     val y0 = (to-double(n - 1) * pin-pitch) / 2.0
     val l0 = loc(x0, y0, -90.0)
-    val row-pos = to-list(loc(0.0,0.0,0.0) * row-locs(W, n, pin-pitch))
+    val row-pos = to-list(row-locs(W, n, pin-pitch))
 
     val pin-pad = smd-pad(S, pad-width, pad-length + 0.3)
     for (i in 0 to n, l in row-pos) do :
-      pad p[i + 1] : {pin-pad} at loc(x0, y0, -90.0) * l
+      pad p[i + 1] : pin-pad at loc(x0, y0, -90.0) * l
 
     for (i in n to (n * 2), l in row-pos) do :
-      pad p[i + 1] : {pin-pad} at loc((- y0), x0, 0.0) * l
+      pad p[i + 1] : pin-pad at loc((- y0), x0, 0.0) * l
 
     for (i in (n * 2) to (n * 3), l in row-pos) do :
-      pad p[i + 1] : {pin-pad} at loc((- x0), (- y0), 90.0) * l
+      pad p[i + 1] : pin-pad at loc((- x0), (- y0), 90.0) * l
 
     for (i in (n * 3) to (n * 4), l in row-pos) do :
-      pad p[i + 1] : {pin-pad} at loc((y0), (- x0), 180.0) * l
+      pad p[i + 1] : pin-pad at loc((y0), (- x0), 180.0) * l
 
     val c-w = (lead-span + 0.3 * 2.0)
     layer(Courtyard(Top)) = Rectangle(c-w, c-w)
@@ -394,15 +395,15 @@ public defn make-qfn-package (pin-pitch:Double, lead-span:Double, n-pins:Int, pa
     layer(Silkscreen("pol",Top)) = Circle((lead-span / -2.0) - 1.0, y0, 0.254)
     ref-label()
 
-public pcb-package qfn-package (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
-  make-qfn-package(pin-pitch, lead-span, n-pins, pad-width, pad-length)
+public pcb-landpattern qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
+  make-qfn-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length)
 
-public pcb-package qfn-package (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double, hs:[Double,Double]) :
-  make-qfn-package(pin-pitch, lead-span, n-pins, pad-width, pad-length)
-  pad p[n-pins + 1] : {smd-pad(hs[0],hs[1])} at loc(0.0, 0.0)  
+public pcb-landpattern qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double, hs:[Double,Double]) :
+  make-qfn-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length)
+  pad p[n-pins + 1] : smd-pad(hs[0],hs[1]) at loc(0.0, 0.0)  
 
 
-public defn make-dfn-package (
+public defn make-dfn-landpattern (
   n-pad:Int
   pad-pitch:Double
   pad-dims:[Double,Double]
@@ -412,7 +413,7 @@ public defn make-dfn-package (
   val [pad-w, pad-h] = pad-dims
   val [body-w, body-h] = body-dims
 
-  inside pcb-package :
+  inside pcb-landpattern :
     val pin-pad = smd-pad(pad-w, pad-h)
 
     val n-side = n-pad / 2
@@ -422,10 +423,10 @@ public defn make-dfn-package (
     val pin-row = to-list(row-locs(W, n-side, pad-pitch))
 
     for (i in 0 to n-side, l in pin-row) do :
-      pad p[i + 1] : {pin-pad} at l0 * l
+      pad p[i + 1] : pin-pad at l0 * l
 
     for (i in n-side to n-pad, l in pin-row) do :
-      pad p[i + 1] : {pin-pad} at ln2 * l
+      pad p[i + 1] : pin-pad at ln2 * l
 
     val pad-x0-abs = abs(pad-x0)
     val pad-x0-dir = pad-x0 / pad-x0-abs
@@ -439,12 +440,12 @@ public defn make-dfn-package (
     layer(Silkscreen("pol",Top)) = Circle(pol-x, pad-y0, 0.254)
     ref-label()
 
-public pcb-package dfn-package ( n-pad:Int, pad-pitch:Double, pad-dims:[Double,Double], pad-x0:Double, body-dims:[Double,Double]) :
-  make-dfn-package(n-pad,pad-pitch,pad-dims,pad-x0,body-dims)
+public pcb-landpattern dfn-landpattern ( n-pad:Int, pad-pitch:Double, pad-dims:[Double,Double], pad-x0:Double, body-dims:[Double,Double]) :
+  make-dfn-landpattern(n-pad,pad-pitch,pad-dims,pad-x0,body-dims)
 
-public pcb-package dfn-package ( n-pad:Int, pad-pitch:Double, pad-dims:[Double,Double], pad-x0:Double, body-dims:[Double,Double], hs:[Double,Double]) :
-  make-dfn-package(n-pad,pad-pitch,pad-dims,pad-x0,body-dims)
-  pad p[n-pad + 1] : {smd-pad(hs[0],hs[1])} at loc(0.0, 0.0)  
+public pcb-landpattern dfn-landpattern ( n-pad:Int, pad-pitch:Double, pad-dims:[Double,Double], pad-x0:Double, body-dims:[Double,Double], hs:[Double,Double]) :
+  make-dfn-landpattern(n-pad,pad-pitch,pad-dims,pad-x0,body-dims)
+  pad p[n-pad + 1] : smd-pad(hs[0],hs[1]) at loc(0.0, 0.0)  
 
 
 ;TODO: Until added to core
@@ -460,7 +461,7 @@ public defn bga-pin-name (r:Int, c:Int) :
      Ref(string-join([letter, c + 1]))
 
 public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>) :
-  inside pcb-package :
+  inside pcb-landpattern :
     val pin-pad = bga-pad(pad-diam)
     defn make-pad (r:Int, c:Int) :
       val x = ((to-double(n-pads[0]) - 1.0) / -2.0 + to-double(c)) * pitch
@@ -469,7 +470,7 @@ public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], court
       val name = Ref(letter)[c + 1]
 
       if not contains?(omit-pads, name) :
-        pad {name} : {pin-pad} at loc(x,y)
+        pad (name) : pin-pad at loc(x,y)
 
     for c in 0 to n-pads[0] do :
       for r in 0 to n-pads[1] do :
@@ -480,76 +481,76 @@ public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], court
     layer(Silkscreen("pol", Top)) = Circle(-0.3 - courtyard[0] / 2.0, courtyard[1] / 2.0, 0.127)
     ref-label()
 
-public pcb-package bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>) :
+public pcb-landpattern bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>) :
   make-bga-pkg(pitch, pad-diam, n-pads, courtyard, omit-pads)
 
 ; Generic package instantiations
 ; Passives
 
-public pcb-package INDC1005X55 :
-  make-ipc-two-pin-package("0402")
+public pcb-landpattern INDC1005X55 :
+  make-ipc-two-pin-landpattern("0402")
   ref-label()
 
-public pcb-package CAPT1005X55 :
-  make-ipc-two-pin-package("0402")
+public pcb-landpattern CAPT1005X55 :
+  make-ipc-two-pin-landpattern("0402")
   layer(Silkscreen("pol", Top)) = PlusSymbol(-1.7, 0.0)
   ref-label()
 
-public pcb-package CAPT1608X80 :
-  make-ipc-two-pin-package("0603")
+public pcb-landpattern CAPT1608X80 :
+  make-ipc-two-pin-landpattern("0603")
   layer(Silkscreen("pol", Top)) = PlusSymbol(-2.2, 0.0)
   ref-label()
 
-public pcb-package CAPT2012X125 :
-  make-ipc-two-pin-package("0805")
+public pcb-landpattern CAPT2012X125 :
+  make-ipc-two-pin-landpattern("0805")
   layer(Silkscreen("pol", Top)) = PlusSymbol(-2.4, 0.0)
   ref-label()
 
-public pcb-package CAPT3216X160 :
-  make-ipc-two-pin-package("1206")
+public pcb-landpattern CAPT3216X160 :
+  make-ipc-two-pin-landpattern("1206")
   layer(Silkscreen("pol", Top)) = PlusSymbol(-3.0, 0.0)
   ref-label()
 
-public pcb-package FUSC7330X390 :
+public pcb-landpattern FUSC7330X390 :
   name = "FUSC7330X390"
-  make-two-pin-package(7.26, 2.48, 3.0, 7.5, 3.0)
+  make-two-pin-landpattern(7.26, 2.48, 3.0, 7.5, 3.0)
 
-public pcb-package DIOM-4539X220 :
+public pcb-landpattern DIOM-4539X220 :
   name = "DIOM-4539X220"
-  make-two-pin-package(5.58, 2.15, 2.18, 5.5, 4.0)
+  make-two-pin-landpattern(5.58, 2.15, 2.18, 5.5, 4.0)
   layer(Silkscreen("pol",Top)) = Line(0.25, [Point(3.0, -1.0), Point(3.0, 1.0)])
 
 ; QFNs
 
-public pcb-package QFN50P715X715X80-48 :
+public pcb-landpattern QFN50P715X715X80-48 :
   name = "QFN50P715X715X80-48"
-  make-qfn-package(0.5, 7.15, 48, 0.3, 0.5)
-  pad p[49] : {smd-pad(5.1,5.1)} at loc(0.0, 0.0)
+  make-qfn-landpattern(0.5, 7.15, 48, 0.3, 0.5)
+  pad p[49] : smd-pad(5.1,5.1) at loc(0.0, 0.0)
 
-public pcb-package QFN50P400X400X85-24 :
+public pcb-landpattern QFN50P400X400X85-24 :
   name = "QFN50P400X400X85-24"
-  make-qfn-package(0.5, 4.0, 24, 0.25, 0.4)
-  pad p[25] : {smd-pad(2.5,2.5)} at loc(0.0, 0.0)  
+  make-qfn-landpattern(0.5, 4.0, 24, 0.25, 0.4)
+  pad p[25] : smd-pad(2.5,2.5) at loc(0.0, 0.0)  
 
-public pcb-package SOT95P280X100-3N :
+public pcb-landpattern SOT95P280X100-3N :
   
   val x0 = -0.95
   val y0 = -1.0
-  pad p[1] : {smd-pad(0.6, 0.7)} at loc(x0,y0)
-  pad p[2] : {smd-pad(0.6, 0.7)} at loc((- x0), y0)
-  pad p[3] : {smd-pad(0.6, 0.7)} at loc(0.0, (- y0))
+  pad p[1] : smd-pad(0.6, 0.7) at loc(x0,y0)
+  pad p[2] : smd-pad(0.6, 0.7) at loc((- x0), y0)
+  pad p[3] : smd-pad(0.6, 0.7) at loc(0.0, (- y0))
 
   layer(Courtyard(Top)) = Rectangle(3.3, 2.8)
   layer(Silkscreen("pol", Top)) = Circle(x0, y0 - 1.0, 0.2)
   ref-label()
 
-public pcb-package SC-70-3 :
+public pcb-landpattern SC-70-3 :
   
   val x0 = -1.85 / 2.0
   val y0 = -1.3 / 2.0
-  pad p[1] : {smd-pad(0.6, 0.7)} at loc(x0,y0)
-  pad p[2] : {smd-pad(0.6, 0.7)} at loc((- x0), y0)
-  pad p[3] : {smd-pad(0.6, 0.7)} at loc(0.0, (- y0))
+  pad p[1] : smd-pad(0.6, 0.7) at loc(x0,y0)
+  pad p[2] : smd-pad(0.6, 0.7) at loc((- x0), y0)
+  pad p[3] : smd-pad(0.6, 0.7) at loc(0.0, (- y0))
 
   layer(Courtyard(Top)) = Rectangle(2.65, 2.35)
   ref-label()
@@ -557,36 +558,36 @@ public pcb-package SC-70-3 :
 public defn SOT23 () :
   SOT95P280X100-3N
 
-public pcb-package SOT95P280X145-5N :
+public pcb-landpattern SOT95P280X145-5N :
   val x0 = -0.95
   val y0 = 2.7 / -2.0
-  pad p[1] : {smd-pad(0.6, 1.05)} at loc(x0,y0)
-  pad p[2] : {smd-pad(0.6, 1.05)} at loc(0.0, y0)
-  pad p[3] : {smd-pad(0.6, 1.05)} at loc((- x0), y0)
-  pad p[4] : {smd-pad(0.6, 1.05)} at loc((- x0), (- y0))
-  pad p[5] : {smd-pad(0.6, 1.05)} at loc(x0, (- y0))
+  pad p[1] : smd-pad(0.6, 1.05) at loc(x0,y0)
+  pad p[2] : smd-pad(0.6, 1.05) at loc(0.0, y0)
+  pad p[3] : smd-pad(0.6, 1.05) at loc((- x0), y0)
+  pad p[4] : smd-pad(0.6, 1.05) at loc((- x0), (- y0))
+  pad p[5] : smd-pad(0.6, 1.05) at loc(x0, (- y0))
 
   layer(Courtyard(Top)) = Rectangle(2.7, 3.95)  
   layer(Silkscreen("pol", Top)) = Circle(x0, y0 - 1.0, 0.2)
   
   ref-label()
 
-public pcb-package SOT95P280X145-6N :
+public pcb-landpattern SOT95P280X145-6N :
   val x0 = -0.95
   val y0 = 2.7 / -2.0
-  pad p[1] : {smd-pad(0.6, 1.05)} at loc(x0,y0)
-  pad p[2] : {smd-pad(0.6, 1.05)} at loc(0.0, y0)
-  pad p[3] : {smd-pad(0.6, 1.05)} at loc((- x0), y0)
-  pad p[4] : {smd-pad(0.6, 1.05)} at loc((- x0), (- y0))
-  pad p[5] : {smd-pad(0.6, 1.05)} at loc(0.0, (- y0))
-  pad p[6] : {smd-pad(0.6, 1.05)} at loc(x0, (- y0))
+  pad p[1] : smd-pad(0.6, 1.05) at loc(x0,y0)
+  pad p[2] : smd-pad(0.6, 1.05) at loc(0.0, y0)
+  pad p[3] : smd-pad(0.6, 1.05) at loc((- x0), y0)
+  pad p[4] : smd-pad(0.6, 1.05) at loc((- x0), (- y0))
+  pad p[5] : smd-pad(0.6, 1.05) at loc(0.0, (- y0))
+  pad p[6] : smd-pad(0.6, 1.05) at loc(x0, (- y0))
 
   layer(Silkscreen("pol", Top)) = Circle(x0, y0 - 1.0, 0.2)
   layer(Courtyard(Top)) = Rectangle(2.7, 3.95)  
   
   ref-label()
 
-public pcb-package pin-header-pkg (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
+public pcb-landpattern pin-header-pkg (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
   make-pin-grid(n-pin, n-row, pin-pitch, row-pitch)
 
   val n-col = to-int(ceil(to-double(n-pin) / to-double(n-row)))
@@ -600,14 +601,14 @@ public pcb-package pin-header-pkg (n-pin:Int, n-row:Int, pin-pitch:Double, row-p
   
   ref-label()
 
-public pcb-package top-smd-testpoint-pkg (d:Double) :
-  pad p : {top-smd-testpoint-pad(d)} at loc(0.0, 0.0)
+public pcb-landpattern top-smd-testpoint-pkg (d:Double) :
+  pad p : top-smd-testpoint-pad(d) at loc(0.0, 0.0)
   layer(Courtyard(Top)) = Circle(d / 2.0)
   layer(Silkscreen("f-silk", Top)) = Circle(d / 2.0)
   ref-label()
 
-public pcb-package btm-smd-testpoint-pkg (d:Double) :
-  pad p : {btm-smd-testpoint-pad(d)} at loc(0.0, 0.0)
+public pcb-landpattern btm-smd-testpoint-pkg (d:Double) :
+  pad p : btm-smd-testpoint-pad(d) at loc(0.0, 0.0)
   layer(Courtyard(Bottom)) = Circle(d / 2.0)
   layer(Silkscreen("f-silk", Bottom)) = Circle(d / 2.0)
   ref-label()

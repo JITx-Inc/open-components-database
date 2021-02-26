@@ -1,41 +1,38 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/monolithic-power/MPM3630:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
-  import ocdb/pinspec
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
   import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/generic-components
   import ocdb/bundles
-;[strip]
   import ocdb/symbols
   import ocdb/box-symbol
-;[/strip]
+  import ocdb/passive-circuits
 
-pcb-package mps-MPM3630-pkg :
+pcb-landpattern mps-MPM3630-pkg :
 
-  pad p[1] : {smd-pad(S, 0.25, 0.7)} at loc(-1.8, 1.55, -90.0)
-  pad p[2] : {smd-pad(S, 0.25, 1.1)} at loc(-1.8, 0.9, -90.0)
-  pad p[3] : {smd-pad(S, 0.25, 1.1)} at loc(-1.8, 0.25, -90.0)
+  pad p[1] : smd-pad(S, 0.25, 0.7) at loc(-1.8, 1.55, -90.0)
+  pad p[2] : smd-pad(S, 0.25, 1.1) at loc(-1.8, 0.9, -90.0)
+  pad p[3] : smd-pad(S, 0.25, 1.1) at loc(-1.8, 0.25, -90.0)
 
   for i in 0 to 3 do :
-    pad p[4 + i] : {smd-pad(S, 0.25, 1.1)} at loc(-1.8, -0.4 - to-double(i) * 0.85, -90.0)
+    pad p[4 + i] : smd-pad(S, 0.25, 1.1) at loc(-1.8, -0.4 - to-double(i) * 0.85, -90.0)
   
   for i in 0 to 3 do :
-    pad p[7 + i] : {smd-pad(S, 0.25, 1.1)} at loc(1.8, -2.1 + to-double(i) * 0.85, 90.0)
+    pad p[7 + i] : smd-pad(S, 0.25, 1.1) at loc(1.8, -2.1 + to-double(i) * 0.85, 90.0)
 
-  pad p[10] : {smd-pad(S, 0.25, 1.1)} at loc(1.8, 0.25, 90.0)
-  pad p[11] : {smd-pad(S, 0.25, 1.1)} at loc(1.8, 0.9, 90.0)
-  pad p[12] : {smd-pad(S, 0.25, 0.7)} at loc(1.8, 1.55, 90.0)
+  pad p[10] : smd-pad(S, 0.25, 1.1) at loc(1.8, 0.25, 90.0)
+  pad p[11] : smd-pad(S, 0.25, 1.1) at loc(1.8, 0.9, 90.0)
+  pad p[12] : smd-pad(S, 0.25, 0.7) at loc(1.8, 1.55, 90.0)
 
   for i in 0 to 6 do :
     val pad-type = if i == 2 or i == 3 : smd-pad(S, 0.25, 1.1) else : smd-pad(S, 0.25, 0.7)
-    pad p[13 + i] : {pad-type} at loc(1.25 - to-double(i) * 0.5, 2.8, 180.0)
+    pad p[13 + i] : pad-type at loc(1.25 - to-double(i) * 0.5, 2.8, 180.0)
 
   layer(ForbidVia()) = Rectangle(1.15, 0.79, loc(0.0, 0.575))
   layer(Courtyard(Top)) = Rectangle(3.6, 5.6)
@@ -44,12 +41,12 @@ pcb-package mps-MPM3630-pkg :
 
   ref-label()
 
-public unique pcb-component component:
+public pcb-component component:
   name = "MPM3630"
   manufacturer = "Monolithic Power Systems Inc."
   mpn = "MPM3630GQV-P"
-  val ps = PinSpec $ #TABLE :
-    [Ref | Int ...   | Dir  ]
+  pin-properties :
+    [pin:Ref | pads:Int ...   | side:Dir  ]
     [vin | 16 | Left]
     [en  | 17 | Left]
     [vcc | 2  | Left]
@@ -61,7 +58,8 @@ public unique pcb-component component:
     [pgnd | 12 13 14 | Down]
     [agnd | 3 | Down]
 
-  gen-symbol-map(ps, mps-MPM3630-pkg)
+  make-box-symbol()
+  assign-landpattern(mps-MPM3630-pkg)
 
 ; TODO: Merge with MPM3620A module
 public pcb-module module (v-out:Double) :
@@ -69,15 +67,15 @@ public pcb-module module (v-out:Double) :
   pin vout
   pin gnd
   pin en
-  inst mpm : {ocdb/monolithic-power/MPM3630/component}
+  inst mpm : ocdb/monolithic-power/MPM3630/component
 
-  inst c-fb : {ceramic-cap(22.0e-6)}
+  inst c-fb : ceramic-cap(22.0e-6)
 
-  inst c-in : {ceramic-cap(["capacitance" => 22.0e-6, "min-rated-voltage" => 25.0])}
-  inst c-out-0 : {ceramic-cap(["capacitance" => 22.0e-6, "min-rated-voltage" => 25.0])}
-  inst c-out-1 : {ceramic-cap(["capacitance" => 22.0e-6, "min-rated-voltage" => 25.0])}
+  inst c-in : ceramic-cap(["capacitance" => 22.0e-6, "min-rated-voltage" => 25.0])
+  inst c-out-0 : ceramic-cap(["capacitance" => 22.0e-6, "min-rated-voltage" => 25.0])
+  inst c-out-1 : ceramic-cap(["capacitance" => 22.0e-6, "min-rated-voltage" => 25.0])
 
-  inst en-r : {chip-resistor(100.0e3)}
+  inst en-r : chip-resistor(100.0e3)
 
   net v-in (vin, c-in.p[2], mpm.vin, en-r.p[2])
   net (en-r.p[1], mpm.en, en)
@@ -90,19 +88,18 @@ public pcb-module module (v-out:Double) :
   net agnd (mpm.agnd, gnd)
 
   val mpm-vref = 0.6 ; NOTE: this is different than MPM3620A
-  properties(vout):
-    voltage => [(v-out - 0.03) v-out (v-out + 0.03)]
-  ocdb/passive-circuits/make-voltage-divider(vout, mpm.fb, agnd, [0.55 0.6 0.65], 1.0e-4)
+  property(vout.voltage) = [(v-out - 0.03) v-out (v-out + 0.03)]
+  make-voltage-divider(vout, mpm.fb, agnd, [0.55 0.6 0.65], 1.0e-4)
     
 ;[strip]
-  package(mpm) at loc(0.0, 0.0) on Top
-  package(c-fb) at loc(-5.5, 2.0, -90.0) on Top
-  package(c-in) at loc(1.0, 5.0, 180.0) on Top
-  package(c-out-0) at loc(4.0, 0.0, -90.0) on Top
-  package(c-out-1) at loc(6.0, 0.0, -90.0) on Top
-  package(en-r) at loc(-2.0, 5.0, 90.0) on Top
-  ; package(fb-net.r-hi) at loc(-4.5, 2.0, -90.0) on Top
-  ; package(fb-net.r-lo) at loc(-3.5, 2.0, 90.0) on Top
+  place(mpm) at loc(0.0, 0.0) on Top
+  place(c-fb) at loc(-5.5, 2.0, -90.0) on Top
+  place(c-in) at loc(1.0, 5.0, 180.0) on Top
+  place(c-out-0) at loc(4.0, 0.0, -90.0) on Top
+  place(c-out-1) at loc(6.0, 0.0, -90.0) on Top
+  place(en-r) at loc(-2.0, 5.0, 90.0) on Top
+  ; place(fb-net.r-hi) at loc(-4.5, 2.0, -90.0) on Top
+  ; place(fb-net.r-lo) at loc(-3.5, 2.0, 90.0) on Top
   val w2 = 7.0
   
 ;  layer solder-mask = union(
@@ -142,3 +139,5 @@ public pcb-module module (v-out:Double) :
 ;[strip]
 
 
+public pcb-module module () :
+  inst i : module(1.0)

@@ -1,31 +1,30 @@
-#use-added-syntax(esir)
-defpackage ocdb/tests/default-harness :
+#use-added-syntax(jitx)
+defpackage ocdb/defaults :
   import core
   import collections
-  import esir
-  import esir/gen
-  import esir/repl-lib
-  
+  import jitx
+  import jitx/commands
+
 ;============================================================
 ;=================== Default Materials ======================
 ;============================================================
 
 public pcb-material copper-default :
-  type = conductor
+  type = Conductor
   name = "Copper"
   
 public pcb-material core-default :
-  type = dielectric
+  type = Dielectric
   dielectric-coefficient = 4.26
   name = "PR4 Core"
 
 public pcb-material prepreg-default :
-  type = dielectric
+  type = Dielectric
   dielectric-coefficient = 4.26
   name = "PR4 Prepreg 2113/2116"
 
 public pcb-material soldermask-default :
-  type = dielectric
+  type = Dielectric
   dielectric-coefficient = 3.9
   name = "Taiyo BSN4000"
 
@@ -55,57 +54,34 @@ public pcb-rules default-rules :
   max-board-height = 558.8 ; 22in
 
 public pcb-board default-board (num-layers:Int, width:Double, height:Double) :
-  stackup = {default-stackup(num-layers)}
+  stackup = default-stackup(num-layers)
   boundary = Rectangle(width, height)
   signal-boundary = Rectangle(width, height)
 
-public defn default-board (module:Ref, num-layers:Int, width:Double, height:Double) :
+public defn make-default-board (module:Instantiable, num-layers:Int, width:Double, height:Double) :
   val brd-outline = Rectangle(width, height) 
 
   pcb-board B :
-    stackup = {default-stackup(num-layers)}
+    stackup = default-stackup(num-layers)
     boundary = brd-outline 
     signal-boundary = brd-outline
 
-  unique pcb-design main-design :
-    module = {module}
-    board = B
-    rules = {ocdb/rules/sierra-adv-rules}
-  main-design
+  set-main-module(module)
+  set-board(B)
+  set-rules(ocdb/rules/sierra-adv-rules)
 
 ;============================================================
 ;================= Single Module Design =====================
 ;============================================================
 
-public defn single-module-design (module:Ref, board:Ref) :
-  unique pcb-module main-module :
-    inst instance : {module}
-    package(instance) at loc(0.0,0.0) on Top
-  unique pcb-design main-design :
-    module = {main-module}
-    rules = default-rules
-    board = {board}
-  main-design
+public defn make-single-module-design (module:Instantiable, board:Board) :
+  pcb-module main-module :
+    inst instance : module
+    place(instance) at loc(0.0,0.0) on Top
 
-public defn single-module-design (module:Ref) :
-  single-module-design(module, default-board(4, 10.0, 10.0))
-  
-;[replace]
-;public defn single-module-design (module:Ref) :
-;  unique pcb-module main-module :
-;    inst instance : {module}
-;    package(instance) at loc(0.0,0.0) on Top
-;  unique pcb-design main-design :
-;    module = {main-module}
-;  main-design
+  set-main-module(module)
+  set-board(board)
+  set-rules(default-rules)
 
-
-public defn export-cad (name:String, type:String) :
-  export-kicad(name, [`place => true 
-                            `gen-board => true 
-                            `gen-bom => false 
-                            `gen-schematic => true 
-                            `paper => ANSI-A4
-                            `fresh => true 
-                            `schematic-version => 4
-                            `param-configs => [`sketch]] )
+public defn make-single-module-design (module:Instantiable) :
+  make-single-module-design(module, default-board(4, 10.0, 10.0))

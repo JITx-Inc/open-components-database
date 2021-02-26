@@ -1,13 +1,10 @@
-#use-added-syntax(esir)
-defpackage ocdb/voltage-divider :
+#use-added-syntax(jitx)
+defpackage ocdb/designs/voltage-divider :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
-  import esir/repl-lib
+  import jitx/commands
+  import ocdb/defaults
   import ocdb/checks
   import ocdb/passive-circuits
   import ocdb/bundles
@@ -20,23 +17,23 @@ OPERATING-TEMPERATURE = [0.0, 40.0]
 
 pcb-module demo :
 
-  inst fmc : {ocdb/samtec/ASP-134488-01/component}
+  inst fmc : ocdb/samtec/ASP-134488-01/component
   net gnd (fmc.gnd)
 
   ; Add voltage property to vadj pin
-  properties(fmc.vadj):
-    voltage => [4.95 5.0 5.05]
+  property(fmc.vadj.voltage) = [4.95 5.0 5.05]
 
   ; Create a voltage divider to output a 0.5V that stays within 0.4925 < V < 0.5175. Target current : 1mA, use 0.5% resistors
-  ocdb/passive-circuits/make-voltage-divider(fmc.vadj, fmc.la03-n, gnd, [0.4925 0.5 0.5175] 1.0e-3, 0.5)
+  make-voltage-divider(fmc.vadj, fmc.la03-n, gnd, [0.4925 0.5 0.5175] 1.0e-3, 0.5)
 
   ; Same as above, but solve for a resistor tolerance that passes checks
-  ocdb/passive-circuits/make-voltage-divider(fmc.vadj, fmc.la04-n, gnd, [0.4925 0.5 0.5175] 1.0e-3)
+  make-voltage-divider(fmc.vadj, fmc.la04-n, gnd, [0.4925 0.5 0.5175] 1.0e-3)
 
   ; Same as above, but solve for a resistor tolerance that passes checks, and use default for divider current
-  ocdb/passive-circuits/make-voltage-divider(fmc.vadj, fmc.la05-n, gnd, [0.4925 0.5 0.5175])
+  make-voltage-divider(fmc.vadj, fmc.la05-n, gnd, [0.4925 0.5 0.5175])
 
-val main-design = default-board(demo, 4, 32.0,12.0)
+make-default-board(demo, 4, 32.0,12.0)
+
 
 ; Export design to open JITX ESIR format, and checks to a text file
-export-xml("vdiv.xml" [`lowered => true `check-log => "v-div-checks.txt"])
+; export-xml("vdiv.xml" [`lowered => true `check-log => "v-div-checks.txt"])

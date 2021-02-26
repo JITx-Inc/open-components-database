@@ -1,30 +1,26 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/fremont-micro-devices/FT25H04 :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
 
   import ocdb/land-patterns
   import ocdb/symbols
   import ocdb/box-symbol
-  import ocdb/pinspec
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
 
-  import jitpcb/visualizer
-
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Fremont Micro Devices"
   mpn = "FT25H04S"
   description = "4M-bit Serial Flash - SPI"
 
-  val ps = PinSpec $ #TABLE :
-    [Ref      | Int ...   | Dir   ]
+  pin-properties :
+    [pin:Ref      | pads:Int ...   | side:Dir   ]
     [CS       | 1         | Left  ]
     [SO       | 2         | Left  ]
     [NC       | 3, 7      | Down  ]
@@ -33,20 +29,19 @@ public unique pcb-component component :
     [SCLK     | 6         | Right ]
     [VCC      | 8         | Right ]
 
-  make-pins(ps)
-  make-box-symbol(ps)
-  assign-package(sop65-package(8), ps)
+  make-box-symbol()
+  assign-landpattern(sop65-landpattern(8))
   
   supports spi :
-    mosi  =>  SI
-    miso  =>  SO
-    sck   =>  SCLK
-    ss    =>  CS
+    spi.mosi  =>  self.SI
+    spi.miso  =>  self.SO
+    spi.sck   =>  self.SCLK
+    spi.ss    =>  self.CS
 
-public unique pcb-module module :
+public pcb-module module :
   port pwr : power
   port spi : spi
-  inst flash : {ocdb/fremont-micro-devices/FT25H04/component}
+  inst flash : ocdb/fremont-micro-devices/FT25H04/component
   net (pwr.gnd, flash.VSS)
   net (pwr.vdd, flash.VCC)
   net (spi.miso, flash.SO)

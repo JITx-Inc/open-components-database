@@ -1,13 +1,11 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/connects :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
-  import ocdb/pinspec
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
   import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/generic-components
@@ -15,34 +13,40 @@ defpackage ocdb/connects :
   import ocdb/symbols
   import ocdb/box-symbol
 
-public pcb-connection isolate (a:Ref, b:Ref) :
-  unique inst buf : {ocdb/texas-instruments/ISO1540/component}
-  net ({a}.sda, {buf}.SDA1)
-  net ({a}.scl, {buf}.SCL1)
-  net ({b}.sda, {buf}.SDA2)
-  net ({b}.scl, {buf}.SCL2)
-  properties({buf}.VCC1):
-    requires-power => true
-    power-request => [3.3 0.3 0.05]
-when :
-  port-type(a) == #PT(i2c) and
-  port-type(b) == #PT(i2c) 
+public defn connect-isolate (a:JITXObject, b:JITXObject) :
+  inside pcb-module :
+    eval-when true :
+      match(port-type(a), port-type(b)) :
+        (pa:Bundle, pb:Bundle) :
+          if pa == i2c and pb == i2c :
+            inst buf : ocdb/texas-instruments/ISO1540/component
+            net (a.sda, buf.SDA1)
+            net (a.scl, buf.SCL1)
+            net (b.sda, buf.SDA2)
+            net (b.scl, buf.SCL2)
+            property(buf.VCC1.requires-power) = true
+            property(buf.VCC1.power-request) = [3.3 0.3 0.05]
 
-public pcb-connection phy (x:Ref, y:Ref) :
-  unique inst phy : {ocdb/marvell/88E1510-A0-NNB2C000/module}
-  net ({x}, {phy}.rgmii)
-  net ({y}.mdi, {phy}.mdi)
-  schematic-group({phy}) = phy
-when :
-  port-type(x) == #PT(rgmii) and port-type(y) == #PT(ethernet-1000)
+public defn connect-phy (x:JITXObject, y:JITXObject) :
+  inside pcb-module :
+    eval-when true :
+      match(port-type(x), port-type(y)) :
+        (px:Bundle, py:Bundle) :
+          if px == rgmii and py == ethernet-1000 :
+            inst phy : ocdb/marvell/88E1510-A0-NNB2C000/module
+            net (x, phy.rgmii)
+            net (y.mdi, phy.mdi)
+            schematic-group(phy) = phy
 
-public pcb-connection ft232 (x:Ref, y:Ref) :
-  unique inst xcvr : {ocdb/future-designs/FT232RL/module}
-  net ({x}, {xcvr}.usb-2)
-  net ({y}.tx, {xcvr}.uart.rx)
-  net ({y}.rx, {xcvr}.uart.tx)
-  net ({y}.dtr, {xcvr}.uart.dtr)
-  net ({y}.rts, {xcvr}.uart.rts)
-  schematic-group({xcvr}) = xcvr
-when :
-  port-type(x) == #PT(usb-2) and port-type(y) == #PT({uart-with([#R(dtr) #R(rts)])})
+public defn connect-ft232 (x:JITXObject, y:JITXObject) :
+  inside pcb-module :
+    match(port-type(x), port-type(y)) :
+      (px:Bundle, py:Bundle) :
+        if px == usb-2 and py == uart-with([`dtr `rts]) :
+          public inst xcvr : ocdb/future-designs/FT232RL/module
+          net (x, xcvr.usb-2)
+          net (y.tx, xcvr.uart.rx)
+          net (y.rx, xcvr.uart.tx)
+          net (y.dtr, xcvr.uart.dtr)
+          net (y.rts, xcvr.uart.rts)
+          schematic-group(xcvr) = xcvr

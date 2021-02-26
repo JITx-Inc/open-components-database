@@ -1,57 +1,52 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/future-designs/FT232RL :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import esir/repl-lib
-  import jitpcb/visualizer
+  import jitx
+  import jitx/commands
 
-  import ocdb/tests/default-harness
+  import ocdb/defaults
   import ocdb/land-patterns
   import ocdb/symbols
   import ocdb/symbol-utils
   import ocdb/generic-components
 
   import ocdb/bundles
-  import ocdb/pinspec
   import ocdb/box-symbol
 
-public unique pcb-component component:
-  val pinspec = PinSpec $ #TABLE :
-    [Ref | Int ... | Dir]
-    [GND | 7 18 21 | Down]
-    [AGND | 25 | Down]
-    [TEST | 26 | Down]
-    [USBDM | 16 | Left]
-    [USBDP | 15 | Left]
-    [RXD | 5 | Right]
-    [TXD | 1 | Right]
-    [VCC | 20 | Up]
-    [nRI | 6 | Right]
-    [OSCI | 27 | Left]
-    [OSCO | 28 | Left]
-    [nCTS | 11 | Right]
-    [nDCD | 10 | Right]
-    [nDSR | 9 | Right]
-    [nDTR | 2 | Right]
-    [nRTS | 3 | Right]
-    [CBUS[0] | 23 | Right]
-    [CBUS[1] | 22 | Right]
-    [CBUS[2] | 13 | Right]
-    [CBUS[3] | 14 | Right]
-    [CBUS[4] | 12 | Right]
-    [VCCIO | 4 | Up]
-    [nc[0] | 8 | Down]
-    [nc[1] | 24 | Down]
-    [nRESET | 19 | Left]
-    [p3V3OUT | 17 | Left]
+public pcb-component component:
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir]
+    [GND     | 7 18 21      | Down    ]
+    [AGND    | 25           | Down    ]
+    [TEST    | 26           | Down    ]
+    [USBDM   | 16           | Left    ]
+    [USBDP   | 15           | Left    ]
+    [RXD     | 5            | Right   ]
+    [TXD     | 1            | Right   ]
+    [VCC     | 20           | Up      ]
+    [nRI     | 6            | Right   ]
+    [OSCI    | 27           | Left    ]
+    [OSCO    | 28           | Left    ]
+    [nCTS    | 11           | Right   ]
+    [nDCD    | 10           | Right   ]
+    [nDSR    | 9            | Right   ]
+    [nDTR    | 2            | Right   ]
+    [nRTS    | 3            | Right   ]
+    [CBUS[0] | 23           | Right   ]
+    [CBUS[1] | 22           | Right   ]
+    [CBUS[2] | 13           | Right   ]
+    [CBUS[3] | 14           | Right   ]
+    [CBUS[4] | 12           | Right   ]
+    [VCCIO   | 4            | Up      ]
+    [nc[0]   | 8            | Down    ]
+    [nc[1]   | 24           | Down    ]
+    [nRESET  | 19           | Left    ]
+    [p3V3OUT | 17           | Left    ]
 
-  make-pins(pinspec)
-  make-box-symbol(pinspec)
-  assign-package(sop65-package(28, 7.8), pinspec)
+  make-box-symbol()
+  assign-landpattern(sop65-landpattern(28, 7.8))
 
   name = "FT232"
   description = "FTDI USB to UART http://www.ftdichip.com/Documents/DataSheets/DS_FT232R_v104.pdf"
@@ -59,12 +54,12 @@ public unique pcb-component component:
   mpn = "FT232RL-REEL"
   manufacturer = "Future Designs"
 
-public unique pcb-module module :
+public pcb-module module :
   port usb-2 : usb-2
-  port uart : {uart-with([#R(dtr) #R(rts)])}
+  port uart : uart-with([`dtr `rts])
   pin gnd
   
-  inst xcvr : {ocdb/future-designs/FT232RL/component}
+  public inst xcvr : ocdb/future-designs/FT232RL/component
   net (usb-2.vbus.vdd xcvr.VCC xcvr.VCCIO)
   net (usb-2.vbus.gnd xcvr.GND xcvr.AGND gnd)
   net (usb-2.data.P xcvr.USBDP)

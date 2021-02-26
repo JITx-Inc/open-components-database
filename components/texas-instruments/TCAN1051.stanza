@@ -1,24 +1,20 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/texas-instruments/TCAN1051 :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
 
   import ocdb/land-patterns
   import ocdb/symbols
   import ocdb/box-symbol
-  import ocdb/pinspec
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
 
-  import jitpcb/visualizer
-
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "TCAN1051GVDRQ1"
   description = "1/1 Transceiver Half CANbus 8-SOIC"
@@ -30,33 +26,29 @@ public unique pcb-component component :
   pin VCC
   pin CANL
   pin CANH
-  val ps = PinSpec $ #TABLE :
-  ; [Component pin | Pad number | Symbol pin direction]
-    [Ref   | Int ...   | Dir  ]
-    [VIO   | 5     | Left ]
-    [TXD   | 1     | Left ]
-    [RXD   | 4     | Left ]
-    [S     | 8     | Left ]
-    [GND   | 2     | Down ]
-    [VCC   | 3     | Up ]
-    [CANL  | 6     | Right ]
-    [CANH  | 7     | Right ]
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir]
+    [VIO     | 5            | Left    ]
+    [TXD     | 1            | Left    ]
+    [RXD     | 4            | Left    ]
+    [S       | 8            | Left    ]
+    [GND     | 2            | Down    ]
+    [VCC     | 3            | Up      ]
+    [CANL    | 6            | Right   ]
+    [CANH    | 7            | Right   ]
 
-  make-box-symbol(ps)
-  assign-package(soic127p-package(8), ps)
+  make-box-symbol()
+  assign-landpattern(soic127p-landpattern(8))
 
   ; Figure out what the io voltage level is in the design.
   ; eval-when has-property?(VIO.voltage):
     ; val vio = property(VIO.voltage)
   val vio = 5.0
-  properties(TXD):
-    apply-digital-input-params(0.3 * vio, 0.7 * vio)
-  properties(S):
-    apply-digital-input-params(0.3 * vio, 0.7 * vio)
-  properties(RXD):
-    apply-digital-output-params(0.2 * vio, 0.8 * vio)
+  apply-digital-input-params(self.TXD, 0.3 * vio, 0.7 * vio)
+  apply-digital-input-params(self.S, 0.3 * vio, 0.7 * vio)
+  apply-digital-output-params(self.RXD, 0.2 * vio, 0.8 * vio)
     
-public unique pcb-module module:
+public pcb-module module:
   ; Set up ports
   port can : can
   port uart : uart
@@ -65,7 +57,7 @@ public unique pcb-module module:
   pin vio
   pin gnd
 
-  inst xcvr : {ocdb/texas-instruments/TCAN1051/component}
+  inst xcvr : ocdb/texas-instruments/TCAN1051/component
 
   net (xcvr.GND gnd)
   net (xcvr.TXD uart.tx)
@@ -82,9 +74,6 @@ public unique pcb-module module:
   cap-strap(xcvr.VIO, gnd, 0.1e-6)
 
   val v = 5.0
-  properties(uart.tx):
-    apply-digital-input-params(0.3 * v, 0.7 * v)
-  properties(s):
-    apply-digital-input-params(0.3 * v, 0.7 * v)
-  properties(uart.rx):
-    apply-digital-output-params(0.2 * v, 0.8 * v)
+  apply-digital-input-params(uart.tx, 0.3 * v, 0.7 * v)
+  apply-digital-input-params(s, 0.3 * v, 0.7 * v)
+  apply-digital-output-params(uart.rx, 0.2 * v, 0.8 * v)
