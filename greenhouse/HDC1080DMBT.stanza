@@ -1,0 +1,90 @@
+#use-added-syntax(jitx)
+defpackage HDC1080DMBT :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/symbol-utils
+  import ocdb/generic-components
+  import ocdb/box-symbol
+
+pcb-landpattern son100p300x300x80-7n :
+  pad p[1] : smd-pad(0.86, 0.42) at loc(-1.435, 1.0, 0.0)
+  pad p[2] : smd-pad(0.86, 0.42) at loc(-1.435, -0.0, 0.0)
+  pad p[3] : smd-pad(0.86, 0.42) at loc(-1.435, -1.0, 0.0)
+  pad p[4] : smd-pad(0.86, 0.42) at loc(1.435, -1.0, 0.0)
+  pad p[5] : smd-pad(0.86, 0.42) at loc(1.435, -0.0, 0.0)
+  pad p[6] : smd-pad(0.86, 0.42) at loc(1.435, 1.0, 0.0)
+  pad p[7] : smd-pad(1.5, 2.4) at loc(0.0, -0.0, 0.0)
+
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.127, [ Point(-1.5, 1.5), Point(1.5, 1.5) ])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.127, [ Point(1.5, -1.5), Point(-1.5, -1.5) ])
+  layer(Silkscreen("F-SilkS", Top)) = Circle(Point(-2.5, 1.5), 0.05)
+  layer(Silkscreen("F-SilkS", Top)) = Circle(Point(-2.5, 1.5), 0.05)
+
+  for i in 0 to 10 do :
+    for x in [-1.0, 1.0] do :
+      layer(Cutout()) = Union([
+        Rectangle(2.0, 4.0, loc(3.0 * x, 0.0)),
+        for y in [-1.0, 1.0] seq :
+          Rectangle(3.0, 2.0, loc(2.5 * x, 3.0 * y))
+      ])
+
+  ;   layer(Cutout()) = Rectangle(2.0, 5.0, loc(i, 0.0))
+  ;   layer(SolderMask(Top)) = Circle(C, 1.0)
+  ;   layer(SolderMask(Bottom)) = Circle(C, 1.0)
+  ; layer(Courtyard(Top)) = Rectangle(10.0, 10.0)
+  for i in 0 to 2 do :
+    layer(Courtyard(Top)) = Rectangle(10.0, 10.0)
+
+  
+  ref-label()
+
+pcb-symbol HDC1080DMBT-symbol :
+  pin SDA at Point(-7.62, 0.0) with :
+    direction = Left
+    length = 5.08
+    number-size = 0.609
+    name-size = 0.609
+  pin GND at Point(7.62, -5.08) with :
+    direction = Right
+    length = 5.08
+    number-size = 0.609
+    name-size = 0.609
+  pin VDD at Point(7.62, 5.08) with :
+    direction = Right
+    length = 5.08
+    number-size = 0.609
+    name-size = 0.609
+  pin SCL at Point(-7.62, 2.54) with :
+    direction = Left
+    length = 5.08
+    number-size = 0.609
+    name-size = 0.609
+  pin DAP at Point(7.62, -2.54) with :
+    direction = Right
+    length = 5.08
+    number-size = 0.609
+    name-size = 0.609
+
+  layer("foreground") = Rectangle(15.24, 15.24, loc(0.0, 0.0))
+
+public pcb-component HDC1080DMBT :
+  pin DAP
+  pin GND
+  pin SCL
+  pin SDA
+  pin VDD
+  val pkg = son100p300x300x80-7n
+  val sym = HDC1080DMBT-symbol
+  landpattern = pkg(DAP => pkg.p[7], GND => pkg.p[2], SCL => pkg.p[6], SDA => pkg.p[1], VDD => pkg.p[5])
+  symbol = sym(DAP => sym.DAP, GND => sym.GND, SCL => sym.SCL, SDA => sym.SDA, VDD => sym.VDD)
+
+  name = "SON100P300X300X80-7N"
+  reference-prefix = "U"
+  mpn = "HDC1080DMBT"

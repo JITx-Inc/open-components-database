@@ -1,0 +1,52 @@
+#use-added-syntax(jitx)
+defpackage greenhouse :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/symbol-utils
+  import ocdb/generic-components
+
+  import sensors
+  import goldfish
+  import terminals
+  import IRF520
+
+pcb-module fet-circuit :
+  pin gnd
+  pin vcc
+  inst terminal2 : c-282837-2
+  inst gnd-diode : ocdb/on-semiconductor/MBR0520L/component
+  inst vcc-diode : ocdb/on-semiconductor/MBR0520L/component
+  inst fet : IRF520
+  net GND (gnd, gnd-diode.a, fet.G)
+  net +12V (vcc, vcc-diode.a)
+  net (vcc-diode.c, terminal2.p[1])
+  net (fet.D, terminal2.p[2])
+  net (fet.S, gnd-diode.c)
+  schematic-group(self) = fet
+  
+
+pcb-module greenhouse :
+  inst mcu : goldfish
+  inst ps : ocdb/texas-instruments/TLV62130/module(5.0)
+  inst fet : fet-circuit[2]
+
+  net GND (fet[0].gnd, fet[1].gnd, mcu.gnd, ps.gnd)
+  net VCC (mcu.vcc, ps.vout)
+  net +12V (fet[0].vcc, fet[1].vcc, ps.vin)
+
+  symbol(GND) = ground-sym
+  symbol(VCC) = supply-sym
+
+  schematic-group(ps) = ps
+  schematic-group(mcu) = mcu
+
+val main-design = make-default-board(greenhouse, 4, 30.0, 50.0)
+
+view-board()
+view-schematic()
