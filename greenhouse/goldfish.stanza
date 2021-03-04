@@ -6,8 +6,7 @@ defpackage goldfish :
   import jitx
   import jitx/commands
   import ocdb/defaults
-  import ocdb/bundles with:
-    prefix(usb-2) => bundles-
+  import ocdb/bundles
   import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/generic-components
@@ -128,36 +127,6 @@ pcb-component belfuse-ss-52400-003 :
 
   name = "BELFUSE_SS-52400-003"
   description = ""
-
-pcb-bundle usb-2 :
-  pin N
-  pin P
-
-pcb-module usb-c-connector :
-  port usb:usb-2
-  pin gnd
-  pin vbus
-  pin vcc
-
-  public inst ESDCLAMP : stmicro-USBLC6-2SC6
-  public inst D1 : me-SS34
-  public inst con : belfuse-ss-52400-003
-  public inst R1 : gen-res-cmp(5.1e3)
-  public inst R2 : gen-res-cmp(5.1e3)
-  public inst R4 : gen-res-cmp(22.0, 1.0)
-  public inst R5 : gen-res-cmp(22.0, 1.0)
-  net (R1.p[2], con.CC1)
-  net (R2.p[2], con.CC2)
-  net (vbus D1.a, con.vbus, ESDCLAMP.vbus)
-  net (gnd R1.p[1], R2.p[1], con.gnd, ESDCLAMP.gnd)
-  net (D1.c, vcc)
-
-  net EXT-P (ESDCLAMP.i[1], con.DP1, con.DP2)
-  net D+ (ESDCLAMP.o[1], R4.p[2])
-  net EXT-N (ESDCLAMP.i[0], con.DN1, con.DN2)
-  net D- (ESDCLAMP.o[0], R5.p[2])
-  net USB-P (R4.p[1], usb.P)
-  net USB-N (R5.p[1], usb.N)
   
 pcb-landpattern qfp80p1200x1200x120-44n-pkg :
   pad p[1] : smd-pad(1.4732, 0.508) at loc(-5.7404, 3.9878, 0.0)
@@ -320,37 +289,29 @@ pcb-component stmicro-USBLC6-2SC6 :
 public pcb-module goldfish :
   pin gnd
   pin vcc
+  port usb : usb-2
   public inst C1 : gen-cap-cmp(0.1e-6)
   public inst C2 : gen-cap-cmp(0.1e-6)
   public inst C5 : gen-cap-cmp(0.1e-6)
   public inst C6 : gen-cap-cmp(4.7e-6)
   public inst C9 : gen-cap-cmp(1.0e-6) 
   public inst C10 : gen-cap-cmp(0.1e-6)
-  public inst R3 : gen-res-cmp(10.0e3)
   public inst R6 : gen-res-cmp(10.0e3)
   public inst X1 : yt-X322516MLB4SI
-  public inst usb-con : usb-c-connector
-  public inst reset-button : xkb-TS-1187A-C-C-B
   public inst U1 : qfp80p1200x1200x120-44n
 
-  ; place(usb-con.con) at loc(30.0, -23.49, 180.0) on Top
-
-  net VCC (C1.p[1], R3.p[2], U1.AVCC, U1.VCC, U1.AVCC, U1.VCC, C2.p[1], usb-con.vcc, vcc)
+  net VCC (C1.p[1], U1.AVCC, U1.VCC, U1.AVCC, U1.VCC, C2.p[1], vcc, usb.vbus.vdd)
   net GND (C9.p[2], C1.p[2], R6.p[1], C6.p[2], U1.GND, U1.PE2, U1.UGND,
-           X1.gnd, C2.p[2], C5.p[2],C10.p[2],
-           usb-con.gnd, reset-button.t, gnd)
+           X1.gnd, C2.p[2], C5.p[2],C10.p[2], usb.vbus.gnd, gnd)
   add-xtal-caps(X1, gnd)
   net (U1.XTAL1, X1.p[1])
   net (U1.XTAL2, X1.p[2])
   net (U1.AREF, C10.p[1])
   net (C9.p[1], U1.UCAP)
-  net VBUS (R6.p[2], C6.p[1], U1.VBUS, U1.UVCC, C5.p[1], usb-con.vbus)
-  net nRESET (R3.p[1], U1.nRESET, reset-button.p)
-  net USB-P (usb-con.usb.P, U1.D+)
-  net USB-N (usb-con.usb.N, U1.D-)
-
-  symbol(GND) = ground-sym
-  symbol(VCC) = supply-sym
+  net VBUS (R6.p[2], C6.p[1], U1.VBUS, U1.UVCC, C5.p[1])
+  net nRESET (U1.nRESET)
+  net USB-P (usb.data.P, U1.D+)
+  net USB-N (usb.data.N, U1.D-)
 
   supports gpio:
     gpio.gpio => U1.PB0
@@ -402,8 +363,3 @@ public pcb-module goldfish :
     gpio.gpio => U1.PF6
   supports gpio:
     gpio.gpio => U1.PF7
-
-; make-default-board(goldfish, 4, 30.0, 18.0)
-
-; view-board()
-; view-schematic()
