@@ -8,22 +8,47 @@ defpackage ocdb/checks:
   import ocdb/defaults
   import ocdb/space-derating
   import ocdb/generator-utils
+  import ocdb/property-structs
 
+; ==== Check convenience functions ===
+; ====================================
 
+public defn check-design (module:JITXObject):
+  inside pcb-module:
+    propogate-voltage(module)
+    for i in component-instances(module) do :
+      for p in pins(i) do :
+        if has-property?(p.generic) :
+          check generic-pin(p)
 
-;<notes>
+; public defn final-pass ():
+;   ; println("Final pass")
+;   defn propogate-voltage (n:NetStmt) :
+;     val supply-pin  = for p in refs(n) find : has-property?(p.voltage)
+;     if supply-pin is Ref :
+;       val sp = supply-pin as Ref
+;       if has-property?(sp.voltage) : 
+;         val v = property(sp.voltage)
+;         for p in refs(n) do :
+;           if has-property?(p.supply-pin) :
+;             if property(p.voltage) != v :
+;               println("Incompatible supply voltages on same net.")
+;           else :
+;             inside pcb-module:
+;               properties({p}):
+;                 voltage => v
+;   for n in nets(self) do :
+;     propogate-voltage(n)
 
-io :
-  nets on self isnt allowed
-  has-property?{_.digital-io} syntax -- does this work?
-
-resistor-check :
-  lookup - spice?
-
-pcb-check can only be called from a module.
-change macro to set "inside pcb-module" implicitly
-
-;<notes>
+; Replace this once nets introspection is back
+public defn propogate-voltage (module:JITXObject):
+  inside pcb-module :
+    for p1 in pins(module) do :
+      if has-property?(p1.power-supply-pin) :
+        if property(p1.power-supply-pin) is PowerSupplyPin :
+          for p2 in pins(module) do :
+            if p1 != p2 and connected?([p1, p2]) and not has-property?(p2.voltage) :
+              property(p2.voltage) = supply-voltage(property(p1.power-supply-pin))
 
 ; public pcb-check io () :
 ;   for n in nets(self) do :
@@ -63,6 +88,16 @@ change macro to set "inside pcb-module" implicitly
 ;       #CHECK(property(p[1].vo-cm)[2]   <= property(p[0].vi-cm)[2])
 ;       #CHECK(property(p[1].vo-diff)[0] >= property(p[0].vi-diff)[0])
 
+; Checks any generic pin for rated voltage
+public pcb-check generic-pin (p:JITXObject):
+  #CHECK(has-property?(p.voltage))
+  val p-props = property(p.generic)
+  ; Check that the maxima are never crossed
+  #CHECK(contains?(max-voltage(p-props), property(p.voltage)))
+  ; Check that the nominal point is within the recommended range
+  if has-property?(p.recommended-voltage) :
+    #CHECK(contains?(recommended-voltage(p-props), nominal(property(p.voltage))))
+
 ; Checks a power pin located on a component
 public pcb-check power-pin (p:JITXObject) :
   #CHECK(has-property?(p.power-pin))
@@ -89,7 +124,10 @@ public pcb-check voltage-levels (p:JITXObject, range:[Double,Double,Double]) :
   #CHECK(property(p.voltage)[0] >= range[0])
   #CHECK(property(p.voltage)[2] <= range[2])
 
-; Checks resistors agains operating point and environment
+; ====== Component-level checks ======
+; ====================================
+
+; Checks resistors against operating point and environment
 public pcb-check resistor-check (r:JITXObject) :
   #CHECK(has-property?(r.resistor))
   #CHECK(has-property?(r.operating-point))
@@ -190,3 +228,11 @@ public pcb-check oscillator-check-pullability (o:JITXObject, intf:JITXObject, lo
   #CHECK(has-property?(o.frequency-tolerance))
   #CHECK(has-property?(intf.frequency-tolerance))
   #CHECK(property(o.frequency-tolerance) + freq-error < property(intf.frequency-tolerance))
+
+
+public defn check-oscillator (o:JITXObject, intf:JITXObject, load-cap:JITXObject) :
+  inside pcb-module:
+    check oscillator-check-frequency(o, intf)
+    check oscillator-check-gain(o, intf, load-cap)
+    check oscillator-check-drive(o, intf, load-cap)
+    check oscillator-check-pullability(o, intf, load-cap)

@@ -12,6 +12,7 @@ defpackage ocdb/diodes-incorporated/AP2112:
   import ocdb/bundles
   import ocdb/symbols
   import ocdb/box-symbol
+  import ocdb/property-structs
 
 public pcb-component component :
   pin VEN
@@ -24,19 +25,17 @@ public pcb-component component :
   description = "600-mA, Low-Dropout Regulator"
   mpn = "AP2112K-3.3TRG1"
   pin-properties :
-    [pin:Ref | pads:Int ... | side:Dir]
-    [GND     | 2            | Down    ]
-    [VOUT    | 5            | Right   ]
-    [VIN     | 1            | Left    ]
-    [VEN     | 3            | Left    ]
-    [nc      | 4            | Down    ]
+    [pin:Ref | pads:Int ... | side:Dir | generic-pin:GenericPin]
+    [GND     | 2            | Down     | -]
+    [VOUT    | 5            | Right    | GenericPin(Interval(0.0, 6.0, false), false, 4.0e3)]
+    [VIN     | 1            | Left     | GenericPin(Interval(0.0, 6.0, false), Interval(3.7, 6.0, false), 4.0e3)]
+    [VEN     | 3            | Left     | GenericPin(Interval(0.0, 6.0, false), false, 4.0e3)]
+    [nc      | 4            | Down     | -]
   make-box-symbol()
   assign-landpattern(SOT95P280X145-5N)
 
-  property(VIN.power-pin) = true
-  property(VIN.rated-voltage) = [2.5 6.0]
-  property(VOUT.supply-pin) = true
-  property(VOUT.voltage) = 3.3
+  property(VOUT.power-supply-pin) = PowerSupplyPin(3.3, 0.6)
+  property(self.rated-temperature) = RatedTemperature(Interval(-40.0, 85.0, false))
 
 public pcb-module module : 
   port vin : power

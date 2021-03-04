@@ -12,6 +12,8 @@ defpackage ocdb/designs/ble-mote :
   import ocdb/design-vars
   import ocdb/generator-utils
   import ocdb/generic-components
+  import ocdb/property-structs
+
 
 OPERATING-TEMPERATURE = [-20.0 50.0]
 OPTIMIZE-FOR = ["area"]
@@ -111,9 +113,11 @@ pcb-module sensor-mote :
   ; Apply groups to sub-circuits for schematic and layout
   group-modules([[proc  ant] [hum] [usb ldo] [particle-counter]])
 
+  property(proc.mcu.VDDA.voltage) = Interval(0.0, 3.3, false)
+  check-design-fully(self)
+
 ; Run a function to programmatically connect all gnd pins
 var sensor-mote* = transform-module(connect-gnd-pins, sensor-mote)
-
 ; === Setup visualizations and exports ===
 ; Set the active design directory for CAD
 set-design("ble-mote")
@@ -121,6 +125,7 @@ set-design("ble-mote")
 ; Configure design to have a default 4-layer stackup and design rules.
 make-default-board(sensor-mote*, 4, 30.0, 18.0)
 
+run-checks("BLE-MOTE-CHECKS.txt")
 ; Show the Schematic and PCB for the design
 view-board()
 view-schematic()
