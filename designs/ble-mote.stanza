@@ -13,6 +13,7 @@ defpackage ocdb/designs/ble-mote :
   import ocdb/generator-utils
   import ocdb/generic-components
   import ocdb/property-structs
+  import ocdb/checks
 
 
 OPERATING-TEMPERATURE = [-20.0 50.0]
@@ -30,6 +31,7 @@ pcb-module pms7003 :
   place(header) at loc(0.0,0.0) on Top
   net (vin.gnd vin-mcu.gnd header.p[3] header.p[4])
   net (vin.vdd header.p[1] header.p[2])
+  property(header.p[1].power-pin) = PowerPin(Interval(4.5, 5.5, 5.0))
   net (uart.tx, header.p[10])
   net (uart.rx, header.p[8])
   net (reset, header.p[6])
@@ -39,7 +41,6 @@ pcb-module pms7003 :
 
 pcb-module sensor-mote :
   ; Add USB connector
-  pin barfo
   public inst usb : micro-usb-connector
   place(usb.con) at loc(-10.0, -7.3) on Top
 
@@ -113,8 +114,7 @@ pcb-module sensor-mote :
   ; Apply groups to sub-circuits for schematic and layout
   group-modules([[proc  ant] [hum] [usb ldo] [particle-counter]])
 
-  property(proc.mcu.VDDA.voltage) = Interval(0.0, 3.3, false)
-  check-design-fully(self)
+  check-design(self)
 
 ; Run a function to programmatically connect all gnd pins
 var sensor-mote* = transform-module(connect-gnd-pins, sensor-mote)
@@ -130,11 +130,11 @@ run-checks("BLE-MOTE-CHECKS.txt")
 view-board()
 view-schematic()
 
-; Export CAD
-set-export-board?(true)
-set-export-schematic?(true)
-set-export-backend(`kicad)
-export-cad()
+; ; Export CAD
+; set-export-board?(true)
+; set-export-schematic?(true)
+; set-export-backend(`kicad)
+; export-cad()
 
-; Solve and export Bill of Materials
-export-bom()
+; ; Solve and export Bill of Materials
+; export-bom()
