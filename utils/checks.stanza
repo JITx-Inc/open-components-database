@@ -31,22 +31,30 @@ public pcb-check io (module:JITXObject) :
   var net-pins = []
   for p1 in pins do :
     ; Look for Digital inputs
-    if has-property?(p1.digital-input) :
-      if property(p1.digital-input) is DigitalInput:
-        ; This will visit multi input connections several times.
-        ; Get all pins on the net
-        net-pins = to-tuple(filter({connected?([p1, _])}, pins))
-        val out-pins = to-tuple(filter({has-property?(_.digital-output)}, net-pins))
-        val io-pins  = to-tuple(filter({has-property?(_.digital-io)}, net-pins))
-        val in-pins  = to-tuple(filter({has-property?(_.digital-input)}, net-pins))
-        println(length(in-pins))
-        if length(in-pins) == 1 :
-          if length(out-pins) == 1 :
-            val out-p = driver(property(out-pins[0].digital-output))
-            println(out-p)
-            if (out-p is CMOSOutput or out-p is TTLOutput) :
-              check-single-push-pull-levels(out-pins[0], in-pins[0])
-
+    if (has-property?(p1.digital-output) or has-property?(p1.digital-io)) :
+      ; Get all pins on the net
+      net-pins = to-tuple(filter({connected?([p1, _])}, pins))
+      val out-pins = to-tuple(filter({has-property?(_.digital-output)}, net-pins))
+      val io-pins  = to-tuple(filter({has-property?(_.digital-io)}, net-pins))
+      val in-pins  = to-tuple(filter({has-property?(_.digital-input)}, net-pins))
+      if length(out-pins) == 1 :
+        val out-p = driver(property(out-pins[0].digital-output))
+        if (out-p is CMOSOutput or out-p is TTLOutput) :
+          for inp in in-pins do :
+            check-single-push-pull-levels(out-pins[0], inp)
+          for io in io-pins do :
+            check-single-push-pull-levels(out-pins[0], io)
+      else if length(io-pins) == 1 :
+        val out-p = driver(property(io-pins[0].digital-output))
+        if (out-p is CMOSOutput or out-p is TTLOutput) :
+          for inp in in-pins do :
+            check-single-push-pull-levels(io-pins[0], inp)
+      else if (empty?(in-pins) and empty?(out-pins)) :
+        val out-p = driver(property(io-pins[0].digital-output))
+        if (out-p is CMOSOutput or out-p is TTLOutput) :
+          for io in io-pins do :
+            check-single-push-pull-levels(io-pins[0], io)
+      ; TODO: Handle multi-output/multi IO nets
 ; Checks two push-pull digital logic pins, at least one of which can output
 public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
   
