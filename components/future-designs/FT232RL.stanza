@@ -14,39 +14,87 @@ defpackage ocdb/future-designs/FT232RL :
 
   import ocdb/bundles
   import ocdb/box-symbol
+  import ocdb/property-structs
+  import ocdb/generator-utils
+  import ocdb/checks
 
 public pcb-component component:
+  pin VCC
+  pin TEST
+  pin GND
+  pin VCCIO
+  pin p3V3OUT
+  pin RXD
+  pin TXD
+  pin nRI
+  pin OSCI
+  pin OSCO
+  pin nCTS
+  pin nDCD
+  pin nDSR
+  pin nDTR
+  pin nRTS
+  port CBUS : pin[5]
+
   pin-properties :
-    [pin:Ref | pads:Int ... | side:Dir]
-    [GND     | 7 18 21      | Down    ]
-    [AGND    | 25           | Down    ]
-    [TEST    | 26           | Down    ]
-    [USBDM   | 16           | Left    ]
-    [USBDP   | 15           | Left    ]
-    [RXD     | 5            | Right   ]
-    [TXD     | 1            | Right   ]
-    [VCC     | 20           | Up      ]
-    [nRI     | 6            | Right   ]
-    [OSCI    | 27           | Left    ]
-    [OSCO    | 28           | Left    ]
-    [nCTS    | 11           | Right   ]
-    [nDCD    | 10           | Right   ]
-    [nDSR    | 9            | Right   ]
-    [nDTR    | 2            | Right   ]
-    [nRTS    | 3            | Right   ]
-    [CBUS[0] | 23           | Right   ]
-    [CBUS[1] | 22           | Right   ]
-    [CBUS[2] | 13           | Right   ]
-    [CBUS[3] | 14           | Right   ]
-    [CBUS[4] | 12           | Right   ]
-    [VCCIO   | 4            | Up      ]
-    [nc[0]   | 8            | Down    ]
-    [nc[1]   | 24           | Down    ]
-    [nRESET  | 19           | Left    ]
-    [p3V3OUT | 17           | Left    ]
+    [pin:Ref | pads:Int ... | side:Dir | generic-pin:GenericPin]
+    [GND     | 7 18 21      | Down     | -]
+    [AGND    | 25           | Down     | -]
+    [TEST    | 26           | Down     | GenericPin(Interval(-0.5, 6.0, false), 0.0)]
+    [USBDM   | 16           | Left     | GenericPin(Interval(-0.5, 3.8, false), 0.0)]
+    [USBDP   | 15           | Left     | GenericPin(Interval(-0.5, 3.8, false), 0.0)]
+    [RXD     | 5            | Right    | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [TXD     | 1            | Right    | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [VCC     | 20           | Up       | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [nRI     | 6            | Right    | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [OSCI    | 27           | Left     | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [OSCO    | 28           | Left     | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [nCTS    | 11           | Right    | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [nDCD    | 10           | Right    | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [nDSR    | 9            | Right    | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [nDTR    | 2            | Right    | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [nRTS    | 3            | Right    | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [CBUS[0] | 23           | Right    | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [CBUS[1] | 22           | Right    | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [CBUS[2] | 13           | Right    | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [CBUS[3] | 14           | Right    | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [CBUS[4] | 12           | Right    | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [VCCIO   | 4            | Up       | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [nc[0]   | 8            | Down     | -]
+    [nc[1]   | 24           | Down     | -]
+    [nRESET  | 19           | Left     | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
+    [p3V3OUT | 17           | Left     | GenericPin(Interval(-0.5, 5.5, false), 0.0)]
 
   make-box-symbol()
   assign-landpattern(sop65-landpattern(28, 7.8))
+  property(VCC.power-pin) = PowerPin(Interval(4.0, 5.25, false))
+  property(VCCIO.power-pin) = PowerPin(Interval(1.8, 5.25, false))
+  property(p3V3OUT.power-supply-pin) = PowerSupplyPin(3.3, 0.05)
+
+  eval-when has-property?(VCCIO.rail-voltage) :
+    val vdd  = property(VCCIO.rail-voltage)
+    ; Datasheet gives data in tables, so use piecewise linear model to find value
+    val voh-min = PWL([[1.8 1.32] [2.8 2.1] [3.3 2.2] [5.0 3.2]])[vdd]
+    val voh-max = PWL([[1.8 1.8] [2.8 2.8] [3.3 3.2] [5.0 4.9]])[vdd]
+    val vol-max = PWL([[1.8 0.18] [2.8 0.5] [3.3 0.5] [5.0 0.6]])[vdd]
+    val vol-min = PWL([[1.8 0.06] [2.8 0.3] [3.3 0.3] [5.0 0.3]])[vdd]
+    val vih = 1.5
+    val vil = vdd * 0.3 ;guess
+    val drive-props = DigitalOutput(CMOSOutput(Interval(vol-min, vol-max, false), Interval(voh-min, voh-max, false)))
+    val input-props = DigitalInput(vil, vih)
+    property(TXD.digital-output) = drive-props
+    property(nDTR.digital-output) = drive-props
+    property(nRTS.digital-output) = drive-props
+    property(RXD.digital-input) = input-props
+    property(nRI.digital-input) = input-props
+    property(nDSR.digital-input) = input-props
+    property(nDCD.digital-input) = input-props
+    property(nCTS.digital-input) = input-props
+    for p in pins(CBUS) do :
+      property(p.digital-io) = DigitalIO(CMOSOutput(Interval(vol-min, vol-max, false), Interval(voh-min, voh-max, false)), vil, vih)
+
+  ; Test pin must be connected to GND for device operation
+  check connected([TEST GND])
 
   name = "FT232"
   description = "FTDI USB to UART http://www.ftdichip.com/Documents/DataSheets/DS_FT232R_v104.pdf"

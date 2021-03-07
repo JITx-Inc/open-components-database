@@ -39,7 +39,7 @@ public pcb-component component :
   pin SENSOR-CAPP 
   port nc : pin[4]
 
-  val generic-props = GenericPin(Interval(-0.3, 3.6, false), 0.0)
+  val generic-props = GenericPin(Interval(-0.3, 3.6, false), 1500.0)
 
   pin-properties :
     [pin:Ref     | pads:Int ... | side:Dir| generic-pin:GenericPin]
@@ -93,13 +93,17 @@ public pcb-component component :
   make-box-symbol()
   assign-landpattern(pqfn50p700x700x104-49n)
 
-  property(VDDA.power-pin) = PowerPin(Interval(2.3, 3.6, false))
-  property(VDDA3P3.power-pin) = PowerPin(Interval(2.3, 3.6, false))
+  property(VDDA.power-pin)       = PowerPin(Interval(2.3, 3.6, false))
+  property(VDDA3P3.power-pin)    = PowerPin(Interval(2.3, 3.6, false))
   property(VDD3P3-CPU.power-pin) = PowerPin(Interval(2.3, 3.6, 3.3))
   property(VDD3P3-RTC.power-pin) = PowerPin(Interval(2.3, 3.6, 3.3))
-
-  ; eval-when has-property?(VDD3P3-CPU.voltage):
-  ; val v = voltage(VDD-SDIO)
+  eval-when has-property?(VDD3P3-CPU.rail-voltage):
+    val vdd = property(VDD3P3-CPU.rail-voltage)
+    val drive-props = DigitalOutput(CMOSOutput(Interval(0.0, 0.1 * vdd, false), Interval(0.8 * vdd, vdd, false)))
+    val input-props = DigitalInput(0.25 * vdd, 0.75 * vdd)
+    property(U0TXD.digital-output) = drive-props
+    property(U0RXD.digital-input) = input-props
+    property(EN.reset-pin) = ResetPin(input-props)
 
   ; ESP supports crossbarred IO, so use generic supports
   val reserved-io = [IO[0] IO[16] IO[17] IO[32] IO[33]]

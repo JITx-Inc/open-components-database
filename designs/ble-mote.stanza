@@ -113,14 +113,17 @@ pcb-module sensor-mote :
 
   ; Apply groups to sub-circuits for schematic and layout
   group-modules([[proc  ant] [hum] [usb ldo] [particle-counter]])
-
   check-design(self)
 
-; Run a function to programmatically connect all gnd pins
-var sensor-mote* = transform-module(connect-gnd-pins, sensor-mote)
 ; === Setup visualizations and exports ===
 ; Set the active design directory for CAD
 set-design("ble-mote")
+
+; Run a function to programmatically calculate voltages on rails
+var sensor-mote* = transform-module(propagate-rail-voltage, sensor-mote)
+sensor-mote* = run-evals(sensor-mote*)
+sensor-mote* = transform-module(propagate-rail-voltage, sensor-mote*)
+sensor-mote* = run-evals(sensor-mote*)
 
 ; Configure design to have a default 4-layer stackup and design rules.
 make-default-board(sensor-mote*, 4, 30.0, 18.0)

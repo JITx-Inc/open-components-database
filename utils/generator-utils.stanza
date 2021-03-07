@@ -11,6 +11,7 @@ defpackage ocdb/generator-utils:
   import jitx/powergen/gen
 
   import ocdb/design-vars
+  import ocdb/property-structs
 
 
 ; =======================================
@@ -100,6 +101,19 @@ public defn connect-gnd-pins ():
         val port-name = tail(ref(p), ref-length(ref(p)) - 1)
         if port-name == Ref("gnd") :
           net (self.gnd, p)
+
+
+; Replace this once nets introspection is back
+public defn propagate-rail-voltage ():
+  inside pcb-module :
+    val pins = to-tuple(seq-cat(pins, component-instances(self)))
+    for p1 in pins do :
+      if has-property?(p1.power-supply-pin) :
+        if property(p1.power-supply-pin) is PowerSupplyPin :
+          for p2 in pins do :
+            if p1 != p2 and connected?([p1, p2]) and not has-property?(p2.rail-voltage) :
+              property(p2.rail-voltage) = supply-voltage(property(p1.power-supply-pin))
+              ; println("Supply %_ from %_ to %_" % [property(p2.rail-voltage) ref(p1) ref(p2)])
 
 ; =======================================
 ; Attach the power generator to designs and loads.
