@@ -26,7 +26,9 @@ public defstruct VoltageDividerSolution :
 
 public defn voltage-divider (v-in: [Double, Double, Double],
                              v-out: [Double,Double,Double],
-                             current: Double) -> VoltageDividerSolution|False:
+                             current: Double
+                             params:Tuple<KeyValue<String, ?>>,
+                             ) -> VoltageDividerSolution|False:
   ; Look for highest acceptable tolerance in EIA standard values: [20% 10% 5% 2% 1% 0.5% 0.25% 0.1%]
   val current-tolerance = 0.1
   val goal-r-hi = (v-in[1] - v-out[1]) / current
@@ -42,7 +44,7 @@ public defn voltage-divider (v-in: [Double, Double, Double],
                                     (- tolerance), tolerance, (- tolerance), tolerance,
                                     0., 0., 0., 0.) :
         println("-> Tolerance %_%%" % [tol])
-        val solution = voltage-divider(v-in, v-out, current, tolerance, current-tolerance)
+        val solution = voltage-divider(v-in, v-out, current, tolerance, current-tolerance, params)
         if solution is VoltageDividerSolution :
           return(solution)
 
@@ -50,7 +52,9 @@ public defn voltage-divider (v-in: [Double, Double, Double],
                                   v-out: [Double,Double,Double],
                                   current: Double,
                                   tolerance: Double,
-                                  current-tolerance: Double) -> VoltageDividerSolution|False :
+                                  current-tolerance: Double
+                                  params:Tuple<KeyValue<String, ?>>
+                                  ) -> VoltageDividerSolution|False :
   val goal-r-hi = (v-in[1] - v-out[1]) / current
   val goal-r-lo = v-out[1] / current
   ; Find best resistors matching output requirement
@@ -60,8 +64,8 @@ public defn voltage-divider (v-in: [Double, Double, Double],
   label<VoltageDividerSolution|False> return :
     for ratio in determine-and-sort-fitting-resistance-pairs(v-in, v-out, tolerance, hi-res, lo-res) do :
       println("    - Querying resistors for R1=%_Ω R2=%_Ω" % [high(ratio), low(ratio)])
-      val r-his = query-resistors(high(ratio), tolerance)
-      val r-los = query-resistors(low(ratio), tolerance)
+      val r-his = query-resistors(high(ratio), tolerance, params)
+      val r-los = query-resistors(low(ratio), tolerance, params)
 
       if length(r-his) >= 3 and length(r-los) >= 3 :
         val r-hi-cmp = r-his[0]
@@ -134,13 +138,18 @@ public defn check-output-voltage-range (v-in: [Double, Double, Double],
                                                               min-lo-dr, max-lo-dr, min-hi-dr, max-hi-dr)
   v-out[0] <= vo-min and vo-max <= v-out[2]
 
-defn query-resistors (resistance: Double, tol: Double) -> Tuple<Resistor> :
-  Resistors(["resistance" => resistance,
-             "tolerance" => tol,
-             "minimum_quantity" => 1,
-             "mounting" => PREFERRED-MOUNTING,
-             "case" => get-valid-pkg-list(),
-             "min-stock" => 5 * DESIGN-QUANTITY], ["tcr"])
+defn query-resistors (resistance: Double, tol: Double, params:Tuple<KeyValue<String, ?>>) -> Tuple<Resistor> :
+  val defaults = [
+    "resistance" => resistance,
+    "tolerance" => tol,
+    "minimum_quantity" => 1,
+    "mounting" => PREFERRED-MOUNTING,
+    "case" => get-valid-pkg-list(),
+    "min-stock" => 5 * DESIGN-QUANTITY
+  ]
+  val params* = to-tuple $ 
+    cat(defaults, filter({not contains?(defaults, _)}, params))
+  Resistors(params*, ["tcr"])
 
 defn study-solution (v-in: [Double, Double, Double], r-hi: Resistor, r-lo: Resistor) -> [Double, Double, Double] :
   val lo-drs = [delta-resistance(r-lo, OPERATING-TEMPERATURE[0]), 0., delta-resistance(r-lo, OPERATING-TEMPERATURE[1])]
