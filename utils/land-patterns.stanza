@@ -460,7 +460,7 @@ public defn bga-pin-name (r:Int, c:Int) :
      val letter = red-alph-letter(r)
      Ref(string-join([letter, c + 1]))
 
-public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>) :
+public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>|False) :
   inside pcb-landpattern :
     val pin-pad = bga-pad(pad-diam)
     defn make-pad (r:Int, c:Int) :
@@ -469,20 +469,26 @@ public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], court
       val letter = red-alph-letter(r)
       val name = Ref(letter)[c + 1]
 
-      if not contains?(omit-pads, name) :
-        pad (name) : pin-pad at loc(x,y)
+      match(omit-pads:Tuple<Ref>):
+        if not contains?(omit-pads, name) :
+          pad (name) : pin-pad at loc(x,y)
+      else :
+          pad (name) : pin-pad at loc(x,y)
 
     for c in 0 to n-pads[0] do :
       for r in 0 to n-pads[1] do :
         make-pad(r,c)
 
     layer(Courtyard(Top)) = Rectangle(courtyard[0], courtyard[1])
-    layer(Silkscreen("f-silk", Top)) = LineRectangle(courtyard[0], courtyard[1])
+    ; layer(Silkscreen("f-silk", Top)) = LineRectangle(courtyard[0], courtyard[1])
     layer(Silkscreen("pol", Top)) = Circle(-0.3 - courtyard[0] / 2.0, courtyard[1] / 2.0, 0.127)
     ref-label()
 
-public pcb-landpattern bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>) :
+public pcb-landpattern bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>|False) :
   make-bga-pkg(pitch, pad-diam, n-pads, courtyard, omit-pads)
+
+public pcb-landpattern bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double]) :
+  make-bga-pkg(pitch, pad-diam, n-pads, courtyard, false)
 
 ; Generic package instantiations
 ; Passives
