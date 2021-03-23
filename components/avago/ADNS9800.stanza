@@ -1,0 +1,83 @@
+#use-added-syntax(jitx)
+defpackage ocdb/avago/ADNS9800 :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+
+  import ocdb/land-patterns 
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+public pcb-component component :
+  port spi : spi
+  manufacturer = "Avago"
+  description = "Laser mouse sensor"
+  mpn = "ADNS9800"
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir]
+    [ +VCSEL    | 1  | Left]
+    [ -VCSEL    | 16 | Left]
+    [ LASER_NEN | 2  | Left]
+    [ XYLASER   | 8  | Left]
+    [ spi.ss    | 3  | Right]
+    [ spi.miso  | 4  | Right]
+    [ spi.sck   | 5  | Right]
+    [ spi.mosi  | 6  | Right]
+    [ MOTION    | 7  | Right]
+    [ VDD       | 9  | Up]
+    [ PWR_OPT   | 10 | Left]
+    [ GND       | 11 | Down]
+    [ REFB      | 12 | Left]
+    [ REFA      | 13 | Left]
+    [ DGND      | 14 | Down]
+    [ VDDIO     | 15 | Up]
+  
+  make-box-symbol()
+  assign-landpattern(avago-adns-9800-land)
+
+pcb-landpattern avago-adns-9800-land :
+  val idx = to-tuple $ cat(to-tuple(1 through 8), to-tuple(16 through 9 by -1))
+  for (l in grid-locs(C, 8, 2, 6.3 * 2.0, 1.78, NW, false), i in idx) do :
+    pad p[i] : pth-pad(0.35, 0.65) at l
+
+  layer(Cutout()) = Rectangle(9.15, 13.55)
+  layer(Courtyard(Top)) = Rectangle(14.4, 15.6)
+  layer(Silkscreen("pol", Top)) = Circle(-8.0, 7.5, 0.2)
+  layer(Silkscreen("optical-center", Top)) = Circle(0.0, 1.21, 0.2)
+  layer(Silkscreen("lens", Top)) = LineRectangle(18.9, 21.15, 0.0, 5.0 - 3.84)
+  ref-label()
+  
+
+; Circuit configured for 2.8 - 3.3V operation
+public pcb-module module :
+  port spi : spi
+  pin motion
+  port power: power
+  
+  inst p-fet : ocdb/on-semiconductor/FDN352AP/component
+  inst adns : ocdb/avago/ADNS9800/component
+
+  place(adns) at loc(0.0, -1.21) on Top ; Place optical center at 0,0
+
+  bypass-cap-strap(adns.REFA, power.gnd, 10.0e-6)
+  bypass-cap-strap(adns.REFB, power.gnd, 10.0e-6)
+  bypass-cap-strap(adns.VDDIO, power.gnd, 4.7e-6)
+  bypass-cap-strap(adns.VDD, power.gnd, 4.7e-6)
+  cap-strap(adns.-VCSEL, adns.+VCSEL, 470.0e-12)
+
+  net (motion, adns.MOTION)
+  net (adns.spi spi)
+
+  net (power.vdd, adns.VDD, adns.REFB, adns.PWR_OPT, p-fet.s)
+  net (power.gnd, adns.DGND, adns.GND)
+  
+  bypass-cap-strap(p-fet.s, power.gnd, 1.0e-6)
+  net (p-fet.d, adns.+VCSEL)
+  net (p-fet.g, adns.LASER_NEN)
+  net (adns.XYLASER, adns.-VCSEL)

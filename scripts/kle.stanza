@@ -1,0 +1,159 @@
+#use-added-syntax(jitx)
+defpackage ocdb/scripts/kle-importer: 
+  import core
+  import collections
+  import json
+  import jitx
+  import math 
+
+public val UNIT = 19.05 ; mm 
+
+public pcb-struct ocdb/scripts/kle-importer/KeyCap :
+  row: Int, 
+  col: Int,
+  coord: [Double, Double]
+  string: Tuple<String> ; labels associated with this key
+  bounds: Rectangle     ; the bounding box of the key
+
+public pcb-struct ocdb/scripts/kle-importer/KeyCaps: 
+  keys: Tuple<KeyCap> 
+  dim: [Int, Int]
+
+public defn get? (matrix:KeyCaps, r:Int, c:Int) -> False|KeyCap:
+  find(
+    fn (k:KeyCap) -> True|False:
+      (row(k) == r) and (col(k) == c)
+    keys(matrix)
+  )
+
+public defn dimensions (matrix:KeyCaps) -> [Int, Int]:
+  var max-r = 0
+  var max-c = 0
+  for key in keys(matrix) do : 
+    if col(key) > max-c:
+      max-c = col(key)
+    if row(key) > max-r: 
+      max-r = row(key)
+  [max-r + 1, max-c + 1]
+
+defn center (k:KeyCaps): 
+  val [max-x, max-y] = dim(k)
+  val x-shift = -1.0 * (to-double $ max-x) / 2.0 
+  val y-shift = 1.0 * (to-double $ max-y - 2) / 2.0
+  val keycaps = to-tuple $
+    for key in keys(k) seq : 
+      val bounds = bounds(key)
+      val w = width $ bounds 
+      val h = height $ bounds 
+      val p = pose $ bounds 
+      val xy = center(p)
+      val center-x = x $ xy
+      val center-y = y $ xy
+      val new-bounds = Rectangle(
+        UNIT * w,
+        UNIT * h,
+        Pose(
+            Point(
+              UNIT * (center-x + x-shift + w / 2.0)
+              UNIT * (center-y + y-shift + h / 2.0)
+            )
+            angle   $ p
+            flip-x? $ p
+          )
+        )
+      KeyCap(row(key), col(key), coord(key), string(key), new-bounds)
+  KeyCaps(keycaps, dim(k))
+
+defmethod print (o:OutputStream, k:KeyCaps): 
+  println("DIM %_U x %_U " % dim(k))
+  do({println(IndentedStream(o), _)}, keys(k))
+
+public defn dimensions (keycaps:Tuple<KeyCap>) -> [Int, Int] : 
+  defn count-cols (): 
+    var max = 0
+    for k in keycaps do : 
+      if col(k) > max : 
+        max = col(k)
+    max
+  defn count-rows (): 
+    var max = 0
+    for k in keycaps do : 
+      if row(k) > max : 
+        max = row(k)
+    max
+  [count-rows() + 1, count-cols() + 1]
+
+defn entries (k:KeyCap) :
+  val b = bounds(k)
+  [row(k), col(k), width(b), height(b), center(pose(b)), angle(pose(b)), string(k)]
+
+defn place (x:Double, y:Double, r:Double, rx:Double, ry:Double) -> Pose:
+  ;todo: rotations
+  Pose(Point(x + rx, -1.0 * (y + ry)), 0.0, false)
+
+defmethod print (o:OutputStream, key:KeyCap) : 
+  print(o, "Key(coord:(%,), string:%, bounds:%_)" % [coord(key) string(key), bounds(key)])
+
+public defn parse-kle (path:String) -> KeyCaps :
+  var max-x = 0.0
+  var max-y = 0.0
+
+  defn driver (input:String):
+    generate<KeyCap>:
+      val row = to-seq $ 0 to false
+      val parsed = json/parse(input)
+      var cursor = [0.0, 0.0]
+      
+      match(parsed:Tuple<JSON>): 
+        for layer in parsed do : 
+          match(layer:Tuple<JSON>) :
+            val row* = next(row)
+            var x: False|Double = false
+            var y: False|Double = false
+            var w: False|Double = false
+            var h: False|Double = false
+            val r = 0.0 
+            val rx = 0.0 
+            val ry = 0.0
+            var cursor = 0.0
+            val col = to-seq(0 to false)
+            for element in layer do : 
+              match(element): 
+                (obj:JObject):
+                  x = get?(obj, "x", cursor) as Double
+                  y = get?(obj, "y", to-double $ row* ) as Double
+                  w = get?(obj, "w", 1.0) as Double
+                  h = get?(obj, "h", 1.0) as Double
+
+                (key:String):
+                  val col* = next(col)
+                  val place-x = (x as Double) when x is-not False else cursor
+                  val place-y = (y as Double) when y is-not False else to-double(row*)
+                  val place-w = (w as Double) when w is-not False else 1.0
+                  val place-h = (h as Double) when h is-not False else 1.0
+                  val strings = (to-tuple $ split(key, "\n")) when (length(key) != 0) else []
+                  ;println("%_:%_ - k:%_ @ %_ %_ %_ %_" % [row*, col*, strings, place-x, place-y, place-w, place-w])
+                  val coord = [round(place-y + place-h / 2.0), floor(place-x + place-w / 2.0)]
+                  yield $ 
+                    KeyCap(to-int(coord[0]), to-int(coord[1]), coord, strings, Rectangle(place-w, place-h, place(place-x, place-y, r, rx, ry)))
+                  
+                  cursor = place-x + place-w
+                  if place-x > max-x: 
+                    max-x = cursor
+                  
+                  if place-y > max-y : 
+                    max-y = place-y
+                  
+                  x = false 
+                  y = false 
+                  h = false
+                  w = false
+                (_:?): 
+                  fatal("bad json")
+          else : 
+            fatal("bad json")
+      else: 
+        fatal("bad json")  
+  val keycaps = to-tuple  $  driver  $  slurp $ path
+  ;println("x: %_, y: %_" % [num-rows, num-cols])
+  center(KeyCaps(keycaps, [to-int(max-x) + 1, to-int(max-y) + 1]))

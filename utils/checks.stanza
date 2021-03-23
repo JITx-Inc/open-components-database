@@ -8,24 +8,84 @@ defpackage ocdb/checks:
   import ocdb/defaults
   import ocdb/space-derating
   import ocdb/generator-utils
+  import ocdb/property-structs
 
+; ==== Check convenience functions ===
+; ====================================
 
+public defn check-design (module:JITXObject):
+  inside pcb-module:
+    for i in component-instances(module) do :
+      for p in pins(i) do :
+        ; Check more pins once we get more voltage information from SPICE
+        if has-property?(p.generic-pin) :
+          check generic-pin(p)
+        if has-property?(p.power-pin) :
+          check power-pin(p)
+        if has-property?(p.reset-pin) :
+          check reset-pin(p)
+    check io(module)
 
-;<notes>
+public pcb-check io (module:JITXObject) :
+  val pins = to-tuple(seq-cat(pins, component-instances(module)))
+  var net-pins = []
+  for p1 in pins do :
+    ; Look for Digital inputs
+    if (has-property?(p1.digital-output) or has-property?(p1.digital-io)) :
+      ; Get all pins on the net
+      net-pins = to-tuple(filter({connected?([p1, _])}, pins))
+      val out-pins = to-tuple(filter({has-property?(_.digital-output)}, net-pins))
+      val io-pins  = to-tuple(filter({has-property?(_.digital-io)}, net-pins))
+      val in-pins  = to-tuple(filter({has-property?(_.digital-input)}, net-pins))
+      if length(out-pins) == 1 :
+        val out-p = driver(property(out-pins[0].digital-output))
+        if (out-p is CMOSOutput or out-p is TTLOutput) :
+          for inp in in-pins do :
+            check-single-push-pull-levels(out-pins[0], inp)
+          for io in io-pins do :
+            check-single-push-pull-levels(out-pins[0], io)
+      else if length(io-pins) == 1 :
+        val out-p = driver(property(io-pins[0].digital-output))
+        if (out-p is CMOSOutput or out-p is TTLOutput) :
+          for inp in in-pins do :
+            check-single-push-pull-levels(io-pins[0], inp)
+      else if (empty?(in-pins) and empty?(out-pins)) :
+        val out-p = driver(property(io-pins[0].digital-output))
+        if (out-p is CMOSOutput or out-p is TTLOutput) :
+          for io in io-pins do :
+            check-single-push-pull-levels(io-pins[0], io)
+      ; TODO: Handle multi-output/multi IO nets
+; Checks two push-pull digital logic pins, at least one of which can output
+public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
+  
+  var o 
+  if has-property?(out-p.digital-output) : 
+   o = driver(property(out-p.digital-output))
+  else if has-property?(out-p.digital-io) : 
+   o = driver(property(out-p.digital-io))
 
-io :
-  nets on self isnt allowed
-  has-property?{_.digital-io} syntax -- does this work?
+  #CHECK((o is CMOSOutput) or (o is TTLOutput))
+  ; If in-p is just an input, check output against input
+  if has-property?(in-p.digital-input) :
+    val [vih vil] = [vih(property(in-p.digital-input)) vil(property(in-p.digital-input))]
+    #CHECK(min(voh(o)) > vih)
+    #CHECK(max(vol(o)) < vil)
+    if has-property?(in-p.generic-pin):
+      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(o)))
+  else if has-property?(in-p.digital-io):
+    val i = driver(property(in-p.digital-io))
+    #CHECK((i is CMOSOutput) or (i is TTLOutput))
+    val [vih vil] = [vih(property(in-p.digital-io)) vil(property(in-p.digital-io))]
+    #CHECK(min(voh(o)) > vih)
+    #CHECK(max(vol(o)) < vil)
+    if has-property?(out-p.digital-io):
+      #CHECK(min(voh(i)) > vih(property(out-p.digital-io)))
+      #CHECK(max(vol(i)) < vil(property(out-p.digital-io)))
+    if has-property?(in-p.generic-pin):
+      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(o)))
+    if has-property?(out-p.generic-pin):
+      #CHECK(contains?(max-voltage(property(out-p.generic-pin)), i))
 
-resistor-check :
-  lookup - spice?
-
-pcb-check can only be called from a module.
-change macro to set "inside pcb-module" implicitly
-
-;<notes>
-
-; public pcb-check io () :
 ;   for n in nets(self) do :
 ;     ; Check compatibility between two single-ended logic pins (bi directional checks)
 ;     if (length(refs(n))  == 2) and all?(has-property?{_.digital-io}, refs(n)) : 
@@ -40,18 +100,6 @@ change macro to set "inside pcb-module" implicitly
 ;         #CHECK(property(p[1].vOH) <= property(p[0].rated-voltage)[1])
 ;         #CHECK(property(p[1].vOL) <= property(p[0].vIL))
 ;         #CHECK(property(p[1].vOL) >= property(p[0].rated-voltage)[0])
-;       else if property(p[0].type) == "i" and 
-;               property(p[1].type) == "o" :
-;         #CHECK(property(p[1].vOH) >= property(p[0].vIH))
-;         #CHECK(property(p[1].vOH) <= property(p[0].rated-voltage)[1])
-;         #CHECK(property(p[1].vOL) <= property(p[0].vIL))
-;         #CHECK(property(p[1].vOL) >= property(p[0].rated-voltage)[0])
-;       else if property(p[0].type) == "o" and 
-;               property(p[1].type) == "i" :
-;         #CHECK(property(p[0].vOH) >= property(p[1].vIH))
-;         #CHECK(property(p[0].vOH) <= property(p[1].rated-voltage)[1])
-;         #CHECK(property(p[0].vOL) <= property(p[1].vIL))
-;         #CHECK(property(p[0].vOL) >= property(p[1].rated-voltage)[0])
 ;       else :
 ;         println("Invalid logic connection between: %_ and %_" % [property(p[0].type) property(p[1].type)])
 ;         #CHECK(false)
@@ -63,12 +111,31 @@ change macro to set "inside pcb-module" implicitly
 ;       #CHECK(property(p[1].vo-cm)[2]   <= property(p[0].vi-cm)[2])
 ;       #CHECK(property(p[1].vo-diff)[0] >= property(p[0].vi-diff)[0])
 
-; Checks a power pin located on a component
+public pcb-check connected (p:JITXObject|Tuple<JITXObject>) :
+  #CHECK(connected?(p))
+
+; Checks any generic pin for rated voltage
+public pcb-check generic-pin (p:JITXObject):
+  if (has-property?(p.rail-voltage)) :
+    val p-props = property(p.generic-pin)
+    ; Check that the maxima are never crossed
+    #CHECK(p-props is GenericPin)
+    #CHECK(contains?(max-voltage(p-props), property(p.rail-voltage)))
+
+; Checks a power pin located on an active component
 public pcb-check power-pin (p:JITXObject) :
   #CHECK(has-property?(p.power-pin))
-  #CHECK(has-property?(p.voltage))
-  if has-property?(p.voltage):
-    check-rated-voltage(p)
+  val p-props = property(p.power-pin)
+  #CHECK(p-props is PowerPin)
+  #CHECK(has-property?(p.rail-voltage))
+  #CHECK(contains?(recommended-voltage(p-props), property(p.rail-voltage)))
+
+public pcb-check reset-pin (p:JITXObject) :
+  #CHECK(has-property?(p.reset-pin))
+  val p-props = property(p.reset-pin)
+  #CHECK(p-props is ResetPin)
+  ; Improve this to check togglability
+  #CHECK(connected?(p))
 
 defn check-rated-voltage (p:JITXObject) :
   val rating = property(p.rated-voltage)
@@ -89,7 +156,10 @@ public pcb-check voltage-levels (p:JITXObject, range:[Double,Double,Double]) :
   #CHECK(property(p.voltage)[0] >= range[0])
   #CHECK(property(p.voltage)[2] <= range[2])
 
-; Checks resistors agains operating point and environment
+; ====== Component-level checks ======
+; ====================================
+
+; Checks resistors against operating point and environment
 public pcb-check resistor-check (r:JITXObject) :
   #CHECK(has-property?(r.resistor))
   #CHECK(has-property?(r.operating-point))
@@ -190,3 +260,11 @@ public pcb-check oscillator-check-pullability (o:JITXObject, intf:JITXObject, lo
   #CHECK(has-property?(o.frequency-tolerance))
   #CHECK(has-property?(intf.frequency-tolerance))
   #CHECK(property(o.frequency-tolerance) + freq-error < property(intf.frequency-tolerance))
+
+
+public defn check-oscillator (o:JITXObject, intf:JITXObject, load-cap:JITXObject) :
+  inside pcb-module:
+    check oscillator-check-frequency(o, intf)
+    check oscillator-check-gain(o, intf, load-cap)
+    check oscillator-check-drive(o, intf, load-cap)
+    check oscillator-check-pullability(o, intf, load-cap)

@@ -12,9 +12,12 @@ defpackage ocdb/designs/ble-mote :
   import ocdb/design-vars
   import ocdb/generator-utils
   import ocdb/generic-components
+  import ocdb/property-structs
+  import ocdb/checks
+
 
 OPERATING-TEMPERATURE = [-20.0 50.0]
-OPTIMIZE-FOR = ["area"]
+OPTIMIZE-FOR = ["cost"]
 MIN-PKG = "0402"
 
 ; PMS7003 particle counter interface via header pins
@@ -34,10 +37,12 @@ pcb-module pms7003 :
   net (set, header.p[9])
   res-strap(vin-mcu.vdd, set, 10.0e3)
   res-strap(vin-mcu.vdd, reset, 10.0e3)
+  property(header.p[1].power-pin) = PowerPin(Interval(4.5, 5.5, 5.0))
+  property(header.p[10].digital-output) = DigitalOutput(CMOSOutput(Interval(0.3, 0.5, false), Interval(2.2, 3.3, false)))
+  property(header.p[8].digital-input) = DigitalInput(0.8, 2.7)
 
 pcb-module sensor-mote :
   ; Add USB connector
-  pin barfo
   public inst usb : micro-usb-connector
   place(usb.con) at loc(-10.0, -7.3) on Top
 
@@ -64,7 +69,7 @@ pcb-module sensor-mote :
 
   ; Use a connect statement to interface USB-2 to UART
   connect-ft232(protected-usb, proc.uart)
-  
+
   ; Add a humidty sensor, connect over i2c, add pullups.
   public inst hum : ocdb/texas-instruments/HDC1080/module
   require i2c:i2c from proc
@@ -110,26 +115,31 @@ pcb-module sensor-mote :
 
   ; Apply groups to sub-circuits for schematic and layout
   group-modules([[proc  ant] [hum] [usb ldo] [particle-counter]])
-
-; Run a function to programmatically connect all gnd pins
-var sensor-mote* = transform-module(connect-gnd-pins, sensor-mote)
+  check-design(self)
 
 ; === Setup visualizations and exports ===
 ; Set the active design directory for CAD
 set-design("ble-mote")
 
+; Run a function to programmatically calculate voltages on rails
+var sensor-mote* = transform-module(propagate-rail-voltage, sensor-mote)
+sensor-mote* = run-evals(sensor-mote*)
+sensor-mote* = transform-module(propagate-rail-voltage, sensor-mote*)
+sensor-mote* = run-evals(sensor-mote*)
+
 ; Configure design to have a default 4-layer stackup and design rules.
 make-default-board(sensor-mote*, 4, 30.0, 18.0)
 
+run-checks("BLE-MOTE-CHECKS.txt")
 ; Show the Schematic and PCB for the design
 view-board()
 view-schematic()
 
-; Export CAD
-set-export-board?(true)
-set-export-schematic?(true)
-set-export-backend(`kicad)
-export-cad()
+; ; Export CAD
+; set-export-board?(true)
+; set-export-schematic?(true)
+; set-export-backend(`kicad)
+; export-cad()
 
-; Solve and export Bill of Materials
-export-bom()
+; ; Solve and export Bill of Materials
+; export-bom()
