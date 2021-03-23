@@ -1,22 +1,18 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/analog-devices/ADM7154:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
-  import ocdb/pinspec
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
   import ocdb/land-patterns
 
   import ocdb/generator-utils
   import ocdb/generic-components
 
-;[strip]
   import ocdb/symbols
   import ocdb/box-symbol
-;[/strip]
 
 public pcb-component component (v-out:Double) :
   name = "ADM7154"
@@ -31,30 +27,31 @@ public pcb-component component (v-out:Double) :
     3.3 : "3.3"
     else : fatal("Incorrect current rating for ADM7154 %_" % [v-out])
   mpn = to-string("ADM7154ARDZ-%_-R7" % [a-code])
-  val ps = PinSpec $ #TABLE :
-    [Ref | Int ...   | Dir  ]
-    [vin    | 8 | Left]
-    [en     | 7 | Left]
-    [vreg   | 1 | Left]
-    [byp    | 3 | Left]
-    [vout   | 2 | Right]
-    [ref    | 6 | Right]
-    [ref-sense | 5 | Right]
-    [gnd | 4 9 | Down]
-  gen-symbol-map(ps, soic127p-package(8, [2.3 2.3]))
-  properties(vin):
-    power-pin => true
-    rated-voltage => [2.3 5.5]
-  properties(vout):
-    supply-pin => true
-    voltage => v-out
- 
-public pcb-module module (v-out) :
+  pin-properties :
+    [pin:Ref   | pads:Int ... | side:Dir]
+    [vin       | 8            | Left    ]
+    [en        | 7            | Left    ]
+    [vreg      | 1            | Left    ]
+    [byp       | 3            | Left    ]
+    [vout      | 2            | Right   ]
+    [ref       | 6            | Right   ]
+    [ref-sense | 5            | Right   ]
+    [gnd       | 4 9          | Down    ]
+
+  assign-landpattern(soic127p-landpattern(8, [2.3 2.3]))
+  make-box-symbol()
+
+  property(self.vin.power-pin) = true
+  property(self.vin.rated-voltage) = [2.3 5.5]
+  property(self.vout.supply-pin) = true
+  property(self.vout.voltage) = v-out
+
+public pcb-module module (v-out:Double) :
   pin vin
   pin vout
   pin gnd
   pin en
-  inst ps : {ocdb/analog-devices/ADM7154/component(v-out)}
+  public inst ps : ocdb/analog-devices/ADM7154/component(v-out)
   cap-strap(ps.vin, gnd, 10.0e-6)
   cap-strap(ps.vout, gnd, 10.0e-6)
   cap-strap(ps.vreg, gnd, 10.0e-6)
@@ -66,3 +63,6 @@ public pcb-module module (v-out) :
   net (ps.vin, vin)
   net (ps.vout, vout)
   net (ps.gnd gnd)
+
+public pcb-module module () : 
+  inst i : module(1.0) ; TODO: crashes with -- FATAL ERROR: Incorrect current rating for ADM7154 1.0

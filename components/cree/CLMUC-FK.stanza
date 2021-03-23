@@ -1,27 +1,23 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 ; Include space before colon in definitions
 defpackage ocdb/cree/CLMUC-FK :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
 
   import ocdb/land-patterns
   import ocdb/symbols
   import ocdb/box-symbol
-  import ocdb/pinspec
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
 
-  import jitpcb/visualizer
-
-pcb-package package-rgb :
+pcb-landpattern package-rgb :
   for (l in grid-locs(2, 2, 1.14, 0.7), i in [1 4 2 3]) do:
-    pad p[i] : {smd-pad(0.55, 0.45)} at l
+    pad p[i] : smd-pad(0.55, 0.45) at l
 
   layer(Courtyard(Top)) = Rectangle(1.7, 1.7)
   layer(Silkscreen("f-silk", Top)) = LineRectangle(1.7, 1.7)
@@ -30,26 +26,26 @@ pcb-package package-rgb :
 ; Group together pins that can be easily named where it makes sense
 ; and create a bundle in bundles.stanza.
 
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Cree"
   mpn = "CLMUC-FKA-CL8LCFL5L8BB79353"
   description = "3 in 1 RGB SMD LED"
 
 ; Use unified generator to create pins
   port rgb-led : rgb-led 
-  symbol = diode-rgb-led(rgb-led.a => a, rgb-led.r => r, rgb-led.g => g, 
-                         rgb-led.b => b)
-  package = package-rgb(rgb-led.a => p[1], rgb-led.r => p[2], 
-                        rgb-led.g => p[3], rgb-led.b => p[4])
+  symbol = diode-rgb-led(rgb-led.a => diode-rgb-led.a, rgb-led.r => diode-rgb-led.r, rgb-led.g => diode-rgb-led.g, 
+                         rgb-led.b => diode-rgb-led.b)
+  landpattern = package-rgb(rgb-led.a => package-rgb.p[1], rgb-led.r => package-rgb.p[2], 
+                        rgb-led.g => package-rgb.p[3], rgb-led.b => package-rgb.p[4])
 
-public unique pcb-module module :
+public pcb-module module :
 ; Define pins or ports to externally interface with other modules
   port rgb-led : rgb-led 
   pin vcc
-  inst led : {ocdb/cree/CLMUC-FK/component}
-  inst r-res : {chip-resistor(470.0)}
-  inst g-res : {chip-resistor(330.0)}
-  inst b-res : {chip-resistor(100.0)}
+  inst led : ocdb/cree/CLMUC-FK/component
+  inst r-res : chip-resistor(470.0)
+  inst g-res : chip-resistor(330.0)
+  inst b-res : chip-resistor(100.0)
 
   net (led.rgb-led.r, r-res.p[1])
   net (led.rgb-led.g, g-res.p[1])

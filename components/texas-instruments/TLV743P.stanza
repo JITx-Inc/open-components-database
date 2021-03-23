@@ -1,13 +1,11 @@
-#use-added-syntax(esir)
-defpackage ocdb/texas-instruments/TLV743P:
+#use-added-syntax(jitx)
+defpackage ocdb/texas-instruments/TLV743P :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
-  import ocdb/pinspec
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
   import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/generic-components
@@ -31,24 +29,22 @@ public pcb-component component (v-out:Double) :
     2.5 : ["25" "TLV74325P"]
     3.3 : ["33" "TLV74333P"]
   mpn = to-string("TLV743%_P" % [code])
-  val ps = PinSpec $ #TABLE :
-    [Ref     | Int ...   | Dir]
-    [gnd | 1 | Down]
-    [en  | 2 | Right]
-    [out | 3 | Up]
-    [in  | 4 | Up]
-    [nc  | 5 | Up]
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir]
+    [gnd     | 1            | Down    ]
+    [en      | 2            | Right   ]
+    [out     | 3            | Up      ]
+    [in      | 4            | Up      ]
+    [nc      | 5            | Up      ]
 ;[strip]
-  make-box-symbol(ps)
+  make-box-symbol()
 ;[/strip]
-  assign-package(SOT95P280X145-5N, ps)
+  assign-landpattern(SOT95P280X145-5N)
 
-  properties(in):
-    power-pin => true
-    rated-voltage => [1.4 5.5]
-  properties(out):
-    supply-pin => true
-    voltage => v-out
+  property(in.power-pin) = true
+  property(in.rated-voltage) = [1.4 5.5]
+  property(out.supply-pin) = true
+  property(out.voltage) = v-out
 
   spice:
     "[X] {en} {gnd} {in} {out} {nc} {spice-code}"
@@ -65,3 +61,6 @@ public pcb-module module (v-out:Double) :
   net (vout, ps.out)
   net (gnd, ps.gnd)
   net (en, ps.en)
+
+public pcb-module mod :
+  inst m : module(3.3)

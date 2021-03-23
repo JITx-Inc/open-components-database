@@ -22,5 +22,5 @@ Components are modeled with the standardized open-source Embedded Systems Interm
 | `utils/connections`      | Connection statements for creating io-translation/conditioning circuitry. (e.g. `isolate()`|
 | `utils/generator-utils`      | General purpose utilities for modeling components and creating circuit generators. |
 | `utils/generic-components`      | Collection of generic components (e.g. generic resistors, or banana-plugs)|
-| `utils/land-patterns`      | Generators for land-pattern geometry (e.g. `make-qfn-package()`)|
+| `utils/land-patterns`      | Generators for land-pattern geometry (e.g. `make-qfn-landpattern()`)|
 | `utils/pin-spec`      | Convenience function for creating pins/package mappings from datasheet information.|

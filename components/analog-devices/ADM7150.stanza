@@ -1,21 +1,17 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/analog-devices/ADM7150:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
-  import ocdb/pinspec
+  import jitx
+  import ocdb/defaults
   import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/generic-components
   import ocdb/bundles
-;[strip]
   import ocdb/symbols
   import ocdb/box-symbol
-;[/strip]
+  import jitx/commands
 
 doc: \<s>
 800 mA Ultralow Noise, High PSRR, RF Linear Regulator
@@ -35,8 +31,8 @@ public pcb-component component (v-out:Double) :
     5.0 : "5.0"
     else : fatal("Invalid output voltage for ADM7150 %_" % [v-out])
   mpn = to-string("ADM7150ARDZ-%_-R7" % [a-code])
-  val ps = PinSpec $ #TABLE :
-    [Ref | Int ...   | Dir  ]
+  pin-properties :
+    [pin:Ref | pads:Int ...   | side:Dir]
     [vin  | 8 | Left]
     [en   | 7 | Left]
     [vreg | 1 | Left]
@@ -45,7 +41,10 @@ public pcb-component component (v-out:Double) :
     [ref       | 6 | Right] 
     [ref-sense | 5 | Right]
     [gnd | 4 9 | Down]
-  gen-symbol-map(ps, soic127p-package(8, [2.3 3.0]))
+
+  make-box-symbol()
+
+  assign-landpattern(soic127p-landpattern(8, [2.3 3.0]))
 
 doc: \<s>
 Example Usage:
@@ -63,7 +62,7 @@ doc: \<s>
 The module is an implementation of the circuit from the datasheet, with Cbyp = 100uF. `v-out` is the specified output voltage of the voltage regulator in volts. Valid values are `3.0`, `3.3`, and `5.0`.
 <s>
 
-public pcb-module module (v-out) :
+public pcb-module module (v-out:Double) :
   port dst : power
   port src : power
   pin vin
@@ -74,7 +73,7 @@ public pcb-module module (v-out) :
   net (dst.vdd vout)
   net (src.gnd gnd)
   net (src.vdd vout)
-  inst ps : {ocdb/analog-devices/ADM7150/component(v-out)}
+  inst ps : ocdb/analog-devices/ADM7150/component(v-out)
   cap-strap(ps.vin,  gnd, 10.0e-6)
   cap-strap(ps.vout, gnd, 10.0e-6)
   cap-strap(ps.vreg, gnd, 10.0e-6)
@@ -94,3 +93,6 @@ inst ldo : {ocdb/analog-devices/ADM7150/module(3.0)}
 ```
 <img src=FIG:(gen-ocdb-app, svg, view(URL, single-module-design(ocdb/analog-devices/ADM7150/module(3.0), default-board(4, 10.0, 10.0)))) height="400">
 <s>
+
+public pcb-module module () :
+  inst i : module(3.0)

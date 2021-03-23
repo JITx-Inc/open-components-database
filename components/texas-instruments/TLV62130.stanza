@@ -1,45 +1,44 @@
-#use-added-syntax(esir)
-defpackage ocdb/texas-instruments/TLV62130:
+#use-added-syntax(jitx)
+defpackage ocdb/texas-instruments/TLV62130 :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
 
   import ocdb/land-patterns
   import ocdb/symbols
   import ocdb/box-symbol
-  import ocdb/pinspec
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
+  import ocdb/passive-circuits
 
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "TLV62130RGTR"
   description = "TLV62130x 3-V to 17-V 3-A Step-Down Converter In 3x3 QFN"
-  val ps = PinSpec $ #TABLE :
-    [Ref | Int ...   | Dir  ]
-    [PVIN | 11 12 | Left ]
-    [AVIN | 10    | Left ]
-    [EN   | 13    | Left ]
-    [SS   | 9     | Left ]
-    [DEF  | 8     | Left ]
-    [FSW  | 7     | Left ]
-    [SW   | 1 2 3 | Right]
-    [VOS  | 14    | Right]
-    [PG   | 4     | Right]
-    [FB   | 5     | Right]
-    [AGND | 6     | Down ]
-    [PGND | 15 16 | Down ]
-    [PAD  | 17    | Down ]
-  gen-symbol-map(ps, qfn-package(0.5, 3.0, 16, 0.24, 0.5, [1.68, 1.68]))
+  pin-properties :
+    [pin:Ref   | pads:Int ... | side:Dir]
+    [PVIN      | 11 12        | Left    ]
+    [AVIN      | 10           | Left    ]
+    [EN        | 13           | Left    ]
+    [SS        | 9            | Left    ]
+    [DEF       | 8            | Left    ]
+    [FSW       | 7            | Left    ]
+    [SW        | 1 2 3        | Right   ]
+    [VOS       | 14           | Right   ]
+    [PG        | 4            | Right   ]
+    [FB        | 5            | Right   ]
+    [AGND      | 6            | Down    ]
+    [PGND      | 15 16        | Down    ]
+    [PAD       | 17           | Down    ]
+  assign-landpattern(qfn-landpattern(0.5, 3.0, 16, 0.24, 0.5, [1.68, 1.68]))
+  make-box-symbol()
 
 
-
-public pcb-module module (v-out:Double):
+public pcb-module module (v-out:Double) :
   pin vin
   pin vout
   pin gnd
@@ -47,8 +46,8 @@ public pcb-module module (v-out:Double):
   pin pg
   pin ss
 
-  inst buck : {ocdb/texas-instruments/TLV62130/component}
-  inst l    : {ocdb/abracon/ASPI-0530HI/component(2.2)}
+  public inst buck : ocdb/texas-instruments/TLV62130/component
+  public inst l    : ocdb/abracon/ASPI-0530HI/component(2.2)
 
   net (gnd buck.AGND buck.PGND buck.PAD buck.DEF buck.FSW)
   net (vin buck.AVIN buck.PVIN)
@@ -64,13 +63,14 @@ public pcb-module module (v-out:Double):
   net (en buck.EN)
   res-strap(l.p[2], buck.PG, 100.0e3)
 
-  properties(l.p[2]):
-    voltage => [(v-out * 0.99) v-out ( v-out * 1.01)]
+  property(l.p[2].voltage) = [(v-out * 0.99) v-out ( v-out * 1.01)]
 
   ; Create a voltage divider to output 0.8V. Target current : 5uA
-  ocdb/passive-circuits/make-voltage-divider(l.p[2], buck.FB, gnd, [0.78 0.8 0.82] 5.0e-6)
+  make-voltage-divider(l.p[2], buck.FB, gnd, [0.78 0.8 0.82] 5.0e-6)
 
   cap-strap(vout, gnd, 22.0e-6)
 
-  properties(buck.EN):
-    apply-enable-pin-params(#R(AVIN))
+  apply-enable-pin-params(buck.EN, buck.AVIN)
+
+public pcb-module mod :
+  inst m : module(3.3)

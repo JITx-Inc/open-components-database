@@ -1,40 +1,41 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/keystone/82 :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
 
   import ocdb/land-patterns 
   import ocdb/symbols
   import ocdb/box-symbol
-  import ocdb/pinspec
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
 
-  import jitpcb/visualizer
-
-pcb-package batt-clip-package :
+pcb-landpattern batt-clip-landpattern :
   val pth-pad = pth-pad(0.905)
-  pad pos[1] : {pth-pad} at loc((- 13.715), 0.0)
-  pad pos[2] : {pth-pad} at loc((- 21.335), 0.0)
-  pad neg[1] : {pth-pad} at loc(13.715, 0.0)
-  pad neg[2] : {pth-pad} at loc(21.335, 0.0)
+  pad pos[1] : pth-pad at loc((- 13.715), 0.0)
+  pad pos[2] : pth-pad at loc((- 21.335), 0.0)
+  pad neg[1] : pth-pad at loc(13.715, 0.0)
+  pad neg[2] : pth-pad at loc(21.335, 0.0)
   layer(Courtyard(Top)) = Rectangle(50.0, 10.0)
   layer(Silkscreen("f-silk", Top)) = LineRectangle(50.0, 10.0)
   ref-label()
 
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Keystone Electronics"
   description = "AAA PC Battery Clip"
   mpn = "82"
 
-  port pos : pin[{1 2}]
-  port neg : pin[{1 2}]
+  port pos : pin[[1 2]]
+  port neg : pin[[1 2]]
 
-  package = batt-clip-package(pos[1] => pos[1], pos[2] => pos[2], neg[1] => neg[1], neg[2] => neg[2])
-  symbol = {header-symbol(4,2)}(pos[1] => p[1], pos[2] => p[2], neg[1] => p[3], neg[2] => p[4])
+  landpattern = batt-clip-landpattern(pos[1] => batt-clip-landpattern.pos[1], pos[2] => batt-clip-landpattern.pos[2],
+                              neg[1] => batt-clip-landpattern.neg[1], neg[2] => batt-clip-landpattern.neg[2])
+  val sym = header-symbol(4,2)
+  symbol = sym(pos[1] => sym.p[1], pos[2] => sym.p[2], neg[1] => sym.p[3], neg[2] => sym.p[4])
+
+public pcb-module module :
+  inst i : component

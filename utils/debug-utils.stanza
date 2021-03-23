@@ -1,24 +1,21 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/debug-utils :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import esir/fonts
-  import esir/repl-lib
-  import ocdb/tests/default-harness
+  import jitx
+  import jitx/fonts
+  import jitx/commands
+  import ocdb/defaults
 
   import ocdb/checks
   import ocdb/bundles
-  import ocdb/pinspec
   import ocdb/land-patterns
   import ocdb/generic-components
-  import ocdb/calculate-connected
+  ; import ocdb/calculate-connected
 
-  import jitpcb/powergen
-  import jitpcb/powergen/gen
+  import jitx/powergen/api
+  import jitx/powergen/gen
 
   import ocdb/design-vars
 
@@ -50,7 +47,7 @@ defpackage ocdb/debug-utils :
 ; ------------
 ; ref: reference to pin or net
 ; cmp: reference to pcb-component for testpoint
-public defn db-testpoint (ref:Ref, cmp:Ref) :
+public defn db-testpoint (ref:JITXObject, cmp:Instantiable) :
   inside pcb-module :
     eval-when true :
       add-testpoint(ref, cmp, false, false)
@@ -61,7 +58,7 @@ public defn db-testpoint (ref:Ref, cmp:Ref) :
 ; ------------
 ; ref: reference to pin or net
 ; cmp: reference to pcb-component for testpoint
-public defn db-testpoint-persist (ref:Ref, cmp:Ref) :
+public defn db-testpoint-persist (ref:JITXObject, cmp:Instantiable) :
   inside pcb-module :
     eval-when true :
       add-testpoint(ref, cmp, true, true)
@@ -72,7 +69,7 @@ public defn db-testpoint-persist (ref:Ref, cmp:Ref) :
 ; ------------
 ; ref: reference to pin or net
 ; cmp: reference to pcb-component for testpoint
-public defn db-testpoint-persist-btm (ref:Ref, cmp:Ref) :
+public defn db-testpoint-persist-btm (ref:JITXObject, cmp:Instantiable) :
   inside pcb-module :
     eval-when true :
       add-testpoint(ref, cmp, true, false)
@@ -82,7 +79,7 @@ public defn db-testpoint-persist-btm (ref:Ref, cmp:Ref) :
 ; ------------
 ; refs: Tuple of references to pins or nets
 ; cmp: reference to pcb-component for testpoint
-public defn db-testpoint (refs:Tuple<Ref>, cmp:Ref) : 
+public defn db-testpoint (refs:Tuple<JITXObject>, cmp:Instantiable) : 
   inside pcb-module :
     eval-when true :
       for ref in refs do :
@@ -94,7 +91,7 @@ public defn db-testpoint (refs:Tuple<Ref>, cmp:Ref) :
 ; ------------
 ; refs: Tuple of references to pins or nets
 ; cmp: reference to pcb-component for testpoint
-public defn db-testpoint-persist (refs:Tuple<Ref>, cmp:Ref) : 
+public defn db-testpoint-persist (refs:Tuple<JITXObject>, cmp:Instantiable) : 
   inside pcb-module :
     eval-when true :
       for ref in refs do :
@@ -106,7 +103,7 @@ public defn db-testpoint-persist (refs:Tuple<Ref>, cmp:Ref) :
 ; ------------
 ; refs: Tuple of references to pins or nets
 ; cmp: reference to pcb-component for testpoint
-public defn db-testpoint-persist-btm (refs:Tuple<Ref>, cmp:Ref) : 
+public defn db-testpoint-persist-btm (refs:Tuple<JITXObject>, cmp:Instantiable) : 
   inside pcb-module :
     eval-when true :
       for ref in refs do :
@@ -116,7 +113,7 @@ public defn db-testpoint-persist-btm (refs:Tuple<Ref>, cmp:Ref) :
 ; Parameters
 ; ------------
 ; ref: reference to pin or net
-public defn db-testpad (ref:Ref) :
+public defn db-testpad (ref:JITXObject) :
   inside pcb-module :
     eval-when true :
       val cmp = top-smd-testpoint-cmp()
@@ -127,7 +124,7 @@ public defn db-testpad (ref:Ref) :
 ; Parameters
 ; ------------
 ; ref: reference to pin or net
-public defn db-testpad-persist (ref:Ref) :
+public defn db-testpad-persist (ref:JITXObject) :
   inside pcb-module :
     eval-when true :
       val cmp = top-smd-testpoint-cmp()
@@ -138,7 +135,7 @@ public defn db-testpad-persist (ref:Ref) :
 ; Parameters
 ; ------------
 ; ref: reference to pin or net
-public defn db-testpad-persist-btm (ref:Ref) :
+public defn db-testpad-persist-btm (ref:JITXObject) :
   inside pcb-module :
     eval-when true :
       val cmp = top-smd-testpoint-cmp()
@@ -148,7 +145,7 @@ public defn db-testpad-persist-btm (ref:Ref) :
 ; Parameters
 ; ------------
 ; refs: reference to a tuple of pins or nets
-public defn db-testpad (refs:Tuple<Ref>) :
+public defn db-testpad (refs:Tuple<JITXObject>) :
   inside pcb-module :
     eval-when true :
       for ref in refs do :
@@ -160,7 +157,7 @@ public defn db-testpad (refs:Tuple<Ref>) :
 ; Parameters
 ; ------------
 ; refs: reference to a tuple of pins or nets
-public defn db-testpad-persist (refs:Tuple<Ref>) :
+public defn db-testpad-persist (refs:Tuple<JITXObject>) :
   inside pcb-module :
     eval-when true :
       for ref in refs do :
@@ -172,7 +169,7 @@ public defn db-testpad-persist (refs:Tuple<Ref>) :
 ; Parameters
 ; ------------
 ; refs: reference to a tuple of pins or nets
-public defn db-testpad-persist-btm (refs:Tuple<Ref>) :
+public defn db-testpad-persist-btm (refs:Tuple<JITXObject>) :
   inside pcb-module :
     eval-when true :
       for ref in refs do :
@@ -183,7 +180,7 @@ public defn db-testpad-persist-btm (refs:Tuple<Ref>) :
 ; Parameters
 ; ------------
 ; ref: reference to a pin or net
-public defn db-testheader (ref:Ref) :
+public defn db-testheader (ref:JITXObject) :
   inside pcb-module :
     eval-when true :
       val cmp = pin-header(1)
@@ -194,7 +191,7 @@ public defn db-testheader (ref:Ref) :
 ; Parameters
 ; ------------
 ; ref: reference to a pin or net
-public defn db-testheader-persist (ref:Ref) :
+public defn db-testheader-persist (ref:JITXObject) :
   inside pcb-module :
     eval-when true :
       val cmp = pin-header(1)
@@ -205,7 +202,7 @@ public defn db-testheader-persist (ref:Ref) :
 ; Parameters
 ; ------------
 ; ref: reference to a pin or net
-public defn db-testheader-persist-btm (ref:Ref) :
+public defn db-testheader-persist-btm (ref:JITXObject) :
   inside pcb-module :
     eval-when true :
       val cmp = pin-header(1)
@@ -215,7 +212,7 @@ public defn db-testheader-persist-btm (ref:Ref) :
 ; Parameters
 ; ------------
 ; refs: reference to a tuple of pins or nets
-public defn db-testheader (refs:Tuple<Ref>) :
+public defn db-testheader (refs:Tuple<JITXObject>) :
   inside pcb-module :
     eval-when true :
       for ref in refs do :
@@ -227,7 +224,7 @@ public defn db-testheader (refs:Tuple<Ref>) :
 ; Parameters
 ; ------------
 ; refs: reference to a tuple of pins or nets
-public defn db-testheader-persist (refs:Tuple<Ref>) :
+public defn db-testheader-persist (refs:Tuple<JITXObject>) :
   inside pcb-module :
     eval-when true :
       for ref in refs do :
@@ -239,7 +236,7 @@ public defn db-testheader-persist (refs:Tuple<Ref>) :
 ; Parameters
 ; ------------
 ; refs: reference to a tuple of pins or nets
-public defn db-testheader-persist-btm (refs:Tuple<Ref>) :
+public defn db-testheader-persist-btm (refs:Tuple<JITXObject>) :
   inside pcb-module :
     eval-when true :
       for ref in refs do :
@@ -260,8 +257,8 @@ public defn db-testheader-persist-btm (refs:Tuple<Ref>) :
 ; nodes: reference to tuple of pins or nets
 ; default: node that will be connected to input-node for production
 ; cmp: reference to jumper component
-public defn db-jumper-mux (input-node:Ref, nodes:Tuple<Ref>,
-                        default:Ref, cmp:Ref) :
+public defn db-jumper-mux (input-node:JITXObject, nodes:Tuple<JITXObject>,
+                        default:JITXObject, cmp:Instantiable) :
   inside pcb-module :
     eval-when true :
       net-inline-jumper(input-node, nodes, default, cmp)
@@ -274,8 +271,8 @@ public defn db-jumper-mux (input-node:Ref, nodes:Tuple<Ref>,
 ; input-node: reference to input pin or net
 ; nodes: reference to tuple of pins or nets
 ; default: node that will be connected to input-node for production
-public defn db-jumper-mux (input-node:Ref, nodes:Tuple<Ref>, 
-                        default:Ref) :
+public defn db-jumper-mux (input-node:JITXObject, nodes:Tuple<JITXObject>, 
+                        default:JITXObject) :
   inside pcb-module :
     eval-when true :
       val n = length(nodes)
@@ -290,7 +287,7 @@ public defn db-jumper-mux (input-node:Ref, nodes:Tuple<Ref>,
 ; node1: reference to pin or net
 ; nodes: reference to tuple of pins or nets
 ; cmp: reference to jumper component
-public defn db-jumper (node1:Ref, nodes:Tuple<Ref>, cmp:Ref) :
+public defn db-jumper (node1:JITXObject, nodes:Tuple<JITXObject>, cmp:Instantiable) :
   inside pcb-module :
     eval-when true :
       for ref in nodes do :
@@ -302,7 +299,7 @@ public defn db-jumper (node1:Ref, nodes:Tuple<Ref>, cmp:Ref) :
 ; ------------
 ; node1: reference to pin or net
 ; nodes: reference to tuple of pins or nets
-public defn db-jumper (node1:Ref, nodes:Tuple<Ref>) :
+public defn db-jumper (node1:JITXObject, nodes:Tuple<JITXObject>) :
   inside pcb-module :
     eval-when true :
       val cmp = pin-header(2)
@@ -314,7 +311,7 @@ public defn db-jumper (node1:Ref, nodes:Tuple<Ref>) :
 ; Parameters
 ; ------------
 ; nodes: reference to a tuple of pin or net pairs.
-public defn db-jumper (nodes:Tuple<Tuple<Ref>>, cmp:Ref) :
+public defn db-jumper (nodes:Tuple<Tuple<JITXObject>>, cmp:Instantiable) :
   inside pcb-module :
     eval-when true :
       for pair in nodes do :
@@ -325,7 +322,7 @@ public defn db-jumper (nodes:Tuple<Tuple<Ref>>, cmp:Ref) :
 ; Parameters
 ; ------------
 ; nodes: reference to a tuple of pin or net pairs.
-public defn db-jumper (nodes:Tuple<Tuple<Ref>>) :
+public defn db-jumper (nodes:Tuple<Tuple<JITXObject>>) :
   inside pcb-module :
     eval-when true :
       val cmp = pin-header(2)
@@ -338,7 +335,7 @@ public defn db-jumper (nodes:Tuple<Tuple<Ref>>) :
 ; ------------
 ; node1: reference to pin or net
 ; node2: reference to pin or net
-public defn db-jumper (node1:Ref, node2:Ref) :
+public defn db-jumper (node1:JITXObject, node2:JITXObject) :
   inside pcb-module :
     eval-when true :
       val cmp = pin-header(2)
@@ -350,7 +347,7 @@ public defn db-jumper (node1:Ref, node2:Ref) :
 ; ------------
 ; node1: reference to pin or net
 ; node2: reference to pin or net
-public defn db-zero-res (node1:Ref, node2:Ref) :
+public defn db-zero-res (node1:JITXObject, node2:JITXObject) :
   inside pcb-module :
     eval-when true :
       val cmp = chip-resistor(0.0)
@@ -363,8 +360,8 @@ public defn db-zero-res (node1:Ref, node2:Ref) :
 ; node1: reference to pin or net
 ; node2: reference to pin or net
 ; cmp: reference to component for jumper
-public defn db-jumper-persist-zero-res (node1:Ref, node2:Ref, 
-                                         cmp:Ref) :
+public defn db-jumper-persist-zero-res (node1:JITXObject, node2:JITXObject, 
+                                         cmp:Instantiable) :
   inside pcb-module :
     eval-when true :
       val p-cmp = chip-resistor(0.0)
@@ -376,7 +373,7 @@ public defn db-jumper-persist-zero-res (node1:Ref, node2:Ref,
 ; ------------
 ; node1: reference to pin or net
 ; node2: reference to pin or net
-public defn db-jumper-persist-zero-res (node1:Ref, node2:Ref) :
+public defn db-jumper-persist-zero-res (node1:JITXObject, node2:JITXObject) :
   inside pcb-module :
     eval-when true :
       val cmp = pin-header(2) 
@@ -389,8 +386,8 @@ public defn db-jumper-persist-zero-res (node1:Ref, node2:Ref) :
 ; ------------
 ; node1: reference to pin or net
 ; nodes: reference to a tuple of pins or nets
-public defn db-jumper-persist-zero-res (node1:Ref, 
-                                            nodes:Tuple<Ref>) :
+public defn db-jumper-persist-zero-res (node1:JITXObject, 
+                                            nodes:Tuple<JITXObject>) :
   inside pcb-module :
     eval-when true :
       val cmp = pin-header(2)
@@ -403,8 +400,8 @@ public defn db-jumper-persist-zero-res (node1:Ref,
 ; ------------
 ; nodes -- reference to tuple of pairs of pins or nets
 ; cmp -- reference to jumper component
-public defn db-jumper-persist-zero-res (nodes:Tuple<Tuple<Ref>>, 
-                                         cmp:Ref) :
+public defn db-jumper-persist-zero-res (nodes:Tuple<Tuple<JITXObject>>, 
+                                         cmp:Instantiable) :
   inside pcb-module :
     eval-when true :
       val p-cmp = chip-resistor(0.0)
@@ -416,7 +413,7 @@ public defn db-jumper-persist-zero-res (nodes:Tuple<Tuple<Ref>>,
 ; Parameters
 ; ------------
 ; nodes -- reference to tuple of pairs of pins or nets
-public defn db-jumper-persist-zero-res (nodes:Tuple<Tuple<Ref>>) :
+public defn db-jumper-persist-zero-res (nodes:Tuple<Tuple<JITXObject>>) :
   inside pcb-module :
     eval-when true :
       val cmp = pin-header(2)
@@ -437,10 +434,10 @@ public defn db-jumper-persist-zero-res (nodes:Tuple<Tuple<Ref>>) :
 ; ------------
 ; pwr : Reference to power port JTAG will be connected to
 ; cmp : Component that JTAG will be connected to
-public defn db-jtag-to-cmp (pwr:Ref, cmp:Ref) :
+public defn db-jtag-to-cmp (pwr:JITXObject, cmp:JITXObject) :
   inside pcb-module :
     eval-when true :
-      unique require jtag:jtag from {cmp}
+      require jtag:jtag from cmp
       db-jtag(pwr, jtag)
 
 ; Adds a FTDI connector to a component
@@ -450,11 +447,11 @@ public defn db-jtag-to-cmp (pwr:Ref, cmp:Ref) :
 ; ------------
 ; pwr : Reference to power port that ftdi connector will be connected to
 ; cmp : Component that ftdi connector will be connected to
-public defn db-ftdi-two-comms (pwr:Ref, cmp:Ref) :
+public defn db-ftdi-two-comms (pwr:JITXObject, cmp:JITXObject) :
   inside pcb-module :
     eval-when true :
       if property(self.debug) :
-        unique require uart:uart from {cmp}
+        require uart:uart from cmp
         db-ftdi(pwr, uart)
 
 ; Adds a FTDI connector with RTS and CTS to a component
@@ -464,11 +461,11 @@ public defn db-ftdi-two-comms (pwr:Ref, cmp:Ref) :
 ; ------------
 ; pwr : Reference to power port that ftdi connector will be connected to
 ; cmp : Component that ftdi connector will be connected to
-public defn db-ftdi-four-comms (pwr:Ref, cmp:Ref) :
+public defn db-ftdi-four-comms (pwr:JITXObject, cmp:JITXObject) :
   inside pcb-module :
     eval-when true :
       if property(self.debug) :
-        unique require ftdi:uart4 from {cmp}
+        require ftdi:uart4 from cmp
         db-ftdi(pwr, ftdi)
 
 ; ====================
@@ -481,28 +478,28 @@ public defn db-ftdi-four-comms (pwr:Ref, cmp:Ref) :
 ; ref : reference to pin or net that test point is attached to
 ; cmp : reference to pcb-component for test point
 ; persist? : test points migrate to bottom layer for production
-public defn add-testpoint (ref:Ref, cmp:Ref, persist?:True|False, 
+public defn add-testpoint (ref:JITXObject, cmp:Instantiable, persist?:True|False, 
                            top?:True|False) :
   inside pcb-module  :
     eval-when true :
       if property(self.debug) :
-        unique inst tp : {cmp}
-        schematic-group({tp}) = debug-temp-sch
-        layout-group({tp}) = debug-temp-layout
+        inst tp : cmp
+        schematic-group(tp) = debug-temp-sch
+        layout-group(tp) = debug-temp-layout
         val pins = ports(tp)
         if not empty?(pins) :
-          net ({ref}, {next(pins)})
+          net (ref, pins[0])
       else if persist? and not property(self.debug) :
         if top? :
-          unique inst tp : {top-smd-testpoint-cmp()}
-          schematic-group({tp}) = debug-persist-sch
-          layout-group({tp}) = debug-persist-layout
-          net ({ref}, {tp.p})
+          inst tp : top-smd-testpoint-cmp()
+          schematic-group(tp) = debug-persist-sch
+          layout-group(tp) = debug-persist-layout
+          net (ref, tp.p)
         else :
-          unique inst tp : {btm-smd-testpoint-cmp()}
-          schematic-group({tp}) = debug-persist-sch
-          layout-group({tp}) = debug-persist-layout
-          net ({ref}, {tp.p})
+          inst tp : btm-smd-testpoint-cmp()
+          schematic-group(tp) = debug-persist-sch
+          layout-group(tp) = debug-persist-layout
+          net (ref, tp.p)
 
 ; Adds a n-way jumper from node1 to nodes
 ; For production board, nets node1 to default
@@ -513,22 +510,22 @@ public defn add-testpoint (ref:Ref, cmp:Ref, persist?:True|False,
 ; default : Connected to node1 directly when dev? is False
 ; n : number of nodes to mux node1 with
 ; cmp : component of jumper
-public defn net-inline-jumper (node1:Ref, nodes:Tuple<Ref>, 
-                               default:Ref, cmp:Ref) :
+public defn net-inline-jumper (node1:JITXObject, nodes:Tuple<JITXObject>, 
+                               default:JITXObject, cmp:Instantiable) :
   inside pcb-module :
     eval-when true :
       val n = length(nodes)
       if property(self.debug) :
-        unique inst j : {cmp}
-        schematic-group({j}) = debug-temp-sch
-        layout-group({j}) = debug-temp-layout
-        val pins = all-pins(j)
+        inst j : cmp
+        schematic-group(j) = debug-temp-sch
+        layout-group(j) = debug-temp-layout
+        val pins = pins(j)
         if not empty?(pins) :
-          net ({node1}, {next(pins)})
+          net (node1, pins[0])
           for i in 0 to n do :
-            net ({nodes[i]}, {next(pins)})
+            net (nodes[i], pins[i + 1])
       else :
-        net ({node1}, {default})
+        net (node1, default)
 
 ; Adds user defined jumper components between node1 and each node in
 ; nodes.
@@ -538,28 +535,28 @@ public defn net-inline-jumper (node1:Ref, nodes:Tuple<Ref>,
 ; nodes : tuple of pins or nets to connect each jumper to
 ; cmp : component of jumper
 ; persist-cmp : component that jumper persists to in production 
-public defn net-inline-jumper-persist-cmp (node1:Ref, nodes:Tuple<Ref>,
-                                           cmp:Ref, persist-cmp:Ref) :
+public defn net-inline-jumper-persist-cmp (node1:JITXObject, nodes:Tuple<JITXObject>,
+                                           cmp:Instantiable, persist-cmp:Instantiable) :
   inside pcb-module :
     eval-when true :
       val n = length(nodes)
       for i in 0 to n do :
         if property(self.debug) :
-          unique inst j : {cmp}
-          schematic-group({j}) = debug-temp-sch
-          layout-group({j}) = debug-temp-layout
-          val pins = all-pins(j)
+          inst j : cmp
+          schematic-group(j) = debug-temp-sch
+          layout-group(j) = debug-temp-layout
+          val pins = pins(j)
           if not empty?(pins) :
-            net ({node1}, {next(pins)})
-            net ({nodes[i]}, {next(pins)})
+            net (node1, pins[0])
+            net (nodes[i], pins[1])
         else :
-          unique inst zero : {persist-cmp} 
-          schematic-group({zero}) = debug-persist-sch
-          layout-group({zero}) = debug-persist-layout
-          val pins = all-pins(zero)
+          inst zero : persist-cmp 
+          schematic-group(zero) = debug-persist-sch
+          layout-group(zero) = debug-persist-layout
+          val pins = pins(zero)
           if not empty?(pins) :
-            net ({node1}, {next(pins)})
-            net ({nodes[i]}, {next(pins)})
+            net (node1, pins[0])
+            net (nodes[i], pins[1])
 
 ; Adds a 10 pin Arm JTAG connector to a component
 ; For debug, the connector is a 10 pin header with additional testheaders
@@ -569,38 +566,38 @@ public defn net-inline-jumper-persist-cmp (node1:Ref, nodes:Tuple<Ref>,
 ; ------------
 ; jtag-pwr : Reference to power port
 ; jtag-comms : Reference to jtag port
-public defn db-jtag (jtag-pwr:Ref, jtag-comms:Ref) :
+public defn db-jtag (jtag-pwr:JITXObject, jtag-comms:JITXObject) :
   inside pcb-module :
     eval-when true :
       if property(self.debug) :
-        unique inst jtag-conn : {pin-header(10, 2)}
-        unique inst r-pu1 : {chip-resistor(10.0e3)}[3]
-        unique inst r-pu2 : {chip-resistor(4.7e3)}
-        unique inst r-pd : {chip-resistor(10.0e3)}
-        schematic-group({jtag-conn}) = debug-temp-sch
-        layout-group({jtag-conn}) = debug-temp-layout
-        schematic-group({r-pu1}) = debug-temp-sch
-        layout-group({r-pu1}) = debug-temp-layout
-        schematic-group({r-pu2}) = debug-temp-sch
-        layout-group({r-pu2}) = debug-temp-layout
-        schematic-group({r-pd}) = debug-temp-sch
-        layout-group({r-pd}) = debug-temp-layout
-        net ({jtag-pwr}.vdd, {jtag-conn}.p[1], {r-pu1}[0].p[1], 
-             {r-pu1}[1].p[1], {r-pu2}.p[1], {r-pu1}[2].p[1])
-        net ({jtag-pwr}.gnd, {jtag-conn}.p[3], {jtag-conn}.p[5], 
-             {jtag-conn}.p[9], {r-pd}.p[1])
-        net tms ({jtag-comms}.tms, {jtag-conn}.p[2], {r-pu1}[0].p[2])
-        net tck ({jtag-comms}.tck, {jtag-conn}.p[4], {r-pd}.p[2])
-        net tdo ({jtag-comms}.tdo, {jtag-conn}.p[6], {r-pu1}[2].p[2])
-        net tdi ({jtag-comms}.tdi, {jtag-conn}.p[8], {r-pu1}[1].p[2])
-        net trstn ({jtag-comms}.trstn, {jtag-conn}.p[10], {r-pu2}.p[2])
+        inst jtag-conn : pin-header(10, 2)
+        inst r-pu1 : chip-resistor(10.0e3)[3]
+        inst r-pu2 : chip-resistor(4.7e3)
+        inst r-pd : chip-resistor(10.0e3)
+        schematic-group(jtag-conn) = debug-temp-sch
+        layout-group(jtag-conn) = debug-temp-layout
+        schematic-group(r-pu1) = debug-temp-sch
+        layout-group(r-pu1) = debug-temp-layout
+        schematic-group(r-pu2) = debug-temp-sch
+        layout-group(r-pu2) = debug-temp-layout
+        schematic-group(r-pd) = debug-temp-sch
+        layout-group(r-pd) = debug-temp-layout
+        net (jtag-pwr.vdd, jtag-conn.p[1], r-pu1[0].p[1], 
+             r-pu1[1].p[1], r-pu2.p[1], r-pu1[2].p[1])
+        net (jtag-pwr.gnd, jtag-conn.p[3], jtag-conn.p[5], 
+             jtag-conn.p[9], r-pd.p[1])
+        net tms (jtag-comms.tms, jtag-conn.p[2], r-pu1[0].p[2])
+        net tck (jtag-comms.tck, jtag-conn.p[4], r-pd.p[2])
+        net tdo (jtag-comms.tdo, jtag-conn.p[6], r-pu1[2].p[2])
+        net tdi (jtag-comms.tdi, jtag-conn.p[8], r-pu1[1].p[2])
+        net trstn (jtag-comms.trstn, jtag-conn.p[10], r-pu2.p[2])
         db-testheader-persist([tms, tck, tdo, tdi, trstn])
       else :
-        unique inst jtag-conn : {ocdb/tag-connect/TC2050-IDC-NL/module}
-        schematic-group({jtag-conn}) = debug-persist-sch 
-        layout-group({jtag-conn}) = debug-persist-layout
-        net ({jtag-comms}, {jtag-conn}.j)
-        net ({jtag-conn}.pwr, {jtag-pwr})
+        inst jtag-conn : ocdb/tag-connect/TC2050-IDC-NL/module
+        schematic-group(jtag-conn) = debug-persist-sch 
+        layout-group(jtag-conn) = debug-persist-layout
+        net (jtag-comms, jtag-conn.j)
+        net (jtag-conn.pwr, jtag-pwr)
 
 ; Adds a FTDI connector to a component 
 ; Returns a tuple with [ftdi-vdd, ftdi-gnd]
@@ -608,23 +605,25 @@ public defn db-jtag (jtag-pwr:Ref, jtag-comms:Ref) :
 ; ------------
 ; pwr : power port that ftdi is connected to
 ; uart : uart port that ftdi is connected to 
-public defn db-ftdi (pwr:Ref, uart:Ref) :
+public defn db-ftdi (pwr:JITXObject, uart:JITXObject) :
   inside pcb-module :
     eval-when true :
       if property(self.debug) :
-        unique inst ftdi-conn : {pin-header(6, 1)}
-        schematic-group({ftdi-conn}) = debug-temp-sch
-        layout-group({ftdi-conn}) = debug-temp-layout
-        net ({pwr}.gnd, {ftdi-conn}.p[1])
-        net ({pwr}.vdd, {ftdi-conn}.p[3])
-        if port-type(uart) == #PT(uart) :
-          net ({uart}.rx, {ftdi-conn}.p[4]) 
-          net ({uart}.tx, {ftdi-conn}.p[5])
-        else if port-type(uart) == #PT(uart4) :
-          net ({uart}.cts, {ftdi-conn}.p[2])
-          net ({uart}.txd, {ftdi-conn}.p[4])
-          net ({uart}.rxd, {ftdi-conn}.p[5])
-          net ({uart}.rts, {ftdi-conn}.p[6])
+        inst ftdi-conn : pin-header(6, 1)
+        schematic-group(ftdi-conn) = debug-temp-sch
+        layout-group(ftdi-conn) = debug-temp-layout
+        net (pwr.gnd, ftdi-conn.p[1])
+        net (pwr.vdd, ftdi-conn.p[3])
+        match(port-type(uart)) :
+          (pa:Bundle) :
+            if pa == ocdb/bundles/uart :
+              net (uart.rx, ftdi-conn.p[4]) 
+              net (uart.tx, ftdi-conn.p[5])
+            else if pa == uart4 :
+              net (uart.cts, ftdi-conn.p[2])
+              net (uart.txd, ftdi-conn.p[4])
+              net (uart.rxd, ftdi-conn.p[5])
+              net (uart.rts, ftdi-conn.p[6])
 
 ; Adds an indicator LED to a pin or net.
 ; Parameters
