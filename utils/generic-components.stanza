@@ -13,6 +13,7 @@ defpackage ocdb/generic-components:
   import ocdb/design-vars
   import ocdb/symbols
   import ocdb/box-symbol
+  import ocdb/property-structs
 
 ; ========================================================
 ; ====== Standard packages for the passive solver ========
@@ -298,7 +299,7 @@ public defn bypass-caps (power-pin:JITXObject|Symbol, gnd-pin:JITXObject|Symbol,
   inside pcb-module:
     val n-caps = length(caps)
     for i in 0 to n-caps do :
-      public inst c : ceramic-cap(["capacitance" => caps[i], "min-rated-voltage" => voltage])
+      inst c : ceramic-cap(["capacitance" => caps[i], "min-rated-voltage" => voltage])
       match(power-pin) :
         (r:JITXObject) :
           net (r, c.p[1])
@@ -345,9 +346,10 @@ public defn default-bypass (cmp:JITXObject) :
 
 public defn block-cap (in:JITXObject, out:JITXObject, cap:Double) :
   inside pcb-module :
-    public inst block : ceramic-cap(cap)
+    inst block : ceramic-cap(cap)
     net (in, block.p[1])
     net (out, block.p[2])
+    block
 
 public defn block-cap (in:JITXObject, out:JITXObject) :
   block-cap(in, out, 100.0e-6)
@@ -435,6 +437,7 @@ public pcb-module micro-usb-connector :
   net D+ (usb-2.data.P con.D+)
   net D- (usb-2.data.N con.D-)
   net ID (usb-2.id con.ID)
+  property(con.VCC.power-supply-pin) = PowerSupplyPin(5.0, 0.5)
 
 ; Add a tag-connect landing pattern to a processor
 public defn attach-programming-connector (proc:JITXObject, vio:JITXObject, intf:String):
