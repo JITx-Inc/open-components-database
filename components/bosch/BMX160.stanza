@@ -14,13 +14,14 @@ defpackage ocdb/bosch/BMX160 :
   import ocdb/generator-utils
   import ocdb/generic-components
 
-  import jitpcb/visualizer
-
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Bosch"
   mpn = "BMX160"
   description = "Small, low-power, 9-axis IMU (accel, gyro, magnetometer)"
-
+  pin SDx
+  pin SCx
+  pin SDO
+  pin CSB
   pin-properties :
     [pin:Ref | pads:Int ... | side:Dir ]
     [SDO    | 1     | Right ]
@@ -40,14 +41,14 @@ public unique pcb-component component :
   assign-landpattern(BMX160-pkg)
 
   supports i2c :
-    scl => SCx
-    sda => SDx
+    i2c.scl => SCx
+    i2c.sda => SDx
 
   supports spi :
-    sck => SCx
-    ss => CSB
-    mosi => SDx
-    miso => SDO
+    spi.sck => SCx
+    spi.ss => CSB
+    spi.mosi => SDx
+    spi.miso => SDO
 
 pcb-landpattern BMX160-pkg :
   val dx = 0.675 / 2.0 + 0.925
@@ -80,6 +81,8 @@ public pcb-module module :
   pin gnd
   pin vcc
   port spi-node : spi
+  pin int1
+  pin int2
 
   inst imu : ocdb/bosch/BMX160/component
 
@@ -90,6 +93,8 @@ public pcb-module module :
   net (gnd, imu.GNDIO)
   net (vcc, imu.VDD)
   net (vcc, imu.VDDIO)
+  net (int1, imu.INT1)
+  net (int2, imu.INT2)
   
   cap-strap(vcc, gnd, 1.0e-6)
   cap-strap(vcc, gnd, 0.1e-6)
