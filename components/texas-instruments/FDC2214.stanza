@@ -1,12 +1,11 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/texas-instruments/FDC2214 :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
 
   import ocdb/land-patterns
   import ocdb/symbols
@@ -16,53 +15,47 @@ defpackage ocdb/texas-instruments/FDC2214 :
   import ocdb/generator-utils
   import ocdb/generic-components
 
-  import jitpcb/visualizer
-
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "FDC2214QRGH"
   description = "EMI-Resistant 28-Bit,12-Bit Capacitance-to-Digital Converter for Proximity and Level Sensing Applications"
 
-  val ps = PinSpec $ #TABLE :
-    [Ref    | Int ...   | Dir   | Ref   ]
-    [SCL    | 1         | Left  | base  ]
-    [SDA    | 2         | Left  | base  ]
-    [CLKIN  | 3         | Left  | base  ]
-    [ADDR   | 4         | Left  | base  ]
-    [INTB   | 5         | Left  | base  ]
-    [SD     | 6         | Left  | base  ]
-    [VDD    | 7         | Left  | base  ]
-    [GND    | 8         | Left  | base  ]
-    [IN0A   | 9         | Right | base  ]
-    [IN0B   | 10        | Right | base  ]
-    [IN1A   | 11        | Right | base  ]
-    [IN1B   | 12        | Right | base  ]
-    [IN2A   | 13        | Right | base  ]
-    [IN2B   | 14        | Right | base  ]
-    [IN3A   | 15        | Right | base  ]
-    [IN3B   | 16        | Right | base  ]
+  port i2c : i2c
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir | Ref   ]
+    [i2c.scl | 1            | Left     | base  ]
+    [i2c.sda | 2            | Left     | base  ]
+    [CLKIN   | 3            | Left     | base  ]
+    [ADDR    | 4            | Left     | base  ]
+    [INTB    | 5            | Left     | base  ]
+    [SD      | 6            | Left     | base  ]
+    [VDD     | 7            | Left     | base  ]
+    [GND     | 8            | Left     | base  ]
+    [IN0A    | 9            | Right    | base  ]
+    [IN0B    | 10           | Right    | base  ]
+    [IN1A    | 11           | Right    | base  ]
+    [IN1B    | 12           | Right    | base  ]
+    [IN2A    | 13           | Right    | base  ]
+    [IN2B    | 14           | Right    | base  ]
+    [IN3A    | 15           | Right    | base  ]
+    [IN3B    | 16           | Right    | base  ]
 
-  make-pins(ps)
-  make-box-symbol(ps)
-  assign-package(qfn-package(0.5, 3.8, 16, 0.25, 0.4, [2.6 2.6]), ps)
+  make-box-symbol()
+  assign-landpattern(qfn-package(0.5, 3.8, 16, 0.25, 0.4, [2.6 2.6]))
 
-  supports i2c :
-    sda => SDA
-    scl => SCL
   
-public unique pcb-module module :
+public pcb-module module :
   port i2c-node : i2c
   pin gnd
   pin vcc
 
-  inst cdc : {ocdb/texas-instruments/FDC2214/component}
-  inst clk : {ocdb/kyocera/KC2520B/module(40.0)}
+  inst cdc : ocdb/texas-instruments/FDC2214/component
+  inst clk : ocdb/kyocera/KC2520B/module(40.0)
 
   net (gnd, cdc.GND)
   net (vcc, cdc.VDD)
 
-  require i2c-port : i2c from cdc
-  net (i2c-node, i2c-port)
+  net (i2c-node, cdc.i2c)
 
   net (clk.clkout, cdc.CLKIN)
   
@@ -71,10 +64,10 @@ public unique pcb-module module :
   cap-strap(cdc.IN2A, cdc.IN2B, 33.0e-12)
   cap-strap(cdc.IN3A, cdc.IN3B, 33.0e-12)
 
-  inst l1 : {ocdb/bourns/CMH322522/component(18.0e-6)}
-  inst l2 : {ocdb/bourns/CMH322522/component(18.0e-6)}
-  inst l3 : {ocdb/bourns/CMH322522/component(18.0e-6)}
-  inst l4 : {ocdb/bourns/CMH322522/component(18.0e-6)}
+  inst l1 : ocdb/bourns/CMH322522/component(18.0e-6)
+  inst l2 : ocdb/bourns/CMH322522/component(18.0e-6)
+  inst l3 : ocdb/bourns/CMH322522/component(18.0e-6)
+  inst l4 : ocdb/bourns/CMH322522/component(18.0e-6)
 
   net (cdc.IN0A, l1.p[1])
   net (cdc.IN0B, l1.p[2])

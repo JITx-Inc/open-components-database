@@ -1,12 +1,11 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/texas-instruments/BQ24075 :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
 
   import ocdb/land-patterns
   import ocdb/symbols
@@ -16,41 +15,38 @@ defpackage ocdb/texas-instruments/BQ24075 :
   import ocdb/generator-utils
   import ocdb/generic-components
 
-  import jitpcb/visualizer
-
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "BQ24075RGT"
   description = "Standalone 1-Cell 1.5-A Linear Battery Charger with PowerPath"
 
-  val ps = PinSpec $ #TABLE :
-    [Ref    | Int ...   | Dir   | Ref   ]
-    [BAT    | 2, 3      | Right | base  ]
-    [CE     | 4         | Left  | base  ]
-    [nCHG   | 9         | Left  | base  ]
-    [EN1    | 6         | Left  | base  ]
-    [EN2    | 5         | Left  | base  ]
-    [IN     | 13        | Right | base  ]
-    [ILIM   | 12        | Left | base  ]
-    [ISET   | 16        | Left | base  ]
-    [OUT    | 10, 11    | Right | base  ]
-    [PGOOD  | 7         | Left  | base  ]
-    [SYSOFF | 15        | Left  | base  ]
-    [TPAD   | 17        | Right | base  ]
-    [TMR    | 14        | Right | base  ]
-    [TS     | 1         | Right | base  ]
-    [VSS    | 8         | Right | base  ]
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir | Ref   ]
+    [BAT     | 2, 3         | Right    | base  ]
+    [CE      | 4            | Left     | base  ]
+    [nCHG    | 9            | Left     | base  ]
+    [EN1     | 6            | Left     | base  ]
+    [EN2     | 5            | Left     | base  ]
+    [IN      | 13           | Right    | base  ]
+    [ILIM    | 12           | Left     | base  ]
+    [ISET    | 16           | Left     | base  ]
+    [OUT     | 10, 11       | Right    | base  ]
+    [PGOOD   | 7            | Left     | base  ]
+    [SYSOFF  | 15           | Left     | base  ]
+    [TPAD    | 17           | Right    | base  ]
+    [TMR     | 14           | Right    | base  ]
+    [TS      | 1            | Right    | base  ]
+    [VSS     | 8            | Right    | base  ]
 
-  make-pins(ps)
-  make-box-symbol(ps)
-  assign-package(qfn-package(0.5, 2.8, 16, 0.24, 0.4, [1.68 1.68]), ps)
+  make-box-symbol()
+  assign-landpattern(qfn-package(0.5, 2.8, 16, 0.24, 0.4, [1.68 1.68]))
 
-public unique pcb-module module :
+public pcb-module module :
   pin gnd
   pin vout
   pin vin
   pin batt
-  inst charger : {ocdb/texas-instruments/BQ24075/component}
+  inst charger : ocdb/texas-instruments/BQ24075/component
 
   net (vin, charger.IN)
   net (vout, charger.OUT)

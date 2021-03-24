@@ -1,12 +1,11 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/texas-instruments/BQ27441-G1 :
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
 
   import ocdb/land-patterns
   import ocdb/symbols
@@ -16,44 +15,38 @@ defpackage ocdb/texas-instruments/BQ27441-G1 :
   import ocdb/generator-utils
   import ocdb/generic-components
 
-  import jitpcb/visualizer
-
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "BQ27441-G1"
   description = "System-Side Impedance Track™ Fuel Gauge"
 
-  val ps = PinSpec $ #TABLE :
-    [Ref    | Int ...   | Dir   | Ref   ]
-    [BAT    | 6         | Left  | base  ]
-    [BIN    | 10        | Right | base  ]
-    [GPOUT  | 12        | Right | base  ]
-    [NC     | 4, 9, 11  | Left  | base  ]
-    [SCL    | 2         | Right | base  ]
-    [SDA    | 1         | Right | base  ]
-    [SRN    | 7         | Left  | base  ]
-    [SRP    | 8         | Left  | base  ]
-    [VDD    | 5         | Right | base  ]
-    [VSS    | 3         | Left  | base  ]
-    [TP     | 13        | Left  | base  ]
+  port i2c : i2c
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir | Ref   ]
+    [BAT     | 6            | Left     | base  ]
+    [BIN     | 10           | Right    | base  ]
+    [GPOUT   | 12           | Right    | base  ]
+    [NC      | 4, 9, 11     | Left     | base  ]
+    [i2c.scl | 2            | Right    | base  ]
+    [i2c.sda | 1            | Right    | base  ]
+    [SRN     | 7            | Left     | base  ]
+    [SRP     | 8            | Left     | base  ]
+    [VDD     | 5            | Right    | base  ]
+    [VSS     | 3            | Left     | base  ]
+    [TP      | 13           | Left     | base  ]
 
-  make-pins(ps)
-  make-box-symbol(ps)
-  assign-package(dfn-package(12, 0.4, [0.2, 0.85], -1.975, [4.0, 2.5], [2.45, 1.95]), ps)
+  make-box-symbol()
+  assign-landpattern(dfn-package(12, 0.4, [0.2, 0.85], -1.975, [4.0, 2.5], [2.45, 1.95]))
 
-  supports i2c :
-    sda => SDA
-    scl => SCL
   
-public unique pcb-module module :
-  inst ic : {ocdb/texas-instruments/BQ27441-G1/component}
+public pcb-module module :
+  inst ic : ocdb/texas-instruments/BQ27441-G1/component
   pin gnd
   pin batt-in
   pin batt-out
   port i2c-node : i2c
 
-  require i2c-port : i2c from ic
-  net (i2c-node, i2c-port)
+  net (i2c-node, ic.i2c)
 
   net (gnd, ic.TP, ic.VSS)
   net (batt-in, ic.SRP, ic.BAT)
