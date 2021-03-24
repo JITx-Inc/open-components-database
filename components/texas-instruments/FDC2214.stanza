@@ -10,7 +10,6 @@ defpackage ocdb/texas-instruments/FDC2214 :
   import ocdb/land-patterns
   import ocdb/symbols
   import ocdb/box-symbol
-  import ocdb/pinspec
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
@@ -22,32 +21,36 @@ public pcb-component component :
 
   port i2c : i2c
   pin-properties :
-    [pin:Ref | pads:Int ... | side:Dir | Ref   ]
-    [i2c.scl | 1            | Left     | base  ]
-    [i2c.sda | 2            | Left     | base  ]
-    [CLKIN   | 3            | Left     | base  ]
-    [ADDR    | 4            | Left     | base  ]
-    [INTB    | 5            | Left     | base  ]
-    [SD      | 6            | Left     | base  ]
-    [VDD     | 7            | Left     | base  ]
-    [GND     | 8            | Left     | base  ]
-    [IN0A    | 9            | Right    | base  ]
-    [IN0B    | 10           | Right    | base  ]
-    [IN1A    | 11           | Right    | base  ]
-    [IN1B    | 12           | Right    | base  ]
-    [IN2A    | 13           | Right    | base  ]
-    [IN2B    | 14           | Right    | base  ]
-    [IN3A    | 15           | Right    | base  ]
-    [IN3B    | 16           | Right    | base  ]
+    [pin:Ref | pads:Int ... | side:Dir ]
+    [i2c.scl | 1            | Left     ]
+    [i2c.sda | 2            | Left     ]
+    [CLKIN   | 3            | Left     ]
+    [ADDR    | 4            | Left     ]
+    [INTB    | 5            | Left     ]
+    [SD      | 6            | Left     ]
+    [VDD     | 7            | Left     ]
+    [GND     | 8            | Left     ]
+    [IN0A    | 9            | Right    ]
+    [IN0B    | 10           | Right    ]
+    [IN1A    | 11           | Right    ]
+    [IN1B    | 12           | Right    ]
+    [IN2A    | 13           | Right    ]
+    [IN2B    | 14           | Right    ]
+    [IN3A    | 15           | Right    ]
+    [IN3B    | 16           | Right    ]
 
   make-box-symbol()
-  assign-landpattern(qfn-package(0.5, 3.8, 16, 0.25, 0.4, [2.6 2.6]))
+  assign-landpattern(qfn-landpattern(0.5, 3.8, 16, 0.25, 0.4, [2.6 2.6]))
 
   
-public pcb-module module :
+public pcb-module module (capacitance:Double):
   port i2c-node : i2c
   pin gnd
   pin vcc
+  port ch : diff-pair[4]
+  pin INTB
+  pin ADDR
+  pin SD
 
   inst cdc : ocdb/texas-instruments/FDC2214/component
   inst clk : ocdb/kyocera/KC2520B/module(40.0)
@@ -56,27 +59,30 @@ public pcb-module module :
   net (vcc, cdc.VDD)
 
   net (i2c-node, cdc.i2c)
+  net (cdc.INTB, INTB)
+  net (cdc.ADDR, ADDR)
+  net (cdc.SD, SD)
 
   net (clk.clkout, cdc.CLKIN)
   
-  cap-strap(cdc.IN0A, cdc.IN0B, 33.0e-12)
-  cap-strap(cdc.IN1A, cdc.IN1B, 33.0e-12)
-  cap-strap(cdc.IN2A, cdc.IN2B, 33.0e-12)
-  cap-strap(cdc.IN3A, cdc.IN3B, 33.0e-12)
+  cap-strap(cdc.IN0A, cdc.IN0B, capacitance)
+  cap-strap(cdc.IN1A, cdc.IN1B, capacitance)
+  cap-strap(cdc.IN2A, cdc.IN2B, capacitance)
+  cap-strap(cdc.IN3A, cdc.IN3B, capacitance)
 
   inst l1 : ocdb/bourns/CMH322522/component(18.0e-6)
   inst l2 : ocdb/bourns/CMH322522/component(18.0e-6)
   inst l3 : ocdb/bourns/CMH322522/component(18.0e-6)
   inst l4 : ocdb/bourns/CMH322522/component(18.0e-6)
 
-  net (cdc.IN0A, l1.p[1])
-  net (cdc.IN0B, l1.p[2])
+  net (cdc.IN0A, l1.p[1], ch[0].P)
+  net (cdc.IN0B, l1.p[2], ch[0].N)
 
-  net (cdc.IN1A, l2.p[1])
-  net (cdc.IN1B, l2.p[2])
+  net (cdc.IN1A, l2.p[1], ch[1].P)
+  net (cdc.IN1B, l2.p[2], ch[1].N)
 
-  net (cdc.IN2B, l3.p[1])
-  net (cdc.IN2B, l3.p[2])
+  net (cdc.IN2B, l3.p[1], ch[2].P)
+  net (cdc.IN2B, l3.p[2], ch[2].N)
 
-  net (cdc.IN3A, l4.p[1])
-  net (cdc.IN3A, l4.p[2])
+  net (cdc.IN3A, l4.p[1], ch[3].P)
+  net (cdc.IN3A, l4.p[2], ch[3].N)
