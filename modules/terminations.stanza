@@ -10,6 +10,7 @@ defpackage ocdb/terminations:
   import ocdb/generator-utils
   import ocdb/checks
   import ocdb/design-vars
+  import ocdb/bundles
 
 ; Adds termination circuitry for a can bus based on method
 public defn terminate-can (bus:JITXObject, gnd:JITXObject, method:String, ctrl:JITXObject|False) :
@@ -54,3 +55,13 @@ public defn terminate-can (bus:JITXObject, gnd:JITXObject, method:String, ctrl:J
 public defn terminate-can (bus:JITXObject, gnd:JITXObject, method:String) :
   terminate-can(bus, gnd, method, false)
 
+; Adds 22ohm termination resistors, returns terminated bus
+public defn terminate-usb-2 (bus:JITXObject) :
+  inside pcb-module:
+    port terminated-usb-2 : usb-2
+    net (terminated-usb-2.vbus, bus.vbus)
+    net (terminated-usb-2.id, bus.id)
+    res-strap(terminated-usb-2.data.N, bus.data.N, 22.0)
+    res-strap(terminated-usb-2.data.P, bus.data.P, 22.0)
+    ; Return the terminated bus
+    terminated-usb-2
