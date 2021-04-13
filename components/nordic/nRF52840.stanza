@@ -13,6 +13,9 @@ defpackage ocdb/nordic/nRF52840 :
   import ocdb/generic-components
   import ocdb/box-symbol
   import ocdb/bundles
+  import ocdb/property-structs
+  import ocdb/generator-utils
+  import ocdb/checks
 
 pcb-landpattern xcvr-nrf52840-qiaa-r-pkg :
   pad A8 : bga-pad(0.275) at loc(-1.25, 3.25, 0.0)
@@ -104,6 +107,7 @@ pcb-landpattern xcvr-nrf52840-qiaa-r-pkg :
 public pcb-component component :
   port P0 : pin[32]
   port P1 : pin[16]
+  pin XC2
   pin-properties :
     [ pin:Ref | pads:Ref ... | side:Dir | bank:Ref]
     [ P0[00]  | D2      | Right | io ] ;XL1 
@@ -183,41 +187,58 @@ public pcb-component component :
   make-box-symbol()
   assign-landpattern(xcvr-nrf52840-qiaa-r-pkg)
 
+  ; HFXO for 30ppm
+  property(XC2.crystal-oscillator) = CrystalOscillator(3.5e-3, 100.0e-6, 3.0e-12, 30.0e-6 * 32.0e6, 32.0e6)
+  ; LFXO for 50ppm
+  property(P0[01].crystal-oscillator) = CrystalOscillator(3.1e-6, 0.5e-6, 4.0e-12, 50.0e-6 * 32.768e3, 32.768e3)
+
   name = "XCVR_NRF52840-QIAA-R"
   mpn = "NRF52840-QIAA-R"
   manufacturer = "Nordic Semiconductor"
   description = "Advanced Bluetooth 5, Thread and Zigbee multiprotocol SoC"
 
 ; This module is a WIP.
-; public pcb-module module :
-;   port usb : usb-2
-;   pin gnd
-;   inst mcu : ocdb/nordic/nRF52840/component
+public pcb-module module :
+  port usb : usb-2
+  pin gnd
+  inst mcu : ocdb/nordic/nRF52840/component
 
-;   net (gnd, usb.vbus.gnd, mcu.VSS, mcu.VSS_PA)
+  net (gnd, usb.vbus.gnd, mcu.VSS, mcu.VSS_PA)
 
-;   ; Configure to be in normal voltage mode, DCDC1 enabled (config 5 from datasheet) TODO:make parmaetric
-;   ; Bypass caps
-;   bypass-cap-strap(mcu.DEC1, gnd, 100.0e-9)
-;   bypass-cap-strap(mcu.DEC3, gnd, 100.0e-12)
-;   bypass-cap-strap(mcu.DEC5, gnd, 820.0e-12)
-;   bypass-cap-strap(mcu.DECUSB, gnd, 4.7e-6)
-;   bypass-cap-strap(mcu.VBUS, gnd, 4.7e-6)
-;   bypass-cap-strap(mcu.DEC4, gnd, 1.0e-6)
-;   bypass-cap-strap(mcu.VDD[4], gnd, 1.0e-6)
-;   bypass-cap-strap(mcu.VDDH, gnd, 4.7e-6)
-;   bypass-cap-strap(mcu.VDD[3], gnd, 1.0e-6)
-;   bypass-cap-strap(mcu.VDD[0], gnd, 0.1e-6)
-;   bypass-cap-strap(mcu.VDD[1], gnd, 0.1e-6)
-;   bypass-cap-strap(mcu.VDD[2], gnd, 0.1e-6)
+  ; Configure to be in normal voltage mode, DCDC1 enabled (config 5 from datasheet) Improvement: make power parametric
+  ; Bypass caps
+  bypass-cap-strap(mcu.DEC1, gnd, 100.0e-9)
+  bypass-cap-strap(mcu.DEC3, gnd, 100.0e-12)
+  bypass-cap-strap(mcu.DEC5, gnd, 820.0e-12)
+  bypass-cap-strap(mcu.DECUSB, gnd, 4.7e-6)
+  bypass-cap-strap(mcu.VBUS, gnd, 4.7e-6)
+  bypass-cap-strap(mcu.DEC4, gnd, 1.0e-6)
+  bypass-cap-strap(mcu.VDD[4], gnd, 1.0e-6)
+  bypass-cap-strap(mcu.VDDH, gnd, 4.7e-6)
+  bypass-cap-strap(mcu.VDD[3], gnd, 1.0e-6)
+  bypass-cap-strap(mcu.VDD[0], gnd, 0.1e-6)
+  bypass-cap-strap(mcu.VDD[1], gnd, 0.1e-6)
+  bypass-cap-strap(mcu.VDD[2], gnd, 0.1e-6)
 
-;   inst pwr-ind : smd-inductor(["inductance" => 10.0e-6 "min-current-rating" => 50.0e-3])
-;   inst filt-ind : smd-inductor(["inductance" => 15.0e-9 "min-self-resonant-frequency" => 2.0e9 "material-core" => "ceramic"])
-;   net (pwr-ind.p[1] mcu.DCCH)
-;   net (pwr-ind.p[2] filt-ind.p[1])
-;   net (mcu.DEC4 mcu.DEC6 filt-ind.p[2])
+  inst pwr-ind : smd-inductor(["inductance" => 10.0e-6 "min-current-rating" => 50.0e-3])
+  inst filt-ind : smd-inductor(["inductance" => 15.0e-9 "min-self-resonant-frequency" => 2.0e9 "material-core" => "ceramic"])
+  net (pwr-ind.p[1] mcu.DCCH)
+  net (pwr-ind.p[2] filt-ind.p[1])
+  net (mcu.DEC4 mcu.DEC6 filt-ind.p[2])
 
-;   for i in 0 through 4 do : net (mcu.VDD[0] mcu.VDD[i])
+  for i in 0 through 4 do : net (mcu.VDD[0] mcu.VDD[i])
+
+  inst lfosc : ocdb/epson/FC-135/component
+  net (mcu.P0[0] lfosc.p[1])
+  net (mcu.P0[1] lfosc.p[2])
+  val lf-cb = add-xtal-caps(lfosc, gnd)
+  check-oscillator(lfosc, mcu.P0[1], lf-cb)
+
+  inst hfosc : ocdb/epson/TSX-3225/component(32.0e6)
+  net (mcu.XC1 hfosc.p[1])
+  net (mcu.XC2 hfosc.p[2])
+  val hf-cb = add-xtal-caps(hfosc, gnd)
+  check-oscillator(hfosc, mcu.XC2, hf-cb)
 
 
   

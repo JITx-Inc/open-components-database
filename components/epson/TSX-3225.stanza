@@ -22,17 +22,27 @@ pcb-landpattern xtal-4-3225 :
   layer(Silkscreen("f-silk", Top)) = LineRectangle(3.6, 2.75)
   ref-label()
 
-public pcb-component component :
+public pcb-component component (frequency:Double):
+  val         [mpn-s                        cl        cs        cm        esr   f       df      dl      ] = switch(frequency) :
+    16.0e6 :  ["TSX-3225 16.0000MF09Z-AC0"  9.0e-12   1.31e-12  4.41e-15  60.0  16.0e6  10.0e-6 100.0e-6]
+    24.0e6 :  ["TSX-3225 24.0000MF10Z-C3"   18.0e-12  1.31e-12  4.41e-15  40.0  24.0e6  10.0e-6 100.0e-6]
+    25.0e6 :  ["TSX-3225 25.0000MF20X-AJ3"  8.0e-12   1.31e-12  4.41e-15  40.0  25.0e6  10.0e-6 100.0e-6]
+    26.0e6 :  ["TSX-3225 26.0000MF09Z-AC3"  9.0e-12   1.31e-12  4.41e-15  40.0  26.0e6  10.0e-6 100.0e-6]
+    32.0e6 :  ["TSX-3225 32.0000MF10Z-W6"   12.0e-12  1.31e-12  4.41e-15  40.0  32.0e6  10.0e-6 100.0e-6]
+
   manufacturer = "Epson"
-  description = "MHz Range Crystal"
-  mpn = "TSX-3225 24.0000MF20G-AC3"
+  description = "RF reference MHz Range Crystal"
+  mpn = mpn-s
 
 ; Use unified generator to create pins
-  port p : pin[1 through 4]
+  port p : pin[[1 2]]
+  pin gnd
 
   val sym = crystal-sym(2)
-  symbol = sym(p[1] => sym.p[1], p[2] => sym.g[1], p[3] => sym.p[2], p[4] => sym.g[2])
-  landpattern = xtal-4-3225(p[1] => xtal-4-3225.p[1], p[2] => xtal-4-3225.p[2], p[3] => xtal-4-3225.p[3], p[4] => xtal-4-3225.p[4])
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2], gnd => sym.gnd)
+  landpattern = xtal-4-3225(p[1] => xtal-4-3225.p[1], p[2] => xtal-4-3225.p[3], gnd => xtal-4-3225.p[2], gnd => xtal-4-3225.p[4])
+
+  property(self.crystal-resonator) = ocdb/property-structs/CrystalResonator(cl, cs, cm, esr, f, df * f, dl)
 
 public pcb-module module :
-  inst i : component
+  inst i : ocdb/epson/TSX-3225/component(32.0e6)
