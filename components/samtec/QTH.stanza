@@ -1,0 +1,100 @@
+#use-added-syntax(jitx)
+defpackage ocdb/samtec/QTH :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+public pcb-component component (n-row:Int) :
+  manufacturer = "Samtec"
+  mpn = to-string("QTH-0%_-01-L-D-A" % [n-row])
+  val n-gnd = 4 * (n-row / 30) + n-row * 2
+  val banks = n-row / 30
+  pin-properties :
+    [pin:Ref     | pads:Int ...   | side:Dir]
+    for i in 0 to n-row do :
+      [p[2 * i + 1] | 2 * i + 1 | Left]
+      [p[2 * i + 2] | 2 * i + 2 | Right]
+  make-box-symbol()
+  assign-landpattern(samtec-qth-pkg(n-row))
+  reference-prefix = "J"
+
+public pcb-landpattern samtec-qth-pkg (n-row:Int) :
+  ; n - total number of non-ground pins
+  ; A - total package width
+  ; D - distance between alignment holes
+  val [n, A, D] = switch(n-row) :
+    30 : [60, 20.0, 18.48]
+    60 : [120, 40.01, 38.48]
+    90 : [180, 60.01, 58.48]
+    else : fatal("Incorrect Samtec QTH n-row: %_." % [n-row])
+
+  val pin-pad = smd-pad(0.305, 1.45)
+  val g1-pad = smd-pad(2.54, 0.64)
+  val g2-pad = smd-pad(4.7, 0.64)
+
+  val n-bank = n / 60
+  val bank-pitch = 20.003
+  val bank-width = 14.503 ; Unclear why the datasheet doesn't use 0.5*29 = 14.5
+  val ground-width = 16.89
+  val x1 = (- (to-double(n-bank - 1) * bank-pitch + bank-width) / 2.0) ; x coordinate of pin 1
+  val y1 = 3.086 ; y coordinate of pin 1
+  val gx1 = (- (to-double(n-bank - 1) * bank-pitch + ground-width ) / 2.0) ; x coordinate of g1 pin
+  val gx2 = gx1 + 5.271
+  val gx3 = gx2 + 6.35
+  val gx4 = gx3 + 5.271
+  
+  ; Create list of pin locations for a bank with pin 0 at origin
+  val gls = to-list(grid-locs(C, 30, 2, 2.0 * y1, 0.50))
+  val bank-locs = loc(bank-width / 2.0, (- y1), 90.0, FlipX)
+
+  for (b in 0 to n-bank) do :
+    for (i in 0 to 60, l in gls) do :
+      val lc = loc(center(bank-locs * l))
+      pad p[i + b * 60 + 1] : pin-pad at (loc(x1 + bank-pitch * to-double(b), y1) * lc)
+
+  for (b in 0 to n-bank) do :
+    val offset = bank-pitch * to-double(b)
+    pad p[n + 1 + b * 4] : g1-pad at loc(gx1 + offset, 0.0)
+    pad p[n + 2 + b * 4] : g2-pad at loc(gx2 + offset, 0.0)
+    pad p[n + 3 + b * 4] : g2-pad at loc(gx3 + offset, 0.0)
+    pad p[n + 4 + b * 4] : g1-pad at loc(gx4 + offset, 0.0)
+
+  ; alignment holes
+  layer(Cutout()) = Union(
+    symmetric-about-x([
+      Circle(D / 2.0, 2.03, 0.51)
+    ]))
+  
+  layer(Courtyard(Bottom)) = Union(
+    symmetric-about-x([
+      Rectangle(1.1, 1.1, loc(D / 2.0, 2.03))
+    ]))
+  
+  val cyx = A / 2.0 + 0.5 ; maximum x coordinate of courtyard
+  val cyy = 4.0 ; maximum y coordinate of courtyard
+  val bevel = 2.0 ; length of side of bevel in mm
+  
+  val outline = Polygon(
+    symmetric-about-x([
+      Point(0.0, (- cyy))
+      Point(cyx - bevel, (- cyy)),
+      Point(cyx, (- cyy) + bevel),
+      Point(cyx, cyy),
+      Point(0.0, cyy),
+    ])
+  )
+
+  layer(Courtyard(Top)) = outline
+  layer(Silkscreen("f-silk",Top)) = Line(0.2, points(outline))
+   
+  ref-label()

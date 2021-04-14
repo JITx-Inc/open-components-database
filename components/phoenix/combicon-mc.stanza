@@ -1,0 +1,63 @@
+#use-added-syntax(jitx)
+defpackage ocdb/phoenix/combicon-mc :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+public pcb-component component (n:Int):
+  name = "Phoenix screw terminal"
+  manufacturer = "Phoenix"
+  mpn = switch(n) :
+    2 : "1803277"
+    3 : "1803280"
+    4 : "1803293"
+    5 : "1803303"
+    6 : "1803316"
+    7 : "1803329"
+    8 : "1803332"
+    9 : "1803345"
+    10 : "1803358"
+    11 : "1803361"
+    12 : "1803374"
+    13 : "1803387"
+    14 : "1803390"
+    15 : "1803400"
+    16 : "1803413"
+    18 : "1841297"
+    20 : "1841271"
+    else : fatal("Incorrect n-pin for Phoenix Connector %_" % [n])
+    
+  pin-properties :
+    [pin:Ref     | pads:Int ...   | side:Dir]
+    for i in 1 through n-pin do :
+      [p[i] | i | Left]
+  make-box-symbol()
+  assign-landpattern(phoenix-combicon-mc-pkg(n))
+  reference-prefix = "J"
+
+
+pcb-landpattern phoenix-combicon-mc-pkg (n:Int) :
+  val a = 3.81 * to-double(n - 1)
+  val x0 = a / -2.0
+  val y0 = 8.0
+
+  for (i in 0 to n, l in row-locs(W,n,3.81)) do :
+    pad p[i + 1] : pth-pad(0.6) at loc(x0,y0) * l
+
+  val width = a + 5.2
+
+  layer(Courtyard(Top)) = Rectangle(width, 9.2, loc(0.0, 9.2 / 2.0))
+  layer(Courtyard(Bottom)) = Rectangle(a + 2.0, 2.0, loc(0.0, y0))
+  ; layer(board-edge = line(0.0, point(width / -2.0, 0.0), point(width / 2.0, 0.0))
+  
+  ref-label()
