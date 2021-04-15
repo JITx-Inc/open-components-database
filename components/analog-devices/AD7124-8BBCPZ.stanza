@@ -57,7 +57,7 @@ pcb-landpattern cp-32-12 :
 
 public pcb-component component :
 ; left
-  port VBIAS-IOUT-AIN : pin[[0 1 2 3 4 5 6 7 8 9 10 11 12 13]]
+  port VBIAS-IOUT-AIN : pin[14]
   pin REFIN2P-VBIAS-IOUT-AIN14
   pin REFIN2N-VBIAS-IOUT-AIN15
   pin PSW
@@ -128,8 +128,15 @@ public pcb-module module :
   port power : power
   pin gnd
   port spi : spi
+  pin REFIN1+
+  pin REFIN1-
+  port VBIAS-IOUT-AIN : pin[14]
   public inst adc : ocdb/analog-devices/AD7124-8BBCPZ/component
-  net (adc.*cs spi.ss)
+  net (VBIAS-IOUT-AIN, adc.VBIAS-IOUT-AIN)
+ 
+  net (REFIN1+ adc.REFIN1+)
+  net (REFIN1- adc.REFIN1-)
+  net (adc.*CS spi.ss)
   net (adc.SCLK spi.sck)
   net (adc.DIN spi.mosi)
   net (adc.DOUT-RDY spi.miso)
@@ -140,3 +147,30 @@ public pcb-module module :
   bypass-cap-strap(adc.IOVDD, gnd, 0.1e-6)
   bypass-cap-strap(adc.REGCAPD, gnd, 0.1e-6)
   bypass-cap-strap(adc.REGCAPA, gnd, 0.1e-6)
+
+
+public pcb-module rtd-4-wire (nominal-res:Double):
+  port rtd:rtd
+  inst adc : ocdb/analog-devices/AD7124-8BBCPZ/module
+  port spi : spi
+  net (spi, adc.spi)
+  net (adc.VBIAS-IOUT-AIN[0], rtd.P[0])
+  pin gnd
+  net (gnd, adc.gnd)
+  res-strap(adc.VBIAS-IOUT-AIN[1], rtd.P[1], 1.0e3)
+  cap-strap(adc.VBIAS-IOUT-AIN[1], gnd, 0.01e-6)
+  res-strap(adc.VBIAS-IOUT-AIN[2], rtd.N[0], 1.0e3)
+  cap-strap(adc.VBIAS-IOUT-AIN[2], gnd, 0.01e-6)
+  cap-strap(adc.VBIAS-IOUT-AIN[1], adc.VBIAS-IOUT-AIN[2], 0.1e-6)
+
+  val rnom = closest-std-val(300.0, 1.0)
+  res-strap(adc.REFIN1+, rtd.N[1], 1.0e3)
+  inst r-ref : chip-resistor(rnom)
+  net (rtd.N[1], r-ref.p[1])
+  res-strap(adc.REFIN1-, r-ref.p[2], 1.0e3)
+  res-strap(gnd, r-ref.p[2], 250.0)
+
+
+
+
+
