@@ -426,7 +426,7 @@ public defn ethernet-jack ():
     c
 ;<gnd>
 
-; USB device connection via USBA MicroB
+; USB2 device connection via USBA MicroB
 public pcb-module micro-usb-connector :
   port usb-2 : usb-2
   public inst con : ocdb/amphenol/10103594-0001LF/component
@@ -440,6 +440,27 @@ public pcb-module micro-usb-connector :
   net ID (usb-2.id con.ID)
   property(con.VCC.power-supply-pin) = PowerSupplyPin(5.0, 0.5)
 
+; USB2 device connection via USBC connector
+public pcb-module usb2-on-a-usb-c-connector :
+  port usb-2 : usb-2
+  public inst con : ocdb/belfuse/SS-52400-003/component
+
+  net VBUS (usb-2.vbus.vdd con.vbus)
+  net (usb-2.vbus.gnd con.GND)
+
+  net D- (usb-2.data.N con.DN1, con.DN2)
+  net D+ (usb-2.data.P con.DP1, con.DP2)
+
+  ; RC filter connection for chassis gnd
+  res-strap(con.SHIELD, con.GND, 100.0e3)
+  cap-strap(con.SHIELD, con.GND, 0.1e-6)
+
+  ; 5V Downstream USBC device configuration
+  res-strap(con.CC1, con.GND, 5.1e3)
+  res-strap(con.CC2, con.GND, 5.1e3)
+
+  property(con.vbus) = PowerSupplyPin(5.0, 0.5)
+  
 ; Add a tag-connect landing pattern to a processor
 public defn attach-programming-connector (proc:JITXObject, vio:JITXObject, intf:String):
   inside pcb-module:
