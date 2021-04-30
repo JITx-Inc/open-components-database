@@ -1,0 +1,27 @@
+on: [pull_request]
+
+name: Check that esir definitions are valid
+
+jobs:
+  evaluate-macros:
+    name: Evaluate components
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Configure Mike's AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.MIKE_IAM_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.MIKE_IAM_AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-1
+
+      - name: Login to Mike's Amazon ECR
+        id: login-mike-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Evaluate components
+        run: |
+          docker-compose up --exit-code-from jitx-client
