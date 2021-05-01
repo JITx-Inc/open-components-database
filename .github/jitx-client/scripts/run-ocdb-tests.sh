@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
-echo "Searching for components and generating tests..."
-python3.8 scripts/evaluate_components.py
+echo "Searching for pcb objects and generating tests..."
+python3.8 scripts/evaluate_pcb_objects.py
 cd test-evaluate/
-echo "Launching component tests..."
-jitx run-test test/evaluate-components
+echo "Launching pcb object tests..."
+jitx run-test test/evaluate/api
