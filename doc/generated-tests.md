@@ -8,7 +8,7 @@ If no annotation is present, default values used are:
 TYPE_SAMPLE = {
     "Char": '"c"',
     "String": '"hello world"',
-    "Byte": 'to-byte(1)',
+    "Byte": '1Y',
     "Int": '1',
     "Long": '1L',
     "Float": '1.0F',
