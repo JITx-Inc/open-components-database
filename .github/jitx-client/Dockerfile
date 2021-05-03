@@ -5,8 +5,10 @@ FROM 335772445280.dkr.ecr.us-west-1.amazonaws.com/jitx-client:dev
 ENV PATH="${PATH}:/root/.jitx/current/"
 
 WORKDIR /app
+COPY ./install.sh install.sh
+RUN sh install.sh
+
 COPY ./scripts/ scripts/
-RUN sh scripts/install.sh
 
 
 CMD ["/bin/bash", "scripts/run-ocdb-tests.sh"]
