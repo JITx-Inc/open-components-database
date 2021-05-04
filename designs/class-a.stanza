@@ -10,6 +10,7 @@ defpackage ocdb/designs/class-a :
 
   import ocdb/bundles
   import ocdb/generic-components
+  import ocdb/land-patterns
 
 pcb-module class-a-amplifier (r-set:Double) :
   port vin:power
@@ -31,10 +32,33 @@ pcb-module class-a-amplifier (r-set:Double) :
   net (in c.p[1])
   net (vin.gnd r2.p[2] r4.p[2])
 
+; This landpattern is a dummy lp for power-connector
+pcb-landpattern sample-lp :
+  pad p[1] : smd-pad(1.12, 0.96) at loc(-4.57, 2.54, 0.0)
+  pad p[2] : smd-pad(1.12, 0.96) at loc(-4.57, -2.54, 0.0)
+  name = "Sample Landpattern"
+
+; This symbol is a dummy symbol for power-connector
+pcb-symbol sample-sym :
+  name = "Sample Symbol"
+  pin vdd at Point(0.0, -2.54) with :
+    direction = Down
+    length = 0.0
+    number-size = 0.761
+    name-size = 0.761
+  pin gnd at Point(0.0, 2.54) with :
+    direction = Up
+    length = 0.0
+    number-size = 0.761
+    name-size = 0.761
+  layer("foreground") = Rectangle(5.0, 5.0)
+
 pcb-component power-connector (v-out:Double) :
   port src:power
   spice: 
     "[V] {src.vdd} {src.gnd} {v-out}"
+  landpattern = sample-lp(src.vdd => sample-lp.p[1], src.gnd => sample-lp.p[2])
+  symbol = sample-sym(src.vdd => sample-sym.vdd, src.gnd => sample-sym.gnd)
 
 pcb-module demo :
 
@@ -56,8 +80,6 @@ make-default-board(demo, 4, 30.0, 20.0)
 
 ;Export design to Kicad
 ; export-netlist(checks.gnd, "hello-world.cir")
-set-export-board?(false)
-set-export-schematic?(false)
 export-cad()
 
 ; export-netlist(demo.gnd, "ClassA.cir")
