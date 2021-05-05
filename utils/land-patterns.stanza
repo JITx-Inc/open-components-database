@@ -151,6 +151,34 @@ public defn rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
 public defn rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
   rect-pth-pad(C, drill-w, drill-h, pad-w, pad-h)
 
+pcb-pad roundrect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  name = to-string("%_ RoundedRectangle PTH Pad (drill = (%_, %_), pad = (%_, %_, %_))" % [
+           anchor, drill-w, drill-h, pad-w, pad-h, pad-r])
+  type = TH
+  if drill-w != drill-h :
+    fatal("roundrect-pth-pad(): RoundedRectangle holes are not supported")
+  
+  shape = RoundedRectangle(pad-w, pad-h, pad-r)
+  layer(Cutout()) = Circle(anchor, drill-w)
+  layer(SolderMask(Top)) = RoundedRectangle(pad-w, pad-h, pad-r)
+  layer(SolderMask(Bottom)) = RoundedRectangle(pad-w, pad-h, pad-r)
+
+public defn roundrect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  roundrect-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
+
+public defn roundrect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  roundrect-pth-pad(C, drill-w, drill-h, pad-w, pad-h, pad-r)
+
+pcb-pad roundrect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
+  name = to-string("(%_, %_, %_) %_ RoundedRectangle SMD Pad" % [w,h,r,anchor])
+  type = SMD
+  shape = RoundedRectangle(anchor, w, h, r)
+  layer(Paste(Top)) = RoundedRectangle(anchor, w, h, r)
+  layer(SolderMask(Top)) = RoundedRectangle(anchor, w, h, r)
+
+public defn roundrect-smd-pad (w:Double, h:Double, r:Double) :
+  roundrect-smd-pad(C, w, h, r)
+
 public pcb-landpattern non-plated-hole-pkg (drill-r:Double, mask-r:Double) :
   layer(Cutout()) = Circle(C, drill-r)
   layer(SolderMask(Top)) = Circle(C, mask-r)
