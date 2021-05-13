@@ -1,0 +1,94 @@
+; Helpers for creating matrices of pads.
+#use-added-syntax(jitx)
+defpackage ocdb/land-patterns/pad-matrix:
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+
+; helpers to generate the lookup table. TODO do this programmatically somehow
+; compute the letter prefix for the nth row of a grid (A, B, C, .... AA, BB, .... ZZZZZZ), etc
+;
+defn nth-symbol (n:Int):
+  val letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  val buf = StringBuffer()
+  print(buf, "`")
+  for _ in 0 through (n / 26) do:
+    print(buf, letters[n % 26])
+  to-string(buf)
+
+; Helper to create BGA pad names (A[1], B[2], ... ZZZ[3], etc)
+public defn bga-pad-name (row:Int, col:Int) -> Ref:
+  Ref(nth-symbol(row))[col + 1]
+
+; Helper to create a generic pad name (p, p[1], p[2], etc)
+public defn generic-pad-name (index:False|Int) -> Ref:
+  match(index):
+    (_:False): Ref("p")
+    (i:Int): Ref("p")[i + 1]
+
+; generates a pair of columns of pads
+; p[1]            p[num-pads * 2]
+; p[2]            p[num-pads * 2 - 1]
+; ...             ... 
+; p[num-pads]   p[num-pads + 1]
+public defn two-column-pads (
+  pad-index-offset: Int,  ; index offset of the first pad
+  num-pads: Int,          ; number of pads in the columns
+  x-position: Double,     ; x position of the first pad (top left)
+  y-position: Double,     ; y position of the first pad (top right)
+  row-spacing: Double,    ; spacing between the rows    (vertical)
+  column-spacing: Double, ; spacing between the columns (horizontal)
+  make-pad: () -> JITXDef, ; function that genereates the pad itself
+) -> False:
+  pad-matrix(
+    Point(x-position, y-position),
+    2, 
+    num-pads, 
+    row-spacing,
+    column-spacing,
+    fn (r:Int, c:Int) -> False|JITXDef:
+      make-pad()
+    fn (r:Int, c:Int) -> Ref:
+      generic-pad-name(r when c == 0 else num-pads - r)
+  )
+
+; Generate a dense matrix of pads. Pads will be indexed as p[row * ]
+public defn pad-matrix (
+  num-rows:Int,            ; Number of rows of the matrix
+  num-columns:Int,         ; Number of columns of the matrix
+  row-spacing:Double,      ; Spacing of the rows of the matrix (vertical spacing of pads)
+  column-spacing:Double,   ; Spacing of the columns of the matrix (horizontal spacing of pads)
+  make-pad: () -> JITXDef, ; pad constructor
+): 
+  pad-matrix(
+    Point(0.0, 0.0),
+    num-rows,
+    num-columns,
+    row-spacing, 
+    column-spacing,
+    fn (r, c): make-pad(),
+    bga-pad-name
+  )
+
+; A pad matrix is a 2 dimension grid of pads with uniform spacing between rows and columns. 
+; Pad naming and generation are generic (you must supply functions to create them), but the
+; pad generation may be optional.
+public defn pad-matrix ( 
+  pad-1-location: Point,
+  num-rows:    Int,       ; number of rows of the matrix  TODO convert to Dims/IntDims
+  num-columns: Int,       ; number of columns of the matrix
+  row-spacing: Double,    ; spacing between rows TODO convert to Dims/DoubleDims
+  column-spacing: Double, ; spacing between columns
+  make-pad: (Int, Int) -> False|JITXDef, ; function to generate the pad based on row/column indices
+  pad-name: (Int, Int) -> Ref,
+):
+  inside pcb-landpattern:
+    for row in 0 to num-rows do:
+      for column in 0 to num-columns do:
+        val pad? = make-pad(row, column)
+        match(pad?:Pad): ; todo, this can silently fail if you pass in something that doesn't return a Pad
+          val [drow, dcol] = [to-double(row), to-double(column)]
+          val xrc = x(pad-1-location) + column-spacing * drow
+          val yrc = y(pad-1-location) + row-spacing * dcol
+          pad (pad-name(row, column)): pad? at loc(xrc, yrc)
