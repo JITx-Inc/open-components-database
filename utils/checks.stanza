@@ -29,6 +29,7 @@ public defn check-design (module:JITXObject):
 public pcb-check io (module:JITXObject) :
   val pins = to-tuple(seq-cat(pins, component-instances(module)))
   var net-pins = []
+  ; Refactor to use net introspection
   for p1 in pins do :
     ; Look for Digital inputs
     if (has-property?(p1.digital-output) or has-property?(p1.digital-io)) :
@@ -36,80 +37,53 @@ public pcb-check io (module:JITXObject) :
       net-pins = to-tuple(filter({connected?([p1, _])}, pins))
       val out-pins = to-tuple(filter({has-property?(_.digital-output)}, net-pins))
       val io-pins  = to-tuple(filter({has-property?(_.digital-io)}, net-pins))
-      val in-pins  = to-tuple(filter({has-property?(_.digital-input)}, net-pins))
-      if length(out-pins) == 1 :
-        val out-p = driver(property(out-pins[0].digital-output))
+      ; val in-pins  = to-tuple(filter({has-property?(_.digital-input)}, net-pins))
+
+      ; Check outputs against every pin
+      for out-p in cat(out-pins, io-pins) do :
         if (out-p is CMOSOutput or out-p is TTLOutput) :
-          for inp in in-pins do :
-            check-single-push-pull-levels(out-pins[0], inp)
-          for io in io-pins do :
-            check-single-push-pull-levels(out-pins[0], io)
-      else if length(io-pins) == 1 :
-        val out-p = driver(property(io-pins[0].digital-output))
-        if (out-p is CMOSOutput or out-p is TTLOutput) :
-          for inp in in-pins do :
-            check-single-push-pull-levels(io-pins[0], inp)
-      else if (empty?(in-pins) and empty?(out-pins)) :
-        val out-p = driver(property(io-pins[0].digital-output))
-        if (out-p is CMOSOutput or out-p is TTLOutput) :
-          for io in io-pins do :
-            check-single-push-pull-levels(io-pins[0], io)
-      ; TODO: Handle multi-output/multi IO nets
+          for in-p in net-pins do :
+            check-single-push-pull-levels(out-p, inp)
+        if out-p is OpenCollector do :
+
+      
+
+
 ; Checks two push-pull digital logic pins, at least one of which can output
 public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
-  
+  println(ref(out-p))
   var o 
   if has-property?(out-p.digital-output) : 
-   o = driver(property(out-p.digital-output))
+   o = property(out-p.digital-output)
   else if has-property?(out-p.digital-io) : 
-   o = driver(property(out-p.digital-io))
-
-  #CHECK((o is CMOSOutput) or (o is TTLOutput))
+   o = property(out-p.digital-io)
+  #CHECK((driver(o) is CMOSOutput) or (driver(o) is TTLOutput))
   ; If in-p is just an input, check output against input
   if has-property?(in-p.digital-input) :
     val [vih vil] = [vih(property(in-p.digital-input)) vil(property(in-p.digital-input))]
-    #CHECK(min(voh(o)) > vih)
-    #CHECK(max(vol(o)) < vil)
+    #CHECK(connected?[gnd-pin(o) gnd-pin(property(in-p.digital-input))])
+    #CHECK(min(voh(driver(o))) > vih)
+    #CHECK(max(vol(driver(o))) < vil)
     if has-property?(in-p.generic-pin):
-      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(o)))
+      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(driver(o))))
   else if has-property?(in-p.digital-io):
+    #CHECK(connected?[gnd-pin(o) gnd-pin(property(in-p.digital-io))])
     val i = driver(property(in-p.digital-io))
     #CHECK((i is CMOSOutput) or (i is TTLOutput))
     val [vih vil] = [vih(property(in-p.digital-io)) vil(property(in-p.digital-io))]
-    #CHECK(min(voh(o)) > vih)
-    #CHECK(max(vol(o)) < vil)
+    #CHECK(min(voh(driver(o))) > vih)
+    #CHECK(max(vol(driver(o))) < vil)
     if has-property?(out-p.digital-io):
       #CHECK(min(voh(i)) > vih(property(out-p.digital-io)))
       #CHECK(max(vol(i)) < vil(property(out-p.digital-io)))
     if has-property?(in-p.generic-pin):
-      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(o)))
+      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(driver(o))))
     if has-property?(out-p.generic-pin):
       #CHECK(contains?(max-voltage(property(out-p.generic-pin)), i))
+  else if has-property?(in-p.digital-output):
+    #CHECK(tristatable(driver(o)))
+    #CHECK(tristateable(property(in-p.digital-output)))
 
-;   for n in nets(self) do :
-;     ; Check compatibility between two single-ended logic pins (bi directional checks)
-;     if (length(refs(n))  == 2) and all?(has-property?{_.digital-io}, refs(n)) : 
-;       val p = refs(n)
-;       if property(p[0].type) == "io" and 
-;          property(p[1].type) == "io" :
-;         #CHECK(property(p[0].vOH) >= property(p[1].vIH))
-;         #CHECK(property(p[0].vOH) <= property(p[1].rated-voltage)[1])
-;         #CHECK(property(p[0].vOL) <= property(p[1].vIL))
-;         #CHECK(property(p[0].vOL) >= property(p[1].rated-voltage)[0])
-;         #CHECK(property(p[1].vOH) >= property(p[0].vIH))
-;         #CHECK(property(p[1].vOH) <= property(p[0].rated-voltage)[1])
-;         #CHECK(property(p[1].vOL) <= property(p[0].vIL))
-;         #CHECK(property(p[1].vOL) >= property(p[0].rated-voltage)[0])
-;       else :
-;         println("Invalid logic connection between: %_ and %_" % [property(p[0].type) property(p[1].type)])
-;         #CHECK(false)
-;     ; Check compatibility between lvds pairs (bi directional checks)
-;     if (length(refs(n))  == 2) and all?(has-property?{_.lvds}, refs(n)) : 
-;       val p = refs(n)
-;       #CHECK(property(p[0].vo-cm)[2]   <= property(p[1].vi-cm)[2])
-;       #CHECK(property(p[0].vo-diff)[0] >= property(p[1].vi-diff)[0])
-;       #CHECK(property(p[1].vo-cm)[2]   <= property(p[0].vi-cm)[2])
-;       #CHECK(property(p[1].vo-diff)[0] >= property(p[0].vi-diff)[0])
 
 public pcb-check connected (p:JITXObject|Tuple<JITXObject>) :
   #CHECK(connected?(p))

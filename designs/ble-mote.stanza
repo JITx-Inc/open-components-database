@@ -68,7 +68,7 @@ pcb-module sensor-mote :
   place(ant) at loc(9.0, 5.0, -90.0) on Top
 
   ; Use a connect statement to interface USB-2 to UART
-  connect-ft232(protected-usb, proc.uart)
+  val cp2105 = connect-cp2105(protected-usb, proc.uart) as JITXObject
 
   ; Add a humidty sensor, connect over i2c, add pullups.
   public inst hum : ocdb/texas-instruments/HDC1080/module
@@ -90,6 +90,7 @@ pcb-module sensor-mote :
 
   ; Connect power to proc and sensors
   net (hum.power, particle-counter.vin-mcu, proc.power, ldo.vout)
+  net (proc.power.vdd, cp2105.vio)
   net (protected-usb.vbus particle-counter.vin)
 
   ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
@@ -123,14 +124,17 @@ set-design("ble-mote")
 
 ; Run a function to programmatically calculate voltages on rails
 var sensor-mote* = transform-module(propagate-rail-voltage, sensor-mote)
+set-main-module(sensor-mote*)
 sensor-mote* = run-evals(sensor-mote*)
 sensor-mote* = transform-module(propagate-rail-voltage, sensor-mote*)
 sensor-mote* = run-evals(sensor-mote*)
+val assigned-pins = assign-pins()
+sensor-mote* = run-evals(assigned-pins)
+set-main-module(sensor-mote*)
 
 ; Configure design to have a default 4-layer stackup and design rules.
 make-default-board(sensor-mote*, 4, 30.0, 18.0)
 
-run-checks("BLE-MOTE-CHECKS.txt")
 ; Show the Schematic and PCB for the design
 view-board()
 view-schematic()
