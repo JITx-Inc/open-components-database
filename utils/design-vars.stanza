@@ -35,11 +35,39 @@ public defenum DesignConstructionType:
   Rigid
   Flex
 
-; The application domain of the design (consumer, automative, aerospace)
-public defenum DesignApplicationType:
-  Consumer,
-  Automotive,
-;   Aerospace
+; The rating of the design or part
+; Should this be a global configuration?
+public defenum ComponentRating:
+  RatingAEC-Q200, 
+  IPC-X1,
+  IPC-X2,
+  IPC-X3
+  IPC-Y1,
+  IPC-Y2,
+  IPC-Y3,
+  IPC-Y4
+
+public defn component-ratings<?T> (
+  body: () -> ?T, 
+  preferred: ComponentRating
+) -> T:
+  component-ratings(body, preferred, ALLOWED-COMPONENT-RATINGS)
+
+public var PREFERRED-COMPONENT-RATING: False|ComponentRating = false
+public var ALLOWED-COMPONENT-RATINGS: Tuple<ComponentRating> = []
+public defn component-ratings<?T> (
+  body: () -> ?T,
+  preferred:ComponentRating,
+  allowed:Seqable<ComponentRating>
+) -> T:
+  let-var PREFERRED-COMPONENT-RATING = preferred:
+    let-var ALLOWED-COMPONENT-RATINGS = to-tuple(allowed):
+      body()
+public defn component-ratings<?T> (
+  body: () -> ?T,
+  preferred: ComponentRating
+):
+  component-ratings(body, preferred, ALLOWED-COMPONENT-RATINGS)
 
 ; The Design Producability corresponds to the IPC 6011 spec for design producability.
 ; These correspond to tolerances, measurements, assembly and testing or verification 
@@ -49,10 +77,6 @@ public var DESIGN-PRODUCIBILITY: DesignProducability = LevelA
 ; The design construction type refers to the kind of board you are trying to design. 
 ; The options are Rigid() or Flex().
 public var DESIGN-CONSTRUCTION-TYPE: DesignConstructionType = Rigid
-
-; The design application type refers to the domain in which your device will function. 
-; The options are False (none), Consumer(), Automotive(), and Aerospace()
-public var DESIGN-APPLICATION-TYPE: False|DesignApplicationType = false
 
 ; The solder mask expansion variable configures the distance between the soldermask 
 ; and copper layers for pads. It must be positive and may be overridden in generators.
