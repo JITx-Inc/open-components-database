@@ -1,0 +1,127 @@
+defpackage ocdb/land-patterns/pose-arrangement:
+  import core
+  import collections
+  import math
+  import jitx
+  
+defstruct Affine:
+  matrix: [
+    [Double, Double, Double],
+    [Double, Double, Double],
+    [Double, Double, Double]
+  ]
+
+defn Affine () -> Affine:
+  Affine([
+    [1.0, 0.0, 0.0]
+    [0.0, 1.0, 0.0]
+    [0.0, 0.0, 1.0]
+  ])
+
+defn zero () -> Affine:
+    Affine([
+    [0.0, 0.0, 0.0]
+    [0.0, 0.0, 0.0]
+    [0.0, 0.0, 0.0]
+  ])
+
+defn times (a:Affine, b:Affine) -> Affine:
+  val [A, B] = [matrix(a), matrix(b)]
+  val C = Array<Array<Double>>(3)
+  
+  for i in 0 to 3 do:
+    C[i] = Array<Double>(3)
+    for j in 0 to 3 do: 
+      C[i][j] = 0.0
+      for k in 0 to 3 do: 
+        C[i][j] = C[i][j] + A[i][k] * B[k][j]
+  Affine([
+    [C[0][0], C[0][1], C[0][2]]
+    [C[1][0], C[1][1], C[1][2]]
+    [C[2][0], C[2][1], C[2][2]]
+  ])
+
+defn scale (x:Double, y:Double) -> Affine:
+  Affine([
+    [x, 0.0, 0.0]
+    [0.0, y, 0.0]
+    [0.0, 0.0, 1.0]
+  ])
+
+defn flip-x () -> Affine:
+  scale(-1.0, 1.0)
+
+defn flip-y () -> Affine:
+  scale(1.0, -1.0)
+
+defn translate (x:Double, y:Double) -> Affine:
+  Affine([
+    [1.0, 0.0, x]
+    [0.0, 1.0, y]
+    [0.0, 0.0, 1.0]
+  ])
+ 
+defn rotation (degrees:Double) -> Affine:
+  val theta = PI * degrees / 180.0
+  Affine([
+    [cos(theta), -1.0 * sin(theta), 0.0],
+    [sin(theta), cos(theta), 0.0],
+    [0.0, 0.0, 1.0]
+  ])
+
+defn times (p:Point, a:Affine) -> Point:
+  val p1 = Array<Double>(3)
+  p1[0] = x(p)
+  p1[1] = y(p)
+  p1[2] = 1.0
+
+  var p2 = Array<Double>(2)
+  p2[0] = 0.0
+  p2[1] = 0.0
+  p2[2] = 0.0
+
+  val A = matrix(a)
+  for i in 0 to 3 do:
+    for j in 0 to 3 do:
+      p2[i] = p2[i] + p1[j] * A[i][j]
+  Point(p2[0], p2[1])
+
+defn times (p:Pose, a:Affine):
+  sub-center(p, center(p) * a) 
+
+;
+public defstruct PoseArrangement: 
+  locations: Seqable<Pose>,
+
+defn times (a:Affine, p:PoseArrangement) -> PoseArrangement:
+  times(p, a)
+
+defn times (p:PoseArrangement, a:Affine) -> PoseArrangement:
+  PoseArrangement(seq({_ * a}, locations(p)))
+
+public defn translated (p:PoseArrangement, x:Double, y:Double) -> PoseArrangement:
+  PoseArrangement(seq({_ * translate(x, y)}, locations(p)))
+
+public defn scaled (p:PoseArrangement, x:Double, y:Double) -> PoseArrangement: 
+  PoseArrangement(seq({_ * scale(x, y)}, locations(p)))
+
+public defn rotated (p:PoseArrangement, degrees:Double) -> PoseArrangement:
+  PoseArrangement(seq({_ * rotation(degrees)}, locations(p)))
+
+public defn grid (
+  num-rows:Int,
+  num-columns:Int,
+) -> PoseArrangement:
+  PoseArrangement $ 
+    generate<Pose>:
+      for r in 0 to num-rows do:
+        for c in 0 to num-columns do:
+          val x = (to-double(c) / to-double(num-columns))
+          val y = (to-double(r) / to-double(num-columns))
+          yield(loc(x, y))
+
+; Example: create a grid of poses of N x M separated by e 
+defn my-grid (N:Int, M:Int, e:Double) -> PoseArrangement:
+  val width  = to-double(N) * e
+  val length = to-double(M) * e
+  scaled(grid(N, M), width, length)

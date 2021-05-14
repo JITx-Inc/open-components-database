@@ -5,6 +5,7 @@ defpackage ocdb/land-patterns/pad-matrix:
   import collections
   import jitx
   import jitx/commands
+  import ocdb/land-patterns/pose-arrangement
 
 ; helpers to generate the lookup table. TODO do this programmatically somehow
 ; compute the letter prefix for the nth row of a grid (A, B, C, .... AA, BB, .... ZZZZZZ), etc
@@ -12,20 +13,22 @@ defpackage ocdb/land-patterns/pad-matrix:
 defn nth-symbol (n:Int):
   val letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
   val buf = StringBuffer()
-  print(buf, "`")
   for _ in 0 through (n / 26) do:
     print(buf, letters[n % 26])
   to-string(buf)
 
 ; Helper to create BGA pad names (A[1], B[2], ... ZZZ[3], etc)
 public defn bga-pad-name (row:Int, col:Int) -> Ref:
-  Ref(nth-symbol(row))[col + 1]
-
+  val r = Ref(nth-symbol(row))[col + 1]
+  println("ref is: %_" % [r])
+  r
 ; Helper to create a generic pad name (p, p[1], p[2], etc)
 public defn generic-pad-name (index:False|Int) -> Ref:
   match(index):
-    (_:False): Ref("p")
-    (i:Int): Ref("p")[i + 1]
+    (_:False):
+      Ref("p")
+    (i:Int):
+      Ref("p")[i + 1]
 
 ; generates a pair of columns of pads
 ; p[1]            p[num-pads * 2]
@@ -84,11 +87,16 @@ public defn pad-matrix (
   pad-name: (Int, Int) -> Ref,
 ):
   inside pcb-landpattern:
+    val x-offset = 0.5 * to-double(num-columns - 1) * column-spacing
+    val y-offset = 0.5 * to-double(num-rows - 1) * row-spacing
     for row in 0 to num-rows do:
       for column in 0 to num-columns do:
         val pad? = make-pad(row, column)
         match(pad?:Pad): ; todo, this can silently fail if you pass in something that doesn't return a Pad
           val [drow, dcol] = [to-double(row), to-double(column)]
-          val xrc = x(pad-1-location) + column-spacing * drow
-          val yrc = y(pad-1-location) + row-spacing * dcol
+          val xrc = x(pad-1-location) + column-spacing * dcol - x-offset
+          val yrc = y(pad-1-location) - row-spacing * drow + y-offset
           pad (pad-name(row, column)): pad? at loc(xrc, yrc)
+        else:
+          fatal("%_ must be a pad" % [pad?])
+        
