@@ -18,6 +18,12 @@ defn Affine () -> Affine:
     [0.0, 0.0, 1.0]
   ])
 
+defmethod print (o:OutputStream, a:Affine):
+  println(o, "[")
+  for n in 0 to 3 do: 
+    println(IndentedStream(o), "[%,]" % [matrix(a)[n]])
+  println(o, "]")
+
 defn zero () -> Affine:
     Affine([
     [0.0, 0.0, 0.0]
@@ -75,17 +81,17 @@ defn times (p:Point, a:Affine) -> Point:
   p1[1] = y(p)
   p1[2] = 1.0
 
-  var p2 = Array<Double>(2)
+  var p2 = Array<Double>(3)
   p2[0] = 0.0
   p2[1] = 0.0
   p2[2] = 0.0
-
   val A = matrix(a)
   for i in 0 to 3 do:
     for j in 0 to 3 do:
-      p2[i] = p2[i] + p1[j] * A[i][j]
-  Point(p2[0], p2[1])
-
+      p2[i] = p2[i] + p1[i] * A[i][j]
+  val r = Point(p2[0], p2[1])
+  println("[%,] * %_ = %_" % [p1, a, p2])
+  r
 defn times (p:Pose, a:Affine):
   sub-center(p, center(p) * a) 
 
