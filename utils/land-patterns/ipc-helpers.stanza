@@ -244,7 +244,7 @@ public pcb-struct ocdb/land-patterns/ipc-helpers/ComponentTolerance:
 
 ; A single value and its tolerance
 public pcb-struct ocdb/land-patterns/ipc-helpers/SingleTolerance:
-  value:Double, 
+  nominal-value:Double, 
   tolerance:Double, ; TODO with: ensure => non-negative! and less than value
 
 ; A set of manufacturing tolerances
@@ -254,20 +254,20 @@ public pcb-struct ocdb/land-patterns/ipc-helpers/ManufacturerTolerances:
 
 ; Return the minimum value for a value with some tolerance
 public defn min (s:SingleTolerance) -> Double: 
-  value(s) - tolerance(s)
+  nominal-value(s) - tolerance(s)
 
 ; Return the maximum value for a value with some tolerance
 public defn max (s:SingleTolerance) -> Double: 
-  value(s) + tolerance(s)
+  nominal-value(s) + tolerance(s)
 
 ; Find the RMS sum of many tolerances. This operation is non-commutative and non-associative, so 
 ; it should be called once when working with tolerances.
 public defn sum (s:Seqable<SingleTolerance>) -> SingleTolerance:
-  var nom = 0.0
-  var tol = 0.0
+  var nom: Double = 0.0
+  var tol: Double = 0.0
   for t in s do:
-    nom = nom + value(t)
-    tol = tol + tolerance(s) * tolerance(s)
+    nom = nom + nominal-value(t)
+    tol = tol + tolerance(t) * tolerance(t)
   SingleTolerance(nom, sqrt(tol))
 
 ;==============================================================================
@@ -302,15 +302,15 @@ public defn land-pattern-dimensions (
   defn formula (a, b, c) -> Double:
     val F = fabrication(manufacturer-tolerance)
     val P = placement-accuracy(manufacturer-tolerance)
-    sum([SingleTolerance(a, c), SingleTolerance(b, F, SingleTolerance(b, P)])
+    max(sum([SingleTolerance(a, c), SingleTolerance(b, F), SingleTolerance(b, P)]))
 
   val Lmin = y(land-pattern-dims) - length(component-tolerance)
   val Lmax = y(land-pattern-dims) + length(component-tolerance)
   val Smax = Lmax - 2. * (y(lead-dims) - lead-widths(component-tolerance))
-  val Wmin = x(lead-dims) - lead-widths(tolerance)
-  val Xmax = formula(Wmin, side(lead-fillets), width(tolerance)) ; TODO sanity check this. The formula does not make sense.
+  val Wmin = x(lead-dims) - lead-widths(component-tolerance)
+  val Xmax = formula(Wmin, side(lead-fillets), width(component-tolerance)) ; TODO sanity check this. The formula does not make sense.
   val Zmax = formula(Lmin, toe(lead-fillets), length(component-tolerance))
-  val Gmin = formula(Smax, - heel(lead-fillets), lead-widths(component-tolerance))
+  val Gmin = formula(Smax, -1. * heel(lead-fillets), lead-widths(component-tolerance))
 
   [Dims(Xmax, Zmax), Gmin]
 
@@ -328,7 +328,7 @@ public defn land-pattern-dimensions (
     land-pattern-dims, 
     lead-dims, 
     distance-between-lands, 
-    lead-filets,
+    lead-fillets,
     component-tolerances, 
     ManufacturerTolerances(0.0, 0.0)) ; todo: reasonable defaults or pull from design rules
 
