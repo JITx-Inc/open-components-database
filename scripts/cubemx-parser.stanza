@@ -2,20 +2,27 @@
 defpackage ocdb/scripts/cubemx-importer:
   import core
   import collections
+  import jitx
+  import jitx/commands
   import lang-utils
 
+; A helper struct to contain CSV data
 defstruct CSV:
   data: Tuple<Tuple<False|String>>
 
+; lookup row/column data in a parsed CSV
 defn lookup (csv, row:Int, col:Int) -> False|String:
   data(csv)[row][col]
 
+; returns number of rows in CSV
 defn num-rows (csv:CSV) -> Int:
   length(data(csv))
 
+; returns number of columns in CSV
 defn num-cols (csv:CSV) -> Int:
   length(data(csv)[0])
 
+; converts CSV into a table of tables based on columnar entries
 defn by-column (csv:CSV) -> HashTable<String, Tuple<False|String>>:
   to-hashtable<String, Tuple<False|String>> $
     for c in 0 to num-cols(csv) seq:
@@ -23,28 +30,62 @@ defn by-column (csv:CSV) -> HashTable<String, Tuple<False|String>>:
         for r in 1 to num-rows(csv) seq:
           lookup(csv, r, c)
 
+; parse a CSV document
 defn parse-csv (doc:String) -> CSV:
   val lines = split(doc, "\r\n")
   CSV{to-tuple(_)} $
     for line in lines seq:
       to-tuple(seq({false when empty?(_0) else _0}, split(line, ",")))
 
+; Convert a string representation of a pin name into a ref
+defn ref-ify (s:String) -> Ref:
+  ; we assume names begin with a letter, or else we have problems
+  if not letter?(s[0]):
+    fatal("pin name %_ does not begin with a letter" % [s])
+  ; internal helper. Returns the baseref and integer if the value ends in a number, 
+  ; false otherwise
+  defn ends-in-number? (s) -> False|[String, Int]:
+    var ref-end = length(s) - 1
+    while digit?(s[ref-end]) and ref-end > 0:
+      ref-end = ref-end - 1
+    val [start, end] = [s[0 through ref-end], s[(ref-end + 1) to false]]
+    if empty?(end):
+      false
+    else:
+      [start, to-int(end)]
+  ; extract the ref from a string
+  match(ends-in-number?(s)):
+    (_:False): Ref(s)
+    (p:[String, Int]):
+      val [prefix, postfix] = p
+      IndexRef(Ref(prefix), postfix)
+
+; The data we extract from the spreadsheets
 deftype CubeMXData
+; List of names of pins 
 defmulti names (data:CubeMXData) -> Seqable<String>
+; The data associated with a single pin
 defmulti data (data:CubeMXData, name:String) -> HashTable<String, False|String>
+; Position of a pin (its pad name)
 defmulti position-of (data:CubeMXData, name:String) -> String
+; The type of a data pin
 defmulti type-of (data:CubeMXData, name:String) -> String
+; The signal of a data pin, if it has one
 defmulti signal-of? (data:CubeMXData, name:String) -> False|String
+; The label of a pin, if it has one
 defmulti label-of? (data:CubeMXData, name:String) -> False|String
+; List of alternate functions for a pin
 defmulti alternate-functions-of (data:CubeMXData, name:String) -> Seqable<String>
 
+; Printer for debugging
 defmethod print (o:OutputStream, c:CubeMXData):
   for n in names(c) do: 
-    println(o, "pin %_" % [n])
+    println(o, "pin %_" % [ref-ify(n)])
     for kv in filter({value(_) is-not False}, data(c, n)) do:
       println(IndentedStream(o), "%_: %_" % [key(kv), value(kv)])
 
-defn parse-cubemx-csv (csv-path:String):
+; Parse CSV output of CubeMX into a the data structure
+defn parse-cubemx-csv (csv-path:String) -> CubeMXData:
   val tables = by-column(parse-csv(slurp(csv-path)))
   val name-indices = to-hashtable<String, Int> $
     for (entry in tables["Name"], index in 0 to false) seq:
@@ -57,7 +98,6 @@ defn parse-cubemx-csv (csv-path:String):
       to-hashtable<String, False|String> $
         for table in filter({key(_) != "Name"}, tables) seq:
           key(table) => value(table)[name-indices[name]]
-
     defmethod position-of (this, name:String):
       data(this, name)["Position"] as String
     defmethod type-of (this, name:String):
@@ -73,4 +113,15 @@ defn parse-cubemx-csv (csv-path:String):
           (s:String):
             One(s) when prefix?(key(field), "AF") else None()
 
+; Given a CSV file created from CubeMX spreadsheets, generate the
+; supports/requires statements for the referenced pins.
+; public defn stm32-supports-requires (cubemx-csv-path:String):
+;   cubemx-data = parse-cubemx-csv(cubemx-csv-path)
+;   defn data-pin? (name:String):
+;     contains?(["I/O" "Output" "MonoIO"], type-of(cubemx-data, name))
+
+;   inside pcb-component:
+;     val data-pins = filter(data-pin?, names(cubemx-data))
+
 val cube-data = parse-cubemx-csv("STM32MP157FAAx.csv")
+println(cube-data)
