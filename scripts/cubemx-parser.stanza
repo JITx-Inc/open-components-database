@@ -76,6 +76,8 @@ defmulti signal-of? (data:CubeMXData, name:String) -> False|String
 defmulti label-of? (data:CubeMXData, name:String) -> False|String
 ; List of alternate functions for a pin
 defmulti alternate-functions-of (data:CubeMXData, name:String) -> Seqable<String>
+; List all functions for a pin 
+defmulti functions-of (data:CubeMXData, name:String) -> Seqable<String>
 
 ; Printer for debugging
 defmethod print (o:OutputStream, c:CubeMXData):
@@ -112,16 +114,34 @@ defn parse-cubemx-csv (csv-path:String) -> CubeMXData:
           (_:False): None()
           (s:String):
             One(s) when prefix?(key(field), "AF") else None()
-
+    defmethod functions-of (this, name:String):
+      generate<String>:
+        call?(yield{_}, signal-of?(this, name))
+        do(yield, alternate-functions-of(this, name))
+    
 ; Given a CSV file created from CubeMX spreadsheets, generate the
 ; supports/requires statements for the referenced pins.
-; public defn stm32-supports-requires (cubemx-csv-path:String):
-;   cubemx-data = parse-cubemx-csv(cubemx-csv-path)
-;   defn data-pin? (name:String):
-;     contains?(["I/O" "Output" "MonoIO"], type-of(cubemx-data, name))
+public defn generate-stm32-supports (cubemx-csv-path:String) -> String
+  val cubemx-data = parse-cubemx-csv(cubemx-csv-path)
+  val buf = StringBuffer()
 
-;   inside pcb-component:
-;     val data-pins = filter(data-pin?, names(cubemx-data))
+  defn print-bundle (name:String):
+    println(buf, "pcb-bundle %_: pin p")
 
+  defn print-self-supports (name:String, pin-name:Ref):
+    println(buf, "supports %_:" % [name])
+    println(IndentedStream(buf), "p => %_" % [pin-name])
+  
+  val bundle-defined? = Set<String>()
+  val self-supports = to-tuple{cat-all(_)} $
+    for pin-name in names(cubemx-data) seq 
+      for function in functions-of(cumemx-data, pin-name) seq:
+        if not bundle-defined?[function] do:
+          add(bundle-defined?, function)
+        [pin-name, function]
+
+  do(print-bundle, bundle-defined)
+  do(print-self-supports{_0[0], _0[1]}, self-supports)
+  
 val cube-data = parse-cubemx-csv("STM32MP157FAAx.csv")
 println(cube-data)
