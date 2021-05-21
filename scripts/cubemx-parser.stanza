@@ -4,39 +4,96 @@ defpackage ocdb/scripts/cubemx-importer:
   import collections
   import jitx
   import jitx/commands
+  import jitx/xml
   import lang-utils
+  import ocdb/bundles
 
-; A helper struct to contain CSV data
-defstruct CSV:
-  data: Tuple<Tuple<False|String>>
+;==============================================================================
+;================================== IR ========================================
+;==============================================================================
 
-; lookup row/column data in a parsed CSV
-defn lookup (csv, row:Int, col:Int) -> False|String:
-  data(csv)[row][col]
+; A pin defined by CubeMX XML
+public defstruct Stm32Pin:
+  pin-name:Ref,     ; name of the pin
+  pad-name:String,  ; name of the corresponding pad
+  pin-type:String,  ; the type of pin
+  signals:Tuple<String>, ; supported signals
 
-; returns number of rows in CSV
-defn num-rows (csv:CSV) -> Int:
-  length(data(csv))
+; An IP block defined by CubeMX XML
+public defstruct Stm32Ip:
+  name:String,
+  instance-name:String,
 
-; returns number of columns in CSV
-defn num-cols (csv:CSV) -> Int:
-  length(data(csv)[0])
+; A microcontroller defined by CubeMX XML
+public defstruct Stm32MCU:
+  family:String,  ; mcu family
+  package:String, ; package for this mcu
+  ref:String,     ; reference designator
+  pins:Tuple<Stm32Pin> ; pins of the mcu
+  ip: Tuple<Stm32Ip>   ; ip blocks of the mcu
 
-; converts CSV into a table of tables based on columnar entries
-defn by-column (csv:CSV) -> HashTable<String, Tuple<False|String>>:
-  to-hashtable<String, Tuple<False|String>> $
-    for c in 0 to num-cols(csv) seq:
-      lookup(csv, 0, c) as String => to-tuple $
-        for r in 1 to num-rows(csv) seq:
-          lookup(csv, r, c)
+;==============================================================================
+;=============================== Parsing ======================================
+;==============================================================================
+public defn Stm32Pin (elt:Elt):
+  Stm32Pin(
+    ref-ify(get-String(elt, `Name))
+    get-String(elt, `Position)
+    get-String(elt, `Type)
+    to-tuple(seq(get-String{_, `Name}, get-children(elt, `Signal)))
+  )
 
-; parse a CSV document
-defn parse-csv (doc:String) -> CSV:
-  val lines = split(doc, "\r\n")
-  CSV{to-tuple(_)} $
-    for line in lines seq:
-      to-tuple(seq({false when empty?(_0) else _0}, split(line, ",")))
+public defn Stm32Ip (elt:Elt):
+  Stm32Ip(
+    get-String(elt, `Name)
+    get-String(elt, `InstanceName)
+  )
 
+public defn Stm32MCU (elt:Elt):
+  Stm32MCU(
+    get-String(elt, `Family)
+    get-String(elt, `Package)
+    get-String(elt, `RefName)
+    to-tuple(seq(Stm32Pin, get-children(elt, `Pin)))
+    to-tuple(seq(Stm32Ip, get-children(elt, `IP)))
+  )
+
+public defn Stm32MCU (xml-path:String):
+  Stm32MCU(read-xml-file(xml-path))
+
+;==============================================================================
+;============================== Printers ======================================
+;==============================================================================
+defmethod print (o:OutputStream, p:Stm32Pin):
+  println(o, "pin:")
+  val os = IndentedStream(o)
+  println(os, "pin-name: %_" % [pin-name(p)])
+  println(os, "pad-name: %_" % [pad-name(p)])
+  println(os, "pad-type: %_" % [pin-type(p)])
+  if not empty?(signals(p)):
+    println(os, "signals:")
+    do(println{IndentedStream(os), _}, signals(p))
+
+defmethod print (o:OutputStream, i:Stm32Ip):
+  println(o, "ip:")
+  val os = IndentedStream(o)
+  println(os, "name: %_" % [name(i)])
+  println(os, "instance-name: %_" % [instance-name(i)])
+
+defmethod print (o:OutputStream, s:Stm32MCU):
+  println(o, "mcu:")
+  val os = IndentedStream(o)
+  println(os, "family: %_" % [family(s)])
+  println(os, "package: %_" % [package(s)])
+  println(os, "ref: %_" % [ref(s)])
+  println(os, "pins:")
+  do(print{IndentedStream(os), _}, pins(s))
+  println(os, "ip:")
+  do(print{IndentedStream(os), _}, ip(s))
+
+;==============================================================================
+;=============================== Helpers ======================================
+;==============================================================================
 ; Convert a string representation of a pin name into a ref
 defn ref-ify (s:String) -> Ref:
   ; we assume names begin with a letter, or else we have problems
@@ -60,88 +117,56 @@ defn ref-ify (s:String) -> Ref:
       val [prefix, postfix] = p
       IndexRef(Ref(prefix), postfix)
 
-; The data we extract from the spreadsheets
-deftype CubeMXData
-; List of names of pins 
-defmulti names (data:CubeMXData) -> Seqable<String>
-; The data associated with a single pin
-defmulti data (data:CubeMXData, name:String) -> HashTable<String, False|String>
-; Position of a pin (its pad name)
-defmulti position-of (data:CubeMXData, name:String) -> String
-; The type of a data pin
-defmulti type-of (data:CubeMXData, name:String) -> String
-; The signal of a data pin, if it has one
-defmulti signal-of? (data:CubeMXData, name:String) -> False|String
-; The label of a pin, if it has one
-defmulti label-of? (data:CubeMXData, name:String) -> False|String
-; List of alternate functions for a pin
-defmulti alternate-functions-of (data:CubeMXData, name:String) -> Seqable<String>
-; List all functions for a pin 
-defmulti functions-of (data:CubeMXData, name:String) -> Seqable<String>
+;==============================================================================
+;============================== Importer ======================================
+;==============================================================================
+; defn single-pin-bundle (o:OutputStream, bundle-name:String):
+;   println(o, "pcb-bundle %_:" % [bundle-name])
+;   println(IndentedStream(o), "pin p")
 
-; Printer for debugging
-defmethod print (o:OutputStream, c:CubeMXData):
-  for n in names(c) do: 
-    println(o, "pin %_" % [ref-ify(n)])
-    for kv in filter({value(_) is-not False}, data(c, n)) do:
-      println(IndentedStream(o), "%_: %_" % [key(kv), value(kv)])
+defn split-at-first (s:String, c:Char) -> False|[String, String]:
+  match(index-of-char(s, c)):
+    (i:Int):
+      [s[0 to i], s[min(i + 1, length(s) - 1) to false]]
+    (_:False): false
 
-; Parse CSV output of CubeMX into a the data structure
-defn parse-cubemx-csv (csv-path:String) -> CubeMXData:
-  val tables = by-column(parse-csv(slurp(csv-path)))
-  val name-indices = to-hashtable<String, Int> $
-    for (entry in tables["Name"], index in 0 to false) seq:
-      entry as String => index
+public defstruct Stm32Supports?:
+  bundle:JITXDef,
+  pins:Tuple<KeyValue<Ref, String>>
+
+public defn print-supports (mcu:Stm32MCU):
+  ; bundles we care about are:
+  ; - i2c
+  ; - spi
+  ; - uart
+  ; - gpio
+
+  ; instance-name -> ip-name
+  val bundles = [
+    adc, 
+    uart,
+    spi,
+    i2c,
+    gpio,
+  ]
+  val bundle-names = to-tuple(seq(to-string{name(_)}, bundles))
+  val ip-instance-table = to-hashtable<String, JITXDef> $ 
+    for ip-block in ip(mcu) seq?:
+      match(find(fn (b:JITXDef): name(b) == lower-case(name(ip-block)), bundles)):
+        (_:False): None()
+        (b:JITXDef):
+          One(instance-name(ip-block) => b)
   
-  new CubeMXData:
-    defmethod names (this):
-      seq({_ as String}, tables["Name"])
-    defmethod data (this, name:String):
-      to-hashtable<String, False|String> $
-        for table in filter({key(_) != "Name"}, tables) seq:
-          key(table) => value(table)[name-indices[name]]
-    defmethod position-of (this, name:String):
-      data(this, name)["Position"] as String
-    defmethod type-of (this, name:String):
-      data(this, name)["Type"] as String
-    defmethod signal-of? (this, name:String):
-      data(this, name)["Signal"]
-    defmethod label-of? (this, name:String):
-      data(this, name)["Label"]
-    defmethod alternate-functions-of (this, name:String):
-      for field in data(this, name) seq?:
-        match(value(field)):
-          (_:False): None()
-          (s:String):
-            One(s) when prefix?(key(field), "AF") else None()
-    defmethod functions-of (this, name:String):
-      generate<String>:
-        call?(yield{_}, signal-of?(this, name))
-        do(yield, alternate-functions-of(this, name))
-    
-; Given a CSV file created from CubeMX spreadsheets, generate the
-; supports/requires statements for the referenced pins.
-public defn generate-stm32-supports (cubemx-csv-path:String) -> String
-  val cubemx-data = parse-cubemx-csv(cubemx-csv-path)
-  val buf = StringBuffer()
-
-  defn print-bundle (name:String):
-    println(buf, "pcb-bundle %_: pin p")
-
-  defn print-self-supports (name:String, pin-name:Ref):
-    println(buf, "supports %_:" % [name])
-    println(IndentedStream(buf), "p => %_" % [pin-name])
-  
-  val bundle-defined? = Set<String>()
-  val self-supports = to-tuple{cat-all(_)} $
-    for pin-name in names(cubemx-data) seq 
-      for function in functions-of(cumemx-data, pin-name) seq:
-        if not bundle-defined?[function] do:
-          add(bundle-defined?, function)
-        [pin-name, function]
-
-  do(print-bundle, bundle-defined)
-  do(print-self-supports{_0[0], _0[1]}, self-supports)
-  
-val cube-data = parse-cubemx-csv("STM32MP157FAAx.csv")
-println(cube-data)
+  for instance in ip-instance-table do:
+    val related-pins = to-tuple $ 
+      for pin in pins(mcu) seq?:
+        label<Maybe<KeyValue<Ref, String>>> break:
+          for signal in signals(pin) do:
+            val ss = split-at-first(signal, '_')
+            match(ss:[String, String]):
+              val [inst, sig] = ss
+              if inst == key(instance):
+                break(One(pin-name(pin) => sig))
+          None()
+    println("%_: [%,]" % [key(instance), related-pins])
+  do(println{"%_ => %_" % [key(_0), name(value(_0))]}, ip-instance-table)
