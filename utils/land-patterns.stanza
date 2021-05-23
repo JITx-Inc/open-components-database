@@ -7,8 +7,12 @@ defpackage ocdb/land-patterns :
   import jitx/fonts
   import jitx/commands
 
-; ====== Reference Label Helpers ===============================================
+; ====== Argument constraint Helpers ===========================================
+defn ensure-even-positive! (value: Int, name: String):
+  if value < 2 or value % 2 == 1:
+    fatal("%_ only supports a positive even number of pins." % [name])
 
+; ====== Reference Label Helpers ===============================================
 public defn ref-label (x:Double, y:Double, a:Anchor) :
   inside pcb-landpattern :
     layer(Silkscreen("values", Top)) = Text(">REF", 0.7056, a, loc(x,y))
@@ -147,6 +151,32 @@ public defn rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
 public defn rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
   rect-pth-pad(C, drill-w, drill-h, pad-w, pad-h)
 
+pcb-pad roundrect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  name = to-string("%_ RoundedRectangle PTH Pad (drill = (%_, %_), pad = (%_, %_, %_))" % [
+           anchor, drill-w, drill-h, pad-w, pad-h, pad-r])
+  type = TH
+  shape = RoundedRectangle(pad-w, pad-h, pad-r)
+  layer(Cutout()) = Circle(anchor, drill-w) when drill-w == drill-h else
+                    Capsule(anchor, drill-w, drill-h)
+  layer(SolderMask(Top)) = RoundedRectangle(pad-w, pad-h, pad-r)
+  layer(SolderMask(Bottom)) = RoundedRectangle(pad-w, pad-h, pad-r)
+
+public defn roundrect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  roundrect-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
+
+public defn roundrect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  roundrect-pth-pad(C, drill-w, drill-h, pad-w, pad-h, pad-r)
+
+pcb-pad roundrect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
+  name = to-string("(%_, %_, %_) %_ RoundedRectangle SMD Pad" % [w,h,r,anchor])
+  type = SMD
+  shape = RoundedRectangle(anchor, w, h, r)
+  layer(Paste(Top)) = RoundedRectangle(anchor, w, h, r)
+  layer(SolderMask(Top)) = RoundedRectangle(anchor, w, h, r)
+
+public defn roundrect-smd-pad (w:Double, h:Double, r:Double) :
+  roundrect-smd-pad(C, w, h, r)
+
 public pcb-landpattern non-plated-hole-pkg (drill-r:Double, mask-r:Double) :
   layer(Cutout()) = Circle(C, drill-r)
   layer(SolderMask(Top)) = Circle(C, mask-r)
@@ -276,9 +306,15 @@ public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|Fals
     external-names = ([part-name])
     ref-label()
 
+;<test>
+part-name: "008004" "006003" "01007" "5040" ; last 3 are made up
+<test>
 public defn make-ipc-two-pin-landpattern (part-name:String) :
   make-ipc-two-pin-landpattern(part-name, true, false)
 
+;<test>
+part-name: "01005"
+<test>
 public pcb-landpattern ipc-two-pin-landpattern (part-name:String) :
   make-ipc-two-pin-landpattern(part-name, true, false)
   ref-label()
@@ -287,11 +323,16 @@ public pcb-landpattern ipc-two-pin-landpattern (part-name:String, pol?:True|Fals
   make-ipc-two-pin-landpattern(part-name, true, pol?)
   ref-label()
 
+;<test>
+part-name: "1210"
+<test>
 public pcb-landpattern ipc-two-pin-pol-landpattern (part-name:String) :
   make-ipc-two-pin-landpattern(part-name, true, true)
   ref-label()
 
 public defn make-soic127p-landpattern (n:Int, lead-span:Double) :
+  ensure-even-positive!(n, "make-soic127p-landpattern")
+
   inside pcb-landpattern :  
 
     val pin-pitch = 1.27
@@ -322,6 +363,9 @@ public defn make-soic127p-landpattern (n:Int, lead-span:Double) :
 public defn make-soic127p-landpattern (n:Int) :
   make-soic127p-landpattern(n, 6.0)
 
+;<test>
+n: even positive
+<test>
 public pcb-landpattern soic127p-landpattern (n:Int) :
   make-soic127p-landpattern(n, 6.0)
 
@@ -331,6 +375,8 @@ public pcb-landpattern soic127p-landpattern (n:Int, hs:[Double, Double]) :
 
 ; See SOP_JEDEC_MO-153F.pdf for reference
 public defn make-sop65-landpattern (n:Int, lead-span:Double) :
+  ensure-even-positive!(n, "make-sop65-landpattern")
+
   inside pcb-landpattern :
 
     val pin-pitch = 0.65
@@ -360,6 +406,10 @@ public defn make-sop65-landpattern (n:Int, lead-span:Double) :
 
 public pcb-landpattern sop65-landpattern (n:Int, lead-span:Double) :
   make-sop65-landpattern(n, lead-span)
+
+;<test>
+n: even positive
+<test>
 public pcb-landpattern sop65-landpattern (n:Int) :
   make-sop65-landpattern(n, 6.4)
 
