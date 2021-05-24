@@ -6,7 +6,6 @@ defpackage ocdb/scripts/cubemx-importer:
   import jitx/commands
   import jitx/xml
   import lang-utils
-  import ocdb/bundles
 
 ;==============================================================================
 ;================================== IR ========================================
@@ -32,6 +31,10 @@ public defstruct Stm32MCU:
   pins:Tuple<Stm32Pin> ; pins of the mcu
   ip: Tuple<Stm32Ip>   ; ip blocks of the mcu
 
+; An option for GPIO 
+defstruct GpioOption:
+  gpio:Stm32Pin
+
 ; An option for an SWD port
 defstruct SwdOption:
   swdio:Stm32Pin
@@ -44,26 +47,6 @@ defstruct JtagOption:
   tdo  : Stm32Pin
   tms  : Stm32Pin
   trstn: False|Stm32Pin
-
-; A generic IP block
-defstruct IpBlock:
-  name:String,   ; name of the IP block
-  instances:Int, ; number of instances corresponding to this
-  related-pins:Tuple<[Stm32Pin, Int, String]> ; pins of the mcu that may correspond 
-
-; A bundle generated from an IP block
-defstruct IpBundle:
-  name: String,
-  pins: Tuple<String>,
-
-; An option for assinging to an IP bundle
-defstruct BundleOption:
-  bundle: IpBundle,
-  id: Int,
-  assignments: Tuple<Ref>,
-
-defn name (b:BundleOption) -> String:
-  to-string $ "%_-%_" % [name(bundle(b)), id(b)]
 
 ;==============================================================================
 ;=============================== Parsing ======================================
@@ -127,31 +110,24 @@ defmethod print (o:OutputStream, s:Stm32MCU):
 defmethod print (o:OutputStream, s:SwdOption):
   println(o, "supports swd:")
   val os = IndentedStream(o)
-  println(os, "swd.swdio => self.%_" % [pin-name(swdio(s))])
-  println(os, "swd.swdclk => self.%_" % [pin-name(swclk(s))])
+  println(os, "swdio  => %_" % [pin-name(swdio(s))])
+  println(os, "swdclk => %_" % [pin-name(swclk(s))])
 
 defmethod print (o:OutputStream, j:JtagOption):
   val jtag = "jtag" when trstn(j) is-not False else "jtag-4"
   println(o, "supports %_:" % [jtag])
   val os = IndentedStream(o)
-  println(os, "%_.tck" % [pin-name $ tck(j)])
-  println(os, "%_.tdi" % [pin-name $ tdi(j)])
-  println(os, "%_.tdo" % [pin-name $ tdo(j)])
-  println(os, "%_.tms" % [pin-name $ tms(j)])
+  println(os, "tck => %_" % [pin-name(tck(j))])
+  println(os, "tdi => %_" % [pin-name(tdi(j))])
+  println(os, "tdo => %_" % [pin-name(tdo(j))])
+  println(os, "tms => %_" % [pin-name(tms(j))])
   if jtag == "jtag":
-    println(os, "%_.trstn" % [pin-name $ trstn(j) as Stm32Pin])
+    println(os, "trstn => %_" % [pin-name $ trstn(j) as Stm32Pin])
 
-defmethod print (o:OutputStream, i:IpBundle):
-  println(o, "pcb-bundle %_:" % [name(i)])
+defmethod print (o:OutputStream, opt:GpioOption):
+  println(o, "supports gpio:")
   val os = IndentedStream(o)
-  for p in pins(i) do:
-    println(os, "pin %_" % [p])
-
-defmethod print (o:OutputStream, opt:BundleOption):
-  println(o, "option (%_):" % [name(opt)])
-  val os = IndentedStream(o)
-  for (p in pins(bundle(opt)), a in assignments(opt)) do:
-    println(o, "%_.%_ => self.%_" % [name(bundle(opt)), p, a])
+  println(os, "gpio => %_" % [pin-name(gpio(opt))])
 
 ;==============================================================================
 ;=============================== Helpers ======================================
@@ -195,20 +171,6 @@ defn ref-ify (s:String) -> Ref:
   ; Launch!
   driver()
 
-; split a string along a separator, returning false if it could not be found.
-defn split-at-first? (s:String, c:Char) -> False|[String, String]:
-  match(index-of-char(s, c)):
-    (i:Int):
-      [s[0 to i], s[min(i + 1, length(s) - 1) to false]]
-    (_:False): false
-
-defn split-at-first! (s:String, c:Char) -> [String, String]:
-  split-at-first?(s, c) as [String, String]
-
-public defstruct Stm32Supports?:
-  bundle:JITXDef,
-  pins:Tuple<KeyValue<Ref, String>>
-
 ; find pins with a signal
 public defn pins-with-signal (pins:Tuple<Stm32Pin>, signal:String):
   pins-with-signal(pins, {_ == signal})
@@ -225,11 +187,8 @@ public defn relevant-signals (pin:Stm32Pin, signal:String):
   filter(prefix?{_, signal}, signals(pin))
 
 ;==============================================================================
-;============================ Import IR =======================================
+;========================== Importer Logic ====================================
 ;==============================================================================
-; defn single-pin-bundle (o:OutputStream, bundle-name:String):
-;   println(o, "pcb-bundle %_:" % [bundle-name])
-;   println(IndentedStream(o), "pin p")
 
 ; Possible SWD options
 defn swd-pins (pins:Tuple<Stm32Pin>) -> SwdOption:
@@ -260,83 +219,87 @@ defn jtag-pins (pins:Tuple<Stm32Pin>) -> False|JtagOption:
     )
 
 ; the gpio pins of the mcu
-defn gpio-pins (pins:Tuple<Stm32Pin>) -> Tuple<Stm32Pin>:
-  pins-with-signal(pins, "GPIO")
+defn gpio-pins (pins:Tuple<Stm32Pin>) -> Tuple<GpioOption>:
+  to-tuple(seq(GpioOption, pins-with-signal(pins, "GPIO")))
 
-; collect the IP blocks of the MCU
-defn ip-blocks (mcu:Stm32MCU) -> Tuple<IpBlock>:
-  defn instance-id (ip-name:String, instance-name:String) -> Int:
-    val suffix = instance-name[length(ip-name) to false]
-    if length(suffix) == 0: 
-      0
-    else:
-      if digit?(suffix[0]):
-        val [id, _] = split-at-first!(suffix, '_')
-        to-int(id) as Int
-      else:
-        0
-    
-  ; first collect the number of instances in the ip block
-  val ip-table = HashTable<String, Int>()
-  for ip-block in ip(mcu) do:
-    if get?(ip-table, name(ip-block)) is False:
-      ip-table[name(ip-block)] = 1
-    else:
-      ip-table[name(ip-block)] = ip-table[name(ip-block)] + 1
+defn print-bundle-data (
+  o:OutputStream,   ; output stream to print to
+  mcu: Stm32MCU,    ; the microcontroller structure we parsed
+  instance-name:String,        ; the name of the IP data we are
+  ocdb-name:String,            ; name of the bundle we map to
+  cubemx-signals:Tuple<String> ; signals in cubemx data we want to map
+  ocdb-pins:Tuple<String>,     ; pins of the bundle we care about
+):
+  if length(ocdb-pins) != length(cubemx-signals):
+    fatal("invalid mapping of cubemx signals to pcb-bundle data in ocdb.")
   
-  ; next collection the relevent pins
-  to-tuple $
-    for ip-entry in ip-table seq:
-      val [ip-name, num-instances] = [key(ip-entry), value(ip-entry)]
-      val related-pins = to-tuple $
-        for pin in pins-with-signal(pins(mcu), prefix?{_, ip-name}) seq-cat: 
-          for sig in relevant-signals(pin, ip-name) seq:
-            [pin, instance-id(ip-name, sig), sig]
-      IpBlock(ip-name, num-instances, related-pins)
+  ; collect data
+  val pins* = pins-with-signal(pins(mcu), prefix?{_, instance-name})
+  val signals* = to-tuple(seq(to-string{"%__%_" % [instance-name, _]}, cubemx-signals))
+  
+  ; print private bundles
+  for s in signals* do:
+    println(o, "pcb-bundle %_: pin p" % [s])
+  
+  ; print supports for private bundles
+  println(o,"")
+  for p in pins* do:
+    for s in filter(contains?{signals(p), _}, signals*) do:
+      println(o, "supports %_:", % [s])
+      println(IndentedStream(o), "p => %_" % [pin-name(p)])
 
-; generate bundles from an IpBlock
-defn ip-bundles (ip:Tuple<IpBlock>) -> Tuple<IpBundle>:
-  to-tuple $ 
-    for block in filter({name(_) != "GPIO"}, ip) seq: 
-      val unique-pins = HashSet<String>()
-      for p in related-pins(block) do:
-        match(split-at-first?(p[2] as String, '_')):
-          (_:False):
-            fatal("%_ is not valid" % [p[2]])
-          (s:[String, String]):
-            val [_, signal] = s
-            add(unique-pins, signal)
-      IpBundle(name(block), to-tuple(unique-pins))
+  ; print chained support, mapping to ocdb bundles
+  println(o, "supports %_:" % [ocdb-name])
+  val os = IndentedStream(o)
+  for (op in ocdb-pins, s in signals*) do:
+    println(os, "require %_-pin: %_" % [op, s])
+  for op in ocdb-pins do:
+    println(os, "%_ => %_-pin" % [op, op])
+  println(o,"")
 
-; Generate bundle options from ip blocks and computed bundles
-defn bundle-options (ip:Tuple<IpBlock>, bundles:Tuple<IpBundle>) -> HashTable<String, Tuple<BundleOption>>: 
-  HashTable<String, Tuple<BundleOption>>()
+defn print-bundle (
+  o:OutputStream,   ; output stream to print to
+  mcu: Stm32MCU,    ; the microcontroller structure we parsed
+  ip-name:String,        ; the name of the IP data we are
+  ocdb-name:String, ; name of the bundle we map to
+  cubemx-signals:Tuple<String> ; signals in cubemx data we want to map
+  ocdb-pins:Tuple<String>,     ; pins of the bundle we care about
+):
+  for ip-block in filter({name(_) == ip-name}, ip(mcu)) do:
+    print-bundle-data(o, mcu, instance-name(ip-block), ocdb-name, cubemx-signals, ocdb-pins)
+
+defn print-spi (o:OutputStream, mcu:Stm32MCU):
+  print-bundle(
+    o, mcu, "SPI", "spi"
+    ["MOSI", "MISO", "SCK", "NSS"]
+    ["mosi", "miso", "sck", "ss"]
+  )
+
+defn print-i2c (o:OutputStream, mcu:Stm32MCU):
+  print-bundle(
+    o, mcu, "I2C", "i2c"
+    ["SDA", "SCL"]
+    ["sda", "scl"]
+  )
 
 ;=============================================================================
 ;========================= Importer Algorithm ================================
 ;=============================================================================
-public defn import-stm32-mcu (mcu:Stm32MCU):
-  ; TODO make this way faster, algorithmic complexity is not great.
-  
+;<USAGE>
+import ocdb/scripts/cubemx-importer
+val mcu = Stm32MCU("path/to/my/stm32/mcu.xml") ; can find in 
+val supports-buf: StringBuffer()
+import-stm32-mcu(supports-buf, mcu)
+println(to-string(supports-buf))
+;<USAGE>
+public defn import-stm32-mcu (o:OutputStream, mcu:Stm32MCU):
   ; First find the SWD and JTAG options if they exist
   val swd  = swd-pins(pins(mcu)) ; fails if there are no swd pins
   val jtag = jtag-pins(pins(mcu))
   val gpio = gpio-pins(pins(mcu))
+  println(o, "%_\n%_\n" % [swd, jtag])
+  do(println{o, _}, gpio)
 
-  ; Next we collect the ip blocks and convert to bundles
-  val ip = ip-blocks(mcu)
-  val bundles = ip-bundles(ip)
-  
-  ; Now we can generate the options for arbitary bundles
-  val option-table = bundle-options(ip, bundles)
-
-  ; Finally we can do our codegen
-  do(print, filter({not empty?(pins(_))}, bundles))
-
-  println("defn generate-supports-stmts ():")
-  val os = IndentedStream(STANDARD-OUTPUT-STREAM)
-  for kv in option-table do:
-    val [bundle, options] = [key(kv), value(kv)]
-    println(os, "supports %_:" % [bundle])
-    do(print{IndentedStream(os)}, options)
-  
+  ; Next print the IP blocks we care about
+  print-i2c(o, mcu)
+  print-spi(o, mcu)
