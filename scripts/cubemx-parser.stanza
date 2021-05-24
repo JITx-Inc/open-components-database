@@ -323,7 +323,12 @@ defn uart-cubemx-pins (c:UartCase):
 ; a set of unique pins corresponding to an instance name
 defn unique-pins-for (instance-name:String, mcu:Stm32MCU) -> Set<String>:
   val s = HashSet<String>()
-  for p in pins-with-signal(pins(mcu), prefix?{_, instance-name}) do:
+
+  ; workaround for unsupported optional pins. 
+  defn F (s:String):
+    prefix?(s, instance-name) and not suffix?(s, "CK")
+  
+  for p in pins-with-signal(pins(mcu), F) do:
     for sig in relevant-signals(p, instance-name) do: 
       add(s, sig[min(length(instance-name) + 1, length(sig)) to false])
   s
@@ -349,7 +354,7 @@ defn uart-case (instance-name:String, mcu:Stm32MCU) -> UartCase:
     fatal("Unsupported UART pin set: %," % [pins])
   
 defn print-uart (o:OutputStream, mcu:Stm32MCU):
-  for uart-block in filter({name(_) == "UART"}, ip(mcu)) do:
+  for uart-block in filter({name(_0) == "UART" or name(_0) == "USART"}, ip(mcu)) do:
     val case = uart-case(instance-name(uart-block), mcu)
     print-bundle-data(
       o, mcu, 
