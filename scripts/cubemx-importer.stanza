@@ -328,6 +328,14 @@ defn print-oscillator (o:OutputStream, mcu:Stm32MCU):
       ["in", "out"]
     )
 
+defn print-i2s (o:OutputStream, mcu:Stm32MCU):
+  print-bundle(
+    o, mcu, "I2S", "i2s",
+    ["CK", "WS", "SDI", "SDO"]
+    ["bclk", "lrclk", "sdi", "sdo"]
+  )
+
+
 ;==============================================================================
 ;============================= UART edge cases ================================
 ;==============================================================================
@@ -419,10 +427,13 @@ public defn import-stm32-mcu (o:OutputStream, mcu:Stm32MCU):
   println(o, "; Family: %_, Package: %_" % [family(mcu), package(mcu)])
   println(o, "pcb-component %_" % [ref(mcu)])
   val os = IndentedStream(o)
+
+  println(os, "mpn = %_") ; todo: mpn 
+  println(os, "package")
+
   ; First find the SWD and JTAG options if they exist
   val swd  = swd-pins(pins(mcu)) ; fails if there are no swd pins
   println(os, swd)
-
   val jtag = jtag-pins(pins(mcu))
   match(jtag:JtagOption):
     println(os jtag)
@@ -434,4 +445,5 @@ public defn import-stm32-mcu (o:OutputStream, mcu:Stm32MCU):
   print-i2c(os, mcu)
   print-spi(os, mcu)
   print-uart(os, mcu)
+  print-i2s(os, mcu)
   print-oscillator(os, mcu)
