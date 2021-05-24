@@ -91,7 +91,7 @@ public pcb-component component :
     [nc[3]       | 48           | Down    | - ]
 
   make-box-symbol()
-  assign-landpattern(qfn-landpattern(0.5, 7.0, 48, 0.25, 0.4, [5.4 5.4]))
+  assign-landpattern(pqfn50p700x700x104-49n)
 
   property(VDDA.power-pin)       = PowerPin(Interval(2.3, 3.6, false))
   property(VDDA3P3.power-pin)    = PowerPin(Interval(2.3, 3.6, false))
@@ -99,8 +99,8 @@ public pcb-component component :
   property(VDD3P3-RTC.power-pin) = PowerPin(Interval(2.3, 3.6, 3.3))
   eval-when has-property?(VDD3P3-CPU.rail-voltage):
     val vdd = property(VDD3P3-CPU.rail-voltage)
-    val drive-props = DigitalOutput(CMOSOutput(Interval(0.0, 0.1 * vdd, false), Interval(0.8 * vdd, vdd, false)))
-    val input-props = DigitalInput(0.25 * vdd, 0.75 * vdd)
+    val drive-props = DigitalOutput(CMOSOutput(Interval(0.0, 0.1 * vdd, false), Interval(0.8 * vdd, vdd, false)), false, VDD3P3-CPU, GND)
+    val input-props = DigitalInput(0.25 * vdd, 0.75 * vdd, VDD3P3-CPU, GND, 50.0e-9)
     property(U0TXD.digital-output) = drive-props
     property(U0RXD.digital-input) = input-props
     property(EN.reset-pin) = ResetPin(input-props)
@@ -111,6 +111,7 @@ public pcb-component component :
     if not contains?(reserved-io, IO-pin) :
       supports io-pin:
         io-pin.p => IO-pin
+        
 
 ; Generic digital pin
 pcb-bundle io-pin:
@@ -138,37 +139,98 @@ public pcb-module module :
   public inst q : ocdb/nexperia/PMBT3904/component[2]
   res-strap(uart.dtr, q[0].b, 10.0e3)
   res-strap(uart.rts, q[1].b, 10.0e3)
-  net BOOT (mcu.IO[0], q[1].c boot)
+  net (mcu.IO[0], q[1].c boot)
   net (mcu.EN, q[0].c en)
   net (uart.rts, q[0].e)
   net (uart.dtr, q[1].e)
 
   ; Supports statements for digital peripherals
-  ; eval-when has-property?(mcu.VDD3P3-CPU.rail-voltage):
-  ;   val vdd = property(mcu.VDD3P3-CPU.rail-voltage)
-  val vdd = 3.3
+  
   for i in 0 to 22 do:
     supports gpio:
       require io:io-pin from mcu
       gpio.gpio => io.p
-      property(io.p.digital-io) = DigitalIO(CMOSOutput(Interval(0.0, 0.1 * vdd, false), Interval(0.8 * vdd, 3.3, false)), 0.25 * vdd, 0.75 * vdd)
+      property(io.p.digital-io) = DigitalIO(CMOSOutput(Interval(0.0, 0.1 * 3.3, false), Interval(0.8 * 3.3, 3.3, false)), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
   for i in 0 to 16 do:
     supports pwm:
       require io:io-pin from mcu
       pwm.pwm => io.p
-      property(io.p.digital-io) = DigitalIO(CMOSOutput(Interval(0.0, 0.1 * vdd, false), Interval(0.8 * vdd, 3.3, false)), 0.25 * vdd, 0.75 * vdd)
+      property(io.p.digital-io) = DigitalIO(CMOSOutput(Interval(0.0, 0.1 * 3.3, false), Interval(0.8 * 3.3, 3.3, false)), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
   for i in 0 to 2 do:
     supports i2c:
       require io:io-pin[2] from mcu
       i2c.sda => io[0].p
       i2c.scl => io[1].p
-      property(io[0].p.digital-io) = DigitalIO(OpenCollector(Interval(0.0, 0.1 * vdd, false), 28.0e-3), 0.25 * vdd, 0.75 * vdd)
-      property(io[1].p.digital-io) = DigitalIO(OpenCollector(Interval(0.0, 0.1 * vdd, false), 28.0e-3), 0.25 * vdd, 0.75 * vdd)
+      property(io[0].p.digital-io) = DigitalIO(OpenCollector(Interval(0.0, 0.1 * 3.3, false), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
+      property(io[1].p.digital-io) = DigitalIO(OpenCollector(Interval(0.0, 0.1 * 3.3, false), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
   for i in 0 to 2 do:
     val ocdb-uart = ocdb/bundles/uart
     supports ocdb-uart:
       require io:io-pin[2] from mcu
       ocdb-uart.tx => io[0].p
-      property(io[0].p.digital-output) = DigitalOutput(CMOSOutput(Interval(0.0, 0.1 * vdd, false), Interval(0.8 * vdd, 3.3, false)))
+      property(io[0].p.digital-output) = DigitalOutput(CMOSOutput(Interval(0.0, 0.1 * 3.3, false), Interval(0.8 * 3.3, 3.3, false)), false, mcu.VDD3P3-CPU, mcu.GND)
       ocdb-uart.rx => io[1].p
-      property(io[1].p.digital-input) = DigitalInput(0.25 * vdd, 0.75 * vdd)
+      property(io[1].p.digital-input) = DigitalInput(0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)  
+
+pcb-landpattern pqfn50p700x700x104-49n :
+  pad p[1] : smd-pad(0.45, 0.35) at loc(-3.265, 2.75, 0.0)
+  pad p[2] : smd-pad(0.45, 0.35) at loc(-3.265, 2.25, 0.0)
+  pad p[3] : smd-pad(0.45, 0.35) at loc(-3.265, 1.75, 0.0)
+  pad p[4] : smd-pad(0.45, 0.35) at loc(-3.265, 1.25, 0.0)
+  pad p[5] : smd-pad(0.45, 0.35) at loc(-3.265, 0.75, 0.0)
+  pad p[6] : smd-pad(0.45, 0.35) at loc(-3.265, 0.25, 0.0)
+  pad p[7] : smd-pad(0.45, 0.35) at loc(-3.265, -0.25, 0.0)
+  pad p[8] : smd-pad(0.45, 0.35) at loc(-3.265, -0.75, 0.0)
+  pad p[9] : smd-pad(0.45, 0.35) at loc(-3.265, -1.25, 0.0)
+  pad p[10] : smd-pad(0.45, 0.35) at loc(-3.265, -1.75, 0.0)
+  pad p[11] : smd-pad(0.45, 0.35) at loc(-3.265, -2.25, 0.0)
+  pad p[12] : smd-pad(0.45, 0.35) at loc(-3.265, -2.75, 0.0)
+  pad p[13] : smd-pad(0.35, 0.45) at loc(-2.75, -3.265, 0.0)
+  pad p[14] : smd-pad(0.35, 0.45) at loc(-2.25, -3.265, 0.0)
+  pad p[15] : smd-pad(0.35, 0.45) at loc(-1.75, -3.265, 0.0)
+  pad p[16] : smd-pad(0.35, 0.45) at loc(-1.25, -3.265, 0.0)
+  pad p[17] : smd-pad(0.35, 0.45) at loc(-0.75, -3.265, 0.0)
+  pad p[18] : smd-pad(0.35, 0.45) at loc(-0.25, -3.265, 0.0)
+  pad p[19] : smd-pad(0.35, 0.45) at loc(0.25, -3.265, 0.0)
+  pad p[20] : smd-pad(0.35, 0.45) at loc(0.75, -3.265, 0.0)
+  pad p[21] : smd-pad(0.35, 0.45) at loc(1.25, -3.265, 0.0)
+  pad p[22] : smd-pad(0.35, 0.45) at loc(1.75, -3.265, 0.0)
+  pad p[23] : smd-pad(0.35, 0.45) at loc(2.25, -3.265, 0.0)
+  pad p[24] : smd-pad(0.35, 0.45) at loc(2.75, -3.265, 0.0)
+  pad p[25] : smd-pad(0.45, 0.35) at loc(3.265, -2.75, 0.0)
+  pad p[26] : smd-pad(0.45, 0.35) at loc(3.265, -2.25, 0.0)
+  pad p[27] : smd-pad(0.45, 0.35) at loc(3.265, -1.75, 0.0)
+  pad p[28] : smd-pad(0.45, 0.35) at loc(3.265, -1.25, 0.0)
+  pad p[29] : smd-pad(0.45, 0.35) at loc(3.265, -0.75, 0.0)
+  pad p[30] : smd-pad(0.45, 0.35) at loc(3.265, -0.25, 0.0)
+  pad p[31] : smd-pad(0.45, 0.35) at loc(3.265, 0.25, 0.0)
+  pad p[32] : smd-pad(0.45, 0.35) at loc(3.265, 0.75, 0.0)
+  pad p[33] : smd-pad(0.45, 0.35) at loc(3.265, 1.25, 0.0)
+  pad p[34] : smd-pad(0.45, 0.35) at loc(3.265, 1.75, 0.0)
+  pad p[35] : smd-pad(0.45, 0.35) at loc(3.265, 2.25, 0.0)
+  pad p[36] : smd-pad(0.45, 0.35) at loc(3.265, 2.75, 0.0)
+  pad p[37] : smd-pad(0.35, 0.45) at loc(2.75, 3.265, 0.0)
+  pad p[38] : smd-pad(0.35, 0.45) at loc(2.25, 3.265, 0.0)
+  pad p[39] : smd-pad(0.35, 0.45) at loc(1.75, 3.265, 0.0)
+  pad p[40] : smd-pad(0.35, 0.45) at loc(1.25, 3.265, 0.0)
+  pad p[41] : smd-pad(0.35, 0.45) at loc(0.75, 3.265, 0.0)
+  pad p[42] : smd-pad(0.35, 0.45) at loc(0.25, 3.265, 0.0)
+  pad p[43] : smd-pad(0.35, 0.45) at loc(-0.25, 3.265, 0.0)
+  pad p[44] : smd-pad(0.35, 0.45) at loc(-0.75, 3.265, 0.0)
+  pad p[45] : smd-pad(0.35, 0.45) at loc(-1.25, 3.265, 0.0)
+  pad p[46] : smd-pad(0.35, 0.45) at loc(-1.75, 3.265, 0.0)
+  pad p[47] : smd-pad(0.35, 0.45) at loc(-2.25, 3.265, 0.0)
+  pad p[48] : smd-pad(0.35, 0.45) at loc(-2.75, 3.265, 0.0)
+  pad p[49] : smd-pad(5.4, 5.4) at loc(0.0, -0.0, 0.0)
+
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.127, [ Point(-3.55, 3.11), Point(-3.55, 3.55) ])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.127, [ Point(-3.55, 3.55), Point(-3.11, 3.55) ])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.127, [ Point(-3.55, -3.11), Point(-3.55, -3.55) ])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.127, [ Point(-3.55, -3.55), Point(-3.11, -3.55) ])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.127, [ Point(3.55, -3.11), Point(3.55, -3.55) ])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.127, [ Point(3.55, -3.55), Point(3.11, -3.55) ])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.127, [ Point(3.55, 3.11), Point(3.55, 3.55) ])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.127, [ Point(3.55, 3.55), Point(3.11, 3.55) ])
+  layer(Silkscreen("F-SilkS", Top)) = Circle(Point(-4.2, 2.8), 0.05)
+  layer(Courtyard(Top)) = Rectangle(7.1,7.1)
+  ref-label()

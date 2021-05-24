@@ -38,8 +38,10 @@ pcb-module pms7003 :
   res-strap(vin-mcu.vdd, set, 10.0e3)
   res-strap(vin-mcu.vdd, reset, 10.0e3)
   property(header.p[1].power-pin) = PowerPin(Interval(4.5, 5.5, 5.0))
-  property(header.p[10].digital-output) = DigitalOutput(CMOSOutput(Interval(0.3, 0.5, false), Interval(2.2, 3.3, false)))
-  property(header.p[8].digital-input) = DigitalInput(0.8, 2.7)
+  property(header.p[10].digital-output) = DigitalOutput(CMOSOutput(Interval(0.3, 0.5, false), Interval(2.2, 3.3, false)), false, header.p[1], header.p[3])
+  property(header.p[8].digital-input) = DigitalInput(0.8, 2.7, header.p[1], header.p[3], 1.0e-6)
+  property(header.p[6].digital-input) = DigitalInput(0.8, 2.7, header.p[1], header.p[3], 1.0e-6)
+  property(header.p[9].digital-input) = DigitalInput(0.8, 2.7, header.p[1], header.p[3], 1.0e-6)
 
 pcb-module sensor-mote :
   ; Add USB connector
@@ -89,7 +91,7 @@ pcb-module sensor-mote :
   net PC-RX (pc-uart.tx particle-counter.uart.rx)
 
   ; Connect power to proc and sensors
-  net (hum.power, particle-counter.vin-mcu, proc.power, ldo.vout)
+  net (hum.power, particle-counter.vin-mcu, proc.power, ldo.vout, cp2105.power)
   net (proc.power.vdd, cp2105.vio)
   net (protected-usb.vbus particle-counter.vin)
 
@@ -129,11 +131,12 @@ sensor-mote* = run-evals(sensor-mote*)
 sensor-mote* = transform-module(propagate-rail-voltage, sensor-mote*)
 sensor-mote* = run-evals(sensor-mote*)
 val assigned-pins = assign-pins()
-sensor-mote* = run-evals(assigned-pins)
-set-main-module(sensor-mote*)
+val final = run-evals(assigned-pins)
+set-main-module(final)
 
+println(connected?(final.proc.mcu.IO[18]))
 ; Configure design to have a default 4-layer stackup and design rules.
-make-default-board(sensor-mote*, 4, 30.0, 18.0)
+make-default-board(final, 4, 30.0, 18.0)
 
 ; Show the Schematic and PCB for the design
 view-board()
