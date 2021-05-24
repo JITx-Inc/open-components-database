@@ -337,13 +337,13 @@ defenum UartCase:
   Uart4   ; 4 pin UART 
   Uart4De ; 4 pin UART with DE pin
 
-; ocdb bundle identifer for a given UART case
+; ocdb bundle identifer for a given UART case3
 defn uart-bundle (c: UartCase):
   switch(c):
     Uart2:   "uart",
     Uart2De: "uart-with([`de])",
-    Uart4:   "uart4",
-    Uart4De: "uart4-with([`de])"
+    Uart4:   "uart",
+    Uart4De: "uart-with([`de])"
 
 ; the OCDB pin names for a UART case
 defn uart-ocdb-pins (c:UartCase):
@@ -393,12 +393,15 @@ defn uart-case (instance-name:String, mcu:Stm32MCU) -> UartCase:
 defn print-uart (o:OutputStream, mcu:Stm32MCU):
   for uart-block in filter({name(_0) == "UART" or name(_0) == "USART"}, ip(mcu)) do:
     val case = uart-case(instance-name(uart-block), mcu)
+    val ocdb-pins = to-tuple(filter(contains?{["rts", "tx" "rx"], _}, uart-ocdb-pins(case)))
+    val cubemx-pins = to-tuple(seq(upper-case, ocdb-pins))
+    val bundle = "uart-with(`rts)" when contains?(ocdb-pins, "rts") else "uart"
     print-bundle-data(
       o, mcu, 
       instance-name(uart-block),
-      uart-bundle(case),
-      uart-cubemx-pins(case)
-      uart-ocdb-pins(case)
+      bundle
+      cubemx-pins
+      ocdb-pins
     )
 
 ;=============================================================================
