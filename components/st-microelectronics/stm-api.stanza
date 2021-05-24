@@ -1,0 +1,100 @@
+#use-added-syntax(jitx)
+defpackage ocdb/st-microelectronics/stm-api :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/symbol-utils
+  import ocdb/generic-components
+  import ocdb/bundles
+  import ocdb/box-symbol
+  import ocdb/property-structs
+
+
+; public pcb-struct ocdb/st-microelectronics/stm-api/STmicroConfigs :
+
+public deftype Settings
+public defmulti entries (s:Settings) -> Tuple<KeyValue<Symbol,?>>
+public defmulti set (s:Settings, k:Symbol, value) -> False
+public defmulti get (s:Settings, k:Symbol) -> ?
+public defn Settings (initial-entries:Tuple<KeyValue<Symbol,?>>) :
+  val table = to-hashtable<Symbol,?>(initial-entries)
+  new Settings :
+    defmethod entries (this) :
+      val sorted-keys = qsort(keys(table))
+      to-tuple $ for k in sorted-keys seq :
+        k => table[k]
+    defmethod set (this, k:Symbol, v) :
+      table[k] = v
+    defmethod get (this, k:Symbol) :
+      table[k]
+
+public val DEFAULT-SETTINGS = [
+    `bypass-package => 10.0e-6
+    `bypass-pin => 100.0e-9]
+
+defn power-pins (stm:JITXObject) -> Tuple<JITXObject> :
+  to-tuple(filter({has-property?(_.power-pin)}, ports(stm)))
+
+defn gnd-pins (stm:JITXObject) -> Tuple<JITXObject> :
+  println("ground pins of %_" % [stm])
+  for p in ports(stm) do :
+    println("%_ has ref %_" % [p, ref(p)])
+    println("vss? = %_" % [substring?(lower-case(to-string(ref(p))), "vss")])
+  val result = to-tuple $ for p in ports(stm) filter :
+    println(ref(p))
+    substring?(lower-case(to-string(ref(p))), "vss")
+  println("result = %_" % [result])
+  result
+
+public defn generate-bypass (stm:JITXObject, bypass-package:Double, bypass-pin:Double) :
+  inside pcb-module :
+    val power-pins = power-pins(stm)
+    val gnd-pin = gnd-pins(stm)[0]
+    if length(power-pins) > 0 :
+      bypass-cap-strap(power-pins[0], gnd-pin, bypass-package)
+      for p in power-pins do :
+        bypass-cap-strap(p,  gnd-pin, bypass-pin)
+
+public defn connect-power (stm:JITXObject) :
+  inside pcb-module :
+    val power-pins = power-pins(stm)
+    port power : power
+    for p in power-pins do : net (power.vdd p)
+    net (stm.VSS, power.gnd)
+
+public defn connect-reset (stm:JITXObject) :
+  inside pcb-module :
+    pin reset
+    net (stm.NRST reset)
+    val power-pins = power-pins(stm)
+    res-strap(power-pins[0], stm.NRST, 10.0e3)
+    cap-strap(power-pins[0], stm.NRST, 10.0e-9)
+
+public defn set-boot (stm:JITXObject) :
+  inside pcb-module :
+    val opt = "flash"
+    val power-pin = power-pins(stm)[0]
+    switch(opt):
+      "flash" :
+        res-strap(stm.BOOT[0], stm.VSS, 10.0e3)
+
+defn supports? (module:InstantiableType, bundle:PortType) -> True|False :
+  pcb-module temp :
+    inst i : module
+    require r:bundle from i
+  set-main-module(temp) ;uh oh
+  val result = assign-pins?()
+  result is-not False
+
+public defn connect-debug (stm:JITXObject) :
+  inside pcb-module:
+    println(supports?(instantiable-type(stm), i2c))
+
+
+
