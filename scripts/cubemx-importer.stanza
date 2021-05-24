@@ -48,12 +48,16 @@ defstruct JtagOption:
   tms  : Stm32Pin
   trstn: False|Stm32Pin
 
+defstruct OscillatorOption:
+  in:Stm32Pin,
+  out:Stm32Pin,
+
 ;==============================================================================
 ;=============================== Parsing ======================================
 ;==============================================================================
 public defn Stm32Pin (elt:Elt):
   Stm32Pin(
-    ref-ify(get-String(elt, `Name))
+    ref-ify(sanitize-pin-name(get-String(elt, `Name)))
     get-String(elt, `Position)
     get-String(elt, `Type)
     to-tuple(seq(get-String{_, `Name}, get-children(elt, `Signal)))
@@ -132,18 +136,15 @@ defmethod print (o:OutputStream, opt:GpioOption):
 ;==============================================================================
 ;=============================== Helpers ======================================
 ;==============================================================================
-; Algorithm to sanitize pin names
+; Algorithm to sanitize pin names.
 defn sanitize-pin-name (s:String) -> String:
-  defn strip-whitespace (s:String) -> String:
-    val whitespace = " "
-    match(index-of-chars(s, whitespace)):
-      (_:False): s
-      (i:Int): s[0 to i]
-  defn strip-metadata (s:String) -> String:
-    if s[0] == "P":
-      
-
-
+  var s*: String = s
+  val chars = " -_"
+  for c in chars do:
+    match(index-of-char(s*, c)):
+      (i:Int): s* = s*[0 to i]
+      (_:?): false
+  s*
 ; Algorithm to convert a string to a Ref. 
 ; - "abcdef1" becomes abcdef[1]
 ; - "123" becomes p[123]
@@ -181,7 +182,7 @@ defn ref-ify (s:String) -> Ref:
       fail()
   
   ; Launch!
-  driver(strip-whitespace(s))
+  driver(s)
 
 ; find pins with a signal
 public defn pins-with-signal (pins:Tuple<Stm32Pin>, signal:String):
@@ -203,6 +204,20 @@ public defn relevant-signals (pin:Stm32Pin, signal:String):
 ;==============================================================================
 ;========================== Importer Logic ====================================
 ;==============================================================================
+; check if any pins support osc
+defn has-OSC (mcu:Stm32MCU) -> True|False:
+  label<True|False> return:
+    for p in pins(mcu) do:
+      if not empty?(relevant-signals(p, "RCC_OSC")):
+        return(true)
+    false
+
+defn has-OSC32 (mcu:Stm32MCU) -> True|False:
+  label<True|False> return:
+    for p in pins(mcu) do:
+      if not empty?(relevant-signals(p, "RCC_OSC32")):
+        return(true)
+    false
 
 ; Possible SWD options
 defn swd-pins (pins:Tuple<Stm32Pin>) -> SwdOption:
@@ -297,6 +312,21 @@ defn print-i2c (o:OutputStream, mcu:Stm32MCU):
     ["SDA", "SCL"]
     ["sda", "scl"]
   )
+
+defn print-oscillator (o:OutputStream, mcu:Stm32MCU):
+  if has-OSC(mcu):
+    print-bundle-data(
+      o, mcu, "RCC_OSC", "high-freq-oscillator",
+      ["IN", "OUT"],
+      ["in", "out"]
+    )
+
+  if has-OSC32(mcu):
+    print-bundle-data(
+      o, mcu, "RCC_OSC32", "high-freq-oscillator",
+      ["IN", "OUT"],
+      ["in", "out"]
+    )
 
 ;==============================================================================
 ;============================= UART edge cases ================================
@@ -401,3 +431,4 @@ public defn import-stm32-mcu (o:OutputStream, mcu:Stm32MCU):
   print-i2c(os, mcu)
   print-spi(os, mcu)
   print-uart(os, mcu)
+  print-oscillator(os, mcu)
