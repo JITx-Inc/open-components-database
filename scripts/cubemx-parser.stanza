@@ -148,12 +148,17 @@ defn ref-ify (s:String) -> Ref:
     else:
       [start, to-int(end)]
   
+  defn strip-whitespace (s:String):
+    val whitespace = " "
+    match(index-of-chars(s, whitespace)):
+      (_:False): s
+      (i:Int): s[0 to i]
   ; internal helper. Prints failure message.
   defn fail () -> Void:
     fatal("Could not parse %_ as a pin or pad ref." % [s])
   
   ; main program
-  defn driver ():
+  defn driver (s:String):
     if letter?(s[0]):
       ; extract the ref from a string
       match(ends-in-number?(s)):
@@ -169,12 +174,13 @@ defn ref-ify (s:String) -> Ref:
       fail()
   
   ; Launch!
-  driver()
+  driver(strip-whitespace(s))
 
 ; find pins with a signal
 public defn pins-with-signal (pins:Tuple<Stm32Pin>, signal:String):
   pins-with-signal(pins, {_ == signal})
 
+; generic utility to find pins with a signal, abstracted over matching
 public defn pins-with-signal (pins:Tuple<Stm32Pin>, matches: (String) -> True|False):
   to-tuple $
     filter(
@@ -183,6 +189,7 @@ public defn pins-with-signal (pins:Tuple<Stm32Pin>, matches: (String) -> True|Fa
       pins
     )
 
+; returns the relevent signals of a pin
 public defn relevant-signals (pin:Stm32Pin, signal:String):
   filter(prefix?{_, signal}, signals(pin))
 
@@ -222,6 +229,7 @@ defn jtag-pins (pins:Tuple<Stm32Pin>) -> False|JtagOption:
 defn gpio-pins (pins:Tuple<Stm32Pin>) -> Tuple<GpioOption>:
   to-tuple(seq(GpioOption, pins-with-signal(pins, "GPIO")))
 
+; code generator to map create supports statements from instance names
 defn print-bundle-data (
   o:OutputStream,   ; output stream to print to
   mcu: Stm32MCU,    ; the microcontroller structure we parsed
@@ -257,10 +265,11 @@ defn print-bundle-data (
     println(os, "%_ => %_-pin" % [op, op])
   println(o,"")
 
+; Code generator to print a bundle mapped to cubemx IP blocks
 defn print-bundle (
   o:OutputStream,   ; output stream to print to
   mcu: Stm32MCU,    ; the microcontroller structure we parsed
-  ip-name:String,        ; the name of the IP data we are
+  ip-name:String,   ; the name of the IP data we are mapping
   ocdb-name:String, ; name of the bundle we map to
   cubemx-signals:Tuple<String> ; signals in cubemx data we want to map
   ocdb-pins:Tuple<String>,     ; pins of the bundle we care about
@@ -282,6 +291,74 @@ defn print-i2c (o:OutputStream, mcu:Stm32MCU):
     ["sda", "scl"]
   )
 
+;==============================================================================
+;============================= UART edge cases ================================
+;==============================================================================
+defenum UartCase:
+  Uart2   ; 2 pin UART
+  Uart2De ; 2 pin UART with DE pin
+  Uart4   ; 4 pin UART 
+  Uart4De ; 4 pin UART with DE pin
+
+; ocdb bundle identifer for a given UART case
+defn uart-bundle (c: UartCase):
+  switch(c):
+    Uart2:   "uart",
+    Uart2De: "uart-with([`de])",
+    Uart4:   "uart4",
+    Uart4De: "uart4-with([`de])"
+
+; the OCDB pin names for a UART case
+defn uart-ocdb-pins (c:UartCase):
+  switch(c):
+    Uart2:   ["tx", "rx"]
+    Uart2De: ["tx", "rx", "de"]
+    Uart4:   ["tx", "rx", "cts", "rts"]
+    Uart4De: ["tx", "rx", "cts", "rts", "de"]
+
+; the CubeMX pin names for a UART case
+defn uart-cubemx-pins (c:UartCase):
+  to-tuple(seq(upper-case, uart-ocdb-pins(c)))
+
+; a set of unique pins corresponding to an instance name
+defn unique-pins-for (instance-name:String, mcu:Stm32MCU) -> Set<String>:
+  val s = HashSet<String>()
+  for p in pins-with-signal(pins(mcu), prefix?{_, instance-name}) do:
+    for sig in relevant-signals(p, instance-name) do: 
+      add(s, sig[min(length(instance-name) + 1, length(sig)) to false])
+  s
+
+; helper to determine if two sets have the same elements
+defn same-set?<?T> (l:Set<?T>, r:Set<?T>):
+  label<True|False> return:
+    if length(l) != length(r):
+      return(false)
+    for e in l do: 
+      if not r[e]:
+        return(false)
+    true
+
+; determine which case we are handling
+defn uart-case (instance-name:String, mcu:Stm32MCU) -> UartCase:
+  val pins = unique-pins-for(instance-name, mcu)
+  label<UartCase> return:
+    for c in 0 to 4 do:
+      val check = uart-cubemx-pins(UartCase(c))
+      if same-set?(to-hashset<String>(uart-cubemx-pins(UartCase(c))), pins):
+        return(UartCase(c))
+    fatal("Unsupported UART pin set: %," % [pins])
+  
+defn print-uart (o:OutputStream, mcu:Stm32MCU):
+  for uart-block in filter({name(_) == "UART"}, ip(mcu)) do:
+    val case = uart-case(instance-name(uart-block), mcu)
+    print-bundle-data(
+      o, mcu, 
+      instance-name(uart-block),
+      uart-bundle(case),
+      uart-cubemx-pins(case)
+      uart-ocdb-pins(case)
+    )
+
 ;=============================================================================
 ;========================= Importer Algorithm ================================
 ;=============================================================================
@@ -293,13 +370,22 @@ import-stm32-mcu(supports-buf, mcu)
 println(to-string(supports-buf))
 ;<USAGE>
 public defn import-stm32-mcu (o:OutputStream, mcu:Stm32MCU):
+  println(o, "; Autogenerated by ocdb/scripts/cubemx-importer")
+  println(o, "; Family: %_, Package: %_" % [family(mcu), package(mcu)])
+  println(o, "pcb-component %_" % [ref(mcu)])
+  val os = IndentedStream(o)
   ; First find the SWD and JTAG options if they exist
   val swd  = swd-pins(pins(mcu)) ; fails if there are no swd pins
+  println(swd)
+
   val jtag = jtag-pins(pins(mcu))
+  match(jtag:JtagOption):
+    println(jtag)
+
   val gpio = gpio-pins(pins(mcu))
-  println(o, "%_\n%_\n" % [swd, jtag])
-  do(println{o, _}, gpio)
+  do(println{os, _}, gpio)
 
   ; Next print the IP blocks we care about
-  print-i2c(o, mcu)
-  print-spi(o, mcu)
+  print-i2c(os, mcu)
+  print-spi(os, mcu)
+  print-uart(os, mcu)
