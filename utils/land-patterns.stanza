@@ -181,22 +181,25 @@ public defn PlusSymbol (x:Double, y:Double) :
 ; ====== Pad Collection Helpers ================================================
 
 ; 2D array of pins
-public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double, pad-ref) :
+public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double, pad-ref, offset-x:Double, offset-y:Double) :
   inside pcb-landpattern:
     
     val n-col = to-int(ceil(to-double(n-pin) / to-double(n-row)))
 
-    val l0 = loc((to-double(n-row - 1) * row-pitch) / -2.0, (to-double(n-col - 1) * pin-pitch) / 2.0)
+    val l0 = loc((to-double(n-row - 1) * row-pitch) / -2.0 + offset-x, (to-double(n-col - 1) * pin-pitch) / 2.0 + offset-y)
     
     for i in 0 to n-col do :
       for j in 0 to n-row do :
         pad p[n-row * i + j + 1] : pad-ref at l0 * loc(to-double(j) * row-pitch, (- to-double(i) * pin-pitch))
     
+public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double, pad-ref) :
+  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch, pad-ref, 0.0, 0.0)
+
 public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
-  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch, pth-pad(0.5))
+  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch, pth-pad(0.5), 0.0, 0.0)
 
 public defn make-pin-grid (n-pin:Int) :
-  make-pin-grid(n-pin, 1, 2.54, 2.54)
+  make-pin-grid(n-pin, 1, 2.54, 2.54, pth-pad(0.5), 0.0, 0.0)
 
 public pcb-landpattern testpad (d:Double) :
   pad tp : testpoint-pad(d) at loc(0.0,0.0)
