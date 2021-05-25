@@ -20,7 +20,6 @@ defpackage ocdb/texas-instruments/SN65HVD1786 :
 
 pcb-landpattern sn65hvd1786d-lp :
   val pad-shape = smd-pad(1.55, 0.6)
-  
   pad p[1] : pad-shape at loc(-2.7, 1.905, 0.0)
   pad p[2] : pad-shape at loc(-2.7, 0.635, 0.0)
   pad p[3] : pad-shape at loc(-2.7, -0.635, 0.0)
@@ -40,26 +39,37 @@ public pcb-component component :
   val power-props = PowerPin(Interval(4.5, 5.5, false))
   pin-properties :
     [pin:Ref | pads:Int ... | side:Dir| generic-pin:GenericPin | power-pin:PowerPin ]
-    [r   | 1 | Left     | generic-props | - ]
-    [nre | 2 | Left     | generic-props | - ]
-    [d   | 3 | Left     | generic-props | - ]
-    [de  | 4 | Left     | generic-props | - ]
-    [gnd | 5 | Down     | generic-props | - ]
-    [a   | 6 | Right    | ab-props      | - ]
-    [b   | 7 | Right    | ab-props      | - ]
-    [vdd | 8 | Up       | generic-props | power-props ]
+    [R   | 1 | Left     | generic-props | - ]
+    [NRE | 2 | Left     | generic-props | - ]
+    [D   | 3 | Left     | generic-props | - ]
+    [DE  | 4 | Left     | generic-props | - ]
+    [GND | 5 | Down     | generic-props | - ]
+    [A   | 6 | Right    | ab-props      | - ]
+    [B   | 7 | Right    | ab-props      | - ]
+    [VDD | 8 | Up       | generic-props | power-props ]
   
   make-box-symbol()
   assign-landpattern(sn65hvd1786d-lp)
-
+  manufacturer = "Texas Instruments"
   name = "TI:SN65HVD1786D"
   reference-prefix = "U"
   mpn = "SN65HVD1786"
 
-public pcb-module module(r:Double) :
-  public inst xvcr : ocdb/st-microelectronics/VL53L1X/component
+public pcb-module module (r:Double) :
+  public inst xcvr : ocdb/texas-instruments/SN65HVD1786/component
   public inst rterm : chip-resistor(r)
-  bypass-cap-strap(xcvr.vdd, xcvr.gnd, 0.1e-6)
   port power : power
-  net (power.vdd xcvr.vdd)
-  net (power.gnd xcvr.gnd)
+  port rs485 : rs485
+  pin R
+  net (R xcvr.R)
+  pin D
+  net (D xcvr.D)
+  pin NRE
+  net (NRE xcvr.NRE)
+  pin DE
+  net (DE xcvr.DE)
+  bypass-cap-strap(xcvr.VDD, xcvr.GND, 0.1e-6)
+  net (power.vdd xcvr.VDD )
+  net (power.gnd xcvr.GND )
+  net (rterm.p[1] xcvr.A rs485.a)
+  net (rterm.p[2] xcvr.B rs485.b)
