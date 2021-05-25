@@ -1,0 +1,97 @@
+#use-added-syntax(esir)
+defpackage ocdb/bosch/BMX160 :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  import jitpcb/visualizer
+
+public unique pcb-component component :
+  manufacturer = "Bosch"
+  mpn = "BMX160"
+  description = "Small, low-power, 9-axis IMU (accel, gyro, magnetometer)"
+
+  val ps = PinSpec $ #TABLE :
+    [Ref    | Int ...   | Dir   | Ref   ]
+    [SDO    | 1         | Right | base  ]
+    [GND    | 2,3,7     | Down  | base  ]
+    [INT1   | 4         | Left  | base  ]
+    [VDDIO  | 5         | Left  | base  ]
+    [GNDIO  | 6         | Down  | base  ]
+    [VDD    | 8         | Left  | base  ]
+    [INT2   | 9         | Left  | base  ]
+    [NC     | 10,11     | Down  | base  ]
+    [CSB    | 12        | Right | base  ]
+    [SCx    | 13        | Right | base  ]
+    [SDx    | 14        | Right | base  ]
+
+  make-pins(ps)
+  make-box-symbol(ps)
+  assign-package(BMX160-pkg, ps)
+
+  supports i2c :
+    scl => SCx
+    sda => SDx
+
+  supports spi :
+    sck => SCx
+    ss => CSB
+    mosi => SDx
+    miso => SDO
+
+pcb-package BMX160-pkg :
+  val dx = 0.675 / 2.0 + 0.925
+  val dy = 0.675 / 2.0 + 0.675
+  val pitch = 0.5
+  pad p[1] : {smd-pad(0.675, 0.25)} at loc((- dx), (1.5 * pitch))
+  pad p[2] : {smd-pad(0.675, 0.25)} at loc((- dx), (0.5 * pitch))
+  pad p[3] : {smd-pad(0.675, 0.25)} at loc((- dx), ((-0.5) * pitch))
+  pad p[4] : {smd-pad(0.675, 0.25)} at loc((- dx), ((-1.5) * pitch))
+
+  pad p[7] : {smd-pad(0.25, 0.675)} at loc(pitch, (- dy))
+  pad p[6] : {smd-pad(0.25, 0.675)} at loc(0.0, (- dy))
+  pad p[5] : {smd-pad(0.25, 0.675)} at loc((- pitch), (- dy))
+
+  pad p[11] : {smd-pad(0.675, 0.25)} at loc(dx, (1.5 * pitch))
+  pad p[10] : {smd-pad(0.675, 0.25)} at loc(dx, (0.5 * pitch))
+  pad p[9] : {smd-pad(0.675, 0.25)} at loc(dx, ((-0.5) * pitch))
+  pad p[8] : {smd-pad(0.675, 0.25)} at loc(dx, ((-1.5) * pitch))
+
+  pad p[12] : {smd-pad(0.25, 0.675)} at loc(pitch, dy)
+  pad p[13] : {smd-pad(0.25, 0.675)} at loc(0.0, dy)
+  pad p[14] : {smd-pad(0.25, 0.675)} at loc((- pitch), dy)
+
+  layer(Courtyard(Top)) = Rectangle(3.0, 2.5)
+  layer(Silkscreen("pol", Top)) = Circle((- dx), dy + 0.5, 0.254)
+
+  ref-label()
+
+public unique pcb-module module :
+  pin gnd
+  pin vcc
+  port spi-node : spi
+
+  inst imu : {ocdb/bosch/BMX160/component}
+
+  require some-spi-port : spi from imu
+  net (spi-node, some-spi-port)
+
+  net (gnd, imu.GND)
+  net (gnd, imu.GNDIO)
+  net (vcc, imu.VDD)
+  net (vcc, imu.VDDIO)
+  
+  cap-strap(vcc, gnd, 1.0e-6)
+  cap-strap(vcc, gnd, 0.1e-6)

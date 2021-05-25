@@ -1,0 +1,56 @@
+#use-added-syntax(esir)
+defpackage ocdb/tag-connect/TC2030-IDC :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  import jitpcb/visualizer
+
+pcb-package footprint :
+  ; landing pads
+  for (l in grid-locs(2, 3, 1.27, 1.27), i in [2 4 6 1 3 5]) do :
+    pad p[i] : {testpoint-pad(0.787)} at l
+  
+  ; alignment holes
+  layer(Cutout()) = Circle((- 2.54), 0.0, 0.4955)
+  layer(Cutout()) = Circle(2.54, 1.016, 0.4955)
+  layer(Cutout()) = Circle(2.54, (- 1.016), 0.4955)
+
+  ; legs
+  layer(Cutout()) = Circle((-2.54), 2.54, 1.1875)
+  layer(Cutout()) = Circle((-2.54), (-2.54), 1.1875)
+  layer(Cutout()) = Circle(0.635, 2.54, 1.1875)
+  layer(Cutout()) = Circle(0.635, (-2.54), 1.1875)
+
+  layer(Courtyard(Top)) = Rectangle(7.75, 8.5, loc((-0.692), 0.0))
+  layer(Courtyard(Bottom)) = Rectangle(7.75, 11.0, loc((-0.692), 0.0))
+  layer(ForbidCopper(LayerIndex(0), LayerIndex(0, Bottom))) = Rectangle(2.54, 1.27)
+  layer(Silkscreen("f-silk", Top)) = Rectangle(7.75, 11.0, loc((-0.692), 0.0))
+  ref-label()
+
+public unique pcb-component component :
+  pin VCC
+  pin SWDIO
+  pin nRESET
+  pin SWDCK
+  pin GND
+  pin SWO
+
+  symbol = {header-symbol(6,2)}(VCC => p[1], SWDIO => p[2], 
+                                nRESET => p[3], SWDCK => p[4],
+                                GND => p[5], SWO => p[6])
+  package = footprint(VCC => p[1], SWDIO => p[2], 
+                                nRESET => p[3], SWDCK => p[4],
+                                GND => p[5], SWO => p[6])

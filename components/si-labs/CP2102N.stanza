@@ -1,0 +1,99 @@
+#use-added-syntax(esir)
+defpackage ocdb/si-labs/CP2102N :
+  import core
+  import collections
+  import math
+  import esir
+  import esir/utils
+  import esir/gen
+  import ocdb/tests/default-harness
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/pinspec
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+  import jitpcb/visualizer
+
+public pcb-component component (pins:Int) :
+  manufacturer = "Raytec"
+  val code = switch(pins):
+    24 : "QFN24"
+    else : fatal("Unsupported or invalid number of pins")
+
+  mpn = to-string("CP2102N-A02-G%_" % [code])
+  description = "USB Bridge, USB to UART USB 2.0 UART Interface"
+
+  val ps = PinSpec $ #TABLE :
+    [Ref      | Int ...       | Dir   | Ref   ]
+    [RI       | 1             | Up  | base  ]
+    [GND      | 2, 25         | Down  | base  ]
+    [D+       | 3             | Left  | base  ]
+    [D-       | 4             | Left  | base  ]
+    [VIO      | 5             | Left  | base  ]
+    [VDD      | 6             | Left  | base  ]
+    [VREGIN   | 7             | Left  | base  ]
+    [VBUS     | 8             | Left  | base  ]
+    [RSTb     | 9             | Right  | base  ]
+    [NC       | 10, 16        | Down  | base  ]
+    [GPIO_3   | 11            | Up  | base  ]
+    [GPIO_2   | 12            | Up  | base  ]
+    [GPIO_1   | 13            | Up  | base  ]
+    [GPIO_0   | 14            | Up  | base  ]
+    [SUSPENDb | 15            | Right  | base  ]
+    [SUSPEND  | 17            | Right  | base  ]
+    [CTS      | 18            | Right  | base  ]
+    [RTS      | 19            | Up  | base  ]
+    [RXD      | 20            | Right  | base  ]
+    [TXD      | 21            | Right  | base  ]
+    [DSR      | 22            | Right  | base  ]
+    [DTR      | 23            | Right  | base  ]
+    [DCD      | 24            | Up  | base  ]
+
+  make-pins(ps)
+  make-box-symbol(ps)
+  assign-package(qfn-package(0.5, 3.9, 24, 0.25, 0.4, [2.45 2.45]), ps)
+
+  supports uart :
+    rx => RXD
+    tx => TXD
+  
+  supports usb-2-data :
+    N => D-
+    P => D+
+
+
+public pcb-module module (pins) :
+  inst bridge : {ocdb/si-labs/CP2102N/component(pins)}
+  
+  pin gnd
+  pin vio
+  pin v-usb
+  port uart-node : uart
+  port usb-data : usb-2-data
+
+
+  require usb-data-local : usb-2-data from bridge
+  net (usb-data-local, usb-data)
+
+  require uart-conv : uart from bridge
+  net (uart-conv, uart-node)
+
+  net (v-usb, bridge.VREGIN)
+
+  net (vio, bridge.VIO)
+  
+  net (gnd, bridge.GND)
+  res-strap(bridge.VBUS, gnd, 47.5e3)
+  res-strap(bridge.VBUS, bridge.VREGIN, 22.1e3)
+
+  cap-strap(bridge.VREGIN, gnd, 4.7e-6)
+  cap-strap(bridge.VREGIN, gnd, 0.1e-6)
+
+  cap-strap(bridge.VDD, gnd, 4.7e-6)
+  cap-strap(bridge.VDD, gnd, 0.1e-6)
+
+  res-strap(bridge.RSTb, bridge.VIO, 1.0e3)
