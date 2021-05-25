@@ -39,10 +39,10 @@ pcb-module pms7003 :
   res-strap(vin-mcu.vdd, set, 10.0e3)
   res-strap(vin-mcu.vdd, reset, 10.0e3)
   property(header.p[1].power-pin) = PowerPin(Interval(4.5, 5.5, 5.0))
-  property(header.p[10].digital-output) = DigitalOutput(CMOSOutput(Interval(0.3, 0.5, false), Interval(2.2, 3.3, false)), false, header.p[1], header.p[3])
-  property(header.p[8].digital-input) = DigitalInput(0.8, 2.7, header.p[1], header.p[3], 1.0e-6)
-  property(header.p[6].digital-input) = DigitalInput(0.8, 2.7, header.p[1], header.p[3], 1.0e-6)
-  property(header.p[9].digital-input) = DigitalInput(0.8, 2.7, header.p[1], header.p[3], 1.0e-6)
+  property(header.p[10].digital-output) = DigitalOutput(CMOSOutput(Interval(0.3, 0.5, false), Interval(2.6, 3.3, false)), false, header.p[1], header.p[3])
+  property(header.p[8].digital-input) = DigitalInput(0.8, 2.6, header.p[1], header.p[3], 1.0e-6)
+  property(header.p[6].digital-input) = DigitalInput(0.8, 2.6, header.p[1], header.p[3], 1.0e-6)
+  property(header.p[9].digital-input) = DigitalInput(0.8, 2.6, header.p[1], header.p[3], 1.0e-6)
 
 pcb-module sensor-mote :
   ; Add USB connector
@@ -118,7 +118,11 @@ pcb-module sensor-mote :
     copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = board-shape
 
   ; Apply groups to sub-circuits for schematic and layout
-  group-modules([[proc  ant] [hum] [usb ldo] [particle-counter]])
+  schematic-group([proc, ant]) = proc
+  schematic-group([usb, ldo, cp2105]) = power
+  schematic-group(hum) = hum
+  schematic-group(particle-counter) = particle-counter
+  ; group-modules([[proc  ant] [hum] [usb ldo] [particle-counter]])
   check-design(self)
 
 ; === Setup visualizations and exports ===
@@ -130,12 +134,14 @@ var sensor-mote* = transform-module(propagate-rail-voltage, sensor-mote)
 sensor-mote* = run-evals(sensor-mote*)
 sensor-mote* = transform-module(propagate-rail-voltage, sensor-mote*)
 sensor-mote* = run-evals(sensor-mote*)
+sensor-mote* = transform-module(propagate-rail-voltage, sensor-mote*)
+sensor-mote* = run-evals(sensor-mote*)
 val assigned-pins = assign-pins()
 val final = run-evals(assigned-pins)
 set-main-module(final)
 
 ; Configure design to have a default 4-layer stackup and design rules.
-make-default-board(final, Rectangle(30.0, 18.0))
+make-default-board(final, 4, Rectangle(30.0, 18.0))
 
 run-checks("BLE-MOTE-CHECKS.txt")
 ; Show the Schematic and PCB for the design
