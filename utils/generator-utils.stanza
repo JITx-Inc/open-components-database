@@ -111,8 +111,13 @@ public defn propagate-rail-voltage ():
       if has-property?(p1.power-supply-pin) :
         if property(p1.power-supply-pin) is PowerSupplyPin :
           for p2 in pins do :
-            if p1 != p2 and connected?([p1, p2]) and not has-property?(p2.rail-voltage) :
-              property(p2.rail-voltage) = supply-voltage(property(p1.power-supply-pin))
+            if p1 != p2 and connected?([p1, p2]) :
+              if has-property?(p2.rail-voltage) :
+                ; Override with higher voltage
+                if supply-voltage(property(p1.power-supply-pin)) > property(p2.rail-voltage):
+                  property(p2.rail-voltage) = supply-voltage(property(p1.power-supply-pin))
+              else:
+                property(p2.rail-voltage) = supply-voltage(property(p1.power-supply-pin))
               ; println("Supply %_ from %_ to %_" % [property(p2.rail-voltage) ref(p1) ref(p2)])
 
 ; =======================================
