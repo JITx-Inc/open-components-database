@@ -14,7 +14,7 @@ defpackage ocdb/st-microelectronics/stm-api :
   import ocdb/bundles
   import ocdb/box-symbol
   import ocdb/property-structs
-
+  import ocdb/checks
 
 ; public pcb-struct ocdb/st-microelectronics/stm-api/STmicroConfigs :
 
@@ -35,21 +35,24 @@ public defn Settings (initial-entries:Tuple<KeyValue<Symbol,?>>) :
       table[k]
 
 public val DEFAULT-SETTINGS = [
-    `bypass-package => 10.0e-6
-    `bypass-pin => 100.0e-9]
+    `bypass-package => 4.7e-6
+    `bypass-pin => 100.0e-9
+    `boot-from => "flash"
+    `debug-interface => swd
+    `debug-connector => ocdb/tag-connect/TC2050-IDC-NL/module]
 
 defn power-pins (stm:JITXObject) -> Tuple<JITXObject> :
-  to-tuple(filter({has-property?(_.power-pin)}, ports(stm)))
+  to-tuple(filter({has-property?(_.power-pin)}, pins(stm)))
 
 defn gnd-pins (stm:JITXObject) -> Tuple<JITXObject> :
-  println("ground pins of %_" % [stm])
-  for p in ports(stm) do :
-    println("%_ has ref %_" % [p, ref(p)])
-    println("vss? = %_" % [substring?(lower-case(to-string(ref(p))), "vss")])
-  val result = to-tuple $ for p in ports(stm) filter :
-    println(ref(p))
+  ; println("ground pins of %_" % [stm])
+  ; for p in ports(stm) do :
+    ; println("%_ has ref %_" % [p, ref(p)])
+    ; println("vss? = %_" % [substring?(lower-case(to-string(ref(p))), "vss")])
+  val result = to-tuple $ for p in pins(stm) filter :
+    ; println(ref(p))
     substring?(lower-case(to-string(ref(p))), "vss")
-  println("result = %_" % [result])
+  ; println("result = %_" % [result])
   result
 
 public defn generate-bypass (stm:JITXObject, bypass-package:Double, bypass-pin:Double) :
@@ -64,9 +67,10 @@ public defn generate-bypass (stm:JITXObject, bypass-package:Double, bypass-pin:D
 public defn connect-power (stm:JITXObject) :
   inside pcb-module :
     val power-pins = power-pins(stm)
+    val gnd-pins = gnd-pins(stm)
     port power : power
     for p in power-pins do : net (power.vdd p)
-    net (stm.VSS, power.gnd)
+    for p in gnd-pins do   : net (p, power.gnd)
 
 public defn connect-reset (stm:JITXObject) :
   inside pcb-module :
@@ -76,13 +80,39 @@ public defn connect-reset (stm:JITXObject) :
     res-strap(power-pins[0], stm.NRST, 10.0e3)
     cap-strap(power-pins[0], stm.NRST, 10.0e-9)
 
-public defn set-boot (stm:JITXObject) :
+defn has-pin? (stm:JITXObject, pin-q:String) :
+  val t = to-tuple $ for p in pins(stm) filter :
+    substring?(to-string(ref(p)), pin-q)
+  not empty?(t)
+
+defn has-port? (stm:JITXObject, port-q:String) :
+  val t = to-tuple $ for p in ports(stm) filter :
+    substring?(to-string(ref(p)), port-q)
+  not empty?(t)
+
+public defn set-boot (stm:JITXObject, boot-from:String) :
   inside pcb-module :
-    val opt = "flash"
     val power-pin = power-pins(stm)[0]
-    switch(opt):
+    val gnd-pin = gnd-pins(stm)[0]
+    switch(boot-from):
       "flash" :
-        res-strap(stm.BOOT[0], stm.VSS, 10.0e3)
+        res-strap(stm.BOOT[0], gnd-pin, 10.0e3)
+      "system" :
+        if not has-pin?(stm, "BOOT[1]") : 
+          println("system boot not supported on %_." % [ref(stm)])
+        else :
+          res-strap(stm.BOOT[1], gnd-pin, 10.0e3)
+          res-strap(stm.BOOT[0], power-pin, 10.0e3)
+      "sram" :
+        if not has-pin?(stm, "BOOT[1]") : 
+          println("system boot not supported on %_." % [ref(stm)])
+        else:
+          res-strap(stm.BOOT[1], power-pin, 10.0e3)
+          res-strap(stm.BOOT[0], power-pin, 10.0e3)
+
+    check connected(stm.BOOT[0])
+    if has-pin?(stm, "BOOT[1]") : 
+      check connected(stm.BOOT[1])
 
 defn supports? (module:InstantiableType, bundle:PortType) -> True|False :
   pcb-module temp :
@@ -92,9 +122,17 @@ defn supports? (module:InstantiableType, bundle:PortType) -> True|False :
   val result = assign-pins?()
   result is-not False
 
-public defn connect-debug (stm:JITXObject) :
+public defn connect-debug (stm:JITXObject, debug-interface:PortType, connector:Instantiable) :
   inside pcb-module:
-    println(supports?(instantiable-type(stm), i2c))
+    if supports?(instantiable-type(stm), debug-interface) and supports?(connector, debug-interface):
+      inst con : connector
+      require debug-m:debug-interface from stm
+      require debug-c:debug-interface from con
+      net (debug-m debug-c)
+      ; if has-port?(con, "power") :
+      ;   net (con.power, stm.power)
+    else :
+      println("Unsupported debug-interface on %_" % [ref(stm)])
 
 
 
