@@ -147,8 +147,19 @@ public defn setup-clocks (stm:JITXObject, HSE-freq:Double, HSE-ppm:Double, HSE-s
           net (hf-osc.in hf-xtal.p[1])
           net (hf-osc.out hf-xtal.p[2])
           val hf-cb = add-xtal-caps(hf-xtal, gnd-pin)
-          check-oscillator(hf-xtal, CrystalOscillator(3.5e-3, 100.0e-6, 3.0e-12, HSE-ppm * HSE-freq, HSE-freq), hf-cb)
-
+          check-oscillator(hf-xtal, CrystalOscillator(2.0e-3, 100.0e-6, 3.0e-12, HSE-ppm * HSE-freq, HSE-freq), hf-cb)
+        "osc" :
+          if HSE-ppm > 25.0e-6 :
+            require hf-osc:high-freq-oscillator from stm
+            inst osc :  ocdb/abracon/AMPM/module(HSE-freq)
+            net (hf-osc.in osc.out)
+            net (osc.power.gnd, gnd-pin)
+            net (osc.power.vdd, power-pin)
+          else : 
+            println("MEMS oscillators in library can't meet ppm. Try a 'crystal' source.")
+    ; if supports?(instantiable-type(stm), low-freq-oscillator) and LSE-ppm < 0.03 :
+    ;   switch(LSE-source):
+    ;     "crystal" :
 
 
 
