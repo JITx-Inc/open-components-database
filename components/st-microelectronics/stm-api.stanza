@@ -42,7 +42,7 @@ public val DEFAULT-SETTINGS = [
     `debug-interface => swd
     `debug-connector => ocdb/tag-connect/TC2050-IDC-NL/module
     `HSE-freq => 16.0e6   `HSE-ppm => 30.0e-6 `HSE-source => "crystal"
-    `LSE-freq => 32.768e3 `LSE-ppm => 20.0e-6 `LSE-source => "crystal"]
+    `LSE-freq => 32.768e3 `LSE-ppm => 0.05 `LSE-source => "crystal"]
 
 defn power-pins (stm:JITXObject) -> Tuple<JITXObject> :
   to-tuple(filter({has-property?(_.power-pin)}, pins(stm)))
@@ -157,9 +157,23 @@ public defn setup-clocks (stm:JITXObject, HSE-freq:Double, HSE-ppm:Double, HSE-s
             net (osc.power.vdd, power-pin)
           else : 
             println("MEMS oscillators in library can't meet ppm. Try a 'crystal' source.")
-    ; if supports?(instantiable-type(stm), low-freq-oscillator) and LSE-ppm < 0.03 :
-    ;   switch(LSE-source):
-    ;     "crystal" :
+    if supports?(instantiable-type(stm), low-freq-oscillator) and LSE-ppm < 0.03 :
+      switch(LSE-source):
+        "crystal" :
+          if LSE-freq == 32.768e3 :
+            require lf-osc:low-freq-oscillator from stm
+            inst losc : ocdb/epson/FC-135/component
+            net (lf-osc.in losc.p[1])
+            net (lf-osc.out losc.p[2])
+            val lf-cb = add-xtal-caps(losc, gnd-pin)
+            check-oscillator(losc, CrystalOscillator(3.1e-6, 0.5e-6, 4.0e-12, 50.0e-6 * 32.768e3, 32.768e3), lf-cb)
+          else:
+            println("Unsupported frequency for LSE: %_. Try 32.768e3." % [LSE-freq])
+        else:
+          println("Unsupported sourece for LSE. Try a 'crystal' source.")
+    else:
+      println("%_ does not support an external LSE source." % [ref(stm)])
+
 
 
 
