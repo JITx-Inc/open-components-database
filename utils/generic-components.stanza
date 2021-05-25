@@ -565,8 +565,10 @@ public defn mounting-hole-cmp (drill-r:Double, pad-r:Double) :
 public defn mounting-hole-cmp (drill-r:Double) :
   mounting-hole-cmp(drill-r, drill-r + 0.35)
 
-public defn board-mounting-holes (w:Double, h:Double, s:String|Double) :
+public defn add-mounting-holes (board:Rectangle, s:String|Double, no-hole:Tuple<Int>) :
   inside pcb-module :
+    val w =  width(board)
+    val h =  height(board)
     val r = match(s) :
       (screw:String) :
         switch(screw) :
@@ -578,12 +580,16 @@ public defn board-mounting-holes (w:Double, h:Double, s:String|Double) :
           else : fatal("Unsupported Screw size %_ for mounting hole" % [screw])
       (diameter:Double) : diameter / 2.0
       (f) : fatal("Unsupported call to mounting hole")
-    public inst holes : mounting-hole-cmp(r)[4]
     val offs = r * 6.0 ;1.5X bolt diameter * 2
-    for (l in grid-locs(2, 2, w - offs, h - offs), i in 0 to 4) do :
-      place(holes[i]) at l on Top
+    for (l in grid-locs(2, 2, w - offs, h - offs), i in 1 through 4) do :
+      if not contains?(no-hole,i) :
+        inst hole : mounting-hole-cmp(r)
+        place(hole) at l on Top
 
-
+public defn add-mounting-holes (board:Rectangle) :
+  add-mounting-holes(board, "M3", [])
+public defn add-mounting-holes (board:Rectangle, no-hole:Tuple<Int>) :
+  add-mounting-holes(board, "M3", no-hole)
 
 ; ========================================================
 ; ===================== Antennas =========================
