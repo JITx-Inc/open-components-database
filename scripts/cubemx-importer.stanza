@@ -307,6 +307,16 @@ defn print-bundle-data (
     println(os, "%_.%_ => %_-pin.p" % [ocdb-name, op, op])
   println(o,"")
 
+defn print-bundle (
+  o:OutputStream,   ; output stream to print to
+  mcu: Stm32MCU,    ; the microcontroller structure we parsed
+  ip-name:String,   ; the name of the IP data we are mapping
+  ocdb-name:String, ; name of the bundle we map to
+  cubemx-signals:Tuple<String> ; signals in cubemx data we want to map
+  ocdb-pins:Tuple<String>,     ; pins of the bundle we care about
+): 
+  print-bundle(o, mcu, ip-name, ocdb-name, cubemx-signals, ocdb-pins, {false})
+
 ; Code generator to print a bundle mapped to cubemx IP blocks
 defn print-bundle (
   o:OutputStream,   ; output stream to print to
@@ -315,9 +325,10 @@ defn print-bundle (
   ocdb-name:String, ; name of the bundle we map to
   cubemx-signals:Tuple<String> ; signals in cubemx data we want to map
   ocdb-pins:Tuple<String>,     ; pins of the bundle we care about
+  ignore?: (String) -> True|False
 ):
   for ip-block in filter({name(_) == ip-name}, ip(mcu)) do:
-    val unique-pins = unique-pins-for(instance-name(ip-block), mcu)
+    val unique-pins = unique-pins-for(instance-name(ip-block), mcu, ignore?)
     if not same-set?(unique-pins, to-hashset<String>(cubemx-signals)):
       println("Warning: incomplete pin data for %_. Expected [%,], found [%,]." % [instance-name(ip-block), cubemx-signals, unique-pins])
     else:
@@ -335,6 +346,7 @@ defn print-i2c (o:OutputStream, mcu:Stm32MCU):
     o, mcu, "I2C", "i2c"
     ["SDA", "SCL"]
     ["sda", "scl"]
+    suffix?{_, "SMBA"}
   )
 
 defn print-oscillator (o:OutputStream, mcu:Stm32MCU):
