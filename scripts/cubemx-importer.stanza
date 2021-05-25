@@ -190,17 +190,33 @@ public defn pins-with-signal (pins:Tuple<Stm32Pin>, signal:String):
 
 ; generic utility to find pins with a signal, abstracted over matching
 public defn pins-with-signal (pins:Tuple<Stm32Pin>, matches: (String) -> True|False):
-  to-tuple $
-    filter(
-      fn (p:Stm32Pin):
-        find(matches, signals(p)) is-not False,
-      pins
-    )
+  defn F (p:Stm32Pin):
+    find(matches, signals(p)) is-not False
+  to-tuple(filter({find(matches, signals(_)) is-not False}, pins))
+  ; to-tuple $
+  ;   filter(
+  ;     fn (p:Stm32Pin):
+  ;       find(matches, signals(p)) is-not False,
+  ;     pins
+  ;   )
 
 ; returns the relevent signals of a pin
 public defn relevant-signals (pin:Stm32Pin, signal:String):
   filter(prefix?{_, signal}, signals(pin))
 
+; a set of unique pins corresponding to an instance name
+defn unique-pins-for (instance-name:String, mcu:Stm32MCU) -> Set<String>:
+  unique-pins-for(instance-name, mcu, fn (_:String): false)
+
+; set of unique pins corresponding to an instance name, ignoring what matches ignore(s)
+defn unique-pins-for (instance-name:String, mcu:Stm32MCU, ignore?: (String) -> True|False) -> Set<String>:
+  defn F (s:String):
+    prefix?(s, instance-name) and not ignore?(s)
+  val u = HashSet<String>()
+  for p in pins-with-signal(pins(mcu), F) do:
+    for s in relevant-signals(p, instance-name) do:
+      add(u, s[(length(instance-name) + 1) to false])
+  u
 ;==============================================================================
 ;========================== Importer Logic ====================================
 ;==============================================================================
@@ -301,7 +317,11 @@ defn print-bundle (
   ocdb-pins:Tuple<String>,     ; pins of the bundle we care about
 ):
   for ip-block in filter({name(_) == ip-name}, ip(mcu)) do:
-    print-bundle-data(o, mcu, instance-name(ip-block), ocdb-name, cubemx-signals, ocdb-pins)
+    val unique-pins = unique-pins-for(instance-name(ip-block), mcu)
+    if not same-set?(unique-pins, to-hashset<String>(cubemx-signals)):
+      println("Warning: incomplete pin data for %_. Expected [%,], found [%,]." % [instance-name(ip-block), cubemx-signals, unique-pins])
+    else:
+      print-bundle-data(o, mcu, instance-name(ip-block), ocdb-name, cubemx-signals, ocdb-pins)
 
 defn print-spi (o:OutputStream, mcu:Stm32MCU):
   print-bundle(
@@ -333,11 +353,29 @@ defn print-oscillator (o:OutputStream, mcu:Stm32MCU):
     )
 
 defn print-i2s (o:OutputStream, mcu:Stm32MCU):
-  print-bundle(
-    o, mcu, "I2S", "i2s",
-    ["CK", "WS", "SDI", "SDO"]
-    ["bclk", "lrclk", "sdi", "sdo"]
-  )
+  for ip-block in filter(prefix?{instance-name(_),"I2S"}, ip(mcu)) do:
+    val pins = unique-pins-for(instance-name(ip-block), mcu)
+    var mclk?: True|False   = false
+    var duplex?: True|False = false
+    if contains?(pins, "MCLK"): 
+      mclk?   = true
+    if contains?(pins, "SDO") and contains?(pins, "SDI"):
+      duplex? = true
+    val bundle-name = to-string("i2s(%_, %_)" % [mclk?, duplex?])
+    val pin-names = to-tuple(cat-all([
+      ["mclk"] when mclk? else []
+      ["sdi" "sdo"] when duplex? else ["sd"]
+      ["ws" "bclk"]
+    ]))
+    val signal-names = to-tuple(seq(
+      {upper-case(_0) when _0 != "bclk" else "CK"},
+      pin-names
+    )) 
+    print-bundle-data(
+      o, mcu, instance-name(ip-block), bundle-name,
+      signal-names
+      pin-names
+    )
 
 
 ;==============================================================================
@@ -369,19 +407,6 @@ defn uart-ocdb-pins (c:UartCase):
 defn uart-cubemx-pins (c:UartCase):
   to-tuple(seq(upper-case, uart-ocdb-pins(c)))
 
-; a set of unique pins corresponding to an instance name
-defn unique-pins-for (instance-name:String, mcu:Stm32MCU) -> Set<String>:
-  val s = HashSet<String>()
-
-  ; workaround for unsupported optional pins. 
-  defn F (s:String):
-    prefix?(s, instance-name) and not suffix?(s, "CK")
-  
-  for p in pins-with-signal(pins(mcu), F) do:
-    for sig in relevant-signals(p, instance-name) do: 
-      add(s, sig[min(length(instance-name) + 1, length(sig)) to false])
-  s
-
 ; helper to determine if two sets have the same elements
 defn same-set?<?T> (l:Set<?T>, r:Set<?T>):
   label<True|False> return:
@@ -394,7 +419,7 @@ defn same-set?<?T> (l:Set<?T>, r:Set<?T>):
 
 ; determine which case we are handling
 defn uart-case (instance-name:String, mcu:Stm32MCU) -> UartCase:
-  val pins = unique-pins-for(instance-name, mcu)
+  val pins = unique-pins-for(instance-name, mcu, suffix?{_, "CK"})
   label<UartCase> return:
     for c in 0 to 4 do:
       val check = uart-cubemx-pins(UartCase(c))
