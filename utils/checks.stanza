@@ -26,6 +26,14 @@ public defn check-design (module:JITXObject):
           check reset-pin(p)
     check io(module)
 
+defn get-other-pin (comp:JITXObject,  p:JITXObject) :
+  val pins = pins(comp)
+  var op
+  for ps in pins do :
+    if ps != p :
+      op  = ps
+  op
+
 public pcb-check io (module:JITXObject) :
   val pins = to-tuple(seq-cat(pins, component-instances(module)))
   var net-pins = []
@@ -52,7 +60,35 @@ public pcb-check io (module:JITXObject) :
             if in-p != out-p :
               ; println("checking %_ vs %_" % [ref(out-p) ref(in-p)])
               check-single-push-pull-levels(out-p, in-p)
-        ; if out-p is OpenCollector do :
+
+        else if o is OpenCollector :
+          var is-net-ok? = false
+          for p in net-pins do :
+            val myinst = containing-instance(p) as JITXObject
+            if has-property?(myinst.resistance) :
+              val high-pin = get-other-pin(myinst, p)
+              if has-property?(high-pin.rail-voltage):
+                val rail-voltage = property(high-pin.rail-voltage)
+                ; Valid opencollector nets have pull up resistors
+                is-net-ok? = true
+                val i = rail-voltage / property(myinst.resistance)
+                #CHECK( i < iol(o))
+                for p in net-pins do :
+                  if has-property?(p.digital-input) or has-property?(p.digital-io) :
+                    var vih-v = 0
+                    if has-property?(p.digital-input) : 
+                      vih-v = vih(property(p.digital-input))
+                    else if has-property?(p.digital-io) : 
+                      vih-v = vih(property(p.digital-io))
+                    #CHECK(rail-voltage > vih-v)
+                  if has-property?(p.generic-pin):
+                    #CHECK(contains?(max-voltage(property(p.generic-pin)), rail-voltage))
+          #CHECK(is-net-ok?)
+
+              ; if has-property?(get-other-pin(myinst).rail-voltage, p) :
+              ;   println(property(myinst.rail-voltage))
+
+
 
 ; Checks two push-pull digital logic pins, at least one of which can output
 public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
