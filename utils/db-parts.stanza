@@ -9,21 +9,15 @@ defpackage ocdb/db-parts :
     prefix(Capacitor) => EModel-
     prefix(Inductor) => EModel-
   import jitx/commands
-  import jitx/param-sets
-  import jitx/params
-  import jitx/param-manager
-  import jitx/errors
 
   import ocdb/defaults
   import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/symbols
   import ocdb/design-vars
-  import ocdb/property-structs
-  import ocdb/box-symbol
 
 
-deftype Component
+public deftype Component
 public defmulti x (component: Component) -> Double
 public defmulti y (component: Component) -> Double
 public defmulti area (component: Component) -> Double
@@ -548,159 +542,6 @@ public defn Inductor (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tupl
 
 
 ;============================================================
-;===================== Micro Controller =====================
-;============================================================
-
-public defstruct MicroController <: Component :
-  ; Generic properties
-  manufacturer: String
-  mpn: String
-  trust: String
-  x: Double with: (as-method => true)
-  y: Double with: (as-method => true)
-  z: Double|False
-  mounting: String
-  rated-temperature: MinMaxRange|False
-  ; Specific properties
-  core: String
-  core-architecture: String
-  data-width: Int
-  flash: Double
-  frequency: Double
-  io: Int
-  line: String
-  mfg-package: String
-  ram: Double
-  series: String
-  supply-voltage: MinMaxRange
-  price: Double|False
-  sellers: Tuple<Tuple<KeyValue<String, ?>>>|False
-
-defn int (json: JSON) -> Int:
-  to-int(json as Double)
-
-public defn MicroController (raw-json: JObject) -> MicroController :
-  val json = filter-json(raw-json)
-  val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
-
-  MicroController(json["manufacturer"] as String,
-                  json["mpn"] as String,
-                  json["trust"] as String,
-                  x,
-                  y,
-                  z,
-                  json["mounting"] as String,
-                  parse-rated-temperature(json),
-                  json["core"] as String,
-                  json["core-architecture"] as String,
-                  int(json["data-width"]),
-                  json["flash"] as Double,
-                  json["frequency"] as Double,
-                  int(json["io"]),
-                  json["line"] as String,
-                  json["mfg-package"] as String,
-                  json["ram"] as Double,
-                  json["series"] as String
-                  parse-supply-voltage(json),
-                  optional-double(json, "resolved_price"),
-                  parse-sellers(json))
-
-defmethod to-esir (mcu: MicroController) -> Instantiable :
-  pcb-component my-microcontroller :
-    manufacturer = manufacturer(mcu)
-    mpn = mpn(mcu)
-    val generic-props = GenericPin(Interval(-0.3, 4.0, false), 2000.0)
-    val supply-voltage = supply-voltage(mcu)
-    val power-props = PowerPin(Interval(min(supply-voltage), max(supply-voltage), false))
-    ;pin-properties :
-    ;  [pin:Ref | pads:Int ... | side:Dir| generic-pin:GenericPin | power-pin:PowerPin ]
-    ;  What is the paatern of pins?
-
-    val x = x(mcu)
-    val landpattern =
-      switch(mfg-package(mcu)) :
-      "LQFP64" :
-        qfp-landpattern(0.5, x, 64, 0.3, 1.2)
-      "LQFP48" :
-        qfp-landpattern(0.5, x, 48, 0.3, 1.2)
-      "VFQFPN36" :
-        qfn-landpattern(0.5, x, 36, 0.23, 0.55, [4.8 4.8])
-      "UFQFPN28" :
-        qfn-landpattern(0.5, x, 28, 0.25, 0.4)
-      "TFBGA64" :
-        bga-pkg(0.5, 0.28, [8, 8], [x y(mcu)], [])
-      "LFBGA100" :
-        bga-pkg(0.8, 0.5, [10, 10], [x y(mcu)], [])
-      "TSSOP20" :
-        sop65-landpattern(20, x)
-    assign-landpattern(landpattern)
-    make-box-symbol()
-
-    ;ocdb/components/STM32F031F_4-6_Px/supports/make-supports()  ; Wrong, put a switch with correct one
-
-  my-microcontroller
-
-public defn find-stm32-module (mpn: String) -> (Tuple<KeyValue> -> Instantiable) :
-  switch(mpn) :
-    "STM32F102R4T6A" :
-      ocdb/st-microelectronics/STM32F102R4T6A/module
-    "STM32F102R6T6A" :
-      ocdb/st-microelectronics/STM32F102R6T6A/module
-    "STM32F102C4T6A" :
-      ocdb/st-microelectronics/STM32F102C4T6A/module
-    "STM32F102C6T6A" :
-      ocdb/st-microelectronics/STM32F102C6T6A/module
-    "STM32F103T4U6A" :
-      ocdb/st-microelectronics/STM32F103T4U6A/module
-    "STM32F103T6U6A" :
-      ocdb/st-microelectronics/STM32F103T6U6A/module
-    "STM32F103RBH6" :
-      ocdb/st-microelectronics/STM32F103RBH6/module
-    "STM32F105V8H6" :
-      ocdb/st-microelectronics/STM32F105V8H6/module
-    "STM32F105VBH6" :
-      ocdb/st-microelectronics/STM32F105VBH6/module
-    "STM32F107VCH6" :
-      ocdb/st-microelectronics/STM32F107VCH6/module
-    "STM32F031F4P6" :
-      ocdb/st-microelectronics/STM32F031F4P6/module
-    "STM32F031F6P6" :
-      ocdb/st-microelectronics/STM32F031F6P6/module
-    "STM32L031F6P6" :
-      ocdb/st-microelectronics/STM32L031F6P6/module
-    "STM32F038G6U6" :
-      ocdb/st-microelectronics/STM32F038G6U6/module
-; inst stm : Micocontroller("family" => "STM32F0" "flash.min" => 1000.0e3])([`bypass-package => 4.7e-6])
-
-public defn MicroController (properties:Tuple<KeyValue>) -> MicroController :
-  MicroController(properties, [])
-
-public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>) -> MicroController :
-  MicroController(properties, exist, OPTIMIZE-FOR, ["max-rated-temperature.min" => OPERATING-TEMPERATURE[0],
-                                                    "min-rated-temperature.max" => OPERATING-TEMPERATURE[1]])
-
-public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, temperature-properties:Tuple<KeyValue>) -> MicroController :
-  val params = jitx-params()
-  val vendors = bom-vendors(params)
-  val vendor-properties =
-    match(vendors: Tuple<String>) :
-      ["_sellers" => vendors]
-    else :
-      []
-  val query-properties = to-tuple $ cat-all([["category" => "microcontroller",
-                                              "_sort" => sort,
-                                              "_exist" => exist,
-                                              "_stock" => DESIGN-QUANTITY],
-                                             vendor-properties
-                                             temperature-properties,
-                                             properties])
-  val jsons = dbquery-all(query-properties) as Tuple<JObject>
-  if length(jsons) == 0 :
-    throw(NoComponentMeetingRequirements(query-properties))
-  else :
-    MicroController(jsons[0])
-
-;============================================================
 ;====================== Printer =============================
 ;============================================================
 
@@ -767,29 +608,6 @@ defmethod print (o:OutputStream, r:Inductor) :
     "metadata = %_" % [indented-list(metadata(r))]]
   print(o, "Inductor(%_)" % [indented-list(items)])
 
-defmethod print (o:OutputStream, r:MicroController) :
-  val items = [
-    "mpn = %_" % [mpn(r)]
-    "trust = %_" % [trust(r)]
-    "(x, y, z) = (%,)" % [[x(r), y(r), z(r)]]
-    "mounting = %_" % [mounting(r)]
-    "rated-temperature = %_" % [rated-temperature(r)]
-    "core = %_" % [core(r)]
-    "core-architecture = %_" % [core-architecture(r)]
-    "data-width = %_" % [data-width(r)]
-    "flash = %_" % [flash(r)]
-    "frequency = %_" % [frequency(r)]
-    "io = %_" % [io(r)]
-    "line = %_" % [line(r)]
-    "mfg-package = %_" % [mfg-package(r)]
-    "ram = %_" % [ram(r)]
-    "series = %_" % [series(r)]
-    "supply-voltage = %_" % [supply-voltage(r)]
-    "price = %_" % [price(r)]
-    "sellers = %_" % [sellers(r)]]
-  print(o, "MicroController(%_)" % [indented-list(items)])
-
-
 defmethod print (o:OutputStream, r:MinMaxRange) :
   print(o, "MinMaxRange(min=%_, max=%_)" % [min(r), max(r)])
 
@@ -802,7 +620,7 @@ defmethod print (o:OutputStream, esr:ESR) :
 defmethod print (o:OutputStream, s:Sourcing) :
   print(o, "ESR(price=%_, minimum-quantity=%_, stock=%_)" % [price(s), minimum-quantity(s), stock(s)])
 
-defn indented-list (items:Seqable) :
+public defn indented-list (items:Seqable) :
   new Printable :
     defmethod print (o:OutputStream, this) :
       val o2 = IndentedStream(o)
@@ -818,14 +636,14 @@ defn filter-json (json: JObject) :
   JObject(to-tuple $ filter({not contains?(["qty", "factory-stock"], key(_))}, entries(json)))
 
 
-defn parse-dimensions (dimensions: JObject) -> [Double, Double, Double|False] :
+public defn parse-dimensions (dimensions: JObject) -> [Double, Double, Double|False] :
   [dimensions["x"] as Double, dimensions["y"] as Double, optional-double(dimensions, "z")]
 
 defn optional-string (json: JObject, field: String) -> String|False :
   val j = get?(json, field)
   j as String when not (j is False or j is JNull)
 
-defn optional-double (json: JObject, field: String) -> Double|False :
+public defn optional-double (json: JObject, field: String) -> Double|False :
   val j = get?(json, field)
   j as Double when not (j is False or j is JNull)
 
@@ -833,7 +651,7 @@ public defstruct MinMaxRange :
   min: Double
   max: Double
 
-defn parse-rated-temperature (json: JObject) -> MinMaxRange|False :
+public defn parse-rated-temperature (json: JObject) -> MinMaxRange|False :
   val rated-temperature-json = get?(json, "rated-temperature")
   match(rated-temperature-json: JObject) :
     MinMaxRange(rated-temperature-json["min"] as Double, rated-temperature-json["max"] as Double)
@@ -843,19 +661,9 @@ defn parse-tolerance (json: JObject) -> MinMaxRange|False :
   match(tolerance-json: JObject) :
       MinMaxRange(tolerance-json["min"] as Double, tolerance-json["max"] as Double)
 
-defn parse-supply-voltage (json: JObject) -> MinMaxRange :
-  val supply-voltage-json = json["rated-temperature"] as JObject
-  MinMaxRange(supply-voltage-json["min"] as Double, supply-voltage-json["max"] as Double)
-
 defn parse-sourcing (json: JObject) -> Sourcing :
   ; minimum-quantity and stock are float in MongoDB even though the python scraper do gives python ints to pymongo.
   Sourcing(optional-double(json, "price"), to-int(json["minimum_quantity"] as Double), to-int(json["stock"] as Double))
-
-defn parse-sellers (json: JObject) -> Tuple<Tuple<KeyValue<String, ?>>>|False:
-  val sellers = get?(json, "sellers")
-  if not sellers is False :
-    val cast-sellers = sellers as Tuple<JObject>
-    map(entries, cast-sellers)
 
 defn emodel-pourcentage-tolerance (value: MinMaxRange|False) -> Double|UNKNOWN :  ; FIXME: Tolerance minmax range not handled properly but emodel is going depricated
   match(value: MinMaxRange) :
