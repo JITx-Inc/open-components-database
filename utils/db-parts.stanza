@@ -18,6 +18,8 @@ defpackage ocdb/db-parts :
   import ocdb/generator-utils
   import ocdb/symbols
   import ocdb/design-vars
+  import ocdb/property-structs
+  import ocdb/box-symbol
 
 
 deftype Component
@@ -577,7 +579,6 @@ defn int (json: JSON) -> Int:
 public defn MicroController (raw-json: JObject) -> MicroController :
   val json = filter-json(raw-json)
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
-  println(json)
 
   MicroController(json["manufacturer"] as String,
                   json["mpn"] as String,
@@ -601,11 +602,36 @@ public defn MicroController (raw-json: JObject) -> MicroController :
 
 defmethod to-esir (mcu: MicroController) -> Instantiable :
   pcb-component my-microcontroller :
-    val manufacturer-string = manufacturer(mcu)
-    match(manufacturer-string: String) :
-      manufacturer = manufacturer-string
-
+    manufacturer = manufacturer(mcu)
     mpn = mpn(mcu)
+    val generic-props = GenericPin(Interval(-0.3, 4.0, false), 2000.0)
+    val supply-voltage = supply-voltage(mcu)
+    val power-props = PowerPin(Interval(min(supply-voltage), max(supply-voltage), false))
+    ;pin-properties :
+    ;  [pin:Ref | pads:Int ... | side:Dir| generic-pin:GenericPin | power-pin:PowerPin ]
+    ;  What is the paatern of pins?
+
+    val x = x(mcu)
+    val landpattern =
+      switch(mfg-package(mcu)) :
+      "LQFP64" :
+        qfp-landpattern(0.5, x, 64, 0.3, 1.2)
+      "LQFP48" :
+        qfp-landpattern(0.5, x, 48, 0.3, 1.2)
+      "VFQFPN36" :
+        qfn-landpattern(0.5, x, 36, 0.23, 0.55, [4.8 4.8])
+      ;"UFQFPN28" :
+      ;  qfn-landpattern(0.5, x, 28, 0.25, 0.4, false)
+      "TFBGA64" :
+        bga-pkg(0.5, 0.28, [8, 8], [x y(mcu)], [])
+      "LFBGA100" :
+        bga-pkg(0.8, 0.5, [10, 10], [x y(mcu)], [])
+      "TSSOP20" :
+        sop65-landpattern(20, x)
+    assign-landpattern(landpattern)
+    make-box-symbol()
+
+    ocdb/components/STM32F031F_4-6_Px/supports/make-supports()  ; Wrong, put a switch with correct one
 
   my-microcontroller
 
