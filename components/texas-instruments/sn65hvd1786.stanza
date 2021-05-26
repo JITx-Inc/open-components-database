@@ -53,23 +53,25 @@ public pcb-component component :
   manufacturer = "Texas Instruments"
   name = "TI:SN65HVD1786D"
   reference-prefix = "U"
-  mpn = "SN65HVD1786"
+  mpn = "SN65HVD1786DR‎"
 
-public pcb-module module (r:Double) :
-  public inst xcvr : ocdb/texas-instruments/SN65HVD1786/component
-  public inst rterm : chip-resistor(r)
+public pcb-module module (terminate:Double|False) :
+  inst xcvr : ocdb/texas-instruments/SN65HVD1786/component
   port power : power
   port rs485 : rs485
+  port uart : uart-with([`rts])
   pin R
-  net (R xcvr.R)
+  net (R uart.rx xcvr.R)
   pin D
-  net (D xcvr.D)
+  net (D uart.tx xcvr.D)
   pin NRE
   net (NRE xcvr.NRE)
   pin DE
-  net (DE xcvr.DE)
+  net (DE uart.rts xcvr.DE)
   bypass-cap-strap(xcvr.VDD, xcvr.GND, 0.1e-6)
   net (power.vdd xcvr.VDD )
   net (power.gnd xcvr.GND )
-  net (rterm.p[1] xcvr.A rs485.a)
-  net (rterm.p[2] xcvr.B rs485.b)
+  net (xcvr.A rs485.a)
+  net (xcvr.B rs485.b)
+  
+  match(terminate:Double) : res-strap(xcvr.A xcvr.B, terminate)
