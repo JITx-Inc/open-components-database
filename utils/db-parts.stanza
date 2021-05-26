@@ -12,6 +12,7 @@ defpackage ocdb/db-parts :
   import jitx/param-sets
   import jitx/params
   import jitx/param-manager
+  import jitx/errors
 
   import ocdb/defaults
   import ocdb/land-patterns
@@ -601,6 +602,41 @@ public defn MicroController (raw-json: JObject) -> MicroController :
                   parse-supply-voltage(json))
 
 defmethod to-esir (mcu: MicroController) -> Instantiable :
+  pcb-component my-microcontroller :
+    manufacturer = manufacturer(mcu)
+    mpn = mpn(mcu)
+    val generic-props = GenericPin(Interval(-0.3, 4.0, false), 2000.0)
+    val supply-voltage = supply-voltage(mcu)
+    val power-props = PowerPin(Interval(min(supply-voltage), max(supply-voltage), false))
+    ;pin-properties :
+    ;  [pin:Ref | pads:Int ... | side:Dir| generic-pin:GenericPin | power-pin:PowerPin ]
+    ;  What is the paatern of pins?
+
+    val x = x(mcu)
+    val landpattern =
+      switch(mfg-package(mcu)) :
+      "LQFP64" :
+        qfp-landpattern(0.5, x, 64, 0.3, 1.2)
+      "LQFP48" :
+        qfp-landpattern(0.5, x, 48, 0.3, 1.2)
+      "VFQFPN36" :
+        qfn-landpattern(0.5, x, 36, 0.23, 0.55, [4.8 4.8])
+      "UFQFPN28" :
+        qfn-landpattern(0.5, x, 28, 0.25, 0.4)
+      "TFBGA64" :
+        bga-pkg(0.5, 0.28, [8, 8], [x y(mcu)], [])
+      "LFBGA100" :
+        bga-pkg(0.8, 0.5, [10, 10], [x y(mcu)], [])
+      "TSSOP20" :
+        sop65-landpattern(20, x)
+    assign-landpattern(landpattern)
+    make-box-symbol()
+
+    ;ocdb/components/STM32F031F_4-6_Px/supports/make-supports()  ; Wrong, put a switch with correct one
+
+  my-microcontroller
+
+public defn find-stm32-module (mpn: String) -> (Tuple<KeyValue> -> Instantiable) :
   switch(mpn) :
     "STM32F102R4T6A" :
       ocdb/st-microelectronics/STM32F102R4T6A/module
@@ -630,41 +666,7 @@ defmethod to-esir (mcu: MicroController) -> Instantiable :
       ocdb/st-microelectronics/STM32L031F6P6/module
     "STM32F038G6U6" :
       ocdb/st-microelectronics/STM32F038G6U6/module
-
-defn to-esir-component (mcu: MicroController) -> Instantiable :
-  pcb-component my-microcontroller :
-    manufacturer = manufacturer(mcu)
-    mpn = mpn(mcu)
-    val generic-props = GenericPin(Interval(-0.3, 4.0, false), 2000.0)
-    val supply-voltage = supply-voltage(mcu)
-    val power-props = PowerPin(Interval(min(supply-voltage), max(supply-voltage), false))
-    ;pin-properties :
-    ;  [pin:Ref | pads:Int ... | side:Dir| generic-pin:GenericPin | power-pin:PowerPin ]
-    ;  What is the paatern of pins?
-
-    val x = x(mcu)
-    val landpattern =
-      switch(mfg-package(mcu)) :
-      "LQFP64" :
-        qfp-landpattern(0.5, x, 64, 0.3, 1.2)
-      "LQFP48" :
-        qfp-landpattern(0.5, x, 48, 0.3, 1.2)
-      "VFQFPN36" :
-        qfn-landpattern(0.5, x, 36, 0.23, 0.55, [4.8 4.8])
-      ;"UFQFPN28" :
-      ;  qfn-landpattern(0.5, x, 28, 0.25, 0.4, false)
-      "TFBGA64" :
-        bga-pkg(0.5, 0.28, [8, 8], [x y(mcu)], [])
-      "LFBGA100" :
-        bga-pkg(0.8, 0.5, [10, 10], [x y(mcu)], [])
-      "TSSOP20" :
-        sop65-landpattern(20, x)
-    assign-landpattern(landpattern)
-    make-box-symbol()
-
-    ocdb/components/STM32F031F_4-6_Px/supports/make-supports()  ; Wrong, put a switch with correct one
-
-  my-microcontroller
+; inst stm : Micocontroller("family" => "STM32F0" "flash.min" => 1000.0e3])([`bypass-package => 4.7e-6])
 
 public defn MicroController (properties:Tuple<KeyValue>) -> MicroController :
   MicroController(properties, [])
@@ -689,7 +691,10 @@ public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>, so
                                              temperature-properties,
                                              properties])
   val jsons = dbquery-all(query-properties) as Tuple<JObject>
-  MicroController(jsons[0])
+  if length(jsons) == 0 :
+    throw(NoComponentMeetingRequirements(query-properties))
+  else :
+    MicroController(jsons[0])
 
 ;============================================================
 ;====================== Printer =============================
