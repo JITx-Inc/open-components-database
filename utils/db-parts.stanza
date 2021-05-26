@@ -9,8 +9,11 @@ defpackage ocdb/db-parts :
     prefix(Capacitor) => EModel-
     prefix(Inductor) => EModel-
   import jitx/commands
-  import ocdb/defaults
+  import jitx/param-sets
+  import jitx/params
+  import jitx/param-manager
 
+  import ocdb/defaults
   import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/symbols
@@ -552,9 +555,9 @@ public defstruct MicroController <: Component :
   trust: String
   x: Double with: (as-method => true)
   y: Double with: (as-method => true)
-  z: Double
+  z: Double|False
   mounting: String
-  rated-temperature: MinMaxRange
+  rated-temperature: MinMaxRange|False
   ; Specific properties
   core: String
   core-architecture: String
@@ -568,10 +571,13 @@ public defstruct MicroController <: Component :
   series: String
   supply-voltage: MinMaxRange
 
+defn int (json: JSON) -> Int:
+  to-int(json as Double)
 
 public defn MicroController (raw-json: JObject) -> MicroController :
   val json = filter-json(raw-json)
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
+  println(json)
 
   MicroController(json["manufacturer"] as String,
                   json["mpn"] as String,
@@ -583,10 +589,10 @@ public defn MicroController (raw-json: JObject) -> MicroController :
                   parse-rated-temperature(json),
                   json["core"] as String,
                   json["core-architecture"] as String,
-                  json["data-width"] as Int,
+                  int(json["data-width"]),
                   json["flash"] as Double,
                   json["frequency"] as Double,
-                  json["io"] as Int,
+                  int(json["io"]),
                   json["line"] as String,
                   json["mfg-package"] as String,
                   json["ram"] as Double,
@@ -595,7 +601,7 @@ public defn MicroController (raw-json: JObject) -> MicroController :
 
 defmethod to-esir (mcu: MicroController) -> Instantiable :
   pcb-component my-microcontroller :
-    val manufacturer-string = manufacturer(inductor)
+    val manufacturer-string = manufacturer(mcu)
     match(manufacturer-string: String) :
       manufacturer = manufacturer-string
 
@@ -606,17 +612,25 @@ defmethod to-esir (mcu: MicroController) -> Instantiable :
 public defn MicroController (properties:Tuple<KeyValue>) -> MicroController :
   MicroController(properties, [])
 
-public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>) -> Inductor :
+public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>) -> MicroController :
   MicroController(properties, exist, OPTIMIZE-FOR, ["max-rated-temperature.min" => OPERATING-TEMPERATURE[0],
-                                             "min-rated-temperature.max" => OPERATING-TEMPERATURE[1]])
+                                                    "min-rated-temperature.max" => OPERATING-TEMPERATURE[1]])
 
 public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, temperature-properties:Tuple<KeyValue>) -> MicroController :
-  val query-properties = to-tuple $ cat-all([["category" => "inductor",
+  val params = jitx-params()
+  val vendors = bom-vendors(params)
+  val vendor-properties =
+    match(vendors: Tuple<String>) :
+      ["_sellers" => vendors]
+    else :
+      []
+  val query-properties = to-tuple $ cat-all([["category" => "microcontroller",
                                               "_sort" => sort,
-                                              "_exist" => exist],
+                                              "_exist" => exist,
+                                              "_stock" => DESIGN-QUANTITY],
+                                             vendor-properties
                                              temperature-properties,
                                              properties])
-
   val jsons = dbquery-all(query-properties) as Tuple<JObject>
   MicroController(jsons[0])
 
