@@ -34,9 +34,9 @@ pcb-landpattern sn65hvd1786d-lp :
   ref-label()
 
 public pcb-component component :
-  val generic-props = GenericPin(Interval(-0.3, 5.5, false), 4000.0)
-  val ab-props = GenericPin(Interval(-25.0, 25.0, false), 16000.0)
-  val power-props = PowerPin(Interval(4.5, 5.5, false))
+  val generic-props = GenericPin(Interval(-0.3, 7.0, false), 4000.0)
+  val ab-props = GenericPin(Interval(-70.0, 70.0, false), 16000.0)
+  val power-props = PowerPin(Interval(3.15, 5.5, false))
   pin-properties :
     [pin:Ref | pads:Int ... | side:Dir| generic-pin:GenericPin | power-pin:PowerPin ]
     [R   | 1 | Left     | generic-props | - ]
@@ -53,8 +53,17 @@ public pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "SN65HVD1781QDRQ1"
 
+  eval-when has-property?(self.VDD.rail-voltage) :
+    val vdd  = property(self.VDD.rail-voltage)
+    val drive-props = DigitalOutput(CMOSOutput(Interval(0.0, 0.8, false), Interval(2.4, vdd - 0.3, false)), false, self.VDD, self.GND)
+    val input-props = DigitalInput(0.8, 2.0, self.VDD, self.GND, 50.0e-6)
+    for o in [self.R] do :
+      property(o.digital-output) = drive-props
+    for i in [self.D self.DE self.NRE] do :
+      property(i.digital-input) = input-props
+
 public pcb-module module (terminate:Double|False) :
-  inst xcvr : ocdb/texas-instruments/SN65HVD1786/component
+  inst xcvr : ocdb/texas-instruments/SN65HVD1781/component
   port power : power
   port rs485 : rs485
   port uart : uart-with([`rts])
