@@ -541,6 +541,84 @@ public defn Inductor (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tupl
   ; Inductor("manufacturer", "mpn", "trust", 0.0, 0.0, 0.0, "mounting", false, false, Sourcing(false, 0, 0), [], "type", false, 0.0, false, false, false, false, false, false, false)
 
 
+;============================================================
+;===================== Micro Controller =====================
+;============================================================
+
+public defstruct MicroController <: Component :
+  ; Generic properties
+  manufacturer: String
+  mpn: String
+  trust: String
+  x: Double with: (as-method => true)
+  y: Double with: (as-method => true)
+  z: Double
+  mounting: String
+  rated-temperature: MinMaxRange
+  ; Specific properties
+  core: String
+  core-architecture: String
+  data-width: Int
+  flash: Double
+  frequency: Double
+  io: Int
+  line: String
+  mfg-package: String
+  ram: Double
+  series: String
+  supply-voltage: MinMaxRange
+
+
+public defn MicroController (raw-json: JObject) -> MicroController :
+  val json = filter-json(raw-json)
+  val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
+
+  MicroController(json["manufacturer"] as String,
+                  json["mpn"] as String,
+                  json["trust"] as String,
+                  x,
+                  y,
+                  z,
+                  json["mounting"] as String,
+                  parse-rated-temperature(json),
+                  json["core"] as String,
+                  json["core-architecture"] as String,
+                  json["data-width"] as Int,
+                  json["flash"] as Double,
+                  json["frequency"] as Double,
+                  json["io"] as Int,
+                  json["line"] as String,
+                  json["mfg-package"] as String,
+                  json["ram"] as Double,
+                  json["series"] as String
+                  parse-supply-voltage(json))
+
+defmethod to-esir (mcu: MicroController) -> Instantiable :
+  pcb-component my-microcontroller :
+    val manufacturer-string = manufacturer(inductor)
+    match(manufacturer-string: String) :
+      manufacturer = manufacturer-string
+
+    mpn = mpn(mcu)
+
+  my-microcontroller
+
+public defn MicroController (properties:Tuple<KeyValue>) -> MicroController :
+  MicroController(properties, [])
+
+public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>) -> Inductor :
+  MicroController(properties, exist, OPTIMIZE-FOR, ["max-rated-temperature.min" => OPERATING-TEMPERATURE[0],
+                                             "min-rated-temperature.max" => OPERATING-TEMPERATURE[1]])
+
+public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, temperature-properties:Tuple<KeyValue>) -> MicroController :
+  val query-properties = to-tuple $ cat-all([["category" => "inductor",
+                                              "_sort" => sort,
+                                              "_exist" => exist],
+                                             temperature-properties,
+                                             properties])
+
+  val jsons = dbquery-all(query-properties) as Tuple<JObject>
+  MicroController(jsons[0])
 
 ;============================================================
 ;====================== Printer =============================
@@ -609,6 +687,27 @@ defmethod print (o:OutputStream, r:Inductor) :
     "metadata = %_" % [indented-list(metadata(r))]]
   print(o, "Inductor(%_)" % [indented-list(items)])
 
+defmethod print (o:OutputStream, r:MicroController) :
+  val items = [
+    "mpn = %_" % [mpn(r)]
+    "trust = %_" % [trust(r)]
+    "(x, y, z) = (%,)" % [[x(r), y(r), z(r)]]
+    "mounting = %_" % [mounting(r)]
+    "rated-temperature = %_" % [rated-temperature(r)]
+    "core = %_" % [core(r)]
+    "core-architecture = %_" % [core-architecture(r)]
+    "data-width = %_" % [data-width(r)]
+    "flash = %_" % [flash(r)]
+    "frequency = %_" % [frequency(r)]
+    "io = %_" % [io(r)]
+    "line = %_" % [line(r)]
+    "mfg-package = %_" % [mfg-package(r)]
+    "ram = %_" % [ram(r)]
+    "series = %_" % [series(r)]
+    "supply-voltage = %_" % [supply-voltage(r)]]
+  print(o, "MicroController(%_)" % [indented-list(items)])
+
+
 defmethod print (o:OutputStream, r:MinMaxRange) :
   print(o, "MinMaxRange(min=%_, max=%_)" % [min(r), max(r)])
 
@@ -626,6 +725,7 @@ defn indented-list (items:Seqable) :
     defmethod print (o:OutputStream, this) :
       val o2 = IndentedStream(o)
       do(lnprint{o2, _}, items)
+
 
 ;============================================================
 ;=================== Parsing utils ==========================
@@ -660,6 +760,10 @@ defn parse-tolerance (json: JObject) -> MinMaxRange|False :
   val tolerance-json = get?(json, "tolerance")
   match(tolerance-json: JObject) :
       MinMaxRange(tolerance-json["min"] as Double, tolerance-json["max"] as Double)
+
+defn parse-supply-voltage (json: JObject) -> MinMaxRange :
+  val supply-voltage-json = json["rated-temperature"] as JObject
+  MinMaxRange(supply-voltage-json["min"] as Double, supply-voltage-json["max"] as Double)
 
 defn parse-sourcing (json: JObject) -> Sourcing :
   ; minimum-quantity and stock are float in MongoDB even though the python scraper do gives python ints to pymongo.
