@@ -573,6 +573,8 @@ public defstruct MicroController <: Component :
   ram: Double
   series: String
   supply-voltage: MinMaxRange
+  price: Double|False
+  sellers: Tuple<Tuple<KeyValue<String, ?>>>|False
 
 defn int (json: JSON) -> Int:
   to-int(json as Double)
@@ -599,7 +601,9 @@ public defn MicroController (raw-json: JObject) -> MicroController :
                   json["mfg-package"] as String,
                   json["ram"] as Double,
                   json["series"] as String
-                  parse-supply-voltage(json))
+                  parse-supply-voltage(json),
+                  optional-double(json, "resolved_price"),
+                  parse-sellers(json))
 
 defmethod to-esir (mcu: MicroController) -> Instantiable :
   pcb-component my-microcontroller :
@@ -780,7 +784,9 @@ defmethod print (o:OutputStream, r:MicroController) :
     "mfg-package = %_" % [mfg-package(r)]
     "ram = %_" % [ram(r)]
     "series = %_" % [series(r)]
-    "supply-voltage = %_" % [supply-voltage(r)]]
+    "supply-voltage = %_" % [supply-voltage(r)]
+    "price = %_" % [price(r)]
+    "sellers = %_" % [sellers(r)]]
   print(o, "MicroController(%_)" % [indented-list(items)])
 
 
@@ -844,6 +850,12 @@ defn parse-supply-voltage (json: JObject) -> MinMaxRange :
 defn parse-sourcing (json: JObject) -> Sourcing :
   ; minimum-quantity and stock are float in MongoDB even though the python scraper do gives python ints to pymongo.
   Sourcing(optional-double(json, "price"), to-int(json["minimum_quantity"] as Double), to-int(json["stock"] as Double))
+
+defn parse-sellers (json: JObject) -> Tuple<Tuple<KeyValue<String, ?>>>|False:
+  val sellers = get?(json, "sellers")
+  if not sellers is False :
+    val cast-sellers = sellers as Tuple<JObject>
+    map(entries, cast-sellers)
 
 defn emodel-pourcentage-tolerance (value: MinMaxRange|False) -> Double|UNKNOWN :  ; FIXME: Tolerance minmax range not handled properly but emodel is going depricated
   match(value: MinMaxRange) :
