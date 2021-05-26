@@ -30,16 +30,10 @@ pcb-landpattern vl53l1cxv0fyslash-1 :
   pad p[10] : smd-pad(0.508, 0.508) at loc(-0.799973, 0.800001, 90.0)
   pad p[11] : smd-pad(0.508, 0.508) at loc(-0.799973, 1.599999, 90.0)
   pad p[12] : smd-pad(0.508, 0.508) at loc(0.0, 1.599946, 0.0)
-  ; layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(-0.291973, 0.990501), Point(-0.037973, 0.990501) ])
-  ; layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(-0.291973, 0.609501), Point(-0.291973, 0.990501) ])
-  ; layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(-0.037973, 0.609501), Point(-0.291973, 0.609501) ])
-  ; layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(-0.037973, 0.990501), Point(-0.037973, 0.609501) ])
-  ; layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(-1.651, 2.8575), Point(-1.651, -2.8575) ])
   layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(1.651, 2.9), Point(1.151, 2.9) ])
-  ; layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(1.651, -2.8575), Point(1.651, 2.8575) ])
-  ; layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(-1.651, -2.8575), Point(1.651, -2.8575) ])
   layer(Courtyard(Top)) = Rectangle(3.0, 5.4)
-    ref-label()
+  ref-label()
+
 public pcb-component component :
   val generic-props = GenericPin(Interval(-0.5, 3.6, false), 2000.0)
   val power-props = PowerPin(Interval(2.6, 3.6, false))
@@ -63,15 +57,21 @@ public pcb-component component :
   reference-prefix = "U"
   mpn = "VL53L1CBV0FY/1"
 
+  property(self.SCL.digital-io) = DigitalIO(OpenCollector(Interval(0.0, 0.4, false), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, self.AVDD, self.GND, 50.0e-9)
+  property(self.SDA.digital-io) = DigitalIO(OpenCollector(Interval(0.0, 0.4, false), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, self.AVDD, self.GND, 50.0e-9)
+
+
 public pcb-module module :
   port power : power
   port i2c : i2c
   pin x-shut 
-  inst tof : ocdb/st-microelectronics/VL53L1X/component
+  pin gpio1
+  public inst tof : ocdb/st-microelectronics/VL53L1X/component
   bypass-cap-strap(tof.AVDDVCSEL, tof.AVSSVCSEL, 4.7e-6)
   bypass-cap-strap(tof.AVDDVCSEL, tof.AVSSVCSEL, 0.1e-6)
   net (i2c.sda tof.SDA)
   net (i2c.scl tof.SCL)
   net (x-shut, tof.XSHUT)
+  net (gpio1, tof.GPIO1)
   net (power.vdd tof.AVDDVCSEL tof.AVDD )
   net (power.gnd tof.GND tof.AVSSVCSEL tof.GND2 tof.GND3 tof.GND4)

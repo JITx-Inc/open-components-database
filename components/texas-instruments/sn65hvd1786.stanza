@@ -55,6 +55,15 @@ public pcb-component component :
   reference-prefix = "U"
   mpn = "SN65HVD1786DR‎"
 
+  eval-when has-property?(self.VDD.rail-voltage) :
+    val vdd  = property(self.VDD.rail-voltage)
+    val drive-props = DigitalOutput(CMOSOutput(Interval(0.0, 0.8, false), Interval(2.4, vdd - 0.3, false)), false, self.VDD, self.GND)
+    val input-props = DigitalInput(0.8, 2.0, self.VDD, self.GND, 50.0e-6)
+    for o in [self.R] do :
+      property(o.digital-output) = drive-props
+    for i in [self.D self.DE self.NRE] do :
+      property(i.digital-input) = input-props
+
 public pcb-module module (terminate:Double|False) :
   inst xcvr : ocdb/texas-instruments/SN65HVD1786/component
   port power : power
