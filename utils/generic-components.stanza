@@ -5,6 +5,8 @@ defpackage ocdb/generic-components:
   import math
   import jitx
   import jitx/commands
+  import jitx/utils/box
+
   import ocdb/bundles
   import ocdb/land-patterns
   import ocdb/generator-utils
@@ -553,23 +555,32 @@ public defn dip-pull (pins:Tuple<JITXObject>, power-pin:JITXObject, gnd-pin:JITX
       net (power-pin, sws[i].t)
       res-strap(pins[i], gnd-pin, 10.0e3)
 
-public pcb-component mounting-hole-cmp (drill-r:Double, pad-r:Double, mask-r:Double) :
+; A mounting hole component with a fixed drill radius, pad radius, and mask radius.
+public pcb-component mounting-hole-cmp (drill-r:Double, pad-r:Double, mask-r:Double):
+  ; TODO: - pad-r is unused.
+  ;       - rename r -> radius
+  ;       - use shapes instead of radii.
   val pkg = non-plated-hole-pkg(drill-r, mask-r)
   landpattern = pkg()
   reference-prefix = "H"
   symbol = unplated-hole-sym()
 
+; A mounting hole component with a fixed drill radius and pad radius
 public defn mounting-hole-cmp (drill-r:Double, pad-r:Double) :
   mounting-hole-cmp(drill-r, pad-r, pad-r + 0.35)
 
+; A mounting hole component with a fixed drill radius
 public defn mounting-hole-cmp (drill-r:Double) :
   mounting-hole-cmp(drill-r, drill-r + 0.35)
 
-public defn add-mounting-holes (board:Rectangle, s:String|Double, no-hole:Tuple<Int>) :
+; Add mounting holes to the board given its shape, a screw size, and hole indices to exclude.
+public defn add-mounting-holes (board-shape:Shape, screw-size:String|Double, no-hole:Tuple<Int>) :
+  val d = dims(bounds(board-shape))
+  val board = Rectangle(x(d), y(d))
   inside pcb-module :
     val w =  width(board)
     val h =  height(board)
-    val r = match(s) :
+    val r = match(screw-size) :
       (screw:String) :
         switch(screw) :
           ;Loose Fit https://blogs.mentor.com/tom-hausherr/blog/tag/pcb-mounting-holes/
@@ -577,7 +588,7 @@ public defn add-mounting-holes (board:Rectangle, s:String|Double, no-hole:Tuple<
           "M2p5" : 2.85 / 2.0
           "M3"   : 3.5 / 2.0
           "M3p5" : 3.9 / 2.0
-          else : fatal("Unsupported Screw size %_ for mounting hole" % [screw])
+          else : fatal("Unsupported screw-size %_ for mounting hole" % [screw])
       (diameter:Double) : diameter / 2.0
       (f) : fatal("Unsupported call to mounting hole")
     val offs = r * 6.0 ;1.5X bolt diameter * 2
@@ -586,9 +597,17 @@ public defn add-mounting-holes (board:Rectangle, s:String|Double, no-hole:Tuple<
         inst hole : mounting-hole-cmp(r)
         place(hole) at l on Top
 
-public defn add-mounting-holes (board:Rectangle) :
+; Add mounting holes to the board given its shape and a screw size.
+public defn add-mounting-holes (board:Shape, screw-size:String|Double):
+  add-mounting-holes(board, screw-size, [])
+
+;  Add mounting holes to the board given its shape. Defaults to M3 size holes.
+public defn add-mounting-holes (board:Shape) :
   add-mounting-holes(board, "M3", [])
-public defn add-mounting-holes (board:Rectangle, no-hole:Tuple<Int>) :
+
+; Add mounting holes to the board given its shape, excluding holes given
+; by the indices in no-holes. Defaults to M3 size mounting holes.
+public defn add-mounting-holes (board:Shape, no-hole:Tuple<Int>) :
   add-mounting-holes(board, "M3", no-hole)
 
 ; ========================================================
