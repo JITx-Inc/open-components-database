@@ -6,27 +6,33 @@ defpackage ocdb/designs/tutorial :
   import jitx/commands
   import ocdb/defaults
   import ocdb/generic-components
-  import ocdb/bundles
   import ocdb/design-vars
-  import ocdb/micro-controllers
-  
+
+; These are global "design" variables that are used to configure 
+; internal generators.
+
+;  Tells generators what properties they should consider while optimizing 
+;  your desing - may be "cost" or "area"
 OPTIMIZE-FOR = ["cost"]
+
+; The operating temparature of the design, from min to max
 OPERATING-TEMPERATURE = [-10.0 30.0]
+
 DESIGN-QUANTITY = 0
 
-val board-shape = Rectangle(25.0, 25.0)
+; Here we define a BOARD-SHAPE to be a Rectangle - this configures the outer
+; dimensions of the board.
+val BOARD-SHAPE = Rectangle(25.0, 25.0)
 
+; We need a pcb-module to represent the top level design.
 pcb-module my-design :
-
-  public inst r : chip-resistor(1.0e3)
+  public inst r : chip-resistor(1.0e3)    ; add a resistor and capacitor
   public inst c : ceramic-cap(10.0e-6) 
 
-  inst stm : micro-controller(["line" => "STM32F102"])([`bypass-package => 4.7e-6])
+  add-mounting-holes(BOARD-SHAPE, [2 3])  ; add some mounting holes
 
-  add-mounting-holes(board-shape, [2 3])
-
-make-default-board(my-design, 4, board-shape)
+; Now we can create the design
+make-default-board(my-design, 4, BOARD-SHAPE)
 view-board()
 view-schematic()
-
 export-cad()
