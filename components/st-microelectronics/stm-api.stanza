@@ -11,6 +11,7 @@ defpackage ocdb/st-microelectronics/stm-api :
   import ocdb/symbols
   import ocdb/symbol-utils
   import ocdb/generic-components
+  import ocdb/generator-utils
   import ocdb/bundles
   import ocdb/box-symbol
   import ocdb/property-structs
@@ -39,20 +40,16 @@ public val DEFAULT-SETTINGS = [
     `bypass-pin => 100.0e-9
     `boot-from => "flash"
     `debug-interface => swd
-    `debug-connector => ocdb/tag-connect/TC2050-IDC-NL/module]
+    `debug-connector => ocdb/tag-connect/TC2050-IDC-NL/module
+    `HSE-freq => 16.0e6   `HSE-ppm => 30.0e-6 `HSE-source => "crystal"
+    `LSE-freq => 32.768e3 `LSE-ppm => 20.0e-6 `LSE-source => "crystal"]
 
 defn power-pins (stm:JITXObject) -> Tuple<JITXObject> :
   to-tuple(filter({has-property?(_.power-pin)}, pins(stm)))
 
 defn gnd-pins (stm:JITXObject) -> Tuple<JITXObject> :
-  ; println("ground pins of %_" % [stm])
-  ; for p in ports(stm) do :
-    ; println("%_ has ref %_" % [p, ref(p)])
-    ; println("vss? = %_" % [substring?(lower-case(to-string(ref(p))), "vss")])
   val result = to-tuple $ for p in pins(stm) filter :
-    ; println(ref(p))
     substring?(lower-case(to-string(ref(p))), "vss")
-  ; println("result = %_" % [result])
   result
 
 public defn generate-bypass (stm:JITXObject, bypass-package:Double, bypass-pin:Double) :
@@ -125,18 +122,34 @@ defn supports? (module:InstantiableType, bundle:PortType) -> True|False :
 public defn connect-debug (stm:JITXObject, debug-interface:PortType, connector:Instantiable) :
   inside pcb-module:
     if supports?(instantiable-type(stm), debug-interface) and supports?(connector, debug-interface):
-      inst con : connector
+      inst debug-con : connector
       require debug-m:debug-interface from stm
-      require debug-c:debug-interface from con
+      require debug-c:debug-interface from debug-con
       net (debug-m debug-c)
-      if has-port?(con, "power") :
-        net (con.power.vdd, power-pins(stm)[0])
-        net (con.power.gnd, gnd-pins(stm)[0])
+      if has-port?(debug-con, "power") :
+        net (debug-con.power.vdd, power-pins(stm)[0])
+        net (debug-con.power.gnd, gnd-pins(stm)[0])
     else :
       println("Unsupported debug-interface on %_" % [ref(stm)])
 
-; public defn setup-clocks (stm:JITXObject) :
-;   inside pcb-module:
+; defn select-crystal (freq:Double, ppm:double):
+
+public defn setup-clocks (stm:JITXObject, HSE-freq:Double, HSE-ppm:Double, HSE-source:String, LSE-freq:Double, LSE-ppm:Double, LSE-source:String) :
+  inside pcb-module:
+    val power-pin = power-pins(stm)[0]
+    val gnd-pin = gnd-pins(stm)[0]
+    ; Can we add an external clock, and do we need one?
+    if supports?(instantiable-type(stm), high-freq-oscillator) and HSE-ppm < 0.03 :
+      switch(HSE-source):
+        "crystal" :
+          inst hf-xtal : ocdb/epson/TSX-3225/component(HSE-freq)
+          require hf-osc:high-freq-oscillator from stm
+          net (hf-osc.in hf-xtal.p[1])
+          net (hf-osc.out hf-xtal.p[2])
+          val hf-cb = add-xtal-caps(hf-xtal, gnd-pin)
+          check-oscillator(hf-xtal, CrystalOscillator(3.5e-3, 100.0e-6, 3.0e-12, HSE-ppm * HSE-freq, HSE-freq), hf-cb)
+
+
 
 
 

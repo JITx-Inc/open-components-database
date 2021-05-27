@@ -237,40 +237,42 @@ public pcb-check capacitor-check (c:JITXObject) :
 
   #CHECK(temp >= property(c.rated-temperature)[0])
 
-; Checks the critical gain and drive level of an oscillator (o) against an interface on an IC (intf)
-public pcb-check oscillator-check-frequency (o:JITXObject, intf:JITXObject) :
+; Checks the frequency of an oscillator (o) against an interface on an IC (intf)
+public pcb-check oscillator-check-frequency (o:JITXObject, intf:CrystalOscillator) :
   ; Check critical gain point to ensure oscillation
-  #CHECK(has-property?(o.frequency))
-  #CHECK(has-property?(intf.frequency))
-  #CHECK(property(o.frequency) == property(intf.frequency))
-public pcb-check oscillator-check-gain (o:JITXObject, intf:JITXObject, load-cap:JITXObject) :
+  #CHECK(has-property?(o.crystal-resonator))
+  ; #CHECK(has-property?(intf.crystal-oscillator))
+  #CHECK(frequency(property(o.crystal-resonator)) == frequency(intf))
+
+; Checks the critical gain of an oscillator (o) against an interface on an IC (intf)
+public pcb-check oscillator-check-gain (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
   ; Check critical gain point to ensure oscillation
-  #CHECK(has-property?(o.shunt-capacitance))
-  #CHECK(has-property?(o.load-capacitance))
-  #CHECK(has-property?(o.ESR))
-  #CHECK(has-property?(o.frequency))
-  #CHECK(has-property?(intf.max-critical-gain))
-  val gain = 4.0 * property(o.ESR) * pow(2.0 * PI * property(o.frequency), 2.0) * pow(property(o.shunt-capacitance) + property(o.load-capacitance), 2.0)
-  #CHECK(gain < property(intf.max-critical-gain))
-public pcb-check oscillator-check-drive (o:JITXObject, intf:JITXObject, load-cap:JITXObject) :
+  #CHECK(has-property?(o.crystal-resonator))
+  ; #CHECK(has-property?(intf.crystal-oscillator))
+  val op = property(o.crystal-resonator)
+  val gain = 4.0 * ESR(op) * pow(2.0 * PI * frequency(op), 2.0) * pow(shunt-capacitance(op) + load-capacitance(op), 2.0)
+  #CHECK(gain < max-critical-gain(intf))
+
+; Checks the drive level of an oscillator (o) against an interface on an IC (intf)
+public pcb-check oscillator-check-drive (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
   ; Check drive level against crystal maximum
-  #CHECK(has-property?(intf.drive-level))
-  #CHECK(has-property?(o.max-drive-level))
-  #CHECK(property(intf.drive-level) < property(o.max-drive-level))
-  ; Check pullability of crystal to ensure accuracy
-public pcb-check oscillator-check-pullability (o:JITXObject, intf:JITXObject, load-cap:JITXObject) :
-  #CHECK(has-property?(o.motional-capacitance))
-  val pullability = property(o.motional-capacitance) / (2.0 * pow((property(o.shunt-capacitance) + property(o.load-capacitance)), 2.0))
+  #CHECK(has-property?(o.crystal-resonator))
+  ; #CHECK(has-property?(intf.crystal-oscillator))
+  #CHECK(drive-level(intf) <= max-drive-level(property(o.crystal-resonator)))
+
+; Check pullability of crystal to ensure accuracy
+public pcb-check oscillator-check-pullability (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
+  #CHECK(has-property?(o.crystal-resonator))
+  val op = property(o.crystal-resonator)
+  val pullability = motional-capacitance(op) / (2.0 * pow(shunt-capacitance(op) + load-capacitance(op), 2.0))
   #CHECK(has-property?(load-cap.tolerance))
   #CHECK(has-property?(load-cap.capacitance))
   val dC = (property(load-cap.capacitance) as Double) * (property(load-cap.tolerance)[1] as Double)
-  val freq-error = (pullability as Double) * (dC as Double)
-  #CHECK(has-property?(o.frequency-tolerance))
-  #CHECK(has-property?(intf.frequency-tolerance))
-  #CHECK(property(o.frequency-tolerance) + freq-error < property(intf.frequency-tolerance))
+  val freq-error = (pullability as Double) * (dC as Double) * frequency(op)
+  #CHECK(frequency-tolerance(op) + freq-error < frequency-tolerance(intf))
 
 
-public defn check-oscillator (o:JITXObject, intf:JITXObject, load-cap:JITXObject) :
+public defn check-oscillator (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
   inside pcb-module:
     check oscillator-check-frequency(o, intf)
     check oscillator-check-gain(o, intf, load-cap)
