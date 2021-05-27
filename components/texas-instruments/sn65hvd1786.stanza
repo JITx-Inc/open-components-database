@@ -1,0 +1,77 @@
+#use-added-syntax(jitx)
+defpackage ocdb/texas-instruments/SN65HVD1786 :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/symbol-utils
+  import ocdb/generic-components
+  import ocdb/box-symbol
+  import ocdb/bundles
+
+  import ocdb/design-vars
+  import ocdb/property-structs
+  import ocdb/checks
+  import ocdb/generator-utils
+
+pcb-landpattern sn65hvd1786d-lp :
+  val pad-shape = smd-pad(1.55, 0.6)
+  pad p[1] : pad-shape at loc(-2.7, 1.905, 0.0)
+  pad p[2] : pad-shape at loc(-2.7, 0.635, 0.0)
+  pad p[3] : pad-shape at loc(-2.7, -0.635, 0.0)
+  pad p[4] : pad-shape at loc(-2.7, -1.905, 0.0)
+  pad p[5] : pad-shape at loc(2.7 -1.905, 0.0)
+  pad p[6] : pad-shape at loc(2.7, -0.635, 0.0)
+  pad p[7] : pad-shape at loc(2.7, 0.635, 0.0)
+  pad p[8] : pad-shape at loc(2.7, 1.905, 0.0)
+
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.2, [ Point(2.1, 2.64), Point(1.7, 2.64) ])
+  layer(Courtyard(Top)) = Rectangle(6.6, 5.6)
+  ref-label()
+
+public pcb-component component :
+  val generic-props = GenericPin(Interval(-0.3, 5.5, false), 4000.0)
+  val ab-props = GenericPin(Interval(-25.0, 25.0, false), 16000.0)
+  val power-props = PowerPin(Interval(4.5, 5.5, false))
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir| generic-pin:GenericPin | power-pin:PowerPin ]
+    [R   | 1 | Left     | generic-props | - ]
+    [NRE | 2 | Left     | generic-props | - ]
+    [D   | 3 | Left     | generic-props | - ]
+    [DE  | 4 | Left     | generic-props | - ]
+    [GND | 5 | Down     | generic-props | - ]
+    [A   | 6 | Right    | ab-props      | - ]
+    [B   | 7 | Right    | ab-props      | - ]
+    [VDD | 8 | Up       | generic-props | power-props ]
+  
+  make-box-symbol()
+  assign-landpattern(sn65hvd1786d-lp)
+  manufacturer = "Texas Instruments"
+  name = "TI:SN65HVD1786D"
+  reference-prefix = "U"
+  mpn = "SN65HVD1786DR‎"
+
+public pcb-module module (terminate:Double|False) :
+  inst xcvr : ocdb/texas-instruments/SN65HVD1786/component
+  port power : power
+  port rs485 : rs485
+  port uart : uart-with([`rts])
+  pin R
+  net (R uart.rx xcvr.R)
+  pin D
+  net (D uart.tx xcvr.D)
+  pin NRE
+  net (NRE xcvr.NRE)
+  pin DE
+  net (DE uart.rts xcvr.DE)
+  bypass-cap-strap(xcvr.VDD, xcvr.GND, 0.1e-6)
+  net (power.vdd xcvr.VDD )
+  net (power.gnd xcvr.GND )
+  net (xcvr.A rs485.a)
+  net (xcvr.B rs485.b)
+  
+  match(terminate:Double) : res-strap(xcvr.A xcvr.B, terminate)
