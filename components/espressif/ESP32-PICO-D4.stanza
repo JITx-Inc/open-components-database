@@ -99,8 +99,8 @@ public pcb-component component :
   property(VDD3P3-RTC.power-pin) = PowerPin(Interval(2.3, 3.6, 3.3))
   eval-when has-property?(VDD3P3-CPU.rail-voltage):
     val vdd = property(VDD3P3-CPU.rail-voltage)
-    val drive-props = DigitalOutput(CMOSOutput(Interval(0.0, 0.1 * vdd, false), Interval(0.8 * vdd, vdd, false)))
-    val input-props = DigitalInput(0.25 * vdd, 0.75 * vdd)
+    val drive-props = DigitalOutput(CMOSOutput(Interval(0.0, 0.1 * vdd, false), Interval(0.8 * vdd, vdd, false)), false, VDD3P3-CPU, GND)
+    val input-props = DigitalInput(0.25 * vdd, 0.75 * vdd, VDD3P3-CPU, GND, 50.0e-9)
     property(U0TXD.digital-output) = drive-props
     property(U0RXD.digital-input) = input-props
     property(EN.reset-pin) = ResetPin(input-props)
@@ -111,6 +111,7 @@ public pcb-component component :
     if not contains?(reserved-io, IO-pin) :
       supports io-pin:
         io-pin.p => IO-pin
+        
 
 ; Generic digital pin
 pcb-bundle io-pin:
@@ -138,7 +139,7 @@ public pcb-module module :
   public inst q : ocdb/nexperia/PMBT3904/component[2]
   res-strap(uart.dtr, q[0].b, 10.0e3)
   res-strap(uart.rts, q[1].b, 10.0e3)
-  net BOOT (mcu.IO[0], q[1].c boot)
+  net (mcu.IO[0], q[1].c boot)
   net (mcu.EN, q[0].c en)
   net (uart.rts, q[0].e)
   net (uart.dtr, q[1].e)
@@ -149,27 +150,27 @@ public pcb-module module :
     supports gpio:
       require io:io-pin from mcu
       gpio.gpio => io.p
-      property(io.p.digital-io) = DigitalIO(CMOSOutput(Interval(0.0, 0.1 * 3.3, false), Interval(0.8 * 3.3, 3.3, false)), 0.25 * 3.3, 0.75 * 3.3)
+      property(io.p.digital-io) = DigitalIO(CMOSOutput(Interval(0.0, 0.1 * 3.3, false), Interval(0.8 * 3.3, 3.3, false)), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
   for i in 0 to 16 do:
     supports pwm:
       require io:io-pin from mcu
       pwm.pwm => io.p
-      property(io.p.digital-io) = DigitalIO(CMOSOutput(Interval(0.0, 0.1 * 3.3, false), Interval(0.8 * 3.3, 3.3, false)), 0.25 * 3.3, 0.75 * 3.3)
+      property(io.p.digital-io) = DigitalIO(CMOSOutput(Interval(0.0, 0.1 * 3.3, false), Interval(0.8 * 3.3, 3.3, false)), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
   for i in 0 to 2 do:
     supports i2c:
       require io:io-pin[2] from mcu
       i2c.sda => io[0].p
       i2c.scl => io[1].p
-      property(io[0].p.digital-io) = DigitalIO(OpenCollector(Interval(0.0, 0.1 * 3.3, false), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3)
-      property(io[1].p.digital-io) = DigitalIO(OpenCollector(Interval(0.0, 0.1 * 3.3, false), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3)
+      property(io[0].p.digital-io) = DigitalIO(OpenCollector(Interval(0.0, 0.1 * 3.3, false), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
+      property(io[1].p.digital-io) = DigitalIO(OpenCollector(Interval(0.0, 0.1 * 3.3, false), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
   for i in 0 to 2 do:
     val ocdb-uart = ocdb/bundles/uart
     supports ocdb-uart:
       require io:io-pin[2] from mcu
       ocdb-uart.tx => io[0].p
-      property(io[0].p.digital-output) = DigitalOutput(CMOSOutput(Interval(0.0, 0.1 * 3.3, false), Interval(0.8 * 3.3, 3.3, false)))
+      property(io[0].p.digital-output) = DigitalOutput(CMOSOutput(Interval(0.0, 0.1 * 3.3, false), Interval(0.8 * 3.3, 3.3, false)), false, mcu.VDD3P3-CPU, mcu.GND)
       ocdb-uart.rx => io[1].p
-      property(io[1].p.digital-input) = DigitalInput(0.25 * 3.3, 0.75 * 3.3)
+      property(io[1].p.digital-input) = DigitalInput(0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)  
 
 pcb-landpattern pqfn50p700x700x104-49n :
   pad p[1] : smd-pad(0.45, 0.35) at loc(-3.265, 2.75, 0.0)
