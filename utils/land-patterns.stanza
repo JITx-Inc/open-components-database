@@ -203,6 +203,32 @@ pcb-pad chamferedrect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
 public defn chamferedrect-smd-pad (w:Double, h:Double, r:Double) :
   chamferedrect-smd-pad(C, w, h, r)
 
+pcb-pad dshape-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  name = to-string("%_ DShape PTH Pad (drill = (%_, %_), pad = (%_, %_, %_))" % [
+           anchor, drill-w, drill-h, pad-w, pad-h, pad-r])
+  type = TH
+  shape = DShape(pad-w, pad-h, pad-r)
+  layer(Cutout()) = Circle(anchor, drill-w) when drill-w == drill-h else
+                    Capsule(anchor, drill-w, drill-h)
+  layer(SolderMask(Top)) = DShape(pad-w, pad-h, pad-r)
+  layer(SolderMask(Bottom)) = DShape(pad-w, pad-h, pad-r)
+
+public defn dshape-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  dshape-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
+
+public defn dshape-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  dshape-pth-pad(C, drill-w, drill-h, pad-w, pad-h, pad-r)
+
+pcb-pad dshape-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
+  name = to-string("(%_, %_, %_) %_ DShape SMD Pad" % [w,h,r,anchor])
+  type = SMD
+  shape = DShape(anchor, w, h, r)
+  layer(Paste(Top)) = DShape(anchor, w, h, r)
+  layer(SolderMask(Top)) = DShape(anchor, w, h, r)
+
+public defn dshape-smd-pad (w:Double, h:Double, r:Double) :
+  dshape-smd-pad(C, w, h, r)
+
 public pcb-landpattern non-plated-hole-pkg (drill-r:Double, mask-r:Double) :
   layer(Cutout()) = Circle(C, drill-r)
   layer(SolderMask(Top)) = Circle(C, mask-r)
