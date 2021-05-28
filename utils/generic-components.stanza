@@ -510,25 +510,15 @@ public defn add-testpad (rs:Tuple<JITXObject>, d:Double) :
       public inst tp : gen-testpad(d)
       net (tp.tp, r)
 
-public pcb-component top-smd-testpoint-cmp (d:Double) :
+public pcb-component smd-testpoint-cmp (d:Double) :
   pin p
   symbol = test-point-sym(p => test-point-sym.p)
-  val pkg = top-smd-testpoint-pkg(d)
+  val pkg = smd-testpoint-pkg(d)
   landpattern = pkg(p => pkg.p)
   reference-prefix = "TP"
 
-public pcb-component btm-smd-testpoint-cmp (d:Double) :
-  pin p
-  symbol = test-point-sym(p => test-point-sym.p)
-  val pkg = btm-smd-testpoint-pkg(d)
-  landpattern = pkg(p => pkg.p)
-  reference-prefix = "TP"
-
-public defn top-smd-testpoint-cmp () :
-  top-smd-testpoint-cmp(2.0)
- 
-public defn btm-smd-testpoint-cmp () :
-  btm-smd-testpoint-cmp(2.0)
+public defn smd-testpoint-cmp () :
+  smd-testpoint-cmp(2.0)
 
 ;<gnd>
 public defn filter (in:JITXObject, out:JITXObject, type:String, params:Tuple<Double>) :
@@ -553,17 +543,29 @@ public defn dip-pull (pins:Tuple<JITXObject>, power-pin:JITXObject, gnd-pin:JITX
       net (power-pin, sws[i].t)
       res-strap(pins[i], gnd-pin, 10.0e3)
 
-public pcb-component mounting-hole-cmp (drill-r:Double, pad-r:Double, mask-r:Double) :
-  val pkg = non-plated-hole-pkg(drill-r, mask-r)
-  landpattern = pkg()
+; A mounting hole component with drill and mask radius. Pad radius is unused.
+public pcb-component mounting-hole (drill-r:Double, pad-r:Double, mask-r:Double) :
+  name             = "Generic Mounting Hole"
+  description      = to-string("%~mm mounting hole" % [2. * drill-r])
+  landpattern      = (non-plated-hole-landpattern(drill-r, mask-r))()
+  symbol           = unplated-hole-sym()
   reference-prefix = "H"
-  symbol = unplated-hole-sym()
 
-public defn mounting-hole-cmp (drill-r:Double, pad-r:Double) :
-  mounting-hole-cmp(drill-r, pad-r, pad-r + 0.35)
+; A mounting hole component with drill and pad radius. 
+public defn mounting-hole (drill-r:Double, pad-r:Double) :
+  mounting-hole(drill-r, pad-r, pad-r + 0.35)
 
-public defn mounting-hole-cmp (drill-r:Double) :
-  mounting-hole-cmp(drill-r, drill-r + 0.35)
+; A mounting hole component with a fixed drill radius
+public defn mounting-hole (drill-r:Double) :
+  mounting-hole(drill-r, drill-r + 0.35)
+
+; A non-standard hole with arbitrary shape
+public pcb-component hole-component (hole-shape:Shape):
+  name              = "Generic hole"
+  description       = to-string("%_ shaped hole" % [hole-shape])
+  landpattern       = (non-plated-hole-landpattern(hole-shape))()
+  symbol            = unplated-hole-sym()
+  reference-prefix = "H"
 
 public defn board-mounting-holes (w:Double, h:Double, s:String|Double) :
   inside pcb-module :
@@ -578,7 +580,7 @@ public defn board-mounting-holes (w:Double, h:Double, s:String|Double) :
           else : fatal("Unsupported Screw size %_ for mounting hole" % [screw])
       (diameter:Double) : diameter / 2.0
       (f) : fatal("Unsupported call to mounting hole")
-    public inst holes : mounting-hole-cmp(r)[4]
+    public inst holes : mounting-hole(r)[4]
     val offs = r * 6.0 ;1.5X bolt diameter * 2
     for (l in grid-locs(2, 2, w - offs, h - offs), i in 0 to 4) do :
       place(holes[i]) at l on Top
