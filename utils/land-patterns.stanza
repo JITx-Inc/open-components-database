@@ -108,6 +108,22 @@ public defn PlusSymbol (center:Point, l:Double) -> Shape:
 public defn PlusSymbol (x:Double, y:Double) -> Shape:
   PlusSymbol(Point(x, y), 1.0)
 
+; Create a row of poses
+public defn pose-row (origin:Pose, count:Int, pitch:Double) -> Seqable<Pose>:
+  for n in 0 to count seq:
+    Pose(center(origin) + Point(pitch, 0.0), angle(origin), flip-x?(origin))
+
+; Create a column of poses
+public defn pose-column (origin:Pose, count:Int, pitch:Double) -> Seqable<Pose>:
+  for n in 0 to count seq:
+    Pose(center(origin) + Point(0.0, 0.0), angle(origin), flip-x?(origin))
+
+; Create a matrix of poses by row.
+public defn pose-matrix (origin:Pose, num-rows:Int, num-columns:Int, row-pitch:Double, column-pitch:Double) -> Seqable<Seqable<Pose>>:
+  for r in 0 to num-rows seq:
+    val row-origin = Pose(center(origin) + Point(0.0, row-pitch), angle(origin), flip-x?(origin))
+    pose-row(row-origin, num-columns, column-pitch)
+
 ;==============================================================================
 ;================================= Pads =======================================
 ;==============================================================================
@@ -297,10 +313,49 @@ public defn non-plated-hole-landpattern (drill-r:Double, mask-r:Double) :
 public defn non-plated-hole-landpattern (drill-r:Double) :
   non-plated-hole-landpattern(drill-r, drill-r)
 
-; Create a landpattern with a single pad that corresponds to the smallest sized pad.
-; that may be created by the design variables.
-public pcb-landpattern smallest-pad:
-  pad p: generic-pad(Circle(MIN-COPPER-FEATURE), false, false, SMD) at loc(0.0, 0.0)
+;==============================================================================
+;========================== Land Pattern Generators ===========================
+;==============================================================================
+public pcb-struct ocdb/land-patterns/PinPadMapping:
+  pad-name:  Symbol,  ; the name of the pad
+  pad-shape: JITXDef, ; the corresponding pcb-pad
+  pose:      Pose,    ; the pose of the pad
+
+; A generic landpattern created from a sequence of PinPadMappings
+public pcb-landpattern generic-landpattern (
+  pads:Seqable<PinPadMapping>
+):
+  for p in pads do:
+    pad (pad-name(p)): (pad-shape(p)) at pose(p)
+
+public defn generic-landpattern (
+  pad-names:Seqable<Symbol>,
+  poses:Seqable<Pose>,
+  pad-shape:JITXDef
+):
+  val pads = 
+    for (pn in pad-names, pp in poses) seq:
+      PadPinMapping(pn, pad-shape, pp) 
+  generic-landpattern(pads)
+
+
+public defn soic-naming-convention (row:Int, column:Int, num-pins:Int) -> Ref:
+  if column == 0:
+    IndexRef("p", row + 1)
+  else if column == 1:
+    IndexRef("p", num-pins - row)
+  else:
+    fatal("soic naming convention supports a maximum of 2 columns")
+
+public defn two-column-landpattern (
+  count: Int,    ; number of pads in the column
+  pitch: Double, ; pitch of the column
+  naming-convention: (Int, Int, Int) -> Ref, ; naming convention
+  pad-convention: (Int, Int) -> JITXDef,
+  spacing:Double,
+):
+  val left = 
+    for pose in pose-column(loc(0.0, 0.0), pitch, )
 
 ; ====== Pad Collection Helpers ================================================
 ; Create a grid of poses
@@ -377,6 +432,7 @@ public defn make-two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:
 
 public defn two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
   make-two-pin-landpattern(Z,G,X,w,h,true,false)
+
 public defn two-pin-polarized-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
   make-two-pin-landpattern(Z,G,X,w,h,true,true)
 
