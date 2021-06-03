@@ -9,24 +9,62 @@ defpackage ocdb/designs/tutorial :
   import ocdb/bundles
   import ocdb/design-vars
   import ocdb/micro-controllers
+  import ocdb/generator-utils
+  import ocdb/checks
 
-val board-shape = Rectangle(25.0, 25.0)
+val board-shape = RoundedRectangle(30.0, 25.0, 0.1)
 
-pcb-module my-design :
+pcb-module can-connector :
+  port power:power
+  port can:can
+  public inst connector : ocdb/phoenix/combicon-mc/component(4)
+  net (connector.p[1], power.gnd)
+  net VIN (connector.p[2], power.vdd)
+  net (connector.p[3], can.canh)
+  net (connector.p[4], can.canl)
+  set-power-source(connector.p[2], connector.p[1], 5.0)
 
-  public inst r : chip-resistor(1.0e3)
-  public inst c : ceramic-cap(10.0e-6) 
+pcb-module first-design :
+  ; Add a 4-terminal screw terminal
+  inst connector : can-connector
 
-  ; inst stm : micro-controller(["series" => "STM32F0" "min-flash" => 16.0e3])([`HSE-ppm => 30.0e-6 `boot => "flash"])
-  inst stm : micro-controller(["mpn" => "STM32F038G6U6"])([`HSE-ppm => 30.0e-6 `boot => "flash"])
+  ; Choose the smallest 3.3V F0 mcu that will work for this design. Need 30ppm for the main clock.
+  inst stm : micro-controller(["series" => "STM32F0" "min-supply-voltage.max" => 3.3])([`HSE-ppm => 30.0e-6 `boot => "flash"])
+  println("Selected the %_ from %_" % [mpn?(stm.mcu) manufacturer?(stm.mcu)])
 
-  add-mounting-holes(board-shape, [2 3])
+  ; Add a CAN transceiver
+  inst xr : ocdb/texas-instruments/TCAN1051/module
+  require can-out:uart-with([`rts]) from stm.mcu
+  net UART (can-out, xr.uart-rts)
+  net CAN (xr.can, connector.can)
 
-  println(mpn?(stm.mcu))
+  ; Add an accelerometer
+  inst xl : ocdb/st-microelectronics/LIS3DH/module
+  require acc-i2c:i2c from stm.mcu
+  net (acc-i2c, xl.i2c)
+  add-open-drain-pullups(acc-i2c, stm.power.vdd)
+  require tap-detect:gpio from stm.mcu
+  net WAKE (tap-detect.gpio, xl.int[1])
 
-make-default-board(my-design, 4, board-shape)
+  ; Connect power, apply symbols
+  net (xr.power, connector.power)
+  net (xl.power, stm.power)
+  net P3V3 (xl.vio, xr.vio, stm.power.vdd)
+  net GND (stm.power.gnd)
+  symbol(P3V3) = ocdb/symbols/supply-sym
+  symbol(GND) = ocdb/symbols/ground-sym
+
+  ; Mechanicals
+  add-mounting-holes(board-shape, "M2", [2 3])
+  place(connector.connector) at loc(-4.0, -12.5) on Top
+
+  ; Run the schematic review 
+  check-design(self)
+
+val powered-design = transform-module(generate-power, first-design)
+make-default-board(powered-design, 4, board-shape)
+
 view-board()
 view-schematic()
-export-cad()
 
 export-cad()
