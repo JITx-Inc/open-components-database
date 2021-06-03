@@ -1,23 +1,19 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/littelfuse/SP0503BAHTG:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
 
   import ocdb/land-patterns
   import ocdb/symbols
   import ocdb/box-symbol
-  import ocdb/pinspec
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
   import ocdb/symbol-utils
-
-  import jitpcb/visualizer
 
 pcb-symbol tvs-triple-diode-symbol :
   val x1 = (- 2.0)
@@ -65,29 +61,29 @@ pcb-symbol tvs-triple-diode-symbol :
   unit-ref([1.0, 2.0])
   unit-val([1.0, 1.5])
 
-pcb-package tvs-triple-diode-pkg :
+pcb-landpattern tvs-triple-diode-pkg :
   val dx = 1.9 / 2.0
   val dy = 2.2 / 2.0
   val p1-offset = 0.2
-  pad p[1] : {smd-pad(1.1, 1.35)} at loc((- dx) + p1-offset, (- dy))
-  pad p[2] : {smd-pad(0.9, 1.35)} at loc(dx, (- dy))
-  pad p[3] : {smd-pad(0.9, 1.35)} at loc(dx, dy)
-  pad p[4] : {smd-pad(0.9, 1.35)} at loc((- dx), dy)
+  pad p[1] :smd-pad(1.1, 1.35) at loc((- dx) + p1-offset, (- dy))
+  pad p[2] :smd-pad(0.9, 1.35) at loc(dx, (- dy))
+  pad p[3] :smd-pad(0.9, 1.35) at loc(dx, dy)
+  pad p[4] :smd-pad(0.9, 1.35) at loc((- dx), dy)
 
   layer(Courtyard(Top)) = Rectangle(3.04, 1.4)
   layer(Silkscreen("pol", Top)) = Circle(-1.8, -1.0, 0.2)
   ref-label()
 
-
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "Littelfuse"
   description = "8.5V Clamp  Ipp Tvs Diode Surface Mount SOT-143-4"
   mpn = "SP0503BAHTG"
   pin a
-  pin c[1]
-  pin c[2]
-  pin c[3]
+  port c : pin[[1 2 3]] 
 
-  symbol = tvs-triple-diode-symbol(a => a, c[1] => c[1], c[2] => c[2], c[3] => c[3])
-  package = tvs-triple-diode-pkg(a => p[1], c[1] => p[2], c[2] => p[3], c[3] => p[4])
+
+  val sym = tvs-triple-diode-symbol
+  symbol = sym(a => sym.a, c[1] => sym.c[1], c[2] => sym.c[2], c[3] => sym.c[3])
+  val land = tvs-triple-diode-pkg
+  landpattern = land(a => land.p[1], c[1] => land.p[2], c[2] => land.p[3], c[3] => land.p[4])
   

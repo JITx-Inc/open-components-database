@@ -1,39 +1,38 @@
-#use-added-syntax(esir)
+#use-added-syntax(jitx)
 defpackage ocdb/toshiba/TLP3409S:
   import core
   import collections
   import math
-  import esir
-  import esir/utils
-  import esir/gen
-  import ocdb/tests/default-harness
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
 
   import ocdb/land-patterns
   import ocdb/symbols
   import ocdb/box-symbol
-  import ocdb/pinspec
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
 
-public unique pcb-component component :
+public pcb-component component :
   manufacturer = "ON Semiconductor"
   description = "SSR RELAY SPST-NO 650MA 0-100V"
   mpn = "TLP3409S(TPL,E"
 
   pin a 
   pin c 
-  port drain : pin[{1 2}]
+  port drain : pin[[1 2]]
 
-  symbol = TLP3409S-symbol(a => a, c => c, drain[1] => drain[1], drain[2] => drain[2])
-  package = tlp-3409(a => p[1], c => p[2], drain[1] => p[4], drain[2] => p[3])
-  properties:
-    forward-voltage => 1.27
-    rds-on => 0.4
+  val sym = TLP3409S-symbol
+  val land = tlp-3409
+  symbol = sym(a => sym.a, c => sym.c, drain[1] => sym.drain[1], drain[2] => sym.drain[2])
+  landpattern = land(a => land.p[1], c => land.p[2], drain[1] => land.p[4], drain[2] => land.p[3])
+  property(self.forward-voltage) = 1.27
+  property(self.rds-on) = 0.4
 
-pcb-package tlp-3409 :
+pcb-landpattern tlp-3409 :
   for (l in grid-locs(2, 2, 0.8, 1.4), i in [2 1 3 4]) do :
-    pad p[i] : {smd-pad(0.55, 1.0)} at l
+    pad p[i] : smd-pad(0.55, 1.0) at l
 
   layer(Courtyard(Top)) = Rectangle(1.45, 2.0) 
   layer(Silkscreen("pol", Top)) = Circle(1.0, 1.0, 0.254)
