@@ -93,9 +93,17 @@ public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double, line-w:Doub
 public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double) :
   LineRectangle(w, h, xc, yc, MIN-SILKSCREEN-WIDTH)
 
-; Create a recatngle with width and height and default x/y position
+; Create a rectangle with width and height and default x/y position
 public defn LineRectangle (w:Double, h:Double) :
   LineRectangle(w, h, 0.0, 0.0)
+
+; Create a rectangle from dims structure
+public defn LineRectangle (d:Dims): 
+  LineRectangle(x(d), y(d))
+
+; Create a rectangle around another shape
+public defn outline-bounding-box (s:Shape):
+  LineRectangle(bounds(s))
 
 ; Create a "+" symbol with a fixed length at a center point
 public defn PlusSymbol (center:Point, l:Double) -> Shape:
@@ -119,7 +127,7 @@ public defn pose-column (origin:Pose, count:Int, pitch:Double) -> Seqable<Pose>:
     Pose(center(origin) + Point(0.0, 0.0), angle(origin), flip-x?(origin))
 
 ; Create a matrix of poses by row.
-public defn pose-matrix (origin:Pose, num-rows:Int, num-columns:Int, row-pitch:Double, column-pitch:Double) -> Seqable<Seqable<Pose>>:
+public defn pose-grid (origin:Pose, num-rows:Int, num-columns:Int, column-pitch:Double, row-pitch:Double,) -> Seqable<Seqable<Pose>>:
   for r in 0 to num-rows seq:
     val row-origin = Pose(center(origin) + Point(0.0, row-pitch), angle(origin), flip-x?(origin))
     pose-row(row-origin, num-columns, column-pitch)
@@ -128,20 +136,20 @@ public defn pose-matrix (origin:Pose, num-rows:Int, num-columns:Int, row-pitch:D
 ;================================= Pads =======================================
 ;==============================================================================
 ; A generic pad, defined by the shape of its pad, solder mask, and hole.
-pcb-pad generic-pad (
+public pcb-pad generic-pad (
   pad-shape: Shape,    ; the shape of the pad
   mask?: False|Shape,  ; the shape of the soldermask, if it exists
   hole?: False|Shape,  ; the shape of the hole, if it exists
   type?: False|PadType ; the type of the pad, if not determined by the hole
 ):
-  shape = pad-shape
-  type  =
+  val type*  =
     match(type?):
       (type:PadType): type
       (_:False):
         SMD when hole? is False else TH
-  println("making pad with: shape:%_, mask:%_, hole:%_" % [pad-shape, mask?, hole?])
-  layer(Paste(Top)) = scale(pad-shape, PASTE-COVERAGE-PCT)
+  shape = pad-shape
+  type  = type*
+  name  = to-string("Generic %_ shaped %_ pad" % [pad-shape, type*])
   match(hole?:Shape):
     layer(Cutout()) = hole?
   match(mask?:Shape):
@@ -150,23 +158,27 @@ pcb-pad generic-pad (
       layer(SolderMask(Bottom)) = mask?
 
 ; Create a generic pad with an option mask and hole shape
-defn generic-pad (pad-shape:Shape, mask?:False|Shape, hole?:False|Shape,):
+public defn generic-pad (pad-shape:Shape, mask?:False|Shape, hole?:False|Shape,):
   generic-pad(pad-shape, mask?, hole?, false)
 
 ; Create a generic pad with a Shape and optional mask shape
-defn generic-pad (pad-shape:Shape, mask?:False|Shape):
+public defn generic-pad (pad-shape:Shape, mask?:False|Shape):
   generic-pad(pad-shape, mask?, false)
 
 ; Create a generic pad with pad shape and default mask shape 
-defn generic-pad (pad-shape:Shape):
-  if PREFER-SOLDERMASK-DEFINED:
-    generic-pad(pad-shape, offset(pad-shape, -1. * SOLDERMASK-EXPANSION))
+public defn generic-pad (pad-shape:Shape):
+  val context = get-design-context()
+  val soldermask-expansion = context[`soldermask-expansion] as Double
+  if context[`prefer-soldermask-defined] is True:
+    generic-pad(pad-shape, offset(pad-shape, -1. * soldermask-expansion))
   else:
-    generic-pad(pad-shape, offset(pad-shape, SOLDERMASK-EXPANSION))
+    generic-pad(pad-shape, offset(pad-shape, soldermask-expansion))
 
 ; Create a generic plated through hole pad with a default mask shape
 pcb-pad generic-pth-pad (pad-shape:Shape, hole:Shape):
-  generic-pad(pad-shape, offset(pad-shape, SOLDERMASK-EXPANSION) as Shape, hole, TH)
+  val context = get-design-context()
+  val soldermask-expansion = context[`soldermask-expansion] as Double
+  generic-pad(pad-shape, offset(pad-shape, soldermask-expansion) as Shape, hole, TH)
 
 ; Create an rectangular SMD pad 
 public defn smd-pad (anchor:Anchor, width:Double, height:Double):
@@ -252,7 +264,8 @@ public defn oval-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Do
 public defn rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double):
   val shape = Rectangle(anchor, pad-w, pad-h)
   val hole  = capsule(anchor, drill-w, drill-h)
-  generic-pad(shape, offset(shape, SOLDERMASK-EXPANSION), simplify(hole), TH)
+  val soldermask-expansion = get-design-context()[`soldermask-expansion] as Double
+  generic-pad(shape, offset(shape, soldermask-expansion), simplify(hole), TH)
 
 ; Create a rectangle pth pad with drill 
 public defn rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
@@ -264,7 +277,8 @@ public defn rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Do
 public defn round-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   val shape = round-rect(pad-w, pad-h, pad-r)
   val hole  = capsule(anchor, drill-w, drill-h)
-  generic-pad(shape, offset(shape, SOLDERMASK-EXPANSION), simplify(hole), TH)
+  val soldermask-expansion = get-design-context()[`soldermask-expansion] as Double
+  generic-pad(shape, offset(shape, soldermask-expansion), simplify(hole), TH)
 
 public defn round-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   round-rect-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
@@ -278,7 +292,8 @@ public defn round-rect-smd-pad (w:Double, h:Double, r:Double) :
 public defn chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   val shape = chamfered(pad-w, pad-h, pad-r)
   val hole  = capsule(anchor drill-w, drill-h)
-  generic-pad(shape, offset(shape, SOLDERMASK-EXPANSION), hole, TH)
+  val soldermask-expansion = get-design-context()[`soldermask-expansion] as Double
+  generic-pad(shape, offset(shape, soldermask-expansion), hole, TH)
 
 public defn chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   chamfered-rect-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
