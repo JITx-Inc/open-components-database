@@ -421,63 +421,6 @@ public pcb-landpattern testpad (d:Double) :
   pad tp : testpoint-pad(d) at loc(0.0,0.0)
 
 ; ====== Package Family Generators ================================================
-; Returns the copper geometry on one side of the board corresponding to a landpattern
-public defn copper-on (lp:LandPattern|Instance, side*:Side) -> Seqable<Shape> :
-  lp 
-    $> pads
-    $> seq()
-
-    ; pads(self)
-    ;   $> filter{{side(_0) == side* or type(_0) == TH}, _}
-    ;   $> seq{shape, _}
-    []
-
-; Create an outline of the courtyard on the silkscreen
-public defn outline-courtyard ():
-  inside pcb-landpattern:
-    defn filtering (s:Side):
-      for layer in layers(self) filter:
-        val spec = specifier(layer)
-        match(spec:Courtyard):
-          side(spec) == s
-    defn draw (side:Side):
-      val shapes = seq-cat(artwork, filtering(side))
-      if not empty?(shapes):
-        layer(Silkscreen("f-silk", side)) = shapes
-          $> Union
-          $> bounds
-          $> LineRectangle
-    do(draw, [Top, Bottom])
-
-; Create a courtyard from existing layer definitions.
-public defn make-courtyard ():
-  inside pcb-landpattern:
-    defn filtering (s:Side):
-      for layer in layers(self) filter:
-        match(specifier(layer)):
-          (spec:SolderMask|Paste|Glue|Finish|Courtyard):
-            side(spec) == s
-          (_:Cutout): 
-            true, 
-          (_:?):
-            false
-    defn draw (side:Side):
-      val shapes = cat-all([seq-cat(artwork, filtering(side)), copper-on(side)])
-      if not empty?(shapes):
-        val b = shapes $> Union $> bounds
-        layer(Courtyard(side)) = Rectangle(x(b), y(b))
-    do(draw, [Top, Bottom])
-  
-pcb-struct ocdb/land-patterns/LandpatternInfo:
-  polarized?: True|False,
-  
-defn make-landpattern (info: LandpatternInfo):
-  inside pcb-landpattern:
-    ; if polarized?(info):
-    ;   draw-polarization-marking(pin-0-location)
-    make-courtyard()
-    outline-courtyard()
-
 ; TODO: Unify These.
 public pcb-landpattern dummy-landpattern (n:Int, courtyard:[Double,Double]):
   val r = (max(courtyard[0], courtyard[1]) - 0.2) / 2.0
