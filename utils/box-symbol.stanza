@@ -244,6 +244,22 @@ public defn make-box-symbol (banks:Seqable<BoxBank>) :
 ;=======================================================<doc>
 
 public defn make-box-symbol () :
+  ;Sort the given pins by their .pin-properties-row-index field.
+  defn sort-by-row-index (pins:Tuple<JITXObject>) -> Tuple<JITXObject> :
+    ;Compare pin[i0] versus pin[i1].
+    ;Indices are used, instead of the pin directly, in order to perform a
+    ;stable sort.
+    ;All pins without a .pin-properties-row-index are put in the beginning.
+    defn compare-index (i0:Int, i1:Int) :
+      val ai = value?(property?(pins[i0].pin-properties-row-index))
+      val bi = value?(property?(pins[i1].pin-properties-row-index))
+      match(ai, bi) :
+        (ai:Int, bi:Int) : compare(ai, bi)
+        (ai:Int, bi) : 1
+        (ai, bi:Int) : -1
+        (ai, bi) : compare(i0,i1)
+    val indices = qsort(0 to length(pins), compare-index)
+    map({pins[_]}, indices)    
   defn ensure-good-sides! (pins:Tuple<JITXObject>, sides:Tuple<Maybe>) -> Tuple<Dir> :
     ;Check that all pins.side is either Dir or not given.
     for (p in pins, s in sides) do :
@@ -287,7 +303,7 @@ public defn make-box-symbol () :
     qsort!(banks*, compare-bank)
     banks*    
   inside pcb-component :
-    val pins = pins(self)
+    val pins = sort-by-row-index(pins(self))
     val pin-sides0 = map({property?(_.side)}, pins)
     val pin-banks = map({property?(_.bank)}, pins)
     val pin-sides = ensure-good-sides!(pins, pin-sides0)
