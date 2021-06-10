@@ -23,6 +23,103 @@ public defn ref-label (x:Double, y:Double) :
 public defn ref-label () :
   ref-label(0.0, 0.0)
 
+; helper to compute the shape of an orientation marker
+defn compute-orientation-marker (
+  lp: LandPattern|Self, ; the landpattern, or Self object  
+  p1: Ref,               ; the reference corresponding to pin 1, which may differ for various components (p[1], A[1], etc)
+  angle:Double|Anchor,  ; the anchor, which controls the angle of the shape 
+  distance:Double       ; the distance from the pin to draw
+  shape: Shape          ; the shape of the indicator
+) -> Shape:
+  val angle* = 
+    match(angle):
+      (anchor:Anchor):
+          switch(anchor):
+            C:  0.0  * PI
+            NE: 0.25 * PI
+            N:  0.5  * PI
+            NW: 0.75 * PI
+            W:  1.0  * PI
+            SW: 1.25 * PI
+            S:  1.5  * PI
+            SE: 1.75 * PI
+            E:  0.0
+      (d:Double): PI * d / 180.0
+  
+  val offset = loc(distance * cos(angle*), distance * sin(angle*))
+  val p1-pad = find!({ref(_) == p1}, pads(lp))
+  offset * (pose(p1-pad) * shape)
+  
+; Inside a landpattern, draw the orientation marker given a reference to its first pad, and some
+; additional data to help the generator place the marker. 
+public defn orientation-marker (
+  pad-1:Ref,            ; the reference to the first pad of the landpattern (p[1], A[1], etc) 
+  angle:Double|Anchor,  ; the angle or anchor relative to the first pad to draw the marker
+  distance:Double,      ; the distance from the first pad to draw the marker
+  shape:Shape           ; the shape of the marker itself
+):
+  inside pcb-landpattern:
+    val shape* = compute-orientation-marker(self, pad-1, angle, distance, shape)
+    layer(Silkscreen("f-silk", Top)) = shape*
+    
+public defn polarity-marking (pin-1-loc:Pose):
+  ;TODO use rotation of the pose
+  val distance = SOLDERMASK-EXPANSION + SILK-SOLDERMASK-CLEARANCE + 0.5 * MIN-SILKSCREEN-WIDTH + 0.01
+  val start = center(pin-1-loc) - Point(distance, -1.0 * distance)
+  val length = MIN-SILKSCREEN-WIDTH * 3.0
+  val width  = MIN-SILKSCREEN-WIDTH
+  inside pcb-landpattern:
+    layer(Silkscreen("pol", Top)) = Line(width, [start, start + Point(length, 0.0)])
+
+; Helper to find the courtyard of a landpattern given its current statements. The courtyard
+; is computed as the bounding box of all pad layers and all non-silkscreen or forbid coppper 
+; layers of the landpattern
+; 
+; Geoms are currently unsupported.
+public defn courtyard (package-dims:Dims):
+  val package = Rectangle(x(package-dims), y(package-dims))
+  defn layer-filter (s:Seqable<LayerShape>):
+    for layer-shape in s seq?:
+      match(specifier(layer-shape)):
+        (s:Courtyard|Paste|Glue|Finish): One([side(s), shape(layer-shape)])
+        (_:?): None()
+  inside pcb-landpattern:
+    val pkg-data = [[Top, package]]
+    val lp-data  = layer-filter(layers(self)) 
+    val pad-data = 
+      for pad_ in pads(self) seq-cat:
+        val pad-shape_ = pad-shape(get-pad(pad_))
+        val pad-copper = 
+          if pad-type(get-pad(pad_)) == SMD:
+            [[side(pad_), pad-shape_]]
+          else:
+            [[Top, pad-shape_], [Bottom, pad-shape_]]
+        cat-all([pad-copper, layer-filter(layers(get-pad(pad_)))])
+
+    val data = to-tuple(cat-all([lp-data, pad-data, pkg-data]))
+    defn make-union? (side:Side) -> False|Shape:
+      val shapes = 
+        for [ls, sh] in data seq?:
+          One(sh) when ls == side else None()
+      Union(shapes) when not empty?(shapes) else false
+    
+    for side in [Top, Bottom] do:
+      match(make-union?(side)):
+        (s:Shape):
+          val dims = bounds(s)
+          layer(Courtyard(Top)) = Rectangle(x(dims), y(dims))
+        (_:False):
+          false
+
+public defn courtyard ():
+  courtyard(Dims(0.0, 0.0))
+
+; Create a capsule with normalized rotation
+defn capsule (anchor:Anchor, width:Double, height:Double) -> Capsule:
+  if width >= height:
+    Capsule(anchor, width, height)
+  else:
+    Capsule(width, height, loc(0.0, 0.0, 90.0))
 ; ====== Land pattern utilities ===============================================
 public pcb-pad smd-pad (anchor:Anchor, w:Double, h:Double) :
   name = to-string("%_x%_ %_ SMD Pad" % [w,h,anchor])
