@@ -400,13 +400,13 @@ public defn make-grid-landpattern (
   make-generic-landpattern(to-tuple(mapping))
 
 ; Create a row of pads
-public defn make-pad-row (origin:Pose, count:Int, pitch:Double, naming:(Int) -> Ref, pad-def: (Int) -> Ref) -> Seqable<Pose>:
+public defn make-pad-row (origin:Pose, count:Int, pitch:Double, naming:(Int) -> Ref, pad-def: (Int) -> Ref:
   inside pcb-landpattern:
     for (pose in pose-row(origin, count, pitch), n in 0 to false) do:
       pad (naming(n)) = pad-def(n) at pose
 
 ; Create a column of poses
-public defn make-pad-column (origin:Pose, count:Int, pitch:Double, naming:(Int) -> Ref, pad-def: (Int) -> Ref) -> Seqable<Pose>:
+public defn make-pad-column (origin:Pose, count:Int, pitch:Double, naming:(Int) -> Ref, pad-def: (Int) -> Ref):
   inside pcb-landpattern:
     for (pose in pose-column(origin, count, pitch), n in 0 to false) do:
       pad (naming(n)) = pad-def(n) at pose
@@ -504,6 +504,60 @@ public pcb-landpattern ipc-two-pin-landpattern (part-name:String) :
 public pcb-landpattern ipc-two-pin-landpattern (part-name:String, pol?:True|False) :
   make-ipc-two-pin-landpattern(part-name, true, pol?)
   ref-label()
+
+; Make a landpattern with pads along the four edges of the landpattern
+public defn make-quad-edge-landpattern (
+  pads-along-top: Int,
+  pads-along-side: Int,
+  pad-def:JITXDef,
+  outer-dims:Dims, 
+  inner-dims:Dims,
+):
+  ; Compute x/y positions of the rows and columns
+  ; relative to top left corner
+  val top-x    = 0.5 * x(inner-dims) / to-double(pads-along-top) 
+  val top-y-1  = 0.5 * (y(outer-dims) - y(inner-dims))
+  val top-y-2  = 3.0 * top-y-1 + y(inner-dims)
+  val side-y   = 0.5 * y(inner-dims) / to-double(pads-along-side) + 2.0 * top-y-1
+  val side-x-1 = 0.5 * (x(outer-dims) - x(inner-dims))
+  val side-x-2 = 3.0 * side-x-1 + x(inner-dims)
+  
+  val center = Point(0.5 * x(outer-dims), 0.5 * y(outer-dims))
+  val [p0, p1, p2, p3] = [
+    Point(top-x, top-y-1)   - center
+    Point(top-x, top-y-2)   - center
+    Point(side-x-1, side-y) - center
+    Point(side-x-2, side-y) - center
+  ]
+
+  ; compute the pitch 
+  val top-pitch  = x(inner) / to-double(pads-along-top)
+  val side-pitch = y(inner) / to-double(pads-along-side)
+  
+  ; naming convention of the top/bottom rows
+  defn name-top (n:Int, up?:True|False):
+    val idx = 
+      if not up?:
+        pads-along-side + n
+      else:
+        2 * pads-along-side + pads-along-top + n
+    
+  ; naming convention of the left/right columns
+  defn name-side (n:Int, left?:True|False):
+    val idx = 
+      if not left?:
+        pads-along-side + pads-along-top + n
+      else
+        n
+  defn make-ref (n:Int):
+    IndexRef(Ref("p"), idx)
+    
+  ; construct the rows and columns
+  make-pad-row(Pose(p0, 0.0), pads-along-top, top-pitch, make-ref{name-top(_, true)}, fn (n): pad-def)
+  make-pad-row(Pose(p1, 0.0), pads-along-top, top-pitch, make-ref{name-top(_, false)}, fn (n): pad-def)
+  make-pad-column(Pose(p2, 0.0), pads-along-top, name-side, make-ref{name-top(_, true)}, fn (n): pad-def)
+  make-pad-column(Pose(p3, 0.0), pads-along-top, name-side, make-ref{name-top(_, false)}, fn (n): pad-def)
+
 
 ;<test>
 part-name: "1210"
