@@ -80,8 +80,9 @@ public defn pose-grid (origin:Pose, num-rows:Int, num-columns:Int, column-pitch:
     val row-origin = Pose(center(origin) + Point(0.0, row-pitch), angle(origin), flip-x?(origin))
     pose-row(row-origin, num-columns, column-pitch)
 
-;=============================================================================
-; ====== Land pattern utilities ===============================================
+;===============================================================================
+;=========================== Pad utilities =====================================
+;===============================================================================
 public pcb-pad smd-pad (anchor:Anchor, w:Double, h:Double) :
   name = to-string("%_x%_ %_ SMD Pad" % [w,h,anchor])
   type = SMD
@@ -298,31 +299,122 @@ public defn non-plated-hole-pkg (drill-r:Double) :
   non-plated-hole-pkg(drill-r, drill-r)
 
 
-; ====== Pad Collection Helpers ================================================
+;===============================================================================
+;===================== Generic Landpattern Definition ==========================
+;===============================================================================
+; PinPadMapping is a not-yet-placed pad, with assigned name, pad, and pose
+public pcb-struct ocdb/land-patterns/PinPadMapping:
+  pad-name:  Ref,  ; the name of the pad
+  pad-shape: JITXDef, ; the corresponding pcb-pad
+  pose:      Pose,    ; the pose of the pad
 
-; 2D array of pins
-public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double, pad-ref) :
+
+; A generic landpattern created from a sequence of PinPadMappings
+public defn make-generic-landpattern (
+  pads:Tuple<PinPadMapping>
+):
   inside pcb-landpattern:
-    
-    val n-col = to-int(ceil(to-double(n-pin) / to-double(n-row)))
+    for p in pads do:
+      pad (pad-name(p)): (pad-shape(p) as Pad) at pose(p)
 
-    val l0 = loc((to-double(n-row - 1) * row-pitch) / -2.0, (to-double(n-col - 1) * pin-pitch) / 2.0)
-    
-    for i in 0 to n-col do :
-      for j in 0 to n-row do :
-        pad p[n-row * i + j + 1] : pad-ref at l0 * loc(to-double(j) * row-pitch, (- to-double(i) * pin-pitch))
-    
-public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
-  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch, pth-pad(0.5))
+; Create a generic landpattern with a uniform pad
+public defn make-generic-landpattern (
+  pad-names:Seqable<Ref>,
+  poses:Seqable<Pose>,
+  pad-shape:JITXDef
+):
+  val pads = 
+    for (pn in pad-names, pp in poses) seq:
+      PinPadMapping(pn, pad-shape, pp) 
+  make-generic-landpattern(to-tuple(pads))
 
-public defn make-pin-grid (n-pin:Int) :
-  make-pin-grid(n-pin, 1, 2.54, 2.54)
+;===============================================================================
+;========================= Pad Arrangements ====================================
+;===============================================================================
+; Naming for a 2-column arrangment of pins 
+public defn soic-naming-convention (row:Int, column:Int, num-pins:Int) -> Ref:
+  if column == 0:
+    IndexRef(Ref("p"), row + 1)
+  else if column == 1:
+    IndexRef(Ref("p"), num-pins - row)
+  else:
+    fatal("soic naming convention supports a maximum of 2 columns")
 
+; Create a two-column landpattern
+public defn make-two-column-landpattern (
+  count: Int,    ; number of pads in the column
+  pitch: Double, ; pitch of the column
+  naming-convention: (Int, Int) -> Ref, ; naming convention
+  pad-convention: (Int, Int) -> JITXDef,
+  spacing:Double,
+):
+  val mapping = 
+    for col in 0 to 2 seq-cat:
+      val column = pose-column(loc(to-double(col) * spacing, 0.0), count, pitch)
+      for (pose in column, row in 0 to false) seq:
+        PinPadMapping(naming-convention(row, col), pad-convention(row, col), pose)
+  make-generic-landpattern(to-tuple(mapping))
+
+public defn make-grid-landpattern (
+  num-rows:Int,
+  num-cols:Int,
+  row-pitch:Double,
+  col-pitch:Double,
+  naming-convention: (Int, Int) -> Ref,
+  pad-convention: (Int, Int) -> JITXDef,
+):
+  make-grid-landpattern(num-rows, num-cols, row-pitch, col-pitch, naming-convention, pad-convention, fn (r, c): true)
+
+; Create a grid landpattern
+public defn make-grid-landpattern (
+  num-rows:Int,
+  num-cols:Int,
+  row-pitch:Double,
+  col-pitch:Double,
+  naming-convention: (Int, Int) -> Ref,
+  pad-convention: (Int, Int) -> JITXDef,
+  ignore?: (Int, Int) -> True|False,
+):
+  make-grid-landpattern(loc(0.0, 0.0), num-rows, num-cols, row-pitch, col-pitch, naming-convention, pad-convention, ignore?)
+
+; Create a grid pattern with arbitrary origin
+public defn make-grid-landpattern (
+  origin: Pose,
+  num-rows:Int,
+  num-cols:Int,
+  row-pitch:Double,
+  col-pitch:Double,
+  naming-convention: (Int, Int) -> Ref,
+  pad-convention: (Int, Int) -> JITXDef,
+  ignore?: (Int, Int) -> True|False,
+):
+  val mapping = to-tuple $
+    for col in 0 to num-cols seq-cat:
+      val origin* = loc(to-double(col) * col-pitch + x(center(origin)), y(center(origin)))
+      val column = pose-column(origin*, num-rows, row-pitch)
+      for (row in 0 to false, pose in column) seq?:
+        if not ignore?(row, col):
+          One(PinPadMapping(naming-convention(row, col), pad-convention(row, col), pose))
+        else:
+          None()
+  make-generic-landpattern(to-tuple(mapping))
+
+; Create a row of pads
+public defn make-pad-row (origin:Pose, count:Int, pitch:Double, naming:(Int) -> Ref, pad-def: (Int) -> Ref) -> Seqable<Pose>:
+  inside pcb-landpattern:
+    for (pose in pose-row(origin, count, pitch), n in 0 to false) do:
+      pad (naming(n)) = pad-def(n) at pose
+
+; Create a column of poses
+public defn make-pad-column (origin:Pose, count:Int, pitch:Double, naming:(Int) -> Ref, pad-def: (Int) -> Ref) -> Seqable<Pose>:
+  inside pcb-landpattern:
+    for (pose in pose-column(origin, count, pitch), n in 0 to false) do:
+      pad (naming(n)) = pad-def(n) at pose
+
+; ====== Package Family Generators ================================================
 public pcb-landpattern testpad (d:Double) :
   pad tp : testpoint-pad(d) at loc(0.0,0.0)
 
-; ====== Package Family Generators ================================================
-; TODO: Unify These.
 public pcb-landpattern dummy-landpattern (n:Int, courtyard:[Double,Double]):
   val r = (max(courtyard[0], courtyard[1]) - 0.2) / 2.0
   for i in 0 to n do :
