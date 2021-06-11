@@ -23,6 +23,64 @@ public defn ref-label (x:Double, y:Double) :
 public defn ref-label () :
   ref-label(0.0, 0.0)
 
+;==============================================================================
+;======================== Geometry helpers ====================================
+;==============================================================================
+; Create a rectangle out of lines
+public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double, line-w:Double) :
+  val w2 = w * 0.5
+  val h2 = h * 0.5
+  Line(line-w, [
+    Point(xc - w2, yc - h2)
+    Point(xc + w2, yc - h2)
+    Point(xc + w2, yc + h2)
+    Point(xc - w2, yc + h2)
+    Point(xc - w2, yc - h2)])
+
+; Create a rectangle with width, height, center x/y and default line width
+public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double) :
+  LineRectangle(w, h, xc, yc, MIN-SILKSCREEN-WIDTH)
+
+; Create a rectangle with width and height and default x/y position
+public defn LineRectangle (w:Double, h:Double) :
+  LineRectangle(w, h, 0.0, 0.0)
+
+; Create a rectangle from dims structure
+public defn LineRectangle (d:Dims): 
+  LineRectangle(x(d), y(d))
+
+; Create a rectangle around another shape
+public defn outline-bounding-box (s:Shape):
+  LineRectangle(bounds(s))
+
+; Create a "+" symbol with a fixed length at a center point
+public defn PlusSymbol (center:Point, l:Double) -> Shape:
+  Union $ [
+    Line(MIN-SILKSCREEN-WIDTH, [center + Point(-0.5 * l, 0.0), center + Point(0.5 * l, 0.0)])
+    Line(MIN-SILKSCREEN-WIDTH, [center + Point(0.0, -0.5 * l), center + Point(0.0, 0.5 * l)])
+  ]
+
+; Create a 1mm x 1mm plus symbol at Point(x, y)
+public defn PlusSymbol (x:Double, y:Double) -> Shape:
+  PlusSymbol(Point(x, y), 1.0)
+
+; Create a row of poses
+public defn pose-row (origin:Pose, count:Int, pitch:Double) -> Seqable<Pose>:
+  for n in 0 to count seq:
+    Pose(center(origin) + Point(pitch, 0.0), angle(origin), flip-x?(origin))
+
+; Create a column of poses
+public defn pose-column (origin:Pose, count:Int, pitch:Double) -> Seqable<Pose>:
+  for n in 0 to count seq:
+    Pose(center(origin) - Point(0.0, to-double(n) * pitch), angle(origin), flip-x?(origin))
+
+; Create a matrix of poses by row.
+public defn pose-grid (origin:Pose, num-rows:Int, num-columns:Int, column-pitch:Double, row-pitch:Double,) -> Seqable<Seqable<Pose>>:
+  for r in 0 to num-rows seq:
+    val row-origin = Pose(center(origin) + Point(0.0, row-pitch), angle(origin), flip-x?(origin))
+    pose-row(row-origin, num-columns, column-pitch)
+
+;=============================================================================
 ; ====== Land pattern utilities ===============================================
 public pcb-pad smd-pad (anchor:Anchor, w:Double, h:Double) :
   name = to-string("%_x%_ %_ SMD Pad" % [w,h,anchor])
@@ -239,27 +297,7 @@ public pcb-landpattern non-plated-hole-pkg (drill-r:Double, mask-r:Double) :
 public defn non-plated-hole-pkg (drill-r:Double) :
   non-plated-hole-pkg(drill-r, drill-r)
 
-public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double, line-w:Double) :
-  val w2 = w / 2.0
-  val h2 = h / 2.0
-  Line(line-w, [
-    Point(xc - w2, yc - h2)
-    Point(xc + w2, yc - h2)
-    Point(xc + w2, yc + h2)
-    Point(xc - w2, yc + h2)
-    Point(xc - w2, yc - h2)])
 
-public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double) :
-  LineRectangle(w, h, xc, yc, 0.254)
-
-public defn LineRectangle (w:Double, h:Double) :
-  LineRectangle(w, h, 0.0, 0.0, 0.254)
-
-public defn PlusSymbol (x:Double, y:Double) :
-  Union([
-    Line(0.254, [ Point(x - 0.5, y), Point(x + 0.5, y) ])
-    Line(0.254, [ Point(x, y - 0.5), Point(x, y + 0.5) ])
-  ])
 ; ====== Pad Collection Helpers ================================================
 
 ; 2D array of pins
