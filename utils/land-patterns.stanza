@@ -6,6 +6,7 @@ defpackage ocdb/land-patterns :
   import jitx
   import jitx/fonts
   import jitx/commands
+  import ocdb/design-vars
 
 ; ====== Argument constraint Helpers ===========================================
 defn ensure-even-positive! (value: Int, name: String):
@@ -67,22 +68,31 @@ public defn PlusSymbol (x:Double, y:Double) -> Shape:
 ; Create a row of poses
 public defn pose-row (origin:Pose, count:Int, pitch:Double) -> Seqable<Pose>:
   for n in 0 to count seq:
-    Pose(center(origin) + Point(pitch, 0.0), angle(origin), flip-x?(origin))
+    sub-center(origin, center(origin) + Point(to-double(n) * pitch, 0.0))
 
 ; Create a column of poses
 public defn pose-column (origin:Pose, count:Int, pitch:Double) -> Seqable<Pose>:
   for n in 0 to count seq:
-    Pose(center(origin) - Point(0.0, to-double(n) * pitch), angle(origin), flip-x?(origin))
+    sub-center(origin, center(origin) + Point(0.0, -1.0 * (to-double(n) * pitch)))
 
 ; Create a matrix of poses by row.
 public defn pose-grid (origin:Pose, num-rows:Int, num-columns:Int, column-pitch:Double, row-pitch:Double,) -> Seqable<Seqable<Pose>>:
   for r in 0 to num-rows seq:
-    val row-origin = Pose(center(origin) + Point(0.0, row-pitch), angle(origin), flip-x?(origin))
+    val row-origin = sub-center(origin, center(origin) + Point(0.0, row-pitch))
     pose-row(row-origin, num-columns, column-pitch)
 
 ;===============================================================================
 ;=========================== Pad utilities =====================================
 ;===============================================================================
+public defn rotate-pad (pad:JITXDef, rot:Double) -> JITXDef:
+  val rotation = loc(0.0, 0.0, rot)
+  pcb-pad P:
+    shape = rotation * pad-shape(pad as Pad)
+    type = pad-type(pad as Pad)
+    for layer_ in layers(pad as Pad) do:
+      layer(specifier(layer_)) = rotation * shape(layer_)
+  P
+
 public pcb-pad smd-pad (anchor:Anchor, w:Double, h:Double) :
   name = to-string("%_x%_ %_ SMD Pad" % [w,h,anchor])
   type = SMD
@@ -333,13 +343,10 @@ public defn make-generic-landpattern (
 ;===============================================================================
 ; Naming for a 2-column arrangment of pins 
 public defn soic-naming-convention (row:Int, column:Int, num-pins:Int) -> Ref:
-  if column == 0:
-    IndexRef(Ref("p"), row + 1)
-  else if column == 1:
-    IndexRef(Ref("p"), num-pins - row)
-  else:
-    fatal("soic naming convention supports a maximum of 2 columns")
-
+  fatal("soic naming convention supports a maximum of two columns") when (column >= 2 or column < 0)
+  val idx = row + 1 when column == 0 else num-pins - row
+  IndexRef(Ref("p"), idx)
+  
 ; Create a two-column landpattern
 public defn make-two-column-landpattern (
   count: Int,    ; number of pads in the column
@@ -400,16 +407,16 @@ public defn make-grid-landpattern (
   make-generic-landpattern(to-tuple(mapping))
 
 ; Create a row of pads
-public defn make-pad-row (origin:Pose, count:Int, pitch:Double, naming:(Int) -> Ref, pad-def: (Int) -> Ref:
+public defn make-pad-row (origin:Pose, count:Int, pitch:Double, naming:(Int) -> Ref, pad-def: (Int) -> JITXDef):
   inside pcb-landpattern:
     for (pose in pose-row(origin, count, pitch), n in 0 to false) do:
-      pad (naming(n)) = pad-def(n) at pose
+      pad (naming(n)): pad-def(n) as Pad at pose
 
 ; Create a column of poses
-public defn make-pad-column (origin:Pose, count:Int, pitch:Double, naming:(Int) -> Ref, pad-def: (Int) -> Ref):
+public defn make-pad-column (origin:Pose, count:Int, pitch:Double, naming:(Int) -> Ref, pad-def: (Int) -> JITXDef):
   inside pcb-landpattern:
     for (pose in pose-column(origin, count, pitch), n in 0 to false) do:
-      pad (naming(n)) = pad-def(n) at pose
+      pad (naming(n)): pad-def(n) as Pad at pose
 
 ; ====== Package Family Generators ================================================
 public pcb-landpattern testpad (d:Double) :
@@ -506,59 +513,90 @@ public pcb-landpattern ipc-two-pin-landpattern (part-name:String, pol?:True|Fals
   ref-label()
 
 ; Make a landpattern with pads along the four edges of the landpattern
-public defn make-quad-edge-landpattern (
+public defn make-four-sided-landpattern (
   pads-along-top: Int,
   pads-along-side: Int,
-  pad-def:JITXDef,
+  make-pad: (Int) -> JITXDef,
   outer-dims:Dims, 
   inner-dims:Dims,
 ):
   ; Compute x/y positions of the rows and columns
   ; relative to top left corner
-  val top-x    = 0.5 * x(inner-dims) / to-double(pads-along-top) 
-  val top-y-1  = 0.5 * (y(outer-dims) - y(inner-dims))
-  val top-y-2  = 3.0 * top-y-1 + y(inner-dims)
-  val side-y   = 0.5 * y(inner-dims) / to-double(pads-along-side) + 2.0 * top-y-1
-  val side-x-1 = 0.5 * (x(outer-dims) - x(inner-dims))
-  val side-x-2 = 3.0 * side-x-1 + x(inner-dims)
+  val top-x    = -0.5 * x(inner-dims) + x(inner-dims) / to-double(2 * pads-along-top)
+  val top-y-1  =  0.5 * y(inner-dims) + 0.25 * (y(outer-dims) - y(inner-dims)) 
+  val top-y-2  = -1. * top-y-1
+
+  val side-y   = 0.5 * y(inner-dims) - y(inner-dims) / to-double(2 * pads-along-side)
+  val side-x-1 = -0.5 * x(inner-dims) - 0.25 * (x(outer-dims) - x(inner-dims)) 
+  val side-x-2 = -1. * side-x-1
   
-  val center = Point(0.5 * x(outer-dims), 0.5 * y(outer-dims))
   val [p0, p1, p2, p3] = [
-    Point(top-x, top-y-1)   - center
-    Point(top-x, top-y-2)   - center
-    Point(side-x-1, side-y) - center
-    Point(side-x-2, side-y) - center
+    Point(top-x, top-y-1)
+    Point(top-x, top-y-2)
+    Point(side-x-1, side-y)
+    Point(side-x-2, side-y)
   ]
+  inside pcb-landpattern:
+    layer(Silkscreen("f-silk", Top)) = LineRectangle(x(outer-dims), y(outer-dims))
+    layer(Silkscreen("f-silk", Top)) = LineRectangle(x(inner-dims), y(inner-dims))
 
   ; compute the pitch 
-  val top-pitch  = x(inner) / to-double(pads-along-top)
-  val side-pitch = y(inner) / to-double(pads-along-side)
+  val top-pitch  = x(inner-dims) / to-double(pads-along-top)
+  val side-pitch = y(inner-dims) / to-double(pads-along-side)
   
+  defn make-ref (n:Int):
+    IndexRef(Ref("p"), n)
+
+  defn pad-index (quadrant:Anchor, idx:Int):
+    switch(quadrant):
+      E: idx + 1
+      S: idx + 1 + pads-along-side
+      W: 2 * pads-along-side + pads-along-top - idx
+      N: 2 * (pads-along-side + pads-along-top) - idx
+
   ; naming convention of the top/bottom rows
   defn name-top (n:Int, up?:True|False):
-    val idx = 
-      if not up?:
-        pads-along-side + n
-      else:
-        2 * pads-along-side + pads-along-top + n
     
+    make-ref $
+      if not up?:
+        pads-along-side + n + 1
+      else:
+        2 * (pads-along-side + pads-along-top) - n
+  
   ; naming convention of the left/right columns
   defn name-side (n:Int, left?:True|False):
-    val idx = 
+    make-ref $
       if not left?:
-        pads-along-side + pads-along-top + n
-      else
-        n
-  defn make-ref (n:Int):
-    IndexRef(Ref("p"), idx)
-    
+        2 * pads-along-side + pads-along-top - n
+      else:
+        n + 1
+
   ; construct the rows and columns
-  make-pad-row(Pose(p0, 0.0), pads-along-top, top-pitch, make-ref{name-top(_, true)}, fn (n): pad-def)
-  make-pad-row(Pose(p1, 0.0), pads-along-top, top-pitch, make-ref{name-top(_, false)}, fn (n): pad-def)
-  make-pad-column(Pose(p2, 0.0), pads-along-top, name-side, make-ref{name-top(_, true)}, fn (n): pad-def)
-  make-pad-column(Pose(p3, 0.0), pads-along-top, name-side, make-ref{name-top(_, false)}, fn (n): pad-def)
+  for (p in [p0, p1, p2, p3], anchor in [N, S, E, W]) do:
+    val [count, defpad, maker, pitch] =
+      match(anchor):
+        (_:N|S): [
+          pads-along-top
+          fn (n:Int): rotate-pad(make-pad(pad-index(anchor, n)), 90.0)
+          make-pad-row
+          top-pitch
+        ]
+        (_:E|W):[
+          pads-along-side
+          fn (n:Int): make-pad(pad-index(anchor, n))
+          make-pad-column
+          side-pitch
+        ]
+    maker(loc(x(p), y(p)), count, pitch, make-ref{pad-index(anchor, _)}, defpad)
 
-
+public defn make-four-sided-landpattern (
+  pads-along-top: Int,
+  pads-along-side: Int,
+  pad-def: JITXDef,
+  outer-dims:Dims, 
+  inner-dims:Dims,
+):
+  make-four-sided-landpattern(pads-along-top, pads-along-side, fn (n): pad-def, outer-dims, inner-dims)
 ;<test>
 part-name: "1210"
 <test>
@@ -891,7 +929,7 @@ public pcb-landpattern SOT95P280X145-6N :
 public pcb-landpattern pin-header-pkg (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
   val n-col  = to-int(ceil(to-double(n-pin) / to-double(n-row)))
   val naming = fn (r, c): IndexRef(Ref("p"), n-row * r + c)
-  val pads   = fn (r, c): generic-pth-pad(Circle(0.25), Circle(0.245))
+  val pads   = fn (r, c): pth-pad(0.245, 0.25)
   make-grid-landpattern(n-row, n-col, row-pitch, pin-pitch, naming, pads)
 
   val c-w = to-double(n-row) * row-pitch

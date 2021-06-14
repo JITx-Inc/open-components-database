@@ -1,0 +1,32 @@
+#use-added-syntax(jitx, tests)
+defpackage ocdb/tests/landpatterns:
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/land-patterns
+  import ocdb/box-symbol
+  import ocdb/defaults
+
+deftest(ocdb, landpatterns) quad-edge-landpattern:
+  pcb-pad P:
+    shape = RoundedRectangle(0.5, 2.5, 0.25)
+    type  = SMD
+    layer(SolderMask(Top)) = offset(RoundedRectangle(0.5, 2.5, 0.25), 0.125)
+  pcb-landpattern L:
+    name = "Quad Landpattern"
+    make-quad-edge-landpattern(
+      4, ; number of pads on top/bottom
+      8, ; number of pads on left/right sides
+      P,
+      Dims(6.0, 3.0), ; outer dimensions of the part 
+      Dims(5.0, 2.5)  ; inner dimensions of the part
+    )
+  pcb-component Comp:
+    assign-landpattern(L)
+    make-box-symbol()
+  pcb-module Mod:
+    inst i: Comp
+    place(i) at loc(0.0, 0.0) on Top
+  make-default-board(Mod, 2, 10.0, 10.0)
+  view-board()
