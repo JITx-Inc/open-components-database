@@ -37,7 +37,6 @@ defn get-other-pin (comp:JITXObject,  p:JITXObject) :
 public pcb-check io (module:JITXObject) :
   val pins = to-tuple(seq-cat(pins, component-instances(module)))
   var net-pins = []
-  ; Refactor to use net introspection
   for p1 in pins do :
     ; Look for Digital inputs\
     if (has-property?(p1.digital-output) or has-property?(p1.digital-io)) :
@@ -48,11 +47,10 @@ public pcb-check io (module:JITXObject) :
       ; val in-pins  = to-tuple(filter({has-property?(_.digital-input)}, net-pins))
       ; Check outputs against every pin
       for out-p in cat(out-pins, io-pins) do :
-        var o 
-        if has-property?(out-p.digital-output) : 
-          o = driver(property(out-p.digital-output))
-        else if has-property?(out-p.digital-io) : 
-          o = driver(property(out-p.digital-io))
+        val o = 
+          if has-property?(out-p.digital-output) : driver(property(out-p.digital-output))
+          else if has-property?(out-p.digital-io) : driver(property(out-p.digital-io))
+          else : fatal("Unhandled case.")
 
         ; println("Out %_ is %_" % [ref(out-p) o])
         ; for n in net-pins do: println(ref(n))
@@ -78,11 +76,9 @@ public pcb-check io (module:JITXObject) :
                 #CHECK( i < iol(o))
                 for p in net-pins do :
                   if has-property?(p.digital-input) or has-property?(p.digital-io) :
-                    var vih-v = 0
-                    if has-property?(p.digital-input) : 
-                      vih-v = vih(property(p.digital-input))
-                    else if has-property?(p.digital-io) : 
-                      vih-v = vih(property(p.digital-io))
+                    val vih-v = 
+                      if has-property?(p.digital-input) : vih(property(p.digital-input))
+                      else if has-property?(p.digital-io) : vih(property(p.digital-io))
                     #CHECK(rail-voltage > vih-v)
                   if has-property?(p.generic-pin):
                     #CHECK(contains?(max-voltage(property(p.generic-pin)), rail-voltage))
@@ -92,12 +88,11 @@ public pcb-check io (module:JITXObject) :
 ; Checks two push-pull digital logic pins, at least one of which can output
 public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
   ; if has-property?(in-p.digital-input): println(ref(gnd-pin(property(in-p.digital-input))))
-  var o 
-  if has-property?(out-p.digital-output) : 
-   o = property(out-p.digital-output)
-  else if has-property?(out-p.digital-io) : 
-   o = property(out-p.digital-io)
-   
+  val o = 
+    if has-property?(out-p.digital-output) : property(out-p.digital-output)
+    else if has-property?(out-p.digital-io) : property(out-p.digital-io)
+    else : fatal("Unhandled case.")
+
   #CHECK((driver(o) is CMOSOutput) or (driver(o) is TTLOutput))
   ; If in-p is just an input, check output against input
   if has-property?(in-p.digital-input) :

@@ -48,13 +48,13 @@ defn power-pins (stm:JITXObject) -> Tuple<JITXObject> :
   val result = to-tuple $ for p in pins(stm) filter :
     substring?(lower-case(to-string(ref(p))), "vdd")
   if empty?(result):
-    fatal("%_ is missing an identifiable power pin." % [name(stm)])
+    fatal("%_ is missing an identifiable power pin." % [ref(stm)])
   result
 defn gnd-pins (stm:JITXObject) -> Tuple<JITXObject> :
   val result = to-tuple $ for p in pins(stm) filter :
     substring?(lower-case(to-string(ref(p))), "vss")
   if empty?(result):
-    fatal("%_ is missing an identifiable ground pin." % [name(stm)])
+    fatal("%_ is missing an identifiable ground pin." % [ref(stm)])
   result
 
 public defn generate-bypass (stm:JITXObject, bypass-package:Double, bypass-pin:Double) :
@@ -182,13 +182,13 @@ public defn setup-clocks (stm:JITXObject, HSE-freq:Double, HSE-ppm:Double, HSE-s
             26.0e6,
             32.0e6,
           ]
-          inst hf-xtal:
+          inst hf-xtal :
             if contains?(HSE-FREQS, HSE-freq): 
-              ocdb/epson/TSX-322f/component(HSE-freq)
+              ocdb/epson/TSX-3225/component(HSE-freq)
             else:
-              ocdb/abracon/AMB7/component
-          if contains?(HSE-FREQS, HSE-freq):
-            net(hf-xtal.gnd, gnd-pin)
+              ocdb/abracon/AMB7/component(HSE-freq)
+          if contains?(HSE-FREQS, HSE-freq) :
+            net (hf-xtal.gnd, gnd-pin)
 
           require hf-osc:high-freq-oscillator from stm
           net (hf-osc.in hf-xtal.p[1])

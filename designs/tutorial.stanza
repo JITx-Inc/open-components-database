@@ -23,14 +23,15 @@ pcb-module can-connector :
   net VIN (connector.p[2], power.vdd)
   net (connector.p[3], can.canh)
   net (connector.p[4], can.canl)
+
+  ocdb/terminations/terminate-can(can, power.gnd, "parallel")
   set-power-source(connector.p[2], connector.p[1], 5.0)
 
 pcb-module first-design :
   inst connector : can-connector
 
   ; Choose the smallest 3.3V F0 mcu that will work for this design. Need 30ppm for the main clock.
-  inst stm : micro-controller([ "series" => "STM32L0" 
-                                "min-supply-voltage.max" => 3.3])([`HSE-ppm => 30.0e-6 `boot => "flash"])
+  inst stm : micro-controller([ "series" => "STM32F0" "min-supply-voltage.max" => 3.3])([`HSE-ppm => 30.0e-6 `boot => "flash"])
 
   ; Add a CAN transceiver
   inst xr : ocdb/texas-instruments/TCAN1051/module
@@ -61,7 +62,7 @@ pcb-module first-design :
   ; Run the schematic review 
   check-design(self)
 
-val powered-design = transform-module(generate-power, first-design)
+val powered-design = run-final-passes(transform-module(generate-power, first-design))
 make-default-board(powered-design, 4, board-shape)
 
 view-board()

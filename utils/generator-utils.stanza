@@ -147,3 +147,18 @@ public defn set-power-source (pos:JITXObject, neg:JITXObject, v-in:Double):
     property(pos.power-input) = v-in
     property(pos.gnd-ref) = neg
     property(pos.power-supply-pin) = PowerSupplyPin(v-in, 0.3) 
+
+; =======================================
+; Run transformations to propogate voltages from sources, and run delayed evaluations
+; =======================================
+public defn run-final-passes (module:Instantiable) :
+  var intermediate-design = transform-module(propagate-rail-voltage, module)
+  set-main-module(intermediate-design)
+  intermediate-design = run-evals(intermediate-design)
+  intermediate-design = transform-module(propagate-rail-voltage, intermediate-design)
+  intermediate-design = run-evals(intermediate-design)
+  intermediate-design = transform-module(propagate-rail-voltage, intermediate-design)
+  intermediate-design = run-evals(intermediate-design)
+  val assigned-pins = assign-pins()
+  val final = run-evals(assigned-pins)
+  final
