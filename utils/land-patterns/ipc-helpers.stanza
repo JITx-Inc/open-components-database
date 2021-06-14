@@ -1,0 +1,314 @@
+#use-added-syntax(jitx)
+;==============================================================================
+;========================== Lead Helpers and Definitions ======================
+;==============================================================================
+defpackage ocdb/land-patterns/leads:
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/design-vars
+
+;TODO:
+;  - BGA (table 3-17)
+;  - PSON/PQFN/DFN (table 3-18)
+;  - OSCCC (table 3-19)
+;  - CGA/LGA (table 3-21)
+
+; LeadType is a helper enum for various kinds of leads and terminations on 
+; components. It is used to configure their generated land patterns.
+public pcb-enum ocdb/land-patterns/leads/LeadType:
+  SmallFlatRibbonLLeads,  ; Flat ribbon L leads for pitch less than 0.0625mm
+  SmallGullWingLeads,     ; Gull wwing leads with pitch less than 0.0625mm
+  BigFlatRibbonLLeads,    ; Flat ribbon L leads for pitch greater than 0.0625mm
+  BigGullWingLeads,       ; GullWing leads for pitch greater than 0.0625mm
+  JLeads,                 ; J Leads
+  SmallRectangularLeads,  ; Leads for rectangular components (chip capacitors, resistors, inductors) smaller than 0601
+  BigRectangularLeads,    ; Leads for rectangular components (chip capacitors, resistors, inductors) 0601 or larger
+  CylindricalLeads,       ; Cylindrical end cap leads
+  LeadlessChipCarrierLeads, ; Lead less chip carrier leads
+  ConcaveChipArrayLeads,    ; Concave chip array leads
+  ConvexChipArrayLeads,     ; Convex chip array leads
+  FlatChipArrayLeads,       ; Flat chip array leads
+  ButtJointLeads,           ; Butt joint leads
+  InwardFlatRibbonLLeads,   ; Inward flat ribbons L leads
+  FlatLugLeads,             ; flat lug leads
+  QuadFlatNoLeads,          ; quad flat components without leads
+  SmallOutlineNoLeads,      ; small outline packages without leads
+  SmallOutlineFlatLeads,    ; small outline flat leads
+  ShortTwoPinCrystalLeads,  ; two pin crystal components shorter than 10mm
+  ShortAluminumElectrolyticLeads, ; electrolytic capacitor shorter than 10mm
+  TallTwoPinCrystalLeads,         ; two pin crystal components 10mm or taller
+  TallAluminumElectrolyticLeads,  ; electrolytic capacitor 10mm or taller
+
+; LeadFillets are extra spacing along the sides of a lead when generating a land for 
+; a component's leads.
+public pcb-struct ocdb/land-patterns/packages/LeadFillets:
+  toe:Double  ; space away from the component towards the board
+  heel:Double ; space towards the component
+  side:Double ; space on the edges of the lead
+  courtyard-excess:Double ; TOOD: find out what this means and how to use it
+
+; Compute the LeadFillets of a lead type
+public defn lead-fillets (lead-type) -> LeadFillets:
+  lead-fillets(lead-type, DESIGN-PRODUCIBILITY)
+
+; Compute the LeadFillets of a lead type, given a design producability level.
+public defn lead-fillets (lead-type:LeadType, p:DesignProducability) -> LeadFillets:
+  match(lead-type):
+    (_:SmallFlatRibbonLLeads): flat-ribbon-L(p, 0.0)
+    (_:SmallGullWingLeads): gull-wing-leads(p, 0.0)
+    (_:BigFlatRibbonLLeads): flat-ribbon-L(p, 1.0)
+    (_:BigGullWingLeads): gull-wing-leads(p, 1.0)
+    (_:JLeads): j-leads(p)
+    (_:BigRectangularLeads): big-rectangular(p)
+    (_:SmallRectangularLeads): small-rectangular(p)
+    (_:CylindricalLeads): cylindrical(p)
+    (_:LeadlessChipCarrierLeads): leadless-chip-carrier(p)
+    (_:ConcaveChipArrayLeads): concave-chip-array(p)
+    (_:ConvexChipArrayLeads): convex-chip-array(p)
+    (_:FlatChipArrayLeads): flat-chip-array(p)
+    (_:ButtJointLeads): butt-joints(p)
+    (_:InwardFlatRibbonLLeads): inward-flat-ribbon-l-leads(p)
+    (_:FlatLugLeads): flat-lug-leads(p)
+    (_:QuadFlatNoLeads): quad-flat-no-lead(p)
+    (_:SmallOutlineNoLeads): small-outline-no-lead(p)
+    (_:SmallOutlineFlatLeads): small-outline-flat-lead(p)
+    (_:ShortTwoPinCrystalLeads): two-pin-crystal(p, 0.0)
+    (_:ShortAluminumElectrolyticLeads): aluminum-electrolytic(p, 0.0)
+    (_:TallTwoPinCrystalLeads): two-pin-crystal(p, 11.0)
+    (_:TallAluminumElectrolyticLeads): two-pin-crystal(p, 11.0)
+
+;==============================================================================
+;============================ LeadFillet tables ===============================
+;==============================================================================
+protected defn flat-ribbon-L (p:DesignProducability, pitch:Double):
+  if pitch > 0.0625:
+    switch(p):
+      LevelA: LeadFillets(0.55, 0.45, 0.05, 0.5)
+      LevelB: LeadFillets(0.35, 0.35, 0.03, 0.25)
+      LevelC: LeadFillets(0.15, 0.25, 0.01, 0.1)
+  else:
+    switch(p):
+      LevelA: LeadFillets(0.55, 0.45, 0.01  0.5)
+      LevelB: LeadFillets(0.35, 0.35, -0.02 0.25)
+      LevelC: LeadFillets(0.15, 0.25, -0.04 0.1)
+
+protected defn gull-wing-leads (p:DesignProducability, pitch:Double):
+  flat-ribbon-L(p, pitch)
+
+protected defn j-leads (p:DesignProducability):
+  switch(p):
+    LevelA: LeadFillets(0.55, 0.10, 0.05 ,0.5)
+    LevelB: LeadFillets(0.35, 0.00, 0.03 ,0.25)
+    LevelC: LeadFillets(0.15, -0.10, 0.01,0.1)
+
+; components bigger than 0601
+protected defn big-rectangular (p:DesignProducability): 
+  switch(p):
+    LevelA: LeadFillets(0.55, 0.00, 0.05 ,0.5)
+    LevelB: LeadFillets(0.35, 0.00, 0.00 ,0.25)
+    LevelC: LeadFillets(0.15, 0.00, -0.05, 0.1)
+
+; rectangular components smaller than 0601
+protected defn small-rectangular (p:DesignProducability):
+  switch(p):
+    LevelA: LeadFillets(0.30, 0.00, 0.05 ,0.5)
+    LevelB: LeadFillets(0.20, 0.00, 0.00 ,0.25)
+    LevelC: LeadFillets(0.10, 0.00, -0.05, 0.1)
+
+protected defn cylindrical (p:DesignProducability):
+  switch(p):
+    LevelA: LeadFillets(0.60, 0.20, 0.10, 0.5)
+    LevelB: LeadFillets(0.40, 0.10, 0.05, 0.25)
+    LevelC: LeadFillets(0.20, 0.02, 0.01, 0.1)
+
+protected defn leadless-chip-carrier (p:DesignProducability):
+  switch(p):
+    LevelA: LeadFillets(0.65, 0.25, 0.05, 0.5)
+    LevelB: LeadFillets(0.55, 0.15, -0.05, 0.25)
+    LevelC: LeadFillets(0.45, 0.05, -0.15, 0.1)
+
+protected defn concave-chip-array (p:DesignProducability):
+  switch(p):
+    LevelA: LeadFillets(0.55, -0.05, -0.05, 0.5)
+    LevelB: LeadFillets(0.45, -0.07, -0.07, 0.25)
+    LevelC: LeadFillets(0.35, -0.20, -0.10, 0.1)
+
+protected defn convex-chip-array (p:DesignProducability):
+  switch(p):
+    LevelA: LeadFillets(0.55, -0.05, -0.05, 0.5)
+    LevelB: LeadFillets(0.45, -0.07, -0.07, 0.25)
+    LevelC: LeadFillets(0.35, -0.20, -0.10, 0.1)
+
+protected defn flat-chip-array (p:DesignProducability):
+  switch(p):
+    LevelA: LeadFillets(0.55, -0.05, -0.05, 0.5)
+    LevelB: LeadFillets(0.45, -0.07, -0.07, 0.25)
+    LevelC: LeadFillets(0.35, -0.20, -0.10, 0.1)
+
+protected defn butt-joints (p:DesignProducability):
+  switch(p):
+    LevelA: LeadFillets(1.0, 1.0, 0.3, 1.5)
+    LevelB: LeadFillets(0.8, 0.8, 0.2, 0.8)
+    LevelC: LeadFillets(0.6, 0.6, 0.1, 0.2)
+
+protected defn inward-flat-ribbon-l-leads (p:DesignProducability):
+  switch(p):
+    LevelA: LeadFillets(0.25, 0.8, 0.01, 0.5)
+    LevelB: LeadFillets(0.15, 0.5, -0.05, 0.25)
+    LevelC: LeadFillets(0.07, 0.2, -0.10, 0.1)
+
+protected defn flat-lug-leads (p:DesignProducability):
+  switch(p):
+    LevelA: LeadFillets(0.55, 0.45, 0.05, 0.5)
+    LevelB: LeadFillets(0.35, 0.35, 0.03, 0.25)
+    LevelC: LeadFillets(0.15, 0.25, 0.01, 0.1)
+
+protected defn quad-flat-no-lead (p:DesignProducability):
+  switch(p):
+    LevelA: LeadFillets(0.4, 0.00, -0.04, 0.5)
+    LevelB: LeadFillets(0.3, 0.00, -0.04, 0.25)
+    LevelC: LeadFillets(0.2, 0.00, -0.04, 0.1)
+
+protected defn small-outline-no-lead (p:DesignProducability):
+  switch(p):
+    LevelA: LeadFillets(0.4, 0.00, -0.04, 0.5)
+    LevelB: LeadFillets(0.3, 0.00, -0.04, 0.25)
+    LevelC: LeadFillets(0.2, 0.00, -0.04, 0.1)
+
+protected defn small-outline-flat-lead (p:DesignProducability):
+  switch(p):
+    LevelA: LeadFillets(0.3, 0.00,  0.05, 0.2)
+    LevelB: LeadFillets(0.2, 0.00,  0.00, 0.15)
+    LevelC: LeadFillets(0.1, 0.00, -0.05, 0.1)
+
+protected defn two-pin-crystal (p:DesignProducability, height:Double):
+  if height < 10.0:
+    switch(p):
+      LevelA: LeadFillets(0.7,  0.00, 0.5, 1.0)
+      LevelB: LeadFillets(0.5, -0.10, 0.4, 0.5)
+      LevelC: LeadFillets(0.3, -0.20, 0.3, 0.25)
+  else:
+    switch(p):
+      LevelA: LeadFillets(1.0,  0.00, 0.6, 1.0)
+      LevelB: LeadFillets(0.7, -0.05, 0.5, 0.5)
+      LevelC: LeadFillets(0.4, -0.10, 0.4, 0.25)
+
+protected defn aluminum-electrolytic (p:DesignProducability, height:Double):
+  two-pin-crystal(p, height)
+
+;==============================================================================
+;========================== Main Helpers ======================================
+;==============================================================================
+defpackage ocdb/land-patterns/ipc-helpers:
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/design-vars
+  import ocdb/land-patterns/leads
+  import ocdb/land-patterns/packages
+
+; Component tolerances, defined by component manufacturers.
+public pcb-struct ocdb/land-patterns/ipc-helpers/ComponentTolerance:
+  width: Double,      ; tolerance on the width of a land pattern
+  length:Double,      ; tolerance on the length of a land pattern
+  lead-widths:Double, ; tolerance on the terminations or leads of a land pattern
+
+; A single value and its tolerance
+public pcb-struct ocdb/land-patterns/ipc-helpers/SingleTolerance:
+  value:Double, 
+  tolerance:Double, ; TODO with: ensure => non-negative! and less than value
+
+; A set of manufacturing tolerances
+public pcb-struct ocdb/land-patterns/ipc-helpers/ManufacturerTolerances:
+  fabrication:Double,       ; unilateral profile tolerance for the printed board land pattern 
+  placement-accuracy:Double ; diameter of true position placement accuracy to the center of the land pattern
+
+; A single value and its tolerance
+public pcb-struct ocdb/land-patterns/ipc-helpers/SingleTolerance:
+  nominal-value:Double, 
+  tolerance:Double, ; TODO with: ensure => non-negative! and less than value
+
+; Return the minimum value for a value with some tolerance
+public defn min (s:SingleTolerance) -> Double: 
+  value(s) - tolerance(s)
+
+; Return the maximum value for a value with some tolerance
+public defn max (s:SingleTolerance) -> Double: 
+  value(s) + tolerance(s)
+
+; Find the RMS sum of many tolerances. This operation is non-commutative and non-associative, so 
+; it should be called once when working with tolerances.
+public defn sum (s:Seqable<SingleTolerance>) -> SingleTolerance:
+  var nom = 0.0
+  var tol = 0.0
+  for t in s do:
+    nom = nom + value(t)
+    tol = tol + tolerance(s) * tolerance(s)
+  SingleTolerance(nom, sqrt(tol))
+
+;==============================================================================
+; Value References:
+;
+; Z: Double,  ; overall length of the landpattern
+; G: Double,  ; distance between pads
+; X: Double,  ; width of the landpattern
+; L: Double,  ; overall length of the component
+; S: Double,  ; distance between component terminations
+; W: Double,  ; width of the lead or termination
+; Jt: Double, ; solder fillet at toe
+; Jh: Double, ; solder fillet at heel
+; Js: Double, ; solder fillet at side
+; Cl: Double, ; length tolerance
+; Cs: Double, ; tolerance on distance between component terminations
+; Cw: Double, ; tolerance on lead width
+; F: Double,  ; printed board fabrication tolerances
+; P: Double,  ; part placement tolerance
+;==============================================================================
+
+; Computes the dimensions of a land pattern, returning: [Dims, Double]
+; where the first result is (X, Z) and the second is G.
+public defn land-pattern-dimensions (
+  land-pattern-dims: Dims             ; Dims(X, Z), nominal land pattern dimensions
+  lead-dims: Dims                     ; Dims(W, T), nominal lead/termination dimensions
+  distance-between-lands: Double,     ; G, the space between pads
+  lead-fillets: LeadFillets       ; J
+  component-tolerance: ComponentTolerance   ; C
+  manufacturer-tolerance: ManufacturerTolerances ; F, P
+):
+  defn formula (a, b, c) -> Double:
+    val F = fabrication(manufacturer-tolerance)
+    val P = placement-accuracy(manufacturer-tolerance)
+    sum([SingleTolerance(a, c), SingleTolerance(b, F, SingleTolerance(b, P)])
+
+  val Lmin = y(land-pattern-dims) - length(component-tolerance)
+  val Lmax = y(land-pattern-dims) + length(component-tolerance)
+  val Smax = Lmax - 2. * (y(lead-dims) - lead-widths(component-tolerance))
+  val Wmin = x(lead-dims) - lead-widths(tolerance)
+  val Xmax = formula(Wmin, side(lead-fillets), width(tolerance)) ; TODO sanity check this. The formula does not make sense.
+  val Zmax = formula(Lmin, toe(lead-fillets), length(component-tolerance))
+  val Gmin = formula(Smax, - heel(lead-fillets), lead-widths(component-tolerance))
+
+  [Dims(Xmax, Zmax), Gmin]
+
+; Computes the dimensions of a land pattern, return: [Dims, Double] where the first
+; result is (X, Z) and the second is G. Assumes the manufacturing tolerances are 
+; defaults TODO: pick sensible defaults or introspect design rules
+public defn land-pattern-dimensions (
+  land-pattern-dims: Dims, 
+  lead-dims: Dims,
+  distance-between-lands:Double,
+  lead-fillets:LeadFillets,
+  component-tolerances:ComponentTolerance
+):
+  land-pattern-dimensions(
+    land-pattern-dims, 
+    lead-dims, 
+    distance-between-lands, 
+    lead-filets,
+    component-tolerances, 
+    ManufacturerTolerances(0.0, 0.0)) ; todo: reasonable defaults or pull from design rules
+
