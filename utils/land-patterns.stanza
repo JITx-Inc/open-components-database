@@ -52,23 +52,18 @@ public defn apply-soldermask ():
 ; pad shape if it does not.
 public defn soldermask-defined (p:Pad):
   ; extract the pad data before conversion
-  val name_   = name(p)
-  val shape_  = pad-shape(p)
-  val type_   = pad-type(p)
-  val layers_ = layers(p)
-  val mask?   = find({specifier(_) is SolderMask}, layers_)
-  
+  val mask?   = find({specifier(_) is SolderMask}, layers(p))  
   ; special case: the mask is smaller than the shape already
   if (mask? is-not False) and 
-     (min-width([shape_]) > min-width([shape $ (mask? as LayerShape)])) :
+     (min-width([pad-shape(p)]) > min-width([shape $ (mask? as LayerShape)])) :
     p
   else :
     pcb-pad SMD-p:
-      name  = to-string("%_, SMD" % [name_])
-      type  = type_
-      shape = shape_
+      name  = to-string("%_, SMD" % [name(p)])
+      type  = pad-type(p)
+      shape = pad-shape(p)
       apply-soldermask(0.85, true)
-      for layer_ in filter({specifier(_) is-not SolderMask}, layers_) do:
+      for layer_ in filter({specifier(_) is-not SolderMask}, layers(p)) do:
         layer(specifier(layer_)) = shape(layer_)
     SMD-p
 
