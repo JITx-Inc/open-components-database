@@ -6,7 +6,6 @@ defpackage ocdb/si-labs/CP2102N :
   import jitx
   import jitx/commands
   import ocdb/defaults
-
   import ocdb/land-patterns
   import ocdb/symbols
   import ocdb/box-symbol
@@ -14,17 +13,29 @@ defpackage ocdb/si-labs/CP2102N :
   import ocdb/generator-utils
   import ocdb/generic-components
 
-public pcb-component component (pins:Int) :
+;<test>
+n-pins: 24
+<test>
+public pcb-component component (n-pins:Int) :
+  val [code, lp] = 
+    switch(n-pins):
+      24: [
+        "QFN24", 
+        qfn-landpattern(0.5, 3.9, 24, 0.25, 0.4, [2.45, 2.45])
+      ]
+      else: 
+        fatal("Unsupported or invalid number of pins for CP2102N/component: %_" % [n-pins])
+    
+  ;==============================================================
+  ; Metadata 
+  name         = "CP2102N"
   manufacturer = "Silicon Labs"
-  val code = switch(pins):
-    24 : "QFN24"
-    else : fatal("Unsupported or invalid number of pins")
-
-  mpn = to-string("CP2102N-A02-G%_" % [code])
-  description = "USB Bridge, USB to UART USB 2.0 UART Interface"
-
+  mpn          = to-string("CP2102N-A02-G%_" % [code])
+  description  = "USB Bridge, USB to UART USB 2.0 UART Interface"
+  ;==============================================================
   port uart : uart
   port usb : usb-2-data
+
   pin-properties :
     [pin:Ref | pads:Int ... | side:Dir ]
     [RI       | 1           | Up       ]
@@ -52,37 +63,34 @@ public pcb-component component (pins:Int) :
     [DCD      | 24          | Up       ]
 
   make-box-symbol()
-  assign-landpattern(qfn-landpattern(0.5, 3.9, 24, 0.25, 0.4, [2.45 2.45]))
+  assign-landpattern(lp)
 
-public pcb-module module (pins:Int) :
-  inst bridge : ocdb/si-labs/CP2102N/component(pins)
-  
-  pin gnd
-  pin vio
-  pin v-usb
+;<test>
+n-pins: 24
+<test>
+public pcb-module module (n-pins:Int) :  
+  pin  gnd
+  pin  vio
+  pin  v-usb
   port uart-node : uart
-  port usb-data : usb-2-data
-  port gpio : pin[3]
-  pin suspendb
+  port usb-data  : usb-2-data
+  port gpio      : pin[3]
+  pin  suspendb
 
-  net (bridge.usb, usb-data)
+  inst bridge : ocdb/si-labs/CP2102N/component(n-pins)
 
+  net (bridge.usb,  usb-data)
   net (bridge.uart, uart-node)
+  net (v-usb,       bridge.VREGIN)
+  net (vio,         bridge.VIO)
+  net (gpio,        bridge.GPIO)
+  net (suspendb,    bridge.SUSPENDb)  
+  net (gnd,         bridge.GND)
 
-  net (v-usb, bridge.VREGIN)
-
-  net (vio, bridge.VIO)
-  net (gpio, bridge.GPIO)
-  net (suspendb, bridge.SUSPENDb)
-  
-  net (gnd, bridge.GND)
   res-strap(bridge.VBUS, gnd, 47.5e3)
   res-strap(bridge.VBUS, bridge.VREGIN, 22.1e3)
-
-  cap-strap(bridge.VREGIN, gnd, 4.7e-6)
-  cap-strap(bridge.VREGIN, gnd, 0.1e-6)
-
-  cap-strap(bridge.VDD, gnd, 4.7e-6)
-  cap-strap(bridge.VDD, gnd, 0.1e-6)
-
   res-strap(bridge.RSTb, bridge.VIO, 1.0e3)
+
+  for pin_ in [bridge.VREGIN, bridge.VDD] do:
+    for cap_ in [4.6e-6, 0.1e-6] do:
+      bypass-cap-strap(pin_, gnd, cap_)

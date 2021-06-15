@@ -13,7 +13,9 @@ defpackage ocdb/samtec/QTH :
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
-
+;<test>
+n-row: 30
+<test>
 public pcb-component component (n-row:Int) :
   manufacturer = "Samtec"
   mpn = to-string("QTH-0%_-01-L-D-A" % [n-row])
@@ -28,19 +30,24 @@ public pcb-component component (n-row:Int) :
   assign-landpattern(samtec-qth-pkg(n-row))
   reference-prefix = "J"
 
+;<test>
+n-row: 30
+<test>
 public pcb-landpattern samtec-qth-pkg (n-row:Int) :
   ; n - total number of non-ground pins
   ; A - total package width
   ; D - distance between alignment holes
-  val [n, A, D] = switch(n-row) :
-    30 : [60, 20.0, 18.48]
-    60 : [120, 40.01, 38.48]
-    90 : [180, 60.01, 58.48]
-    else : fatal("Incorrect Samtec QTH n-row: %_." % [n-row])
+  val [n, A, D] = 
+    switch(n-row) :
+      30 : [60,  20.0,  18.48]
+      60 : [120, 40.01, 38.48]
+      90 : [180, 60.01, 58.48]
+      else : 
+        fatal("Incorrect Samtec QTH n-row: %_." % [n-row])
 
   val pin-pad = smd-pad(0.305, 1.45)
-  val g1-pad = smd-pad(2.54, 0.64)
-  val g2-pad = smd-pad(4.7, 0.64)
+  val g1-pad  = smd-pad(2.54,  0.64)
+  val g2-pad  = smd-pad(4.7,   0.64)
 
   val n-bank = n / 60
   val bank-pitch = 20.003
@@ -58,7 +65,7 @@ public pcb-landpattern samtec-qth-pkg (n-row:Int) :
   val bank-locs = loc(bank-width / 2.0, (- y1), 90.0, FlipX)
 
   for b in 0 to n-bank do :
-    for i in 0 to 60, l in gls do :
+    for (i in 0 to 60, l in gls) do :
       val lc = loc(center(bank-locs * l))
       pad p[i + b * 60 + 1] : pin-pad at (loc(x1 + bank-pitch * to-double(b), y1) * lc)
 
