@@ -33,22 +33,19 @@ defn ensure-bundles!<?T> (
         (_:?):
           One([p, b, false]) ; case 3: port is not a bundle
   
-  ; error if not empty
-  if not empty?(errors):
+  if empty?(errors):
+    body()
+  else:
     val buf = StringBuffer()
     println(buf, "Could not %_. Bundles did not match." % [action])
     for [p, b, b?] in errors do:
       println(IndentedStream(buf), 
         "Expected %_ for port %_. Found %_." % [
           name(b), ref(p), 
-          name(b? as Bundle) when b? is-not False else false
+          name(b? as Bundle) when b? is-not False else port-type(p)
         ]
       )
-    fatal(to-string(buf)) ; todo error or exception here?
-    false
-  else:
-    ; good to go, call the body and return
-    body()
+    fatal(to-string(buf))
 
 ; Connect two i2c lines with a buffer. 
 public defn connect-i2c-isolation (
