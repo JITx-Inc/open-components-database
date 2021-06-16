@@ -140,7 +140,6 @@ def choose_pcb_object_arguments(arg_name: str, arg_type: str, file: File, line_n
 
         function_code = [l for line in file[line_number + 1:cursor] if not re.match(" *\n", (l := remove_comment(line)))]
         for line_idx, line in enumerate(function_code[:-1]) :
-            #if re.match("[^;]*switch\({arg_name}\)\n".format(arg_name=arg_name), file[cursor]):
             if f"switch({arg_name})" in line :
                 if (m := re.match(f" *({VALUE_REGEX}) *:", function_code[line_idx + 1])):
                     return [m.group(1)]
