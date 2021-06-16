@@ -12,55 +12,98 @@ defpackage ocdb/connects :
   import ocdb/bundles
   import ocdb/symbols
   import ocdb/box-symbol
+  import lang-utils
 
-public defn connect-isolate (a:JITXObject, b:JITXObject) :
-  inside pcb-module :
-    eval-when true :
-      match(port-type(a), port-type(b)) :
-        (pa:Bundle, pb:Bundle) :
-          if pa == i2c and pb == i2c :
-            inst buf : ocdb/texas-instruments/ISO1540/component
-            net (a.sda, buf.SDA1)
-            net (a.scl, buf.SCL1)
-            net (b.sda, buf.SDA2)
-            net (b.scl, buf.SCL2)
-            property(buf.VCC1.requires-power) = true
-            property(buf.VCC1.power-request) = [3.3 0.3 0.05]
+; Helper function to check if the ports have bundles and their assigned
+; bundle matches what we expect
+defn ensure-bundles!<?T> (
+  body: () -> ?T, 
+  ports:Seqable<JITXObject>, 
+  bundles:Seqable<Bundle>,
+  action) -> False|T:
+  ; collect the mismatched bundles from ports
+  val errors = 
+    for (p in ports, b in bundles) seq?:
+      match(port-type(p)):
+        (b?:Bundle):
+          if b? != b:
+            One([p, b, b?])  ; case 1: ports exist but do not match
+          else:
+            None()           ; case 2: ports exist and match, we're good to go
+        (_:?):
+          One([p, b, false]) ; case 3: port is not a bundle
+  
+  if empty?(errors):
+    body()
+  else:
+    val buf = StringBuffer()
+    println(buf, "Could not %_. Bundles did not match." % [action])
+    for [p, b, b?] in errors do:
+      println(IndentedStream(buf), 
+        "Expected %_ for port %_. Found %_." % [
+          name(b), ref(p), 
+          name(b? as Bundle) when b? is-not False else port-type(p)
+        ]
+      )
+    fatal(to-string(buf))
 
+; Connect two i2c lines with a buffer. 
+public defn connect-i2c-isolation (
+  x:JITXObject,
+  y:JITXObject,
+  buffer:Instantiable
+):
+  within ensure-bundles!([x, y], [i2c, i2c], "call connect-isolation"):
+    inside pcb-module:
+      public inst buf: buffer
+      net (x, buf.p[1])
+      net (y, buf.p[2])
+      buf
+
+; Connect to i2c lines with a buffer, using a default component (TI ISO1540)
+public defn connect-i2c-isolation (
+  x:JITXObject,
+  y:JITXObject,
+):
+  inside pcb-module:
+    val buf = connect-i2c-isolation(x, y, ocdb/texas-instruments/ISO1540/component)
+    match(buf:Instance):
+      property(buf.VCC1.requires-power) = true
+      property(buf.VCC1.power-request) = [3.3 0.3 0.05]
+    buf
+    
+; Wrapper around connect-i2c-isolation for backwards compatibility
+public defn connect-isolate (a:JITXObject, b:JITXObject):
+  connect-i2c-isolation(a, b)
+
+; Connect PHY using a default component (Marvell 8831510-A0-NNB2C000)
 public defn connect-phy (x:JITXObject, y:JITXObject) :
-  inside pcb-module :
-    eval-when true :
-      match(port-type(x), port-type(y)) :
-        (px:Bundle, py:Bundle) :
-          if px == rgmii and py == ethernet-1000 :
-            inst phy : ocdb/marvell/88E1510-A0-NNB2C000/module
-            net (x, phy.rgmii)
-            net (y.mdi, phy.mdi)
-            schematic-group(phy) = phy
+  within ensure-bundles!([x, y], [rgmii, ethernet-1000], "call connect-phy"):
+    inside pcb-module:
+      public inst phy : ocdb/marvell/88E1510-A0-NNB2C000/module
+      net (x, phy.rgmii)
+      net (y.mdi, phy.mdi)
+      schematic-group(phy) = phy
+      phy
 
+; Connect USB-2 over UART using FT232 USB to serial interface
 public defn connect-ft232 (x:JITXObject, y:JITXObject) :
-  inside pcb-module :
-    match(port-type(x), port-type(y)) :
-      (px:Bundle, py:Bundle) :
-        if px == usb-2 and py == uart-with([`dtr `rts]) :
-          public inst xcvr : ocdb/future-designs/FT232RL/module
-          net (x, xcvr.usb-2)
-          net (y.tx, xcvr.uart.rx)
-          net (y.rx, xcvr.uart.tx)
-          net (y.dtr, xcvr.uart.dtr)
-          net (y.rts, xcvr.uart.rts)
-          schematic-group(xcvr) = xcvr
-          xcvr
+  within ensure-bundles!([x, y], [usb-2, uart-with([`dtr, `rts])],  "call connect-ft232"):
+    inside pcb-module :
+      public inst xcvr : ocdb/future-designs/FT232RL/module
+      net (x, xcvr.usb-2)
+      net (y, xcvr.uart)
+      schematic-group(xcvr) = xcvr
+      xcvr
 
+; Connect USB-2 over UART using CP2105 
 public defn connect-cp2105 (usb:JITXObject, uart:JITXObject) :
-  inside pcb-module :
-    match(port-type(usb), port-type(uart)) :
-      (px:Bundle, py:Bundle) :
-        if px == usb-2 and py == uart-with([`dtr `rts]) :
-          public inst xcvr : ocdb/si-labs/CP2105/module
-          net (usb, xcvr.usb-2)
-          net (uart.tx, xcvr.e-uart.rx)
-          net (uart.rx, xcvr.e-uart.tx)
-          net (uart.dtr, xcvr.e-uart.dtr)
-          net (uart.rts, xcvr.e-uart.rts)
-          xcvr
+  within ensure-bundles!([usb, uart], [usb-2, uart-with([`dtr, `rts], "call connect-cp2105")]):
+    inside pcb-module :
+      public inst xcvr : ocdb/si-labs/CP2105/module
+      net (usb, xcvr.usb-2)
+      net (uart.tx,  xcvr.e-uart.rx)
+      net (uart.rx,  xcvr.e-uart.tx)
+      net (uart.dtr, xcvr.e-uart.dtr)
+      net (uart.rts, xcvr.e-uart.rts)
+      xcvr
