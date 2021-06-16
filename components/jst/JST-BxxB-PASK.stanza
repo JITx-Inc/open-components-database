@@ -5,7 +5,6 @@ defpackage ocdb/jst/JST-BxxB-PASK :
   import math
   import jitx
   import jitx/commands
-
   import ocdb/defaults
   import ocdb/land-patterns
   import ocdb/symbols
@@ -15,21 +14,30 @@ defpackage ocdb/jst/JST-BxxB-PASK :
   import ocdb/box-symbol
   import ocdb/property-structs
 
-
+;<test>
+n-pin: 2
+B: 2.54
+<test>
 public pcb-landpattern JST-BxxB-PASK-pkg (n-pin:Int, B:Double) :
-  val offset-x : Double =  (5.3 / 2.0) - (1.7 + 0.8 / 2.0) ;Connector Dims
+  val offset-x =  (5.3 / 2.0) - (1.7 + 0.8 / 2.0) ;Connector Dims
   make-pin-grid(n-pin, 1, 2.0, 0.0, pth-pad(0.4), offset-x, 0.0)
   layer(Courtyard(Top)) = Rectangle(5.4, B + 0.1)
-  layer(Silkscreen("F-SilkS", Top)) = Line(0.2, [ Point(5.3 / 2.0 + 0.1, B / 2.0), Point(5.3 / 2.0 + 0.1, B / 2.0 - 0.8) ])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.2, [
+    Point(5.3 / 2.0 + 0.1, B / 2.0),
+    Point(5.3 / 2.0 + 0.1, B / 2.0 - 0.8)
+  ])
   ref-label()
 
+;<test>
+n-pin: 2
+<test>
 public pcb-component component (n-pin:Int):
   var first-part : String = "B"
-  var A : Double = to-double((n-pin -2) * 2) + 2.0
-  var B : Double = to-double(n-pin * 2) + 2.0
+  var A = to-double((n-pin -2) * 2) + 2.0
+  var B = to-double(n-pin * 2) + 2.0
   if (n-pin < 2 or n-pin > 16):
-    println("JST-BxxB-PASK function received value that doesn't exist! Symbol and landpattern is generated, but the part does not exist!")
-
+    println("Invalid n-pins for JST-BxxB-PASK/component: %_. n-pin must be in range [2, 16]")
+   
   if n-pin < 10:
     first-part = "B0"
     pin-properties :
@@ -43,11 +51,8 @@ public pcb-component component (n-pin:Int):
         [p[i] | i | Left]
         [p[i + 1] | (i + 1) | Right]
 
-;   name = string-join("JST " + first-part + n-pin + "B-PASK Top Entry TH")
-;   mpn = first-part + n-pin + "B-PASK"
-
+  reference-prefix = "J"
   name = string-join(["JST ", first-part, n-pin, "B-PASK Top Entry TH"])
   mpn = string-join([first-part n-pin "B-PASK-1(LF)(SN)"])
   assign-landpattern(JST-BxxB-PASK-pkg(n-pin, B))
   make-box-symbol()
-  reference-prefix = "J"
