@@ -60,7 +60,7 @@ def or_regex(strings: Iterable[str]) -> str:
 
 PACKAGE_REGEX = "[\w!?/-]+"
 VARIABLE_REGEX = "[\w!?-]+"
-VALUE_REGEX = '[-+.!?"\w\d]+'
+VALUE_REGEX = "[-+.!?\"'\w\d]+"
 TYPE_SAMPLE = {
     "Char": '"c"',
     "String": '"hello world"',
@@ -133,8 +133,27 @@ def choose_pcb_object_arguments(arg_name: str, arg_type: str, file: File, line_n
             else:
                 raise TestAnnotationError(number)
     else:
+        cursor = line_number + 1
+        # Detect function body
+        while cursor < len(file) and file[cursor][0] in ("\n", " ", ";") :
+            cursor += 1
+
+        function_code = [l := remove_comment(line) for line in file[line_number + 1:cursor] if not re.match(" *\n", l)]
+        for line_idx, line in enumerate(function_code[:-1]) :
+            #if re.match("[^;]*switch\({arg_name}\)\n".format(arg_name=arg_name), file[cursor]):
+            if f"switch({arg_name})" in line :
+                if (m := re.match(f" *({VALUE_REGEX}) *:", function_code[line_idx + 1])):
+                    print(f"Switch parsing failure: can't retrieve example value in\n```\n{line + function_code[line_idx + 1]}\n```")
+                    return [m.group(1)]
+
         return [TYPE_SAMPLE[arg_type]]
 
+def remove_comment(line: str) -> str :
+    idx = line.find(';')
+    if idx >= 0:
+        return line[:idx] + "\n"
+    else:
+        return line
 
 def parse_pcb_objects(file: File, file_path: str) -> List[PcbObject]:
     objects = []
