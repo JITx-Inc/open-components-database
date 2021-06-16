@@ -12,6 +12,8 @@ defpackage ocdb/generator-utils:
 
   import ocdb/design-vars
   import ocdb/property-structs
+  import ocdb/power-regulators
+  import ocdb/bundles
 
 
 ; =======================================
@@ -22,7 +24,7 @@ defpackage ocdb/generator-utils:
 public defn add-xtal-caps (xtal:JITXObject, gnd:JITXObject, stray-capacitance:Double) :
   inside pcb-module:
     val c-load = load-capacitance(property(xtal.crystal-resonator))
-    val c-bal = 2.0 * (c-load - stray-capacitance)
+    val c-bal = closest-std-val(2.0 * (c-load - stray-capacitance), 5.0)
     cap-strap(xtal.p[1], gnd, ["capacitance" => c-bal "temperature-coefficient.code" => "C0G" ])
     val c = cap-strap(xtal.p[2], gnd, ["capacitance" => c-bal "temperature-coefficient.code" => "C0G" ])
     c 
@@ -125,7 +127,7 @@ public defn propagate-rail-voltage ():
 ; Attach the power generator to designs and loads.
 ; =======================================
 public defn generate-power () :
-  println("JITPCB: Generating power system.")
+  println("JITX: Generating power system.")
   inside pcb-module :
     for i in component-instances(self) do :
       for p in pins(i) do : ; [TODO] public-pins or pins?
@@ -144,3 +146,19 @@ public defn set-power-source (pos:JITXObject, neg:JITXObject, v-in:Double):
   inside pcb-module:
     property(pos.power-input) = v-in
     property(pos.gnd-ref) = neg
+    property(pos.power-supply-pin) = PowerSupplyPin(v-in, 0.3) 
+
+; =======================================
+; Run transformations to propogate voltages from sources, and run delayed evaluations
+; =======================================
+public defn run-final-passes (module:Instantiable) :
+  var intermediate-design = transform-module(propagate-rail-voltage, module)
+  set-main-module(intermediate-design)
+  intermediate-design = run-evals(intermediate-design)
+  intermediate-design = transform-module(propagate-rail-voltage, intermediate-design)
+  intermediate-design = run-evals(intermediate-design)
+  intermediate-design = transform-module(propagate-rail-voltage, intermediate-design)
+  intermediate-design = run-evals(intermediate-design)
+  val assigned-pins = assign-pins()
+  val final = run-evals(assigned-pins)
+  final
