@@ -1,0 +1,75 @@
+#use-added-syntax(jitx)
+defpackage ocdb/texas-instruments/BQ24075 :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+public pcb-component component :
+  manufacturer = "Texas Instruments"
+  mpn = "BQ24075RGT"
+  description = "Standalone 1-Cell 1.5-A Linear Battery Charger with PowerPath"
+
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir ]
+    [BAT     | 2, 3         | Right    ]
+    [CE      | 4            | Left     ]
+    [nCHG    | 9            | Left     ]
+    [EN1     | 6            | Left     ]
+    [EN2     | 5            | Left     ]
+    [IN      | 13           | Right    ]
+    [ILIM    | 12           | Left     ]
+    [ISET    | 16           | Left     ]
+    [OUT     | 10, 11       | Right    ]
+    [PGOOD   | 7            | Left     ]
+    [SYSOFF  | 15           | Left     ]
+    [TPAD    | 17           | Right    ]
+    [TMR     | 14           | Right    ]
+    [TS      | 1            | Right    ]
+    [VSS     | 8            | Right    ]
+
+  make-box-symbol()
+  assign-landpattern(qfn-landpattern(0.5, 2.8, 16, 0.24, 0.4, [1.68 1.68]))
+
+public pcb-module module :
+  pin gnd
+  pin vout
+  pin vin
+  pin batt
+  pin sysoff
+  pin pgood
+  pin nCHG
+  pin tmr
+  inst charger : ocdb/texas-instruments/BQ24075/component
+
+  net (vin, charger.IN)
+  net (vout, charger.OUT)
+  net (batt, charger.BAT)
+
+  net (tmr, charger.TMR)
+  net (pgood, charger.PGOOD)
+  net (nCHG, charger.nCHG)
+  net (sysoff, charger.SYSOFF)
+  net (gnd, charger.VSS)
+  net (gnd, charger.TPAD)
+  net (gnd, charger.EN1)
+  net (gnd, charger.CE)
+
+  res-strap(charger.TS, gnd, 10.0e3)
+  res-strap(charger.ISET, gnd, 2.2e3)
+  res-strap(charger.ILIM, gnd, 1.18e3)
+
+  cap-strap(charger.IN, gnd, 1.0e-6)
+  cap-strap(charger.BAT, gnd, 1.0e-6)
+  cap-strap(charger.OUT, gnd, 4.7e-6)
+  
+  

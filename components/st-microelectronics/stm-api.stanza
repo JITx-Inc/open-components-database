@@ -45,11 +45,16 @@ public val DEFAULT-SETTINGS = [
     `LSE-freq => 32.768e3 `LSE-ppm => 0.05 `LSE-source => "crystal"]
 
 defn power-pins (stm:JITXObject) -> Tuple<JITXObject> :
-  to-tuple(filter({has-property?(_.power-pin)}, pins(stm)))
-
+  val result = to-tuple $ for p in pins(stm) filter :
+    substring?(lower-case(to-string(ref(p))), "vdd")
+  if empty?(result):
+    fatal("%_ is missing an identifiable power pin." % [ref(stm)])
+  result
 defn gnd-pins (stm:JITXObject) -> Tuple<JITXObject> :
   val result = to-tuple $ for p in pins(stm) filter :
     substring?(lower-case(to-string(ref(p))), "vss")
+  if empty?(result):
+    fatal("%_ is missing an identifiable ground pin." % [ref(stm)])
   result
 
 public defn generate-bypass (stm:JITXObject, bypass-package:Double, bypass-pin:Double) :
@@ -66,16 +71,42 @@ public defn connect-power (stm:JITXObject) :
     val power-pins = power-pins(stm)
     val gnd-pins = gnd-pins(stm)
     port power : power
-    for p in power-pins do : net (power.vdd p)
-    for p in gnd-pins do   : net (p, power.gnd)
+    for p in power-pins do : 
+      net VDD (power.vdd p)
+    for p in gnd-pins do   :
+       net GND (p, power.gnd)
+
+    val v-range = recommended-voltage(property(power-pins[0].power-pin))
+    if contains?(v-range, 3.3):
+      property(power-pins[0].power-request) = [3.3, 0.1, 3.3 * 0.03]
+    else if contains?(v-range, 1.8):
+      property(power-pins[0].power-request) = [1.8, 0.1, 1.8 * 0.03]
+
+    property(power-pins[0].gnd-ref) = gnd-pins[0]
+
+    ; TODO Add battery option to API, currently assumes none.
+    if has-pin?(stm, "VBAT") :
+      net (stm.VBAT power.vdd)
 
 public defn connect-reset (stm:JITXObject) :
   inside pcb-module :
     pin reset
     net (stm.NRST reset)
-    val power-pins = power-pins(stm)
-    res-strap(power-pins[0], stm.NRST, 10.0e3)
-    cap-strap(power-pins[0], stm.NRST, 10.0e-9)
+    val power-pin = power-pins(stm)[0]
+    val gnd-pin = gnd-pins(stm)[0]
+    res-strap(power-pin, stm.NRST, 10.0e3)
+    cap-strap(power-pin, stm.NRST, 10.0e-9)
+
+    ; Look for power-on reset pins
+    if has-pin?(stm, "NPOR") :
+      val v-range = recommended-voltage(property(power-pin.power-pin))
+      if contains?(v-range, 1.8):
+        inst mon : ocdb/on-semiconductor/NCP30x/component(1.8)
+        bypass-cap-strap(stm.NPOR, gnd-pin, 0.1e-6)
+        net (mon.gnd, gnd-pin)
+        net (mon.input, power-pin)
+        net (mon.output, stm.NPOR)
+
 
 defn has-pin? (stm:JITXObject, pin-q:String) :
   val t = to-tuple $ for p in pins(stm) filter :
@@ -126,6 +157,7 @@ public defn connect-debug (stm:JITXObject, debug-interface:PortType, connector:I
       require debug-m:debug-interface from stm
       require debug-c:debug-interface from debug-con
       net DEBUG (debug-m debug-c)
+      schematic-group(debug-con) = debug
       if has-port?(debug-con, "power") :
         net (debug-con.power.vdd, power-pins(stm)[0])
         net (debug-con.power.gnd, gnd-pins(stm)[0])
@@ -142,7 +174,22 @@ public defn setup-clocks (stm:JITXObject, HSE-freq:Double, HSE-ppm:Double, HSE-s
     if supports?(instantiable-type(stm), high-freq-oscillator) and HSE-ppm < 0.03 :
       switch(HSE-source):
         "crystal" :
-          inst hf-xtal : ocdb/epson/TSX-3225/component(HSE-freq)
+            ; supported crystal oscillator frequencies
+          val HSE-FREQS = [
+            16.0e6,
+            24.0e6,
+            25.0e6,
+            26.0e6,
+            32.0e6,
+          ]
+          inst hf-xtal :
+            if contains?(HSE-FREQS, HSE-freq): 
+              ocdb/epson/TSX-3225/component(HSE-freq)
+            else:
+              ocdb/abracon/AMB7/component(HSE-freq)
+          if contains?(HSE-FREQS, HSE-freq) :
+            net (hf-xtal.gnd, gnd-pin)
+
           require hf-osc:high-freq-oscillator from stm
           net (hf-osc.in hf-xtal.p[1])
           net (hf-osc.out hf-xtal.p[2])

@@ -72,7 +72,7 @@ pcb-module sensor-mote :
   place(ant) at loc(9.0, 5.0, -90.0) on Top
 
   ; Use a connect statement to interface USB-2 to UART
-  connect-ft232(protected-usb, proc.uart)
+  val cp2105 = connect-cp2105(protected-usb, proc.uart) as JITXObject
 
   ; Add a humidty sensor, connect over i2c, add pullups.
   public inst hum : ocdb/texas-instruments/HDC1080/module
@@ -130,30 +130,19 @@ pcb-module sensor-mote :
 ; Set the active design directory for CAD
 set-design("ble-mote")
 
-; Run a function to programmatically calculate voltages on rails
-var sensor-mote* = transform-module(propagate-rail-voltage, sensor-mote)
-sensor-mote* = run-evals(sensor-mote*)
-sensor-mote* = transform-module(propagate-rail-voltage, sensor-mote*)
-sensor-mote* = run-evals(sensor-mote*)
-sensor-mote* = transform-module(propagate-rail-voltage, sensor-mote*)
-sensor-mote* = run-evals(sensor-mote*)
-val assigned-pins = assign-pins()
-val final = run-evals(assigned-pins)
-set-main-module(final)
-
+val final-design = run-final-passes(sensor-mote)
 ; Configure design to have a default 4-layer stackup and design rules.
-make-default-board(final, 4, Rectangle(30.0, 18.0))
+make-default-board(final-design, 4, Rectangle(30.0, 18.0))
 
-run-checks("BLE-MOTE-CHECKS.txt")
 ; Show the Schematic and PCB for the design
 view-board()
 view-schematic()
 
 ; ; Export CAD
-; set-export-board?(true)
+; set-export-board?(false)
 ; set-export-schematic?(true)
 ; set-export-backend(`kicad)
-; export-cad()
+export-cad()
 
 ; ; Solve and export Bill of Materials
 ; export-bom()
