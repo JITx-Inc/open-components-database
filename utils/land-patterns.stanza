@@ -5,7 +5,9 @@ defpackage ocdb/land-patterns :
   import math
   import jitx
   import jitx/fonts
-  import jitx/commands
+  import jitx/commands with:
+    prefix(pad) => def-
+  import ocdb/design-vars
 
 ; ====== Argument constraint Helpers ===========================================
 defn ensure-even-positive! (value: Int, name: String):
@@ -24,6 +26,59 @@ public defn ref-label () :
   ref-label(0.0, 0.0)
 
 ; ====== Land pattern utilities ===============================================
+; Apply a shape to the soldermask layer of a pcb-pad. 
+public defn apply-soldermask (mask-shape:Shape):
+  inside pcb-pad:
+    layer(SolderMask(Top)) = mask-shape
+    if pad-type(self) == TH:
+      layer(SolderMask(Bottom)) = mask-shape
+
+; Create the soldermask layers based on the pad shape, using a fixed factor.
+; when expand? is true the soldermask shape is computed with expand(), else it is
+; computed with offset()
+public defn apply-soldermask (amount:Double, expand?:True|False):
+  val func = expand when expand? else offset
+  inside pcb-landpattern:
+    apply-soldermask(func(pad-shape(self), amount))
+
+; Apply a default soldermask layer to a pcb-pad, using the SOLDERMASK-EXPANSION
+; design variable and offset() method.
+public defn apply-soldermask ():
+  apply-soldermask(SOLDERMASK-EXPANSION, false)
+
+; A "solder mask defined pad" is one where the soldermask opening is smaller than 
+; the pad shape. This method takes a pad as an argument and converts it into a 
+; soldermask-defined version based on its soldermask layer, if it exists, or the
+; pad shape if it does not.
+public defn soldermask-defined (p:Pad):
+  ; extract the pad data before conversion
+  val mask?   = find({specifier(_) is SolderMask}, layers(p))  
+  ; special case: the mask is smaller than the shape already
+  if (mask? is-not False) and 
+     (min-width([pad-shape(p)]) > min-width([shape $ (mask? as LayerShape)])) :
+    p
+  else :
+    pcb-pad SMD-p:
+      name  = to-string("%_, SMD" % [name(p)])
+      type  = pad-type(p)
+      shape = pad-shape(p)
+      apply-soldermask(0.85, true)
+      for layer_ in filter({specifier(_) is-not SolderMask}, layers(p)) do:
+        layer(specifier(layer_)) = shape(layer_)
+    SMD-p
+
+; Convert a landpattern to solder mask defined. Geoms will be ignored. 
+public defn soldermask-defined (lp:LandPattern):
+  pcb-landpattern SMD-l:
+    name = to-string("%_, soldermask defined" % [name(lp)])
+
+    for pad_ in pads(lp) do:
+      pad (ref(pad_)): soldermask-defined(def-pad(pad_)) at pose(pad_)
+      
+    for layer_ in layers(lp) do:
+      layer(specifier(layer_)) = shape(layer_)
+  SMD-l
+
 public pcb-pad smd-pad (anchor:Anchor, w:Double, h:Double) :
   name = to-string("%_x%_ %_ SMD Pad" % [w,h,anchor])
   type = SMD
@@ -39,15 +94,15 @@ public pcb-pad bga-pad (d:Double) :
   layer(SolderMask(Top)) = Circle(d / 2.0)
 
 public pcb-pad top-smd-testpoint-pad (d:Double) :
-  name = to-string("Test Point Pad")
-  type = SMD
+  name  = to-string("Test Point Pad")
+  type  = SMD
   shape = Circle(d / 2.0)
   layer(Paste(Top)) = Circle(d / 2.0)
   layer(SolderMask(Top)) = Circle(d / 2.0)
 
 public pcb-pad btm-smd-testpoint-pad (d:Double) :
-  name = to-string("Test Point Pad")
-  type = SMD
+  name  = to-string("Test Point Pad")
+  type  = SMD
   shape = Circle(d / 2.0)
   layer(Paste(Bottom)) = Circle(d / 2.0)
   layer(SolderMask(Bottom)) = Circle(d / 2.0)
@@ -59,8 +114,8 @@ public defn btm-smd-testpoint-pad () :
   btm-smd-testpoint-pad(2.0)
 
 public pcb-pad testpoint-pad (d:Double) :
-  name = to-string("%_  Testpoint Pad" % [d])
-  type = SMD
+  name  = to-string("%_  Testpoint Pad" % [d])
+  type  = SMD
   shape = Circle(d / 2.0)
   layer(SolderMask(Top)) = Circle(d / 2.0)
     
@@ -177,6 +232,58 @@ pcb-pad roundrect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
 public defn roundrect-smd-pad (w:Double, h:Double, r:Double) :
   roundrect-smd-pad(C, w, h, r)
 
+pcb-pad chamferedrect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  name = to-string("%_ ChamferedRectangle PTH Pad (drill = (%_, %_), pad = (%_, %_, %_))" % [
+           anchor, drill-w, drill-h, pad-w, pad-h, pad-r])
+  type = TH
+  shape = ChamferedRectangle(pad-w, pad-h, pad-r)
+  layer(Cutout()) = Circle(anchor, drill-w) when drill-w == drill-h else
+                    Capsule(anchor, drill-w, drill-h)
+  layer(SolderMask(Top)) = ChamferedRectangle(pad-w, pad-h, pad-r)
+  layer(SolderMask(Bottom)) = ChamferedRectangle(pad-w, pad-h, pad-r)
+
+public defn chamferedrect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  chamferedrect-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
+
+public defn chamferedrect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  chamferedrect-pth-pad(C, drill-w, drill-h, pad-w, pad-h, pad-r)
+
+pcb-pad chamferedrect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
+  name = to-string("(%_, %_, %_) %_ ChamferedRectangle SMD Pad" % [w,h,r,anchor])
+  type = SMD
+  shape = ChamferedRectangle(anchor, w, h, r)
+  layer(Paste(Top)) = ChamferedRectangle(anchor, w, h, r)
+  layer(SolderMask(Top)) = ChamferedRectangle(anchor, w, h, r)
+
+public defn chamferedrect-smd-pad (w:Double, h:Double, r:Double) :
+  chamferedrect-smd-pad(C, w, h, r)
+
+pcb-pad dshape-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  name = to-string("%_ DShape PTH Pad (drill = (%_, %_), pad = (%_, %_, %_))" % [
+           anchor, drill-w, drill-h, pad-w, pad-h, pad-r])
+  type = TH
+  shape = DShape(pad-w, pad-h, pad-r)
+  layer(Cutout()) = Circle(anchor, drill-w) when drill-w == drill-h else
+                    Capsule(anchor, drill-w, drill-h)
+  layer(SolderMask(Top)) = DShape(pad-w, pad-h, pad-r)
+  layer(SolderMask(Bottom)) = DShape(pad-w, pad-h, pad-r)
+
+public defn dshape-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  dshape-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
+
+public defn dshape-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  dshape-pth-pad(C, drill-w, drill-h, pad-w, pad-h, pad-r)
+
+pcb-pad dshape-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
+  name = to-string("(%_, %_, %_) %_ DShape SMD Pad" % [w,h,r,anchor])
+  type = SMD
+  shape = DShape(anchor, w, h, r)
+  layer(Paste(Top)) = DShape(anchor, w, h, r)
+  layer(SolderMask(Top)) = DShape(anchor, w, h, r)
+
+public defn dshape-smd-pad (w:Double, h:Double, r:Double) :
+  dshape-smd-pad(C, w, h, r)
+
 public pcb-landpattern non-plated-hole-pkg (drill-r:Double, mask-r:Double) :
   layer(Cutout()) = Circle(C, drill-r)
   layer(SolderMask(Top)) = Circle(C, mask-r)
@@ -266,6 +373,19 @@ public defn make-two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:
     if courtyard? : 
       layer(Courtyard(Top)) = Rectangle(w, h)
 
+; A generic pad transformation helper
+public defn pad-transformation (
+  lp: LandPattern,
+  xform: (LandPatternPad) -> False|Pad,
+) -> LandPattern :
+  pcb-landpattern new-lp:
+    for pad_ in pads(lp) do:
+      val def = 
+        match(xform(pad_)):
+          (p:Pad): p
+          (_:False): def-pad(pad_)
+      pad (ref(pad_)): def at pose(pad_)
+  new-lp
 
 public defn make-two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
   make-two-pin-landpattern(Z,G,X,w,h,true,false)

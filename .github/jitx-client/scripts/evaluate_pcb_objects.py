@@ -158,15 +158,13 @@ def parse_package_name(file: File):
 
     raise Exception("No defpackage statement")
 
-def write_stanza_dot_proj(package_infos: List[PackageInfo]):
-    file = [PACKAGE_TEMPLATE.format(package_name=TEST_ENTRYPOINT_PACKAGE_NAME,
+def write_stanza_dot_proj():
+    file = ['include "../open-components-database/stanza.proj"',
+            PACKAGE_TEMPLATE.format(package_name=TEST_ENTRYPOINT_PACKAGE_NAME,
                                     file_name=TEST_ENTRYPOINT_FILE_NAME)]
     for top_level in TopLevel:
         file.append(PACKAGE_TEMPLATE.format(package_name=test_package_name(top_level),
                                             file_name=test_file_name(top_level)))
-    for info in package_infos:
-        file.append(PACKAGE_TEMPLATE.format(package_name=info.package_name, file_name=info.file_name))
-
     write_output_file("stanza.proj", file)
 
 def format_file_template(file_template: File, **kwargs):
@@ -202,7 +200,6 @@ def generate_deftest(argument: Optional[str], test_suffix: str):
 
 if __name__ == "__main__":
     os.makedirs(OUTPUT_DIRECTORY, exist_ok=True)
-    package_infos = []
     evaluated_excluded_files = [ROOT_DIRECTORY + file for file in EXCLUDED_FILES]
     # Should use Jinja2 templating engine
     test_files = {top_level: format_file_template(TEST_FILE_HEADER, package_name=test_package_name(top_level)) for top_level in TopLevel}
@@ -217,7 +214,6 @@ if __name__ == "__main__":
                 pcb_objects = parse_pcb_objects(file, file_path)
                 if pcb_objects:
                     package_name = parse_package_name(file)
-                    package_infos.append(PackageInfo(package_name, PREFIX_FILE_NAME + file_path))
                     for pcb_object in pcb_objects:
                         if pcb_object.arguments is None:
                             generate_deftest(None, "")
@@ -229,7 +225,7 @@ if __name__ == "__main__":
                                     test_suffix = str(idx)
                                 generate_deftest(argument, test_suffix)
 
-    write_stanza_dot_proj(package_infos)
+    write_stanza_dot_proj()
     write_output_file(TEST_ENTRYPOINT_FILE_NAME, generate_test_entrypoint_file())
     for top_level, test_file in test_files.items():
         write_output_file(test_file_name(top_level), test_file)
