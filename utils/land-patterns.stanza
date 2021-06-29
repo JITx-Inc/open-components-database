@@ -33,10 +33,11 @@ public defn extant-dims () -> Dims:
   inside pcb-landpattern:
     val all-shapes = cat-all $ [
       for pad_ in pads(self) seq:
-        pad-shape(def-pad(pad_))
+        pose(pad_) * pad-shape(def-pad(pad_))
       for pad_ in pads(self) seq-cat:
-        seq(shape, layers(def-pad(pad_)))
-      for layer-shape in layers(self) seq:
+        for layer in filter({specifier(_) is-not Silkscreen}, layers(def-pad(pad_))) seq:
+          pose(pad_) * shape(layer)
+      for layer-shape in filter({specifier(_) is-not Silkscreen}, layers(self)) seq:
         shape(layer-shape)
     ]
     Dims(0.0, 0.0) when empty?(all-shapes) else dims(Union(all-shapes))
@@ -856,7 +857,7 @@ public pcb-pad generic-smd-pad (
   type = SMD
   layer(SolderMask(Top)) = mask-shape
 
-public defn draw-polarity-marker (pad-1-ref:Ref, orientation:Anchor):
+public defn draw-polarity-marker (pad-1-ref:Ref):
   ; find pad 1
   inside pcb-landpattern:
     val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
@@ -884,8 +885,8 @@ public defn draw-polarity-marker (pad-1-ref:Ref, orientation:Anchor):
     defn pad-1-pose () -> Pose:
       val pad-1    = find!({ref(_) == pad-1-ref}, pads(self))
       val pad-dims = dims(pad-shape(def-pad(pad-1)))
-      val pad-loc  = pose(pad-1)
       val dims     = extant-dims()
+      val pad-loc  = pose(pad-1)
       if x(dims) > y(dims):
         val translation = -0.5 * x(pad-dims) 
         println("...")
@@ -955,8 +956,7 @@ public defn make-ipc-compliant-two-pin-landpattern (
 
     val x-max = 0.5 * Gmin + 0.5 * land-length
     val x-min = -1.0 * x-max
-
-    println("land-length:%_, land-width:%_, x-min:%_, x-max:%_" % [land-length, land-width, x-min, x-max])
+    ; println("land-length:%_, land-width:%_, x-min:%_, x-max:%_" % [land-length, land-width, x-min, x-max])
 
     val refs: Tuple<Ref> = 
       [Ref("a"), Ref("c")] when polarized? else 
@@ -966,8 +966,12 @@ public defn make-ipc-compliant-two-pin-landpattern (
     val pad_ = generic-smd-pad(Rectangle(land-length, land-width), solder-mask-defined?, SOLDER-MASK-REGISTRATION)
     pad (refs[0]): pad_ at loc(x-min, 0.0)
     pad (refs[1]): pad_ at loc(x-max, 0.0)
-    ; if polarized?:
-    ;   draw-polarity-marking()
+
+    val dims = extant-dims()
+    layer(Courtyard(Top)) = offset(Rectangle(x(dims), y(dims)), courtyard-excess(fillets))
+
+    if polarized?:
+      draw-polarity-marker(Ref("a"))
     ref-label()
 
 public defn make-ipc-compliant-two-pin-landpattern (
@@ -979,14 +983,9 @@ public defn make-ipc-compliant-two-pin-landpattern (
   polarized?:True|False,
 ):
   make-ipc-compliant-two-pin-landpattern(
-    length, 
-    width,
-    lead-length,
-    lead-width?, 
-    FABRICATION-TOLERANCE, 
-    PLACEMENT-TOLERANCE, 
-    density-level, 
-    polarized?,
+    length, width, lead-length, lead-width?, 
+    FABRICATION-TOLERANCE, PLACEMENT-TOLERANCE, 
+    density-level, polarized?,
     false
   )
 
@@ -998,12 +997,8 @@ public defn make-ipc-compliant-two-pin-landpattern (
   polarized?:True|False,
 ):
   make-ipc-compliant-two-pin-landpattern(
-    length, 
-    width, 
-    lead-length, 
-    false, 
-    density-level, 
-    polarized?
+    length, width, lead-length, false, 
+    density-level, polarized?
   )
 
 public pcb-landpattern ipc-compliant-two-pin-landpattern (
@@ -1033,14 +1028,9 @@ public defn ipc-compliant-two-pin-landpattern (
   polarized?:True|False,
 ):
   ipc-compliant-two-pin-landpattern(
-    length, 
-    width,
-    lead-length,
-    lead-width?, 
-    FABRICATION-TOLERANCE, 
-    PLACEMENT-TOLERANCE, 
-    density-level, 
-    polarized?,
+    length, width, lead-length, lead-width?, 
+    FABRICATION-TOLERANCE, PLACEMENT-TOLERANCE, 
+    density-level, polarized?,
     false
   )
 
@@ -1052,10 +1042,6 @@ public defn ipc-compliant-two-pin-landpattern (
   polarized?:True|False,
 ):
   ipc-compliant-two-pin-landpattern(
-    length, 
-    width, 
-    lead-length, 
-    false, 
-    density-level, 
-    polarized?
+    length, width, lead-length, false, 
+    density-level, polarized?
   )
