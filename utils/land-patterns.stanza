@@ -8,8 +8,6 @@ defpackage ocdb/land-patterns :
   import jitx/commands with:
     prefix(pad) => def-
   import ocdb/design-vars
-  import jitx/commands
-  import ocdb/design-vars
 
 ;==============================================================================
 ;============================== Helpers =======================================
@@ -167,18 +165,11 @@ public defn generic-pad (pad-shape:Shape, mask?:False|Shape):
 
 ; Create a generic pad with pad shape and default mask shape 
 public defn generic-pad (pad-shape:Shape):
-  val context = get-design-context()
-  val soldermask-expansion = context[`soldermask-expansion] as Double
-  if context[`prefer-soldermask-defined] is True:
-    generic-pad(pad-shape, offset(pad-shape, -1. * soldermask-expansion))
-  else:
-    generic-pad(pad-shape, offset(pad-shape, soldermask-expansion))
+  generic-pad(pad-shape, offset(pad-shape,  SOLDER-MASK-REGISTRATION))
 
 ; Create a generic plated through hole pad with a default mask shape
 pcb-pad generic-pth-pad (pad-shape:Shape, hole:Shape):
-  val context = get-design-context()
-  val soldermask-expansion = context[`soldermask-expansion] as Double
-  generic-pad(pad-shape, offset(pad-shape, soldermask-expansion) as Shape, hole, TH)
+  generic-pad(pad-shape, offset(pad-shape,  SOLDER-MASK-REGISTRATION) as Shape, hole, TH)
 
 ; Create an rectangular SMD pad 
 public defn smd-pad (anchor:Anchor, width:Double, height:Double):
@@ -220,7 +211,7 @@ public defn pth-pad (drill-radius:Double, mask-radius:Double) :
 
 ; Create a through hole circular pad with drill radius and anchor
 public defn pth-pad (anchor:Anchor, drill-radius:Double) :
-  pth-pad(anchor, drill-radius, drill-radius + SOLDERMASK-EXPANSION, drill-radius + SOLDERMASK-EXPANSION)
+  pth-pad(anchor, drill-radius, drill-radius + SOLDER-MASK-REGISTRATION, drill-radius + SOLDER-MASK-REGISTRATION)
 
 ; Create a through hole circular pad with drill radius
 public defn pth-pad (drill-radius:Double) :
@@ -250,7 +241,7 @@ public defn oval-smd-pad (w:Double, h:Double) :
 public defn oval-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
   val shape = capsule(anchor, pad-w, pad-h)
   val hole = capsule(anchor, drill-w, drill-h)
-  generic-pad(shape, offset(shape, SOLDERMASK-EXPANSION), hole, TH)
+  generic-pad(shape, offset(shape, SOLDER-MASK-REGISTRATION), hole, TH)
 
 ; Create a capsule shaped TH pad with a circular hole
 public defn oval-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
@@ -264,8 +255,7 @@ public defn oval-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Do
 public defn rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double):
   val shape = Rectangle(anchor, pad-w, pad-h)
   val hole  = capsule(anchor, drill-w, drill-h)
-  val soldermask-expansion = get-design-context()[`soldermask-expansion] as Double
-  generic-pad(shape, offset(shape, soldermask-expansion), simplify(hole), TH)
+  generic-pad(shape, offset(shape, SOLDER-MASK-REGISTRATION), simplify(hole), TH)
 
 ; Create a rectangle pth pad with drill 
 public defn rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
@@ -277,8 +267,7 @@ public defn rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Do
 public defn round-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   val shape = round-rect(pad-w, pad-h, pad-r)
   val hole  = capsule(anchor, drill-w, drill-h)
-  val soldermask-expansion = get-design-context()[`soldermask-expansion] as Double
-  generic-pad(shape, offset(shape, soldermask-expansion), simplify(hole), TH)
+  generic-pad(shape, offset(shape, SOLDER-MASK-REGISTRATION), simplify(hole), TH)
 
 public defn round-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   round-rect-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
@@ -292,8 +281,7 @@ public defn round-rect-smd-pad (w:Double, h:Double, r:Double) :
 public defn chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   val shape = chamfered(pad-w, pad-h, pad-r)
   val hole  = capsule(anchor drill-w, drill-h)
-  val soldermask-expansion = get-design-context()[`soldermask-expansion] as Double
-  generic-pad(shape, offset(shape, soldermask-expansion), hole, TH)
+  generic-pad(shape, offset(shape,  SOLDER-MASK-REGISTRATION), hole, TH)
 
 public defn chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   chamfered-rect-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
@@ -318,7 +306,7 @@ public pcb-landpattern non-plated-hole-landpattern (hole:Shape, mask:Shape):
 
 ; Create a non-plated hole landpattern with a hole shape
 public defn non-plated-hole-landpattern (hole:Shape):
-  non-plated-hole-landpattern(hole, offset(hole, SOLDERMASK-EXPANSION))
+  non-plated-hole-landpattern(hole, offset(hole,  SOLDER-MASK-REGISTRATION))
 
 ; Create a circular non-plated hole landpattern with given drill radius and mask radius
 public defn non-plated-hole-landpattern (drill-r:Double, mask-r:Double) :
