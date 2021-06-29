@@ -1,0 +1,48 @@
+#use-added-syntax(jitx)
+defpackage ocdb/test/land-patterns:
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/design-vars
+  import ocdb/land-patterns
+  import ocdb/tolerance
+  import ocdb/box-symbol
+  import ocdb/rules
+
+pcb-component example-1:
+  port p: pin[[1, 2]]
+  val lp = ipc-compliant-two-pin-landpattern(
+    Toleranced(1.0, 0.05)  ; length
+    Toleranced(0.5, 0.05)  ; width
+    Toleranced(0.25, 0.05) ; lead width
+    DensityLevelC ; density-level:DensityLevel,
+    false  ; polarized?:True|False,
+  )
+  ; val lp = L()
+  landpattern = lp(p[1] => lp.p[1], p[2] => lp.p[2])
+  make-box-symbol()
+  
+pcb-component example-2:
+  pin a
+  pin c
+
+  val lp = ipc-compliant-two-pin-landpattern(
+    Toleranced(3.2, 0.2),
+    Toleranced(1.6, 0.2),
+    Toleranced(0.8, 0.3),
+    Toleranced(2.2, 0.1),
+    DensityLevelC,
+    true,
+  )
+  landpattern = lp(a => lp.a, c => lp.c)
+  make-box-symbol()
+
+pcb-module main-module:
+  inst e1: example-1
+  inst e2: example-2
+
+set-rules(sierra-adv-rules)
+make-default-board(main-module, 2, 10.0, 10.0)
+view-board()

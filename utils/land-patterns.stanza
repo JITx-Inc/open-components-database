@@ -8,6 +8,8 @@ defpackage ocdb/land-patterns :
   import jitx/commands with:
     prefix(pad) => def-
   import ocdb/design-vars
+  import ocdb/land-protrusions
+  import ocdb/tolerance
 
 ; ====== Argument constraint Helpers ===========================================
 defn ensure-even-positive! (value: Int, name: String):
@@ -41,10 +43,10 @@ public defn apply-soldermask (amount:Double, expand?:True|False):
   inside pcb-landpattern:
     apply-soldermask(func(pad-shape(self), amount))
 
-; Apply a default soldermask layer to a pcb-pad, using the SOLDERMASK-EXPANSION
+; Apply a default soldermask layer to a pcb-pad, using the SOLDER-MASK-REGISTRATION
 ; design variable and offset() method.
 public defn apply-soldermask ():
-  apply-soldermask(SOLDERMASK-EXPANSION, false)
+  apply-soldermask(SOLDER-MASK-REGISTRATION, false)
 
 ; A "solder mask defined pad" is one where the soldermask opening is smaller than 
 ; the pad shape. This method takes a pad as an argument and converts it into a 
@@ -394,6 +396,33 @@ public pcb-landpattern two-pin-landpattern (Z:Double, G:Double, X:Double, w:Doub
   make-two-pin-landpattern(Z,G,X,w,h,true,false)
 public pcb-landpattern two-pin-polarized-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
   make-two-pin-landpattern(Z,G,X,w,h,true,true)
+
+public defn ipc-part-dimensions (part-name:String) -> [Double, Double, Double]:
+  switch(part-name):
+    ; Name   | Z  |  G  |  X  |
+    ;--------------------------
+    "008004":[0.35, 0.10, 0.14]
+    "01005": [0.56, 0.20, 0.23]
+    "0201" : [1.12, 0.20, 0.42]
+    "0402" : [1.53, 0.39, 0.62]
+    "0603" : [2.55, 0.65, 1.00]
+    "0805" : [2.90, 0.90, 2.00]
+    "1206" : [4.05, 1.65, 1.80]
+    "1210" : [4.40, 1.20, 2.70]
+    "2010" : [6.20, 2.60, 2.70]
+    "2512" : [7.35, 4.85, 3.40]
+    "2920" : [9.70, 5.10, 5.60]
+    else : 
+      val [l w] = switch(length(part-name)):
+        4 : [2 2]
+        5 : [2 3]
+        6 : [3 3]
+      val len = (to-double(part-name[0 to l]) as Double )* 25.4 / (pow(10.0, to-double(l)))
+      val width = (to-double(part-name[l to (l + w)]) as Double )* 25.4 / (pow(10.0, to-double(w)))
+      val Z = len + 2.0 * (0.084 * len - 0.00543)
+      val G = len * 0.465 - 0.222
+      val X = width
+      [Z, G, X]
 
 public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False) :
   inside pcb-landpattern :
@@ -797,3 +826,140 @@ public pcb-landpattern btm-smd-testpoint-pkg (d:Double) :
   layer(Courtyard(Bottom)) = Circle(d / 2.0)
   layer(Silkscreen("f-silk", Bottom)) = Circle(d / 2.0)
   ref-label()
+
+public pcb-pad generic-smd-pad (
+  shape:Shape, 
+  solder-mask-defined?:True|False,
+  solder-mask-registration:Double
+):
+  val bigger-shape = offset(shape, solder-mask-registration)
+  val [pad-shape, mask-shape] = 
+    if solder-mask-defined?:
+      [bigger-shape, shape]
+    else:
+      [shape, bigger-shape]
+    
+  shape = pad-shape
+  type = SMD
+  layer(SolderMask(Top)) = mask-shape
+
+public defn polarity-marking (pose:Pose, dia:Double):
+  val solder-mask-registration = SOLDER-MASK-REGISTRATION ; todo pcb-rules
+  val placement-tolerance = PLACEMENT-TOLERANCE ; todo pcb-rules
+  
+  val rules = current-rules()
+  val min-silkscreen-width = clearance(rules, MinSilkscreenWidth)
+  val dist = min-silkscreen-width * 0.5
+  val line-length = min-silkscreen-width * 3.0
+  val p = center(pose)
+  val theta = angle(pose)
+  val x = (dia + dist) * cos(theta) + /x(p)
+  val y = (dia + dist) * sin(theta) + /y(p)
+
+  inside pcb-landpattern:
+    layer(Silkscreen("pol", Top)) = Line(min-silkscreen-width, [
+      Point(x, y),
+      Point(x + line-length, y)
+    ])
+
+public pcb-landpattern ipc-compliant-two-pin-landpattern (
+  length:Toleranced,      ; L
+  width:Toleranced,       ; W
+  lead-length:Toleranced, ; T
+  lead-width?:False|Toleranced,  ; ...
+  fabrication-tolerance:Double,
+  placement-tolerance:Double
+  density-level:DensityLevel,
+  polarized?:True|False,
+  solder-mask-defined?:True|False,
+):
+  ; helper to compute the excess required by density level and tolerances
+  defn wiggle-room (C:Double):
+    val F = fabrication-tolerance
+    val P = placement-tolerance
+    sqrt(C * C + F * F + P * P)
+
+  ; compute the solder fillets based on the protrusion type
+  val land-protrusion-type = BigRectangularLeads when nominal(length) > 0.6 else SmallRectangularLeads
+  val fillets = lead-fillets(land-protrusion-type, density-level)
+
+  val Cw = max(plus(width), minus(length))
+  val Cl = max(plus(length), minus(length))
+  val Cs = 
+    let:
+      val a = max(plus(lead-length), minus(lead-length))
+      val b = max(plus(length), minus(length))
+      sqrt(a * a + b * b)
+  
+  ; compute the base dimensions of the lands
+  val Lmax = max(length)
+  val Lmin = min(length)
+  val Tmin = min(lead-length)
+  val Wmin = match(lead-width?):
+    (lead-width:Toleranced): 
+      min(lead-width)
+    (_:False):
+      min(width)
+  
+  val Smax = Lmax - 2.0 * Tmin
+  val [Jt, Jh, Js] = [toe(fillets), heel(fillets), side(fillets)]
+  val Zmax = Lmin + 2.0 * Jt + wiggle-room(Cl)
+  val Gmin = Smax - 2.0 * Jh - wiggle-room(Cs)
+  val Xmin = Wmin + 2.0 * Js + wiggle-room(Cw)
+  ; println("Xmin:%_, Wmin:%_, Js:%_, wiggle:%_", % [Xmin, Wmin, Js, wiggle-room(Cw)])
+  ; println("Zmax:%_, Gmin:%_, Xmin:%_" % [Zmax, Gmin, Xmin])
+
+  ; finalize the geometry
+  val land-length = 0.5 * (Zmax - Gmin)
+  val land-width  = Xmin
+  val x-min = -0.5 * (Gmin - land-length)
+  val x-max =  0.5 * (Gmin + land-length)
+  ; println("land-length:%_, land-width:%_, x-min:%_, x-max:%_" % [land-length, land-width, x-min, x-max])
+
+  val refs: Tuple<Ref> = 
+    [Ref("a"), Ref("c")] when polarized? else 
+    [IndexRef(Ref("p"), 1), IndexRef(Ref("p"), 2)]
+
+  ; generate the landpattern
+  val pad_ = generic-smd-pad(Rectangle(land-length, land-width), solder-mask-defined?, SOLDER-MASK-REGISTRATION)
+  pad (refs[0]): pad_ at loc(x-min, 0.0)
+  pad (refs[1]): pad_ at loc(x-max, 0.0)
+  if polarized?:
+    polarity-marking(loc(x-min, 0.0), max(land-length, land-width))
+  ref-label()
+
+public defn ipc-compliant-two-pin-landpattern (
+  length:Toleranced,      ; L
+  width:Toleranced,       ; W
+  lead-length:Toleranced, ; T
+  lead-width?:False|Toleranced,  ; ...
+  density-level:DensityLevel,
+  polarized?:True|False,
+):
+  ipc-compliant-two-pin-landpattern(
+    length, 
+    width,
+    lead-length,
+    lead-width?, 
+    FABRICATION-TOLERANCE, 
+    PLACEMENT-TOLERANCE, 
+    density-level, 
+    polarized?,
+    false
+  )
+
+public defn ipc-compliant-two-pin-landpattern (
+  length:Toleranced,      ; L
+  width:Toleranced,       ; W
+  lead-length:Toleranced, ; T
+  density-level:DensityLevel,
+  polarized?:True|False,
+):
+  ipc-compliant-two-pin-landpattern(
+    length, 
+    width, 
+    lead-length, 
+    false, 
+    density-level, 
+    polarized?
+  )
