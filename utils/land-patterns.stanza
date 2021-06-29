@@ -856,13 +856,50 @@ public pcb-pad generic-smd-pad (
   type = SMD
   layer(SolderMask(Top)) = mask-shape
 
-; public defn draw-polarity-marker (pad-1-ref:Ref, orientation:Anchor):
-;   ; find pad 1
-;   inside pcb-landpattern:
-;     defn corner-pol-mark ():
+public defn draw-polarity-marker (pad-1-ref:Ref, orientation:Anchor):
+  ; find pad 1
+  inside pcb-landpattern:
+    val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
+    defn draw-line (origin:Pose):
+      val line-width = min-silk-width
+      val line-length = line-width * 3.0
+      val line = Line(line-width, [
+        Point(-0.5 * line-width, 0.0)
+        Point( 0.5 * line-width, 0.0)  
+      ])
+      layer(Silkscreen("pol", Top)) = origin * line
 
-;     val pad-1  = find({ref(_) == pad-1-ref}, pads(self))
-;     val pad-dims = dims(pad-def(pad-shape(pad-1)))
+    defn corner-pose () -> Pose:
+      val dims   = extant-dims()
+      val corner = Point(
+        x(dims) * -0.5,
+        y(dims) *  0.5
+      ) 
+      val center = corner + Point(
+        -0.5 * min-silk-width - PLACEMENT-TOLERANCE, 
+        0.5 * min-silk-width + PLACEMENT-TOLERANCE
+      )
+      Pose(center, 0.0, false)
+
+    defn pad-1-pose () -> Pose:
+      val pad-1    = find!({ref(_) == pad-1-ref}, pads(self))
+      val pad-dims = dims(pad-shape(def-pad(pad-1)))
+      val pad-loc  = pose(pad-1)
+      val dims     = extant-dims()
+      if x(dims) > y(dims):
+        val translation = -0.5 * x(pad-dims) 
+        println("...")
+        ; rotated 90 degrees
+      else:
+        println("...")
+      loc(0.0, 0.0)
+
+    val [p1, p2] = [corner-pose(), pad-1-pose()]
+    draw-line $ 
+      if x(center(p1)) > x(center(p2)) or y(center(p1)) > y(center(p2)):
+        p1
+      else:
+        p2
     
 public defn make-ipc-compliant-two-pin-landpattern (
   length:Toleranced,      ; L
