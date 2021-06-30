@@ -1,0 +1,93 @@
+#use-added-syntax(jitx, tests)
+defpackage ocdb/passive-dimensions:
+  import core
+  import collections
+  import math
+  import lang-utils
+  import jitx
+  import jitx/commands
+  import ocdb/tolerance
+
+public pcb-struct ocdb/passive-dimensions/PassiveDimensions:
+  length:Toleranced,
+  width:Toleranced,
+  lead-length:Toleranced,
+; 
+defn parse (part-name:String, imperial?:True|False) -> Dims:
+  defn leading-zeros (s:String):
+    val chars = to-seq(s)
+    let loop (count:Int = 0): 
+      switch(next(chars)):
+        '0': loop(count + 1)
+        else:
+          count
+
+  defn exponent (n-zeros:Int):
+    ; FIXME do the math here.
+    switch(n-zeros): 
+      0:  0.0 when imperial? else -1.0
+      1:  0.0 when imperial? else -1.0  
+      2: -1.0 when imperial? else -2.0
+
+  defn parse-str (str:String):
+    to-double(str) as Double * pow(10.0, -1.0 * to-double(length(str)))
+
+  ; check preconditions
+  if length(part-name) < 3 or length(part-name) > 6: 
+    throw(Exception("Unsupported package name: %_." % [part-name]))
+  
+  for ch in part-name do:
+    if not digit?(ch):
+      throw(Exception("%_ is not a valid part name." % [part-name]))
+
+  ; get the base value of the 
+  val [nl, nw] = 
+    switch(length(part-name)):
+      3: [1, 2]
+      4: [2, 2]
+      5: [2, 3]
+      6: [3, 3]
+
+  ; split the string
+  val length-str = part-name[0 to nl]
+  val width-str  = part-name[nl to false]
+  Dims(parse-str(length-str), parse-str(width-str))
+
+deftest parser:
+  for (part in ["1004", "0603", "0402", "01005", "1206"],
+       expect in [[10.0, 4.0], [6.0, 3.0], [4.0, 2.0], [1.0, 0.5], [12.0, 6.0]]
+      ) do:
+    
+    val [l!, w!] = expect
+    val d = parse(part, true)
+    #EXPECT(l! == x(d))
+    #EXPECT(w! == y(d))
+
+; from https://b2b-api.panasonic.eu/file_stream/pids/fileversion/1242
+defn resistor-lead-length (package-length:Double) -> Toleranced:
+  if      in-range(Toleranced(0.4, 0.02), package-length): Toleranced(0.13, 0.02)
+  else if in-range(Toleranced(0.6, 0.03), package-length): Toleranced(0.23, 0.03)
+  else if in-range(Toleranced(1.0, 0.05), package-length): Toleranced(0.35, 0.05)
+  else if in-range(Toleranced(1.6, 0.15), package-length): Toleranced(0.45, 0.1)
+  else if in-range(Toleranced(2.0, 0.20), package-length): Toleranced(0.60, 0.1)
+  else if in-range(Toleranced(3.2, 0.05, 0.20), package-length): Toleranced(0.60, 0.1)
+  else if in-range(Toleranced(3.2, 0.2), package-length):  Toleranced(0.60, 0.1)
+  else if in-range(Toleranced(4.5, 0.2), package-length):  Toleranced(0.60, 0.1)
+  else if in-range(Toleranced(5.0, 0.2), package-length):  Toleranced(0.60, 0.1)
+  else if in-range(Toleranced(6.4, 0.2), package-length):  Toleranced(0.60, 0.1)
+  else:
+    throw(Exception("Unsupported package size"))
+  
+defn resistor-dimensions (dims:Dims) -> [Toleranced, Toleranced]:
+  defn tolerance ():
+    if      in-range(Toleranced(0.4, 0.02), x(dims)): 0.2
+    else if in-range(Toleranced(0.6, 0.03), package-length): Toleranced(0.23, 0.03)
+    else if in-range(Toleranced(1.0, 0.05), package-length): Toleranced(0.35, 0.05)
+    else if in-range(Toleranced(1.6, 0.15), package-length): Toleranced(0.45, 0.1)
+    else if in-range(Toleranced(2.0, 0.20), package-length): Toleranced(0.60, 0.1)
+    else if in-range(Toleranced(3.2, 0.05, 0.20), package-length): Toleranced(0.60, 0.1)
+    else if in-range(Toleranced(3.2, 0.2), package-length):  Toleranced(0.60, 0.1)
+    else if in-range(Toleranced(4.5, 0.2), package-length):  Toleranced(0.60, 0.1)
+    else if in-range(Toleranced(5.0, 0.2), package-length):  Toleranced(0.60, 0.1)
+    else if in-range(Toleranced(6.4, 0.2), package-length):  Toleranced(0.60, 0.1)
+  

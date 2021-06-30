@@ -27,6 +27,70 @@ public defn ref-label (x:Double, y:Double) :
 public defn ref-label () :
   ref-label(0.0, 0.0)
 
+; Create a capsule with normalized rotation
+defn capsule (anchor:Anchor, width:Double, height:Double) -> Capsule:
+  if width >= height:
+    Capsule(anchor, width, height)
+  else:
+    Capsule(width, height, loc(0.0, 0.0, 90.0))
+
+; Create a rounded rectangle with normalized rotation
+defn round-rect (width:Double, height:Double, r:Double) -> RoundedRectangle:
+  if width >= height:
+    RoundedRectangle(width, height, r)
+  else: 
+    RoundedRectangle(height, width, r, loc(0.0, 0.0, 90.0))
+
+; Create a chamfered rectangle with normalized rotation
+defn chamfered (width:Double, height:Double, r:Double) -> ChamferedRectangle:
+  if width >= height:
+    ChamferedRectangle(width, height, r)
+  else:
+    ChamferedRectangle(height, width, r)
+
+;==============================================================================
+;=========================== Geometric Helpers ================================
+;==============================================================================
+public defn unit-rectangle ():
+  Rectangle(1.0, 1.0)
+public defn unit-circle ():
+  Circle(0.5)
+public defn unit-rounded-rectangle (radius:Double):
+  RoundedRectangle(1.0, 1.0, radius)
+public defn unit-d-shape (radius:Double):
+  DShape(1.0, 1.0, radius)
+public defn unit-chamfered-rectangle (radius:Double):
+  ChamferedRectangle(1.0, 1.0, radius)
+public defn fit-dims (s:Shape, dims:Dims) -> Shape:
+  match(s):
+    (r:Rectangle):
+      Rectangle(x(dims), y(dims), pose(r))
+    (r:RoundedRectangle):
+      RoundedRectangle(x(dims), y(dims), radius(r), pose(r))
+    (r:DShape):
+      DShape(x(dims), y(dims), radius(r), pose(r))
+    (r:ChamferedRectangle):
+      ChamferedRectangle(x(dims), y(dims), radius(r), pose(r))
+    (c:Circle):
+      Circle(center(c), 0.5 * min(x(dims), y(dims)))
+    (_:?):
+      throw(Exception("Unsupported shape: %_" % [s]))
+
+; Create a rectangle out of lines
+public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double, line-w:Double) :
+  val w2 = w * 0.5
+  val h2 = h * 0.5
+  Line(line-w, [
+    Point(xc - w2, yc - h2)
+    Point(xc + w2, yc - h2)
+    Point(xc + w2, yc + h2)
+    Point(xc - w2, yc + h2)
+    Point(xc - w2, yc - h2)])
+
+; Create a rectangle with width, height, center x/y and default line width
+public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double) :
+  LineRectangle(w, h, xc, yc, MIN-SILKSCREEN-WIDTH)
+
 ; ====== Land pattern utilities ===============================================
 ; Find the extant dimensions of a landpattern given all its layers and pads.
 public defn extant-dims () -> Dims:
@@ -411,6 +475,9 @@ public pcb-landpattern two-pin-landpattern (Z:Double, G:Double, X:Double, w:Doub
 public pcb-landpattern two-pin-polarized-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
   make-two-pin-landpattern(Z,G,X,w,h,true,true)
 
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
 public defn ipc-part-dimensions (part-name:String) -> [Double, Double, Double]:
   switch(part-name):
     ; Name   | Z  |  G  |  X  |
