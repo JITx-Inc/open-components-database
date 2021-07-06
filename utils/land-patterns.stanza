@@ -25,14 +25,10 @@ defn ensure-pad-shape! (s:Shape, name:String) -> Shape:
   s as Shape
 
 ; ====== Reference Label Helpers ===============================================
-; Returns a reference label text
-public defn ref-label-text (pose:Pose, anchor:Anchor) -> Text:
-  Text(">REF", MIN-SILKSCREEN-TEXT-HEIGHT, anchor, pose)
-
 ; Creates a reference label from pose and anchor
 public defn ref-label (pose:Pose, anchor:Anchor):
   inside pcb-landpattern:
-    layer(Silkscreen("values", Top)) = ref-label-text(pose, anchor)
+    layer(Silkscreen("values", Top)) = Text(">REF", MIN-SILKSCREEN-TEXT-HEIGHT, anchor, pose)
 
 ; Creates a reference label at a fixed pose
 public defn ref-label (pose:Pose):
@@ -133,47 +129,19 @@ public defn pose-grid (origin:Pose, num-rows:Int, num-columns:Int, column-pitch:
 ;==============================================================================
 ;================================= Pads =======================================
 ;==============================================================================
-; A generic pad, defined by the shape of its pad, solder mask, and hole.
-public pcb-pad generic-pad (
-  pad-shape: Shape,    ; the shape of the pad
-  mask?: False|Shape,  ; the shape of the soldermask, if it exists
-  hole?: False|Shape,  ; the shape of the hole, if it exists
-  type?: False|PadType ; the type of the pad, if not determined by the hole
-):
-  val type*  =
-    match(type?):
-      (type:PadType): type
-      (_:False):
-        SMD when hole? is False else TH
-  shape = pad-shape
-  type  = type*
-  name  = to-string("Generic %_ shaped %_ pad" % [pad-shape, type*])
-  match(hole?:Shape):
-    layer(Cutout()) = hole?
-  match(mask?:Shape):
-    layer(SolderMask(Top)) = mask?  
-    if hole? is-not False:
-      layer(SolderMask(Bottom)) = mask?
+defn make-soldermask ():
+  inside pcb-pad:
+    layer(SolderMask(Top)) = offset(pad-shape(self), SOLDER-MASK-REGISTRATION)
 
-; Create a generic pad with an option mask and hole shape
-public defn generic-pad (pad-shape:Shape, mask?:False|Shape, hole?:False|Shape,):
-  generic-pad(pad-shape, mask?, hole?, false)
-
-; Create a generic pad with a Shape and optional mask shape
-public defn generic-pad (pad-shape:Shape, mask?:False|Shape):
-  generic-pad(pad-shape, mask?, false)
-
-; Create a generic pad with pad shape and default mask shape 
-public defn generic-pad (pad-shape:Shape):
-  generic-pad(pad-shape, offset(pad-shape,  SOLDER-MASK-REGISTRATION))
-
-; Create a generic plated through hole pad with a default mask shape
-pcb-pad generic-pth-pad (pad-shape:Shape, hole:Shape):
-  generic-pad(pad-shape, offset(pad-shape,  SOLDER-MASK-REGISTRATION) as Shape, hole, TH)
+public pcb-pad smd-pad (s:Shape):
+  name  = "SMD Pad"
+  type  = SMD
+  shape = s
+  make-soldermask()
 
 ; Create an rectangular SMD pad 
 public defn smd-pad (anchor:Anchor, width:Double, height:Double):
-  generic-pad(Rectangle(anchor, width, height))
+  smd-pad(Rectangle(anchor, width, height))
 
 ; Create an SMD pad with a given width and height
 public defn smd-pad (width:Double, height:Double) :
@@ -181,45 +149,48 @@ public defn smd-pad (width:Double, height:Double) :
 
 ; Create a BGA pad, with circular SMD
 public defn bga-pad (diameter:Double) :
-  generic-pad(Circle(diameter * 0.5))
+  smd-pad(Circle(diameter * 0.5))
 
 ; Create a soldermask-defined BGA pad
-public defn soldermask-defined-bga-pad (
+public pcb-pad soldermask-defined-bga-pad (
   soldermask-opening-diameter:Double ; the diameter of the soldermask opening
   overlap:Double                     ; the amount the soldermask overlaps the pad beneath
 ):
   val mask-shape = Circle(soldermask-opening-diameter * 0.5)
-  val pad-shape  = offset(mask-shape, -1. * overlap) as Circle
-  generic-pad(pad-shape, mask-shape)
+  name  = "SMD BGA Pad"
+  shape = offset(mask-shape, -1. * overlap) as Circle
+  type = SMD
+  layer(SolderMask(Top)) = mask-shape
+
+; Create an arbitrary testpoint pad
+public pcb-pad testpoint-pad (testpoint-shape:Shape):
+  name = "Test Point Pad"
+  shape = testpoint-shape
+  type = SMD
+  layer(SolderMask(Top)) = testpoint-shape
 
 ; Create a circular test point pad
 public defn testpoint-pad (diameter:Double) :
-  generic-pad(Circle(0.5 * diameter), Circle(0.5 * diameter))
+  testpoint-pad(Circle(0.5 * diameter))
 
-; Create an arbitrary testpoint pad
-public defn testpoint-pad (testpoint-shape:Shape):
-  val s = ensure-pad-shape!(testpoint-shape, "testpoint-shape")
-  generic-pad(s, s)
+public pcb-pad pth-pad (pad-shape:Shape, hole-shape:Shape):
+  name = "PTH Pad"
+  shape = pad-shape
+  type = TH
+  make-soldermask()
+  layer(Cutout()) = hole-shape
 
 ; Create a through hole circular pad
-public defn pth-pad (anchor:Anchor, drill-radius:Double, pad-radius:Double, mask-radius:Double) :
-  generic-pad(Circle(anchor, pad-radius),  Circle(anchor, drill-radius), Circle(anchor, mask-radius), TH)
-  
-; Create a through hole circular pad with drill radius and mask radius
-public defn pth-pad (drill-radius:Double, mask-radius:Double) :
-  pth-pad(C, drill-radius, mask-radius, mask-radius)
+public defn pth-pad (anchor:Anchor, drill-radius:Double, pad-radius:Double) :
+  pth-pad(Circle(anchor, pad-radius),  Circle(anchor, drill-radius))
 
 ; Create a through hole circular pad with drill radius and anchor
 public defn pth-pad (anchor:Anchor, drill-radius:Double) :
-  pth-pad(anchor, drill-radius, drill-radius + SOLDER-MASK-REGISTRATION, drill-radius + SOLDER-MASK-REGISTRATION)
-
-; Create a through hole circular pad with drill radius
-public defn pth-pad (drill-radius:Double) :
-  pth-pad(C, drill-radius)
+  pth-pad(anchor, drill-radius, drill-radius + SOLDER-MASK-REGISTRATION)
 
 ; Create an ocvalcut pad, the shape is a Circle with a Capsule shaped hole.
 public defn pth-ovalcut-pad (anchor:Anchor, drill-size:Dims, pad-radius:Double, mask-radius:Double):
-  generic-pad(Circle(anchor, pad-radius), Circle(anchor, mask-radius), capsule(anchor, x(drill-size), y(drill-size)))
+  pth-pad(Circle(anchor, pad-radius), capsule(anchor, x(drill-size), y(drill-size)))
   
 ; Create an ocvalcut pad, the shape is a Circle with a Capsule shaped hole.
 public defn pth-ovalcut-pad (anchor:Anchor, drill-width:Double, drill-height:Double, pad-radius:Double, mask-radius:Double) :
@@ -231,7 +202,7 @@ public defn pth-ovalcut-pad (drill-w:Double, drill-h:Double, mask-r:Double) :
 
 ; Create a capsule shaped SMD pad with an anchor
 public defn oval-smd-pad (anchor:Anchor, width:Double, height:Double) :
-  generic-pad(capsule(anchor, width, height))  
+  smd-pad(capsule(anchor, width, height))  
 
 ; Create a capsule shaped SMD pad
 public defn oval-smd-pad (w:Double, h:Double) :
@@ -241,7 +212,7 @@ public defn oval-smd-pad (w:Double, h:Double) :
 public defn oval-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
   val shape = capsule(anchor, pad-w, pad-h)
   val hole = capsule(anchor, drill-w, drill-h)
-  generic-pad(shape, offset(shape, SOLDER-MASK-REGISTRATION), hole, TH)
+  pth-pad(shape, hole)
 
 ; Create a capsule shaped TH pad with a circular hole
 public defn oval-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
@@ -255,7 +226,7 @@ public defn oval-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Do
 public defn rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double):
   val shape = Rectangle(anchor, pad-w, pad-h)
   val hole  = capsule(anchor, drill-w, drill-h)
-  generic-pad(shape, offset(shape, SOLDER-MASK-REGISTRATION), simplify(hole), TH)
+  pth-pad(shape, hole)
 
 ; Create a rectangle pth pad with drill 
 public defn rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
@@ -267,13 +238,13 @@ public defn rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Do
 public defn round-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   val shape = round-rect(pad-w, pad-h, pad-r)
   val hole  = capsule(anchor, drill-w, drill-h)
-  generic-pad(shape, offset(shape, SOLDER-MASK-REGISTRATION), simplify(hole), TH)
+  pth-pad(shape, hole)
 
 public defn round-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   round-rect-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
 
 public defn round-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
-  generic-pad(RoundedRectangle(anchor, w, h, r))
+  smd-pad(RoundedRectangle(anchor, w, h, r))
 
 public defn round-rect-smd-pad (w:Double, h:Double, r:Double) :
   round-rect-smd-pad(C, w, h, r)
@@ -281,7 +252,7 @@ public defn round-rect-smd-pad (w:Double, h:Double, r:Double) :
 public defn chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   val shape = chamfered(pad-w, pad-h, pad-r)
   val hole  = capsule(anchor drill-w, drill-h)
-  generic-pad(shape, offset(shape,  SOLDER-MASK-REGISTRATION), hole, TH)
+  pth-pad(shape, hole)
 
 public defn chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   chamfered-rect-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
@@ -290,7 +261,7 @@ public defn chamfered-rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double
   chamfered-rect-pth-pad(C, drill-w, drill-h, pad-w, pad-h, pad-r)
 
 public defn chamfered-rect-smd-pad (w:Double, h:Double, r:Double) :
-  generic-pad(chamfered(w, h, r))
+  smd-pad(chamfered(w, h, r))
 
 ;==============================================================================
 ;========================= Land Patterns ======================================
@@ -833,7 +804,7 @@ public pcb-landpattern SOT95P280X145-6N :
 public pcb-landpattern pin-header-pkg (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
   val n-col  = to-int(ceil(to-double(n-pin) / to-double(n-row)))
   val naming = fn (r, c): IndexRef(Ref("p"), n-row * r + c)
-  val pads   = fn (r, c): generic-pth-pad(Circle(0.25), Circle(0.245))
+  val pads   = fn (r, c): pth-pad(Circle(0.25), Circle(0.245))
   make-grid-landpattern(n-row, n-col, row-pitch, pin-pitch, naming, pads)
 
   val c-w = to-double(n-row) * row-pitch
@@ -845,9 +816,8 @@ public pcb-landpattern pin-header-pkg (n-pin:Int, n-row:Int, pin-pitch:Double, r
   
   ref-label()
 
-public pcb-landpattern smd-testpoint-pkg (d:Double, side:Side) :
-  pad p : testpoint-pad(d) at loc(0.0, 0.0) on side
+public pcb-landpattern smd-testpoint-pkg (d:Double) :
+  pad p : testpoint-pad(d) at loc(0.0, 0.0)
   layer(Courtyard(Top)) = Circle(d / 2.0)
   layer(Silkscreen("f-silk", Top)) = Circle(d / 2.0)
   ref-label()
-
