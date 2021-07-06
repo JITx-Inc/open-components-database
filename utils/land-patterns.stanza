@@ -305,6 +305,18 @@ public defn chamfered-rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double
 public defn chamfered-rect-smd-pad (w:Double, h:Double, r:Double) :
   smd-pad(chamfered(w, h, r))
 
+public defn dshape-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) : 
+  smd-pad(DShape(anchor, w, h, r))
+
+public defn dshape-smd-pad (w:Double, h:Double, r:Double) : 
+  dshape-smd-pad(C, w, h, r)
+
+public defn dshape-pth-pad (anchor:Anchor, w:Double, h:Double, r:Double) : 
+  pth-pad(DShape(anchor, w, h, r))
+
+public defn dshape-pth-pad (w:Double, h:Double, r:Double) : 
+  dshape-pth-pad(C, w, h, r)
+
 ;==============================================================================
 ;========================= Land Patterns ======================================
 ;==============================================================================
@@ -337,25 +349,21 @@ public defn non-plated-hole-landpattern (drill-r:Double) :
 ;========================== Pose Arrangement Helpers ==========================
 ;==============================================================================
 ; PinPadMapping is a not-yet-placed pad, with assigned name, pad, and pose
-public pcb-struct ocdb/land-patterns/PinPadMapping:
+pcb-struct ocdb/land-patterns/PinPadMapping:
   pad-name:  Ref,  ; the name of the pad
   pad-shape: JITXDef, ; the corresponding pcb-pad
   pose:      Pose,    ; the pose of the pad
 
 ; A generic landpattern created from a sequence of PinPadMappings
-public pcb-landpattern make-generic-landpattern (
-  pads:Seqable<PinPadMapping>
-):
+pcb-landpattern make-generic-landpattern (pads:Seqable<PinPadMapping>):
   inside pcb-landpattern:
     for p in pads do:
       pad (pad-name(p)): (pad-shape(p) as Pad) at pose(p)
 
 ; Create a generic landpattern with a uniform pad
-public defn make-generic-landpattern (
-  pad-names:Seqable<Ref>,
-  poses:Seqable<Pose>,
-  pad-shape:JITXDef
-):
+defn make-generic-landpattern (pad-names:Seqable<Ref>,
+                               poses:Seqable<Pose>,
+                               pad-shape:JITXDef):
   val pads = 
     for (pn in pad-names, pp in poses) seq:
       PinPadMapping(pn, pad-shape, pp) 
@@ -371,13 +379,11 @@ public defn soic-naming-convention (row:Int, column:Int, num-pins:Int) -> Ref:
     fatal("soic naming convention supports a maximum of 2 columns")
 
 ; Create a two-column landpattern
-public defn make-two-column-landpattern (
-  count: Int,    ; number of pads in the column
-  pitch: Double, ; pitch of the column
-  naming-convention: (Int, Int) -> Ref, ; naming convention
-  pad-convention: (Int, Int) -> JITXDef,
-  spacing:Double,
-):
+public defn make-two-column-landpattern (count: Int,    ; number of pads in the column
+                                         pitch: Double, ; pitch of the column
+                                         naming-convention: (Int, Int) -> Ref, ; naming convention
+                                         pad-convention: (Int, Int) -> JITXDef,
+                                         spacing:Double):
   val mapping = 
     for col in 0 to 2 seq-cat:
       val column = pose-column(loc(to-double(col) * spacing, 0.0), count, pitch)
@@ -396,15 +402,13 @@ public defn make-grid-landpattern (
   make-grid-landpattern(num-rows, num-cols, row-pitch, col-pitch, naming-convention, pad-convention, fn (r, c): true)
 
 ; Create a grid landpattern
-public defn make-grid-landpattern (
-  num-rows:Int,
-  num-cols:Int,
-  row-pitch:Double,
-  col-pitch:Double,
-  naming-convention: (Int, Int) -> Ref,
-  pad-convention: (Int, Int) -> JITXDef,
-  ignore?: (Int, Int) -> True|False,
-):
+public defn make-grid-landpattern (num-rows:Int,
+                                   num-cols:Int,
+                                   row-pitch:Double,
+                                   col-pitch:Double,
+                                   naming-convention: (Int, Int) -> Ref,
+                                   pad-convention: (Int, Int) -> JITXDef,
+                                   ignore?: (Int, Int) -> True|False):
   val mapping = 
     for col in 0 to num-cols seq-cat:
       val origin = loc(to-double(col) * col-pitch, 0.0)
