@@ -14,45 +14,20 @@ defpackage ocdb/connects :
   import ocdb/box-symbol
   import lang-utils
 
-; Helper function to check if the ports have bundles and their assigned
-; bundle matches what we expect
-defn ensure-bundles!<?T> (
-  body: () -> ?T, 
-  ports:Seqable<JITXObject>, 
-  bundles:Seqable<Bundle>,
-  action) -> False|T:
-  ; collect the mismatched bundles from ports
-  val errors = 
-    for (p in ports, b in bundles) seq?:
-      match(port-type(p)):
-        (b?:Bundle):
-          if b? != b:
-            One([p, b, b?])  ; case 1: ports exist but do not match
-          else:
-            None()           ; case 2: ports exist and match, we're good to go
-        (_:?):
-          One([p, b, false]) ; case 3: port is not a bundle
-  
-  if empty?(errors):
-    body()
-  else:
-    val buf = StringBuffer()
-    println(buf, "Could not %_. Bundles did not match." % [action])
-    for [p, b, b?] in errors do:
-      println(IndentedStream(buf), 
-        "Expected %_ for port %_. Found %_." % [
-          name(b), ref(p), 
-          name(b? as Bundle) when b? is-not False else port-type(p)
-        ]
-      )
-    fatal(to-string(buf))
+defn ensure-bundle-port! (port:JITXObject, bundle:Bundle):
+  defn fail ():
+    fatal("The port %_ is not of bundle %_." % [port, bundle])
+  match(port-type(p)):
+    (b?:Bundle):
+      if b? != bundle:
+        fail()
+    (_:?):
+      fail()
 
 ; Connect two i2c lines with a buffer. 
-public defn connect-i2c-isolation (
-  x:JITXObject,
-  y:JITXObject,
-  buffer:Instantiable
-):
+public defn connect-i2c-isolation (x:JITXObject,
+                                   y:JITXObject,
+                                   buffer:Instantiable):
   within ensure-bundles!([x, y], [i2c, i2c], "call connect-isolation"):
     inside pcb-module:
       public inst buf: buffer
@@ -61,10 +36,7 @@ public defn connect-i2c-isolation (
       buf
 
 ; Connect to i2c lines with a buffer, using a default component (TI ISO1540)
-public defn connect-i2c-isolation (
-  x:JITXObject,
-  y:JITXObject,
-):
+public defn connect-i2c-isolation (x:JITXObject, y:JITXObject):
   inside pcb-module:
     val buf = connect-i2c-isolation(x, y, ocdb/texas-instruments/ISO1540/component)
     match(buf:Instance):
