@@ -4,19 +4,63 @@ defpackage ocdb/tolerance:
   import collections
   import math
 
+; A generic value with some tolerance. May be offcenter (upper tolerance != lower tolerance)
 public pcb-struct ocdb/tolerance/Toleranced:
   nominal:Double,
   plus:Double,
   minus:Double,
 
-public defn Toleranced (value:Double, tolerance:Double):
+; Create a tolerance value with the same tolerance in both directions
+public defn Toleranced (value:Double, tolerance:Double) -> Toleranced:
   Toleranced(value, tolerance, tolerance)
 
-public defn max (t:Toleranced):
+; Create a tolerance with minimum, typical, and maximum
+public defn min-typ-max (min:Double, typ:Double, max:Double) -> Toleranced:
+  Toleranced(typ, typ - min, max - typ)
+
+; Create a tolerance from percentages higher and lower
+public defn tol% (tol+:Double, typ:Double, tol-:Double) -> Toleranced:
+  val plus = tol+ * typ
+  val minus = tol- * typ
+  Toleranced(typ, plus, minus)
+
+; Create a tolerance from differences higher and lower
+public defn tol (tol+:Double, typ:Double, tol-:Double) -> Toleranced:
+  Toleranced(typ, tol+, tol-)
+
+; Return the upper tolerance, as a percentage
+public defn tol+% (t:Toleranced) -> Double:
+  plus(t) / nominal(t)
+
+; Return the lower tolerance, as a percentage
+public defn tol-% (t:Toleranced) -> Double:
+  minus(t) / nominal(t)
+
+; Return the max value
+public defn max (t:Toleranced) -> Double:
   nominal(t) + plus(t)
 
-public defn min (t:Toleranced):
+; Return the min value
+public defn min (t:Toleranced) -> Double:
   nominal(t) - minus(t)
 
-defn center (t:Toleranced):
+; Return the typical value
+public defn typ (t:Toleranced) -> Double:
+  nominal(t)
+
+; Return the upper tolerance
+public defn tol+ (t:Toleranced) -> Double:
+  plus(t)
+
+; Return the lower tolerance
+public defn tol- (t:Toleranced) -> Double:
+  minus(t)
+
+; Return the center of the value range
+public defn center (t:Toleranced) -> Double:
   0.5 * (min(t) + max(t))
+
+; Check if a value is within the tolerance's range.
+public defn in-range? (t:Toleranced, value:Double) -> True|False:
+  value >= min(t) and value <= max(t)
+ 

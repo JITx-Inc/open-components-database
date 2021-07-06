@@ -10,22 +10,82 @@ defpackage ocdb/land-patterns :
   import ocdb/design-vars
   import ocdb/land-protrusions
   import ocdb/tolerance
+  import ocdb/passive-land-sizes
 
 ; ====== Argument constraint Helpers ===========================================
 defn ensure-even-positive! (value: Int, name: String):
   if value < 2 or value % 2 == 1:
     fatal("%_ only supports a positive even number of pins." % [name])
 
-; ====== Reference Label Helpers ===============================================
+; ====== Silk screen helpers ===================================================
+public defn draw-polarity-marker (pad-1-ref:Ref):
+  ; find pad 1
+  inside pcb-landpattern:
+    val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
+    defn draw-line (origin:Pose):
+      val line-width = min-silk-width
+      val line-length = line-width * 3.0
+      val line = Line(line-width, [
+        Point(-0.5 * line-width, 0.0)
+        Point( 0.5 * line-width, 0.0)  
+      ])
+      layer(Silkscreen("pol", Top)) = origin * line
+
+    defn corner-pose () -> Pose:
+      val dims   = extant-dims()
+      val corner = Point(
+        x(dims) * -0.5,
+        y(dims) *  0.5
+      ) 
+      val center = corner + Point(
+        -0.5 * min-silk-width - PLACEMENT-TOLERANCE, 
+        0.5 * min-silk-width + PLACEMENT-TOLERANCE
+      )
+      Pose(center, 0.0, false)
+
+    defn pad-1-pose () -> Pose:
+      val pad-1    = find!({ref(_) == pad-1-ref}, pads(self))
+      val pad-dims = dims(pad-shape(def-pad(pad-1)))
+      val dims     = extant-dims()
+      val pad-loc  = pose(pad-1)
+      if x(dims) > y(dims):
+        val translation = -0.5 * x(pad-dims) 
+        println("...")
+        ; rotated 90 degrees
+      else:
+        println("...")
+      loc(0.0, 0.0)
+
+    val [p1, p2] = [corner-pose(), pad-1-pose()]
+    draw-line $ 
+      if x(center(p1)) > x(center(p2)) or y(center(p1)) > y(center(p2)):
+        p1
+      else:
+        p2
+
+; Create a reference label at (x, y) with text anchor a
 public defn ref-label (x:Double, y:Double, a:Anchor) :
   inside pcb-landpattern :
     layer(Silkscreen("values", Top)) = Text(">REF", 0.7056, a, loc(x,y))
-    
+
+; Create a reference label at (x, y)
 public defn ref-label (x:Double, y:Double) :
   ref-label(x,y,C)
 
+; Create a reference label at (0, 0)
 public defn ref-label () :
   ref-label(0.0, 0.0)
+
+;==============================================================================
+;=========================== Geometric Helpers ================================
+;==============================================================================
+; Helper to normalize x/y dimensions into x/y and position, assuming that x is the longer
+; dimension than y.
+public defn normalize-dimensions (dims:Dims) -> [Dims(), Pose]:
+  val length = max(x(dims), y(dims))
+  val width  = min(x(dims), y(dims))
+  val rot    = 90.0 when y(dims) > x(dims) else 0.0
+  [Dims(length, width), rot]
 
 ; Create a capsule with normalized rotation
 defn capsule (anchor:Anchor, width:Double, height:Double) -> Capsule:
@@ -46,21 +106,29 @@ defn chamfered (width:Double, height:Double, r:Double) -> ChamferedRectangle:
   if width >= height:
     ChamferedRectangle(width, height, r)
   else:
-    ChamferedRectangle(height, width, r)
+    ChamferedRectangle(height, width, r, loc(0.0, 0.0, 90.0))
 
-;==============================================================================
-;=========================== Geometric Helpers ================================
-;==============================================================================
+; Creata a unit rectangle (width = length = 1.0)
 public defn unit-rectangle ():
   Rectangle(1.0, 1.0)
+
+; Create a unit circle (diameter = 1.0)
 public defn unit-circle ():
   Circle(0.5)
+
+; Create a unit rounded rectangle (width = length = 1.0)
 public defn unit-rounded-rectangle (radius:Double):
   RoundedRectangle(1.0, 1.0, radius)
+
+; Create a unit d-shape (width = length = 1.0)
 public defn unit-d-shape (radius:Double):
   DShape(1.0, 1.0, radius)
+
+; Create a unit chamfered rectangle (width = length = 1.0)
 public defn unit-chamfered-rectangle (radius:Double):
   ChamferedRectangle(1.0, 1.0, radius)
+
+; Fit a shape inside dimensions. 
 public defn fit-dims (s:Shape, dims:Dims) -> Shape:
   match(s):
     (r:Rectangle):
@@ -894,51 +962,6 @@ public pcb-pad generic-smd-pad (
   type = SMD
   layer(SolderMask(Top)) = mask-shape
 
-public defn draw-polarity-marker (pad-1-ref:Ref):
-  ; find pad 1
-  inside pcb-landpattern:
-    val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
-    defn draw-line (origin:Pose):
-      val line-width = min-silk-width
-      val line-length = line-width * 3.0
-      val line = Line(line-width, [
-        Point(-0.5 * line-width, 0.0)
-        Point( 0.5 * line-width, 0.0)  
-      ])
-      layer(Silkscreen("pol", Top)) = origin * line
-
-    defn corner-pose () -> Pose:
-      val dims   = extant-dims()
-      val corner = Point(
-        x(dims) * -0.5,
-        y(dims) *  0.5
-      ) 
-      val center = corner + Point(
-        -0.5 * min-silk-width - PLACEMENT-TOLERANCE, 
-        0.5 * min-silk-width + PLACEMENT-TOLERANCE
-      )
-      Pose(center, 0.0, false)
-
-    defn pad-1-pose () -> Pose:
-      val pad-1    = find!({ref(_) == pad-1-ref}, pads(self))
-      val pad-dims = dims(pad-shape(def-pad(pad-1)))
-      val dims     = extant-dims()
-      val pad-loc  = pose(pad-1)
-      if x(dims) > y(dims):
-        val translation = -0.5 * x(pad-dims) 
-        println("...")
-        ; rotated 90 degrees
-      else:
-        println("...")
-      loc(0.0, 0.0)
-
-    val [p1, p2] = [corner-pose(), pad-1-pose()]
-    draw-line $ 
-      if x(center(p1)) > x(center(p2)) or y(center(p1)) > y(center(p2)):
-        p1
-      else:
-        p2
-    
 public defn make-ipc-compliant-two-pin-landpattern (
   length:Toleranced,      ; L
   width:Toleranced,       ; W
@@ -1039,10 +1062,10 @@ public defn make-ipc-compliant-two-pin-landpattern (
   )
 
 public pcb-landpattern ipc-compliant-two-pin-landpattern (
-  length:Toleranced,      ; L
-  width:Toleranced,       ; W
-  lead-length:Toleranced, ; T
-  lead-width?:False|Toleranced,  ; ...
+  length:Toleranced,
+  width:Toleranced,
+  lead-length:Toleranced,
+  lead-width?:False|Toleranced,
   fabrication-tolerance:Double,
   placement-tolerance:Double
   density-level:DensityLevel,
@@ -1057,10 +1080,10 @@ public pcb-landpattern ipc-compliant-two-pin-landpattern (
   )
 
 public defn ipc-compliant-two-pin-landpattern (
-  length:Toleranced,      ; L
-  width:Toleranced,       ; W
-  lead-length:Toleranced, ; T
-  lead-width?:False|Toleranced,  ; ...
+  length:Toleranced,
+  width:Toleranced,
+  lead-length:Toleranced,
+  lead-width?:False|Toleranced,
   density-level:DensityLevel,
   polarized?:True|False,
 ):
@@ -1082,3 +1105,26 @@ public defn ipc-compliant-two-pin-landpattern (
     length, width, lead-length, false, 
     density-level, polarized?
   )
+
+public defn chip-resistor-landpattern (part-name:String, imperial?:True|False, density-level:DensityLevel):
+  val dimensions = resistor-dimensions(part-name, imperial?)
+  ipc-compliant-two-pin-landpattern(
+    length(dimensions)
+    width(dimensions)
+    lead-length(dimensions)
+    density-level
+    false
+  )
+
+public defn chip-resistor-landpattern (part-name:String, density-level:DensityLeve):
+  if suffix?(part-name, "i"):
+    chip-resistor-landpattern(part-name[0 to length(part-name) - 1], true, density-level:DensityLeve)
+  else:
+    chip-resistor-landpattern(part-name, false, density-level:DensityLeve)
+
+public defn chip-resistor-landpattern (part-name:String, imperial?:True|False):
+  chip-resistor-landpattern(part-name, imperial?, DensityLevelC)
+
+public defn chip-resistor-landpattern (part-name:String):
+  chip-resistor-landpattern(part-name, DensityLevelC)
+
