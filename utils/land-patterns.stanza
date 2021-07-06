@@ -129,15 +129,63 @@ public defn pose-grid (origin:Pose, num-rows:Int, num-columns:Int, column-pitch:
 ;==============================================================================
 ;================================= Pads =======================================
 ;==============================================================================
-defn make-soldermask ():
+; Apply a shape to the soldermask layer of a pcb-pad. 
+public defn apply-soldermask (mask-shape:Shape):
   inside pcb-pad:
-    layer(SolderMask(Top)) = offset(pad-shape(self), SOLDER-MASK-REGISTRATION)
+    layer(SolderMask(Top)) = mask-shape
+    if pad-type(self) == TH:
+      layer(SolderMask(Bottom)) = mask-shape
+
+; Create the soldermask layers based on the pad shape, using a fixed factor.
+; when expand? is true the soldermask shape is computed with expand(), else it is
+; computed with offset()
+public defn apply-soldermask (amount:Double, expand?:True|False):
+  val func = expand when expand? else offset
+  inside pcb-landpattern:
+    apply-soldermask(func(pad-shape(self), amount))
+
+; Apply a default soldermask layer to a pcb-pad, using the SOLDERMASK-EXPANSION
+; design variable and offset() method.
+public defn apply-soldermask ():
+  apply-soldermask(SOLDERMASK-EXPANSION, false)
+
+; A "solder mask defined pad" is one where the soldermask opening is smaller than 
+; the pad shape. This method takes a pad as an argument and converts it into a 
+; soldermask-defined version based on its soldermask layer, if it exists, or the
+; pad shape if it does not.
+public defn soldermask-defined (p:Pad):
+  ; extract the pad data before conversion
+  val mask?   = find({specifier(_) is SolderMask}, layers(p))  
+  ; special case: the mask is smaller than the shape already
+  if (mask? is-not False) and 
+     (min-width([pad-shape(p)]) > min-width([shape $ (mask? as LayerShape)])) :
+    p
+  else :
+    pcb-pad SMD-p:
+      name  = to-string("%_, SMD" % [name(p)])
+      type  = pad-type(p)
+      shape = pad-shape(p)
+      apply-soldermask(0.85, true)
+      for layer_ in filter({specifier(_) is-not SolderMask}, layers(p)) do:
+        layer(specifier(layer_)) = shape(layer_)
+    SMD-p
+
+; Convert a landpattern to solder mask defined. Geoms will be ignored. 
+public defn soldermask-defined (lp:LandPattern):
+  pcb-landpattern SMD-l:
+    name = to-string("%_, soldermask defined" % [name(lp)])
+    for pad_ in pads(lp) do:
+      pad (ref(pad_)): soldermask-defined(def-pad(pad_)) at pose(pad_)
+    for layer_ in layers(lp) do:
+      layer(specifier(layer_)) = shape(layer_)
+
+  SMD-l
 
 public pcb-pad smd-pad (s:Shape):
   name  = "SMD Pad"
   type  = SMD
   shape = s
-  make-soldermask()
+  apply-soldermask()
 
 ; Create an rectangular SMD pad 
 public defn smd-pad (anchor:Anchor, width:Double, height:Double):
@@ -177,7 +225,7 @@ public pcb-pad pth-pad (pad-shape:Shape, hole-shape:Shape):
   name = "PTH Pad"
   shape = pad-shape
   type = TH
-  make-soldermask()
+  apply-soldermask()
   layer(Cutout()) = hole-shape
 
 ; Create a through hole circular pad
