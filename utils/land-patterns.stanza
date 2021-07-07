@@ -42,25 +42,53 @@ public defn ref-label (x:Double, y:Double) :
 public defn ref-label () :
   ref-label(loc(0.0, 0.0))
 
+; Helper function to convert an anchor into a point.
+defn normalize-to-point (anchor:Anchor) -> Point:
+  val [v, h] = components(anchor)
+  val dx = match(h):
+    (hr:W) :  1.0
+    (hr:C) :  0.0
+    (hr:E) : -1.0
+  val dy = match(v) :
+    (vt:S) : 1.0
+    (vt:C) : 0.0
+    (vt:N) : 1.0
+  Point(dx, dy)
 
-defn normalize (width:Double, height:Double) -> [Double, Double, Double]:
+; TODO move to internals
+defn times (p:Point, d:Dims) -> Point:
+  Point(x(p) * x(d), y(p) * y(d))
+
+; Helper function to convert an x/y width to length and width (by convention: longer side 
+; is on x axis and shorter side is on y)
+defn normalize-rotation (width:Double, height:Double) -> [Double, Double, Double]:
   val rot = 90.0 when height > width else 0.0
   [max(width, height), min(width, height), rot]
 
-; Create a capsule with normalized rotation
-defn capsule (anchor:Anchor, width:Double, height:Double) -> Capsule:
-  val [length, width, rot] = normalize(width, height)
-  Capsule(anchor, length, width, loc(0.0, 0.0, rot))
+; Normalize the position of a shape given an anchor and rotation.
+defn normalize-loc (s:Shape, anchor:Anchor, rot:Double):
+  val pose = Pose((0.5 * normalize-to-point(anchor)) * dims(s), rot, false)
+  pose * s 
 
-; Create a rounded rectangle with normalized rotation
-defn round-rect (width:Double, height:Double, r:Double) -> RoundedRectangle:
-  val [length, width, rot] = normalize(width, height)
-  RoundedRectangle(length, width, r, loc(0.0, 0.0, rot))
+; Create a rectangle with normalized rotation and position.
+defn rectangle (anchor:Anchor, width:Double, height:Double):
+  val [length, width_, rot] = normalize-rotation(width, height)
+  normalize-loc(Rectangle(width, height), anchor,rot)
+
+; Create a capsule with normalized rotation and position.
+defn capsule (anchor:Anchor, width:Double, height:Double):
+  val [length, width_, rot] = normalize-rotation(width, height)
+  normalize-loc(Capsule(length, width_), anchor, rot)
+
+; Create a rounded rectangle with normalized rotation and position.
+defn round-rect (anchor:Anchor, width:Double, height:Double, r:Double):
+  val [length, width_, rot] = normalize-rotation(width, height)
+  normalize-loc(RoundedRectangle(length, width_ r), anchor, rot)
   
-; Create a chamfered rectangle with normalized rotation
-defn chamfered (width:Double, height:Double, r:Double) -> ChamferedRectangle:
-  val [length, width, rot] = normalize(width, height)
-  ChamferedRectangle(length, width, r, loc(0.0, 0.0, rot))
+; Create a chamfered rectangle with normalized rotation and position.
+defn chamfered (anchor:Anchor, width:Double, height:Double, r:Double):
+  val [length, width_, rot] = normalize-rotation(width, height)
+  normalize-loc(ChamferedRectangle(length, width_, r), anchor, rot)
 
 ;==============================================================================
 ;=========================== Geometric Helpers ================================
@@ -137,10 +165,10 @@ public defn apply-soldermask (amount:Double, expand?:True|False):
   inside pcb-landpattern:
     apply-soldermask(func(pad-shape(self), amount))
 
-; Apply a default soldermask layer to a pcb-pad, using the SOLDERMASK-EXPANSION
+; Apply a default soldermask layer to a pcb-pad, using the SOLDER-MASK-REGISTRATION
 ; design variable and offset() method.
 public defn apply-soldermask ():
-  apply-soldermask(SOLDERMASK-EXPANSION, false)
+  apply-soldermask(SOLDER-MASK-REGISTRATION, false)
 
 ; A "solder mask defined pad" is one where the soldermask opening is smaller than 
 ; the pad shape. This method takes a pad as an argument and converts it into a 
@@ -265,7 +293,7 @@ public defn oval-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Do
 
 ; Create a rectangle pth pad with anchor, width, height, pad width, and pad height
 public defn rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double):
-  val shape = Rectangle(anchor, pad-w, pad-h)
+  val shape = rectangle(anchor, pad-w, pad-h)
   val hole  = capsule(anchor, drill-w, drill-h)
   pth-pad(shape, hole)
 
@@ -277,7 +305,7 @@ public defn rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Do
   rect-pth-pad(C, drill-w, drill-h, pad-w, pad-h)
 
 public defn round-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
-  val shape = round-rect(pad-w, pad-h, pad-r)
+  val shape = round-rect(anchor, pad-w, pad-h, pad-r)
   val hole  = capsule(anchor, drill-w, drill-h)
   pth-pad(shape, hole)
 
@@ -285,13 +313,13 @@ public defn round-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-
   round-rect-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
 
 public defn round-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
-  smd-pad(RoundedRectangle(anchor, w, h, r))
+  smd-pad(round-rect(anchor, w, h, r))
 
 public defn round-rect-smd-pad (w:Double, h:Double, r:Double) :
   round-rect-smd-pad(C, w, h, r)
 
 public defn chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
-  val shape = chamfered(pad-w, pad-h, pad-r)
+  val shape = chamfered(anchor, pad-w, pad-h, pad-r)
   val hole  = capsule(anchor drill-w, drill-h)
   pth-pad(shape, hole)
 
@@ -301,8 +329,11 @@ public defn chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, 
 public defn chamfered-rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   chamfered-rect-pth-pad(C, drill-w, drill-h, pad-w, pad-h, pad-r)
 
-public defn chamfered-rect-smd-pad (w:Double, h:Double, r:Double) :
-  smd-pad(chamfered(w, h, r))
+public defn chamfered-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
+  smd-pad(chamfered(anchor, w, h, r))
+
+public defn chamfered-rect-smd-pad (w:Double, h:Double, r:Double):
+  chamfered-rect-smd-pad(C, w, h, r)
 
 public defn dshape-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) : 
   smd-pad(DShape(anchor, w, h, r))
@@ -310,11 +341,11 @@ public defn dshape-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
 public defn dshape-smd-pad (w:Double, h:Double, r:Double) : 
   dshape-smd-pad(C, w, h, r)
 
-public defn dshape-pth-pad (anchor:Anchor, w:Double, h:Double, r:Double) : 
-  pth-pad(DShape(anchor, w, h, r))
+public defn dshape-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, w:Double, h:Double, r:Double) : 
+  pth-pad(DShape(anchor, w, h, r), DShape(anchor, drill-w, drill-h, r))
 
-public defn dshape-pth-pad (w:Double, h:Double, r:Double) : 
-  dshape-pth-pad(C, w, h, r)
+public defn dshape-pth-pad (drill-w:Double, drill-h:Double, w:Double, h:Double, r:Double) : 
+  dshape-pth-pad(C, drill-w, drill-h, w, h, r)
 
 ;==============================================================================
 ;========================= Land Patterns ======================================
