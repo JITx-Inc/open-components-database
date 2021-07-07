@@ -401,13 +401,12 @@ defn make-generic-landpattern (pad-names:Seqable<Ref>,
 
 ; Naming for a 2-column arrangment of pins 
 public defn soic-naming-convention (row:Int, column:Int, num-pins:Int) -> Ref:
-  if column == 0:
-    IndexRef(Ref("p"), row + 1)
-  else if column == 1:
-    IndexRef(Ref("p"), num-pins - row)
-  else:
+  if (column < 0) or (column > 1): 
     fatal("soic naming convention supports a maximum of 2 columns")
-
+  switch(column):
+    0: IndexRef(Ref("p"), row + 1)
+    1: IndexRef(Ref("p"), num-pins - row)
+  
 ; Create a two-column landpattern
 public defn make-two-column-landpattern (count: Int,    ; number of pads in the column
                                          pitch: Double, ; pitch of the column
@@ -721,14 +720,17 @@ public pcb-landpattern dfn-landpattern ( n-pad:Int, pad-pitch:Double, pad-dims:[
   make-dfn-landpattern(n-pad,pad-pitch,pad-dims,pad-x0,body-dims)
   pad p[n-pad + 1] : smd-pad(hs[0],hs[1]) at loc(0.0, 0.0)  
 
+; returns the letter corresponding to a row in a bga package, for example:
+; A, B, C, D, E, E, F, G, H, J, K, L, M, N, P, R, T, U, V, W, Y
+; AA, AB, ... etc
 public defn red-alph-letter (idx:Int):
   val table = "ABCDEFGHJKLMNPRTUVWY"
   val buf = StringBuffer()
-  var rem = idx
-  let loop (): 
-    print(buf, table[rem % length(table)])
-    if rem > 0:
-      rem = rem / length(table)
+  let loop (row: Int = idx):
+    if row >= length(table):
+      print(buf, table[row / length(table) - 1])
+      loop(row / length(table))
+  print(buf, table[idx % length(table)])
   to-string(buf)
 
 public defn bga-pin-name (r:Int, c:Int) :
