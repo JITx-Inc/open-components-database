@@ -35,6 +35,10 @@ public defstruct Stm32MCU:
 defstruct GpioOption:
   gpio:Stm32Pin
 
+; An option for GPIO 
+defstruct AdcOption:
+  adc:Stm32Pin
+
 ; An option for an SWD port
 defstruct SwdOption:
   swdio:Stm32Pin
@@ -132,6 +136,11 @@ defmethod print (o:OutputStream, opt:GpioOption):
   println(o, "supports gpio:")
   val os = IndentedStream(o)
   println(os, "gpio.gpio => self.%_" % [pin-name(gpio(opt))])
+
+defmethod print (o:OutputStream, opt:AdcOption):
+  println(o, "supports adc:")
+  val os = IndentedStream(o)
+  println(os, "adc.adc => self.%_" % [pin-name(adc(opt))])
 
 ;==============================================================================
 ;=============================== Helpers ======================================
@@ -268,6 +277,10 @@ defn jtag-pins (pins:Tuple<Stm32Pin>) -> False|JtagOption:
 defn gpio-pins (pins:Tuple<Stm32Pin>) -> Tuple<GpioOption>:
   to-tuple(seq(GpioOption, pins-with-signal(pins, "GPIO")))
 
+; the adc pins of the mcu
+defn adc-pins (pins:Tuple<Stm32Pin>) -> Tuple<AdcOption>:
+  to-tuple(seq(AdcOption, pins-with-signal(pins, prefix?{_, "ADC"})))
+
 ; code generator to map create supports statements from instance names
 defn print-bundle-data (
   o:OutputStream,   ; output stream to print to
@@ -338,7 +351,7 @@ defn print-spi (o:OutputStream, mcu:Stm32MCU):
   print-bundle(
     o, mcu, "SPI", "spi"
     ["MOSI", "MISO", "SCK", "NSS"]
-    ["mosi", "miso", "sck", "ss"]
+    ["sdi", "sdo", "sck", "cs"]
   )
 
 defn print-i2c (o:OutputStream, mcu:Stm32MCU):
@@ -432,10 +445,12 @@ defn same-set?<?T> (l:Set<?T>, r:Set<?T>):
 ; determine which case we are handling
 defn uart-case (instance-name:String, mcu:Stm32MCU) -> UartCase:
   val pins = unique-pins-for(instance-name, mcu, suffix?{_, "CK"})
+  print-pins(pins)
   label<UartCase> return:
     for c in 0 to 4 do:
       val check = uart-cubemx-pins(UartCase(c))
       if same-set?(to-hashset<String>(uart-cubemx-pins(UartCase(c))), pins):
+        println("uart-case: Returning %_" % [UartCase(c)])
         return(UartCase(c))
     fatal("Unsupported UART pin set: %," % [pins])
   
@@ -477,9 +492,22 @@ public defn import-stm32-mcu (o:OutputStream, mcu:Stm32MCU):
   val gpio = gpio-pins(pins(mcu))
   do(println{os, _}, gpio)
 
+  val adc = adc-pins(pins(mcu))
+  do(println{os, _}, adc)
+
   ; Next print the IP blocks we care about
   print-i2c(os, mcu)
   print-spi(os, mcu)
   print-uart(os, mcu)
   print-i2s(os, mcu)
   print-oscillator(os, mcu)
+
+defn print-pins (pins:Tuple<Stm32Pin>):
+  for p in pins do:
+    print("%_," % [pin-name(p)])
+  println(" ")
+
+defn print-pins (pins:Set<String>):
+  for p in pins do:
+    print("%_, " % [p])
+  println(" ")
