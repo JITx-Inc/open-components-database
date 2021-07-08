@@ -114,11 +114,35 @@ public pcb-bundle usart ():
   pin rx
   pin tx
 
-public pcb-bundle spi :
-  pin mosi
-  pin miso
+public pcb-enum ocdb/bundles/SPIPins :
+  SDO
+  SDI
+  CS
+  CIPO
+  COPI
+  SDIO
+
+public pcb-bundle spi  (pins:Tuple<ocdb/bundles/SPIPins>):
   pin sck
-  pin ss
+  for p in pins do :
+    switch(p) :
+      SDI : make-pin(`sdi)
+      SDO : make-pin(`sdo)
+      CS  : make-pin(`cs)
+      CIPO  : make-pin(`cipo)
+      COPI  : make-pin(`copi)
+
+; Most common spi bundle
+public pcb-bundle spi ():
+  pin sck
+  pin sdo
+  pin sdi
+  pin cs
+
+public pcb-bundle quad-spi :
+  port sdio : pin[4]
+  pin sck
+  pin cs
 
 public pcb-bundle usb-2-data:
   diff-pair-pins()
@@ -161,13 +185,20 @@ public pcb-bundle high-freq-oscillator :
   pin in
   pin out
 
-public pcb-bundle i2s (mclk?:True|False, duplex?:True|False):
-  pin blck
+public pcb-enum ocdb/bundles/I2SPins :
+  SDMI
+  MCK
+
+public pcb-bundle i2s  (pins:Tuple<ocdb/bundles/I2SPins>):
+  pin ck
   pin ws
-  if mclk?:
-    pin mclk
-  if duplex?:
-    pin sdi
-    pin sdo
-  else:
-    pin sd
+  pin sdmo
+  for p in pins do :
+    switch(p) :
+      SDMI : make-pin(`sdmi)
+      MCK  : make-pin(`mck)
+
+public pcb-bundle i2s () :
+  pin ck
+  pin ws
+  pin sdmo
