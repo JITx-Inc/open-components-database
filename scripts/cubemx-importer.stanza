@@ -36,9 +36,13 @@ public defstruct Stm32MCU:
 defstruct GpioOption:
   gpio:Stm32Pin
 
-; An option for GPIO 
+; An option for ADC 
 defstruct AdcOption:
   adc:Stm32Pin
+
+; An option for DAC 
+defstruct DacOption:
+  dac:Stm32Pin
 
 ; An option for an SWD port
 defstruct SwdOption:
@@ -142,6 +146,11 @@ defmethod print (o:OutputStream, opt:AdcOption):
   println(o, "supports adc:")
   val os = IndentedStream(o)
   println(os, "adc.adc => self.%_" % [pin-name(adc(opt))])
+
+defmethod print (o:OutputStream, opt:DacOption):
+  println(o, "supports dac:")
+  val os = IndentedStream(o)
+  println(os, "dac.dac => self.%_" % [pin-name(dac(opt))])
 
 ;==============================================================================
 ;=============================== Helpers ======================================
@@ -286,6 +295,15 @@ defn adc-pin? (s:String) -> True|False :
 ; the adc pins of the mcu
 defn adc-pins (pins:Tuple<Stm32Pin>) -> Tuple<AdcOption>:
   to-tuple(seq(AdcOption, pins-with-signal(pins, adc-pin?)))
+
+defn dac-pin? (s:String) -> True|False :
+  val b = not empty?(regex-match("^DAC.*_OUT.*", s))
+  ; println("%_ : %_" % [s, b])
+  b
+
+; the dac pins of the mcu
+defn dac-pins (pins:Tuple<Stm32Pin>) -> Tuple<DacOption>:
+  to-tuple(seq(DacOption, pins-with-signal(pins, dac-pin?)))
 
 ; code generator to map create supports statements from instance names
 defn print-bundle-data (
@@ -500,6 +518,9 @@ public defn import-stm32-mcu (o:OutputStream, mcu:Stm32MCU):
 
   val adc = adc-pins(pins(mcu))
   do(println{os, _}, adc)
+
+  val dac = dac-pins(pins(mcu))
+  do(println{os, _}, dac)
 
   ; Next print the IP blocks we care about
   print-i2c(os, mcu)
