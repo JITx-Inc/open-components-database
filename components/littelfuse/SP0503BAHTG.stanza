@@ -1,0 +1,89 @@
+#use-added-syntax(jitx)
+defpackage ocdb/littelfuse/SP0503BAHTG:
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import ocdb/symbol-utils
+
+pcb-symbol tvs-triple-diode-symbol :
+  val x1 = -2.0
+  val x2 = 0.0
+  val x3 = 2.0
+  val ybot = 0.4
+  
+  pin a at unit-point(0.0, 2.0)
+  pin c[1] at unit-point(x1, -1.5)
+  pin c[2] at unit-point(x2, -1.5)
+  pin c[3] at unit-point(x3, -1.5)
+  unit-text([(-0.3) 1.6], "A")
+
+  ; draw three diode symbols next to each other along the bottom
+  ; c1
+  unit-triangle([x1, ybot], [x1, (ybot - 0.8)], 1.0)
+  unit-line([[x1,(ybot - 0.8)], [x1, -1.5]])
+  unit-line([[x1 - 0.5, (ybot - 0.8)], [x1 + 0.5, (ybot - 0.8)]])
+  unit-line([[x1 - 0.5, -0.4], [x1 - 0.5, -0.15], [x1 - 0.3, -0.15]])
+  unit-line([[x1 + 0.5, -0.4], [x1 + 0.5, -0.65], [x1 + 0.3, -0.65]])
+  unit-text([(x1 - 0.3) -1.2], "C1")
+
+  ; c2 
+  unit-triangle([x2, ybot], [x2, (ybot - 0.8)], 1.0)
+  unit-line([[x2,(ybot - 0.8)], [x2, -1.5]])
+  unit-line([[x2 - 0.5, (ybot - 0.8)], [x2 + 0.5, (ybot - 0.8)]])
+  unit-line([[-0.5, -0.4], [-0.5, -0.15], [-0.3, -0.15]])
+  unit-line([[0.5, -0.4], [0.5, -0.65], [0.3, -0.65]])
+  unit-text([(x2 - 0.3) -1.2], "C2")
+
+  ; c3 
+  unit-triangle([x3, ybot], [x3, (ybot - 0.8)], 1.0)
+  unit-line([[x3,(ybot - 0.8)], [x3, -1.5]])
+  unit-line([[x3 - 0.5, (ybot - 0.8)], [x3 + 0.5, (ybot - 0.8)]])
+  unit-line([[x3 - 0.5, -0.4], [x3 - 0.5, -0.15], [x3 - 0.3, -0.15]])
+  unit-line([[x3 + 0.5, -0.4], [x3 + 0.5, -0.65], [x3 + 0.3, -0.65]])
+  unit-text([(x3 - 0.3) -1.2], "C3")
+
+  ; add remaining lines
+  unit-line([[x1, ybot], [x1, ybot + 0.5]])
+  unit-line([[x2, ybot], [x2, 2.0]])
+  unit-line([[x3, ybot], [x3, ybot + 0.5]])
+  unit-line([[x1, ybot + 0.5], [x3, ybot + 0.5]])
+
+  unit-ref([1.0, 2.0])
+  unit-val([1.0, 1.5])
+
+pcb-landpattern tvs-triple-diode-pkg :
+  val dx = 1.9 / 2.0
+  val dy = 2.2 / 2.0
+  val p1-offset = 0.2
+  pad p[1] : smd-pad(1.1, 1.35) at loc((- dx) + p1-offset, (- dy))
+  pad p[2] : smd-pad(0.9, 1.35) at loc(dx, (- dy))
+  pad p[3] : smd-pad(0.9, 1.35) at loc(dx, dy)
+  pad p[4] : smd-pad(0.9, 1.35) at loc((- dx), dy)
+
+  layer(Courtyard(Top)) = Rectangle(3.04, 1.4)
+  layer(Silkscreen("pol", Top)) = Circle(-1.8, -1.0, 0.2)
+  ref-label()
+
+public pcb-component component :
+  manufacturer = "Littelfuse"
+  description = "8.5V Clamp  Ipp Tvs Diode Surface Mount SOT-143-4"
+  mpn = "SP0503BAHTG"
+  pin a
+  port c : pin[[1 2 3]] 
+
+
+  val sym = tvs-triple-diode-symbol
+  symbol = sym(a => sym.a, c[1] => sym.c[1], c[2] => sym.c[2], c[3] => sym.c[3])
+  val land = tvs-triple-diode-pkg
+  landpattern = land(a => land.p[1], c[1] => land.p[2], c[2] => land.p[3], c[3] => land.p[4])
+  

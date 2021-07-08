@@ -26,90 +26,102 @@ public defn check-design (module:JITXObject):
           check reset-pin(p)
     check io(module)
 
+defn get-other-pin (comp:JITXObject,  p:JITXObject) :
+  val pins = pins(comp)
+  var op
+  for ps in pins do :
+    if ps != p :
+      op  = ps
+  op
+
 public pcb-check io (module:JITXObject) :
   val pins = to-tuple(seq-cat(pins, component-instances(module)))
   var net-pins = []
   for p1 in pins do :
-    ; Look for Digital inputs
+    ; Look for Digital inputs\
     if (has-property?(p1.digital-output) or has-property?(p1.digital-io)) :
       ; Get all pins on the net
       net-pins = to-tuple(filter({connected?([p1, _])}, pins))
       val out-pins = to-tuple(filter({has-property?(_.digital-output)}, net-pins))
       val io-pins  = to-tuple(filter({has-property?(_.digital-io)}, net-pins))
-      val in-pins  = to-tuple(filter({has-property?(_.digital-input)}, net-pins))
-      if length(out-pins) == 1 :
-        val out-p = driver(property(out-pins[0].digital-output))
-        if (out-p is CMOSOutput or out-p is TTLOutput) :
-          for inp in in-pins do :
-            check-single-push-pull-levels(out-pins[0], inp)
-          for io in io-pins do :
-            check-single-push-pull-levels(out-pins[0], io)
-      else if length(io-pins) == 1 :
-        val out-p = driver(property(io-pins[0].digital-output))
-        if (out-p is CMOSOutput or out-p is TTLOutput) :
-          for inp in in-pins do :
-            check-single-push-pull-levels(io-pins[0], inp)
-      else if (empty?(in-pins) and empty?(out-pins)) :
-        val out-p = driver(property(io-pins[0].digital-output))
-        if (out-p is CMOSOutput or out-p is TTLOutput) :
-          for io in io-pins do :
-            check-single-push-pull-levels(io-pins[0], io)
-      ; TODO: Handle multi-output/multi IO nets
+      ; val in-pins  = to-tuple(filter({has-property?(_.digital-input)}, net-pins))
+      ; Check outputs against every pin
+      for out-p in cat(out-pins, io-pins) do :
+        val o = 
+          if has-property?(out-p.digital-output) : driver(property(out-p.digital-output))
+          else if has-property?(out-p.digital-io) : driver(property(out-p.digital-io))
+          else : fatal("Unhandled case.")
+
+        ; println("Out %_ is %_" % [ref(out-p) o])
+        ; for n in net-pins do: println(ref(n))
+
+        if (o is CMOSOutput or o is TTLOutput) :
+          for in-p in net-pins do :
+            if in-p != out-p :
+              ; println("checking %_ vs %_" % [ref(out-p) ref(in-p)])
+              check-single-push-pull-levels(out-p, in-p)
+
+        if o is OpenCollector :
+          ; println("checking %_ as OpenCollector" % [ref(out-p)])
+          var is-net-ok? = false
+          for p in net-pins do :
+            val myinst = containing-instance(p) as JITXObject
+            if has-property?(myinst.resistance) :
+              val high-pin = get-other-pin(myinst, p)
+              if has-property?(high-pin.rail-voltage):
+                val rail-voltage = property(high-pin.rail-voltage)
+                ; Valid opencollector nets have pull up resistors
+                is-net-ok? = true
+                val i = rail-voltage / property(myinst.resistance)
+                #CHECK( i < iol(o))
+                for p in net-pins do :
+                  if has-property?(p.digital-input) or has-property?(p.digital-io) :
+                    val vih-v = 
+                      if has-property?(p.digital-input) : vih(property(p.digital-input))
+                      else if has-property?(p.digital-io) : vih(property(p.digital-io))
+                    #CHECK(rail-voltage > vih-v)
+                  if has-property?(p.generic-pin):
+                    #CHECK(contains?(max-voltage(property(p.generic-pin)), rail-voltage))
+          #CHECK(is-net-ok?)
+
+
 ; Checks two push-pull digital logic pins, at least one of which can output
 public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
-  
-  var o 
-  if has-property?(out-p.digital-output) : 
-   o = driver(property(out-p.digital-output))
-  else if has-property?(out-p.digital-io) : 
-   o = driver(property(out-p.digital-io))
+  ; if has-property?(in-p.digital-input): println(ref(gnd-pin(property(in-p.digital-input))))
+  val o = 
+    if has-property?(out-p.digital-output) : property(out-p.digital-output)
+    else if has-property?(out-p.digital-io) : property(out-p.digital-io)
+    else : fatal("Unhandled case.")
 
-  #CHECK((o is CMOSOutput) or (o is TTLOutput))
+  #CHECK((driver(o) is CMOSOutput) or (driver(o) is TTLOutput))
   ; If in-p is just an input, check output against input
   if has-property?(in-p.digital-input) :
     val [vih vil] = [vih(property(in-p.digital-input)) vil(property(in-p.digital-input))]
-    #CHECK(min(voh(o)) > vih)
-    #CHECK(max(vol(o)) < vil)
+    #CHECK(connected?([gnd-pin(o) gnd-pin(property(in-p.digital-input))]))
+    #CHECK(min(voh(driver(o))) > vih)
+    #CHECK(max(vol(driver(o))) < vil)
     if has-property?(in-p.generic-pin):
-      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(o)))
+      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(driver(o))))
   else if has-property?(in-p.digital-io):
+    #CHECK(connected?([gnd-pin(o) gnd-pin(property(in-p.digital-io))]))
     val i = driver(property(in-p.digital-io))
     #CHECK((i is CMOSOutput) or (i is TTLOutput))
-    val [vih vil] = [vih(property(in-p.digital-io)) vil(property(in-p.digital-io))]
-    #CHECK(min(voh(o)) > vih)
-    #CHECK(max(vol(o)) < vil)
+    val [vih-v vil-v] = [vih(property(in-p.digital-io)) vil(property(in-p.digital-io))]
+    #CHECK(min(voh(driver(o))) > vih-v)
+    #CHECK(max(vol(driver(o))) < vil-v)
     if has-property?(out-p.digital-io):
-      #CHECK(min(voh(i)) > vih(property(out-p.digital-io)))
-      #CHECK(max(vol(i)) < vil(property(out-p.digital-io)))
+      #CHECK(min(voh(i)) > vih(o))
+      #CHECK(min(voh(i)) > vih(o))
+      #CHECK(max(vol(i)) < vil(o))
     if has-property?(in-p.generic-pin):
-      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(o)))
+      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(driver(o))))
     if has-property?(out-p.generic-pin):
-      #CHECK(contains?(max-voltage(property(out-p.generic-pin)), i))
+      #CHECK(contains?(max-voltage(property(out-p.generic-pin)), voh(i)))
+  else if has-property?(in-p.digital-output) and o is DigitalOutput:
+    
+    #CHECK(tristateable(o))
+    #CHECK(tristateable(property(in-p.digital-output)))
 
-;   for n in nets(self) do :
-;     ; Check compatibility between two single-ended logic pins (bi directional checks)
-;     if (length(refs(n))  == 2) and all?(has-property?{_.digital-io}, refs(n)) : 
-;       val p = refs(n)
-;       if property(p[0].type) == "io" and 
-;          property(p[1].type) == "io" :
-;         #CHECK(property(p[0].vOH) >= property(p[1].vIH))
-;         #CHECK(property(p[0].vOH) <= property(p[1].rated-voltage)[1])
-;         #CHECK(property(p[0].vOL) <= property(p[1].vIL))
-;         #CHECK(property(p[0].vOL) >= property(p[1].rated-voltage)[0])
-;         #CHECK(property(p[1].vOH) >= property(p[0].vIH))
-;         #CHECK(property(p[1].vOH) <= property(p[0].rated-voltage)[1])
-;         #CHECK(property(p[1].vOL) <= property(p[0].vIL))
-;         #CHECK(property(p[1].vOL) >= property(p[0].rated-voltage)[0])
-;       else :
-;         println("Invalid logic connection between: %_ and %_" % [property(p[0].type) property(p[1].type)])
-;         #CHECK(false)
-;     ; Check compatibility between lvds pairs (bi directional checks)
-;     if (length(refs(n))  == 2) and all?(has-property?{_.lvds}, refs(n)) : 
-;       val p = refs(n)
-;       #CHECK(property(p[0].vo-cm)[2]   <= property(p[1].vi-cm)[2])
-;       #CHECK(property(p[0].vo-diff)[0] >= property(p[1].vi-diff)[0])
-;       #CHECK(property(p[1].vo-cm)[2]   <= property(p[0].vi-cm)[2])
-;       #CHECK(property(p[1].vo-diff)[0] >= property(p[0].vi-diff)[0])
 
 public pcb-check connected (p:JITXObject|Tuple<JITXObject>) :
   #CHECK(connected?(p))
@@ -127,7 +139,9 @@ public pcb-check power-pin (p:JITXObject) :
   #CHECK(has-property?(p.power-pin))
   val p-props = property(p.power-pin)
   #CHECK(p-props is PowerPin)
+  ; println("%_ has power" % [ref(p)])
   #CHECK(has-property?(p.rail-voltage))
+  ; println("%_ has %_" % [ref(p) property(p.rail-voltage)])
   #CHECK(contains?(recommended-voltage(p-props), property(p.rail-voltage)))
 
 public pcb-check reset-pin (p:JITXObject) :
@@ -229,40 +243,41 @@ public pcb-check capacitor-check (c:JITXObject) :
 
   #CHECK(temp >= property(c.rated-temperature)[0])
 
-; Checks the critical gain and drive level of an oscillator (o) against an interface on an IC (intf)
-public pcb-check oscillator-check-frequency (o:JITXObject, intf:JITXObject) :
+; Checks the frequency of an oscillator (o) against an interface on an IC (intf)
+public pcb-check oscillator-check-frequency (o:JITXObject, intf:CrystalOscillator) :
   ; Check critical gain point to ensure oscillation
-  #CHECK(has-property?(o.frequency))
-  #CHECK(has-property?(intf.frequency))
-  #CHECK(property(o.frequency) == property(intf.frequency))
-public pcb-check oscillator-check-gain (o:JITXObject, intf:JITXObject, load-cap:JITXObject) :
+  #CHECK(has-property?(o.crystal-resonator))
+  ; #CHECK(has-property?(intf.crystal-oscillator))
+  #CHECK(frequency(property(o.crystal-resonator)) == frequency(intf))
+
+; Checks the critical gain of an oscillator (o) against an interface on an IC (intf)
+public pcb-check oscillator-check-gain (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
   ; Check critical gain point to ensure oscillation
-  #CHECK(has-property?(o.shunt-capacitance))
-  #CHECK(has-property?(o.load-capacitance))
-  #CHECK(has-property?(o.ESR))
-  #CHECK(has-property?(o.frequency))
-  #CHECK(has-property?(intf.max-critical-gain))
-  val gain = 4.0 * property(o.ESR) * pow(2.0 * PI * property(o.frequency), 2.0) * pow(property(o.shunt-capacitance) + property(o.load-capacitance), 2.0)
-  #CHECK(gain < property(intf.max-critical-gain))
-public pcb-check oscillator-check-drive (o:JITXObject, intf:JITXObject, load-cap:JITXObject) :
+  #CHECK(has-property?(o.crystal-resonator))
+  ; #CHECK(has-property?(intf.crystal-oscillator))
+  val op = property(o.crystal-resonator)
+  val gain = 4.0 * ESR(op) * pow(2.0 * PI * frequency(op), 2.0) * pow(shunt-capacitance(op) + load-capacitance(op), 2.0)
+  #CHECK(gain < max-critical-gain(intf))
+
+; Checks the drive level of an oscillator (o) against an interface on an IC (intf)
+public pcb-check oscillator-check-drive (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
   ; Check drive level against crystal maximum
-  #CHECK(has-property?(intf.drive-level))
-  #CHECK(has-property?(o.max-drive-level))
-  #CHECK(property(intf.drive-level) < property(o.max-drive-level))
-  ; Check pullability of crystal to ensure accuracy
-public pcb-check oscillator-check-pullability (o:JITXObject, intf:JITXObject, load-cap:JITXObject) :
-  #CHECK(has-property?(o.motional-capacitance))
-  val pullability = property(o.motional-capacitance) / (2.0 * pow((property(o.shunt-capacitance) + property(o.load-capacitance)), 2.0))
+  #CHECK(has-property?(o.crystal-resonator))
+  ; #CHECK(has-property?(intf.crystal-oscillator))
+  #CHECK(drive-level(intf) <= max-drive-level(property(o.crystal-resonator)))
+
+; Check pullability of crystal to ensure accuracy
+public pcb-check oscillator-check-pullability (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
+  #CHECK(has-property?(o.crystal-resonator))
+  val op = property(o.crystal-resonator)
+  val pullability = motional-capacitance(op) / (2.0 * pow(shunt-capacitance(op) + load-capacitance(op), 2.0))
   #CHECK(has-property?(load-cap.tolerance))
   #CHECK(has-property?(load-cap.capacitance))
   val dC = (property(load-cap.capacitance) as Double) * (property(load-cap.tolerance)[1] as Double)
-  val freq-error = (pullability as Double) * (dC as Double)
-  #CHECK(has-property?(o.frequency-tolerance))
-  #CHECK(has-property?(intf.frequency-tolerance))
-  #CHECK(property(o.frequency-tolerance) + freq-error < property(intf.frequency-tolerance))
+  val freq-error = (pullability as Double) * (dC as Double) * frequency(op)
+  #CHECK(frequency-tolerance(op) + freq-error < frequency-tolerance(intf))
 
-
-public defn check-oscillator (o:JITXObject, intf:JITXObject, load-cap:JITXObject) :
+public defn check-oscillator (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
   inside pcb-module:
     check oscillator-check-frequency(o, intf)
     check oscillator-check-gain(o, intf, load-cap)
