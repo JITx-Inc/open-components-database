@@ -403,7 +403,7 @@ public defn make-generic-landpattern (pad-names:Seqable<Ref>,
   val pads = 
     for (pn in pad-names, pp in poses) seq:
       PinPadMapping(pn, pad-shape, pp) 
-  make-generic-landpattern(pads)
+  make-generic-landpattern(to-tuple(pads))
 
 ; Naming for a 2-column arrangment of pins 
 public defn soic-naming-convention (row:Int, column:Int, num-pins:Int) -> Ref:
@@ -419,7 +419,7 @@ public defn make-two-column-landpattern (count: Int,    ; number of pads in the 
                                          naming-convention: (Int, Int) -> Ref, ; naming convention
                                          pad-convention: (Int, Int) -> JITXDef,
                                          spacing:Double):
-  val mapping = 
+  val mapping = to-tuple $
     for col in 0 to 2 seq-cat:
       val column = pose-column(loc(to-double(col) * spacing, 0.0), count, pitch)
       for (pose in column, row in 0 to false) seq:
@@ -444,15 +444,26 @@ public defn make-grid-landpattern (num-rows:Int,
                                    naming-convention: (Int, Int) -> Ref,
                                    pad-convention: (Int, Int) -> JITXDef,
                                    ignore?: (Int, Int) -> True|False):
-  val mapping = 
-    for col in 0 to num-cols seq-cat:
-      val origin = loc(to-double(col) * col-pitch, 0.0)
-      val column = pose-column(origin, num-rows, row-pitch)
-      for (row in 0 to false, pose in column) seq?:
-        if not ignore?(row, col):
-          One(PinPadMapping(naming-convention(row, col), pad-convention(row, col), pose))
-        else:
-          None()
+  ; val mapping = to-tuple $
+  ;   for col in 0 to num-cols seq-cat:
+  ;     val origin = loc(to-double(col) * col-pitch, 0.0)
+  ;     val column = pose-column(origin, num-rows, row-pitch)
+  ;     for (row in 0 to false, pose in column) seq?:
+  ;       if not ignore?(row, col):
+  ;         One(PinPadMapping(naming-convention(row, col), pad-convention(row, col), pose))
+  ;       else:
+  ;         None()
+  val rcs = 
+    for r in 0 to num-rows seq-cat:
+      for c in 0 to num-cols seq:
+        [r, c]
+  val mapping = to-tuple $ 
+    for (coord in rcs, pose in grid-locs(num-rows, num-cols, row-pitch, col-pitch)) seq?:
+      val [c, r] = coord
+      if not ignore?(r, c):
+        One(PinPadMapping(naming-convention(r, c), pad-convention(r, c), pose))
+      else:
+        None()
   make-generic-landpattern(mapping)
 
 ;==================================================================================
