@@ -6,6 +6,7 @@ defpackage ocdb/scripts/cubemx-importer:
   import jitx/commands
   import jitx/xml
   import lang-utils
+  import pcre
 
 ;==============================================================================
 ;================================== IR ========================================
@@ -277,9 +278,14 @@ defn jtag-pins (pins:Tuple<Stm32Pin>) -> False|JtagOption:
 defn gpio-pins (pins:Tuple<Stm32Pin>) -> Tuple<GpioOption>:
   to-tuple(seq(GpioOption, pins-with-signal(pins, "GPIO")))
 
+defn adc-pin? (s:String) -> True|False :
+  val b = not empty?(regex-match("^ADC.*_IN.*", s))
+  ; println("%_ : %_" % [s, b])
+  b
+
 ; the adc pins of the mcu
 defn adc-pins (pins:Tuple<Stm32Pin>) -> Tuple<AdcOption>:
-  to-tuple(seq(AdcOption, pins-with-signal(pins, prefix?{_, "ADC"})))
+  to-tuple(seq(AdcOption, pins-with-signal(pins, adc-pin?)))
 
 ; code generator to map create supports statements from instance names
 defn print-bundle-data (
@@ -445,7 +451,7 @@ defn same-set?<?T> (l:Set<?T>, r:Set<?T>):
 ; determine which case we are handling
 defn uart-case (instance-name:String, mcu:Stm32MCU) -> UartCase:
   val pins = unique-pins-for(instance-name, mcu, suffix?{_, "CK"})
-  print-pins(pins)
+  ;print-pins(pins)
   label<UartCase> return:
     for c in 0 to 4 do:
       val check = uart-cubemx-pins(UartCase(c))
