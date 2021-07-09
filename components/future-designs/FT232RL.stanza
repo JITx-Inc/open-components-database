@@ -80,8 +80,8 @@ public pcb-component component:
     val vol-min = PWL([[1.8 0.06] [2.8 0.3] [3.3 0.3] [5.0 0.3]])[vdd]
     val vih = 1.5
     val vil = vdd * 0.3 ;guess
-    val drive-props = DigitalOutput(CMOSOutput(Interval(vol-min, vol-max, false), Interval(voh-min, voh-max, false)))
-    val input-props = DigitalInput(vil, vih)
+    val drive-props = DigitalOutput(CMOSOutput(Interval(vol-min, vol-max, false), Interval(voh-min, voh-max, false)), false, VCCIO, GND)
+    val input-props = DigitalInput(vil, vih, VCCIO, GND, 1.0e-6) ; TODO: Leakage current is a guess
     property(TXD.digital-output) = drive-props
     property(nDTR.digital-output) = drive-props
     property(nRTS.digital-output) = drive-props
@@ -91,10 +91,11 @@ public pcb-component component:
     property(nDCD.digital-input) = input-props
     property(nCTS.digital-input) = input-props
     for p in pins(CBUS) do :
-      property(p.digital-io) = DigitalIO(CMOSOutput(Interval(vol-min, vol-max, false), Interval(voh-min, voh-max, false)), vil, vih)
+      property(p.digital-io) = DigitalIO(CMOSOutput(Interval(vol-min, vol-max, false), Interval(voh-min, voh-max, false)), vil, vih, VCCIO, GND, 1.0e-6)
 
   ; Test pin must be connected to GND for device operation
   check connected([TEST GND])
+  check connected(VCCIO)
 
   name = "FT232"
   description = "FTDI USB to UART http://www.ftdichip.com/Documents/DataSheets/DS_FT232R_v104.pdf"
@@ -105,10 +106,12 @@ public pcb-component component:
 public pcb-module module :
   port usb-2 : usb-2
   port uart : uart-with([`dtr `rts])
+  pin vccio
   pin gnd
   
   public inst xcvr : ocdb/future-designs/FT232RL/component
-  net (usb-2.vbus.vdd xcvr.VCC xcvr.VCCIO)
+  net (usb-2.vbus.vdd xcvr.VCC)
+  net (xcvr.VCCIO vccio)
   net (usb-2.vbus.gnd xcvr.GND xcvr.AGND gnd)
   net (usb-2.data.P xcvr.USBDP)
   net (usb-2.data.N xcvr.USBDM)

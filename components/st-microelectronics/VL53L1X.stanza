@@ -1,0 +1,80 @@
+#use-added-syntax(jitx)
+defpackage ocdb/st-microelectronics/VL53L1X :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/symbol-utils
+  import ocdb/generic-components
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/design-vars
+  import ocdb/property-structs
+  import ocdb/checks
+  import ocdb/generator-utils
+
+pcb-landpattern vl53l1cxv0fyslash-1 :
+  pad p[1]  : smd-pad(0.508, 0.508) at loc(0.8, 1.6, 90.0)
+  pad p[2]  : smd-pad(0.508, 0.508) at loc(0.8, 0.8, 90.0)
+  pad p[3]  : smd-pad(0.508, 0.508) at loc(0.8, -0.0, 90.0)
+  pad p[4]  : smd-pad(0.508, 0.508) at loc(0.8, -0.8, 90.0)
+  pad p[5]  : smd-pad(0.508, 0.508) at loc(0.8, -1.6, 90.0)
+  pad p[6]  : smd-pad(0.508, 0.508) at loc(0.0, -1.6, 0.0)
+  pad p[7]  : smd-pad(0.508, 0.508) at loc(-0.8, -1.6, 90.0)
+  pad p[8]  : smd-pad(0.508, 0.508) at loc(-0.8, -0.8, 90.0)
+  pad p[9]  : smd-pad(0.508, 0.508) at loc(-0.8, -0.0, 90.0)
+  pad p[10] : smd-pad(0.508, 0.508) at loc(-0.8, 0.8, 90.0)
+  pad p[11] : smd-pad(0.508, 0.508) at loc(-0.8, 1.6, 90.0)
+  pad p[12] : smd-pad(0.508, 0.508) at loc(0.0, 1.6, 0.0)
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [
+    Point(1.651, 2.9),
+    Point(1.151, 2.9)
+  ])
+  layer(Courtyard(Top)) = Rectangle(3.0, 5.4)
+  ref-label()
+
+public pcb-component component :
+  val generic-props = GenericPin(Interval(-0.5, 3.6, false), 2000.0)
+  val power-props = PowerPin(Interval(2.6, 3.6, false))
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir| generic-pin:GenericPin | power-pin:PowerPin ]
+    [DNC | 8 | Right      | - | - ]
+    [GND | 3 | Down       | generic-props | - ]
+    [SCL | 10 | Left      | generic-props | - ]
+    [SDA | 9 | Left       | generic-props | - ]
+    [AVDD | 11 | Up       | generic-props | power-props ]
+    [GND2 | 4 | Down      | generic-props | - ]
+    [GND3 | 6 | Down      | generic-props | - ]
+    [GND4 | 12 | Down     | generic-props | - ]
+    [GPIO1 | 7 | Left     | generic-props | - ]
+    [XSHUT | 5 | Left     | generic-props | - ]
+    [AVDDVCSEL | 1 | Up   | generic-props | power-props ]
+    [AVSSVCSEL | 2 | Down | generic-props | - ]
+  make-box-symbol()
+  assign-landpattern(vl53l1cxv0fyslash-1)
+  name = "VL53L1C"
+  reference-prefix = "U"
+  mpn = "VL53L1CBV0FY/1"
+
+  property(self.SCL.digital-io) = DigitalIO(OpenCollector(Interval(0.0, 0.4, false), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, self.AVDD, self.GND, 50.0e-9)
+  property(self.SDA.digital-io) = DigitalIO(OpenCollector(Interval(0.0, 0.4, false), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, self.AVDD, self.GND, 50.0e-9)
+
+
+public pcb-module module :
+  port power : power
+  port i2c : i2c
+  pin x-shut 
+  pin gpio1
+  public inst tof : ocdb/st-microelectronics/VL53L1X/component
+  bypass-cap-strap(tof.AVDDVCSEL, tof.AVSSVCSEL, 4.7e-6)
+  bypass-cap-strap(tof.AVDDVCSEL, tof.AVSSVCSEL, 0.1e-6)
+  net (i2c.sda tof.SDA)
+  net (i2c.scl tof.SCL)
+  net (x-shut, tof.XSHUT)
+  net (gpio1, tof.GPIO1)
+  net (power.vdd tof.AVDDVCSEL tof.AVDD )
+  net (power.gnd tof.GND tof.AVSSVCSEL tof.GND2 tof.GND3 tof.GND4)

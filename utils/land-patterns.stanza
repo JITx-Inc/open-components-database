@@ -596,8 +596,8 @@ public defn make-soic127p-landpattern (n:Int, lead-span:Double) :
     
     layer(Courtyard(Top)) = Rectangle(c-w, c-h)
 
-    layer(Silkscreen("f-silk", Top)) = LineRectangle(c-w, c-h)
-    layer(Silkscreen("pol", Top)) = Circle(x0 - 2.0, y0, 0.254)
+    ; layer(Silkscreen("f-silk", Top)) = LineRectangle(c-w, c-h)
+    layer(Silkscreen("pol", Top)) = Circle(x0 - 2.0, y0, 0.2)
     ref-label()
 
 public defn make-soic127p-landpattern (n:Int) :
@@ -641,7 +641,7 @@ public defn make-sop65-landpattern (n:Int, lead-span:Double) :
     layer(Courtyard(Top)) = Rectangle(c-w, c-h)
 
     name = to-string("SOP65 with %_ pins." % [n])
-    layer(Silkscreen("pol", Top)) = Circle(x0 - 0.5, y0, 0.2)
+    layer(Silkscreen("pol", Top)) = Circle(x0 - 1.0, y0, 0.2)
     ref-label()
 
 public pcb-landpattern sop65-landpattern (n:Int, lead-span:Double) :
@@ -653,7 +653,7 @@ n: even positive
 public pcb-landpattern sop65-landpattern (n:Int) :
   make-sop65-landpattern(n, 6.4)
 
-public defn make-qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
+public defn make-qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double, corner-pads:[Pad,Pad]|False) :
   inside pcb-landpattern :
     var n = -1
     if n-pins % 4 == 0 :
@@ -667,6 +667,57 @@ public defn make-qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int
     val row-pos = to-list(row-locs(W, n, pin-pitch))
 
     val pin-pad = smd-pad(S, pad-width, pad-length + 0.3)
+
+    defn place-pads (pose:Pose, i:Int, ub:Int, lb:Int) :
+      match(corner-pads:[Pad,Pad]):
+        if i == lb:
+          pad p[i + 1] : corner-pads[0] at pose
+        else if i == ub:
+          pad p[i + 1] : corner-pads[1] at pose
+        else:
+          pad p[i + 1] : pin-pad at pose
+      else:
+        pad p[i + 1] : pin-pad at pose
+
+    for (i in 0 to n, l in row-pos) do :
+      place-pads(loc(x0, y0, -90.0) * l, i, 0, n - 1)
+    for (i in n to (n * 2), l in row-pos) do :
+      place-pads(loc((- y0), x0, 0.0) * l, i, n, n * 2 - 1)
+    for (i in (n * 2) to (n * 3), l in row-pos) do :
+      place-pads(loc((- x0), (- y0), 90.0) * l, i, n * 2, n * 3 - 1)
+    for (i in (n * 3) to (n * 4), l in row-pos) do :
+      place-pads(loc((y0), (- x0), 180.0) * l, i, n * 3, n * 4 - 1)
+
+    layer(Courtyard(Top)) = Rectangle(lead-span, lead-span)
+    layer(Silkscreen("pol",Top)) = Circle((lead-span / -2.0) - 1.0, y0, 0.2)
+    ref-label()
+
+public pcb-landpattern qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
+  make-qfn-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length, false)
+
+public pcb-landpattern qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double, corner-pads:[Pad,Pad]|False) :
+  make-qfn-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length, corner-pads)
+
+public pcb-landpattern qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double, hs:[Double,Double]) :
+  make-qfn-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length, false)
+  pad p[n-pins + 1] : smd-pad(hs[0],hs[1]) at loc(0.0, 0.0)  
+
+public defn make-qfp-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
+  inside pcb-landpattern :
+    var n = -1
+    
+    if n-pins % 4 == 0 :
+      n = n-pins / 4
+    else :
+      fatal("make-qfp-package is only for symmetric 4-sided qfps.")
+    
+    val pin-pad = smd-pad(S, pad-width, (pad-length + 0.3))
+    
+    val x0 = (- ((lead-span / 2.0) + 0.3))
+    val y0 = (to-double(n - 1) * pin-pitch) / 2.0
+    val l0 = loc(x0, y0, -90.0)
+    val row-pos = to-list(row-locs(W, n, pin-pitch))
+
     for (i in 0 to n, l in row-pos) do :
       pad p[i + 1] : pin-pad at loc(x0, y0, -90.0) * l
 
@@ -679,19 +730,12 @@ public defn make-qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int
     for (i in (n * 3) to (n * 4), l in row-pos) do :
       pad p[i + 1] : pin-pad at loc((y0), (- x0), 180.0) * l
 
-    val c-w = (lead-span + 0.3 * 2.0)
-    layer(Courtyard(Top)) = Rectangle(c-w, c-w)
-    layer(Silkscreen("f-silk",Top)) = LineRectangle(c-w, c-w)
-    layer(Silkscreen("pol",Top)) = Circle((lead-span / -2.0) - 1.0, y0, 0.254)
-    ref-label()
+    
+    layer(Courtyard(Top)) = Rectangle(lead-span, lead-span)
+    layer(Silkscreen("pol",Top)) = Circle((lead-span / -2.0) - 1.0, y0, 0.2)
 
-public pcb-landpattern qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
-  make-qfn-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length)
-
-public pcb-landpattern qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double, hs:[Double,Double]) :
-  make-qfn-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length)
-  pad p[n-pins + 1] : smd-pad(hs[0],hs[1]) at loc(0.0, 0.0)  
-
+public pcb-landpattern qfp-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
+  make-qfp-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length)
 
 public defn make-dfn-landpattern (
   n-pad:Int
@@ -833,12 +877,12 @@ public pcb-landpattern d-sod-123 :
 
 public pcb-landpattern QFN50P715X715X80-48 :
   name = "QFN50P715X715X80-48"
-  make-qfn-landpattern(0.5, 7.15, 48, 0.3, 0.5)
+  make-qfn-landpattern(0.5, 7.15, 48, 0.3, 0.5, false)
   pad p[49] : smd-pad(5.1,5.1) at loc(0.0, 0.0)
 
 public pcb-landpattern QFN50P400X400X85-24 :
   name = "QFN50P400X400X85-24"
-  make-qfn-landpattern(0.5, 4.0, 24, 0.25, 0.4)
+  make-qfn-landpattern(0.5, 4.0, 24, 0.25, 0.4, false)
   pad p[25] : smd-pad(2.5,2.5) at loc(0.0, 0.0)  
 
 public pcb-landpattern SOT95P280X100-3N :

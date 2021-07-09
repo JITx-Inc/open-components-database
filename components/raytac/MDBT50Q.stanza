@@ -1,0 +1,208 @@
+#use-added-syntax(jitx)
+defpackage ocdb/raytac/MDBT50Q :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+
+public pcb-enum ocdb/raytac/MDBT50Q/RaytacAntennaType:
+  RaytacChipAntena
+  RaytacPcbAntenna
+
+public pcb-component component (antenna-type:RaytacAntennaType):
+  mpn = to-string $ "MDBT50Q-%_512K" % 
+    ["P" when antenna-type == RayTacPcbAntenna else ""]
+  manufacturer = "Raytac"
+  description = "nRF52833 based module, with chip or PCB antenna"
+
+  pin-properties :
+    [pin:Ref | pads:Int ...    | side:Dir ]
+    [GND    | 1, 2, 15, 33, 55 | Down ]
+    [NC[0]  | 4                | Up   ]
+    [NC[1]  | 31               | Up   ]
+    [NC[2]  | 42               | Up   ]
+    [NC[3]  | 45               | Up   ]
+    [NC[4]  | 49               | Up   ]
+    [NC[5]  | 59               | Up   ]
+    [NC[6]  | 60               | Up   ]
+    [P0[25]  | 3                | Left ]
+    [P0[23]  | 5                | Left ]
+    [P1[05]  | 6                | Left ]
+    [P1[03]  | 7                | Left ]
+    [P0[19]  | 8                | Left ]
+    [P0[03]  | 9                | Left ]
+    [P0[29]  | 10               | Left ]
+    [P0[02]  | 11               | Left ]
+    [P0[31]  | 12               | Left ]
+    [P0[28]  | 13               | Left ]
+    [P0[30]  | 14               | Left ]
+    [P0[27]  | 16               | Left ]
+    [P0[00]  | 17               | Left ]
+    [P0[01]  | 18               | Left ]
+    [P0[26]  | 19               | Left ]
+    [P0[04]  | 20               | Left ]
+    [P0[05]  | 21               | Left ]
+    [P0[06]  | 22               | Left ]
+    [P0[07]  | 23               | Left ]
+    [P0[08]  | 24               | Left ]
+    [P1[08]  | 25               | Left ]
+    [P1[09]  | 26               | Left ]
+    [P0[11]  | 27               | Left ]
+    [VDD    | 28               | Right]
+    [P0[12]  | 29               | Left ]
+    [VDDH   | 30               | Right]
+    [VBUS   | 32               | Right]
+    [D-     | 34               | Right]
+    [D+     | 35               | Right]
+    [P0[14]  | 36               | Left ]
+    [P0[13]  | 37               | Left ]
+    [P0[16]  | 38               | Left ]
+    [P0[15]  | 39               | Left ]
+    [P0[18]  | 40               | Left ]
+    [P0[17]  | 41               | Left ]
+    [P0[21]  | 43               | Left ]
+    [P0[20]  | 44               | Left ]
+    [P0[22]  | 46               | Left ]
+    [P1[00]  | 47               | Left ]
+    [P0[24]  | 48               | Left ]
+    [P1[02]  | 50               | Left ]
+    [SWDIO  | 51               | Right]
+    [P0[09]  | 52               | Left ]
+    [SWDCK  | 53               | Right]
+    [P0[10]  | 54               | Left ]
+    [P1[04]  | 56               | Left ]
+    [P1[06]  | 57               | Left ]
+    [P1[07]  | 58               | Left ]
+    [P1[01]  | 61               | Left ]
+
+  make-box-symbol()
+  assign-landpattern(module-pkg)
+
+pcb-landpattern module-pkg:
+  val padx = 0.6
+  val pady = 0.4
+  val pitch = 0.8
+  val offset = 0.9
+
+  pad p[1] : smd-pad(padx, pady) at loc(0.6, 11.5)
+  pad p[2] : smd-pad(padx, pady) at loc(0.6, 10.4)
+  pad p[3] : smd-pad(padx, pady) at loc(0.6, 9.6)
+  for i in 4 to 15 do :
+    val div = to-double(i % 2)
+    if div > 0.0 :
+      pad p[i] : smd-pad(padx, pady) at loc(0.6 + offset, 8.0 - ((to-double((i - 5) / 2) + 0.5) * pitch))
+    else :
+      pad p[i] : smd-pad(padx, pady) at loc(0.6, 8.0 - (to-double((i - 4) / 2) * pitch))
+
+  for i in 15 to 34 do :
+    if i >= 19 and i <=29 :
+      val div = to-double(i % 2)
+      if div > 0.0 :
+        pad p[i] : smd-pad(pady, padx) at loc(0.45 + ((to-double((i - 16 + 3) / 2) + 0.5) * pitch), 0.6 + offset)
+      else :
+        pad p[i] : smd-pad(pady, padx) at loc(0.45 + (to-double((i - 15 + 3) / 2) * pitch), 0.6)
+    else :
+      if i > 29 : 
+        pad p[i] : smd-pad(pady, padx) at loc(0.45 + to-double(i - 15 - 6) * pitch, 0.6)
+      else :
+        pad p[i] : smd-pad(pady, padx) at loc(0.45 + to-double(i - 15) * pitch, 0.6)
+
+  pad p[34] : smd-pad(padx, pady) at loc(9.9, 1.6)
+
+  for i in 35 to 43 do :
+    val div = to-double(i % 2)
+    if div < 1.0 :
+      pad p[i] : smd-pad(padx, pady) at loc(9.9 - offset, 2.4 + ((to-double((i - 36) / 2) + 0.5) * pitch))
+    else :
+      pad p[i] : smd-pad(padx, pady) at loc(9.9, 2.4 + (to-double((i - 35) / 2) * pitch))
+
+  for i in 43 to 50 do :
+    val div = to-double(i % 2)
+    if div > 0.0 :
+      pad p[i] : smd-pad(padx, pady) at loc(9.9 - offset, 6.0 + (to-double((i - 45) / 2) + 1.0) * pitch)
+    else :
+      pad p[i] : smd-pad(padx, pady) at loc(9.9, 6.0 + (to-double((i - 46) / 2 ) + 1.5) * pitch)
+
+  for i in 50 to 55 do :
+    val div = to-double(i % 2)
+    if div < 1.0 :
+      pad p[i] : smd-pad(padx, pady) at loc(9.9 - offset, 9.2 + to-double((i - 50) / 2) * pitch)
+    else :
+      pad p[i] : smd-pad(padx, pady) at loc(9.9, 9.2 + (to-double((i - 51) / 2) + 0.5) * pitch)
+
+  pad p[55] : smd-pad(padx, pady) at loc(9.9, 11.5)
+
+  for i in 56 to 62 do :
+    pad p[i] : smd-pad(pady, padx) at loc(3.25 + to-double(i - 56) * pitch, 7.2)
+
+  layer(Courtyard(Top)) = Rectangle(10.5, 15.5, loc(10.5 / 2.0, 15.5 / 2.0))
+  layer(ForbidCopper(LayerIndex(0), LayerIndex(0, Bottom))) = Rectangle(12.4, 3.8, loc(10.5 / 2.0, 15.5 - 3.8 / 2.0))
+  layer(ForbidCopper(LayerIndex(0), LayerIndex(0))) = Rectangle(1.6, 1.2, loc(2.95 + 1.6 / 2.0, 15.5 - 3.8 - 1.2 / 2.0))
+  ref-label()
+
+public pcb-module module (antenna-type:RaytacAntennaType):
+  pin gnd
+  pin vcc
+  pin vbus
+  pin reset
+  pin swdio
+  pin swdck
+
+  port spi-master : spi
+  port i2c-master : i2c
+  port uart-nrf : uart
+  port P0 : pin[32]
+  port P1 : pin[10]
+
+  inst ble-module : ocdb/raytac/MDBT50Q/component(antenna-type)
+
+  ; Power connections and decoupling caps
+  net (gnd, ble-module.GND)
+  net (vcc, ble-module.VDD)
+  net (vcc, ble-module.VDDH)
+  net (vbus, ble-module.VBUS)
+  cap-strap(vcc, gnd, 10.0e-6)
+  cap-strap(vbus, gnd, 10.0e-6)
+
+  net (P0 ble-module.P0)
+  net (P1 ble-module.P1)
+
+  ; swd
+  net (swdio, ble-module.SWDIO)
+  net (swdck, ble-module.SWDCK)
+
+  ; spi
+  net (spi-master.mosi, ble-module.P0[28])
+  net (spi-master.miso, ble-module.P0[30])
+  net (spi-master.sck, ble-module.P0[31])
+  net (spi-master.ss, ble-module.P0[02])
+
+  ; i2c
+  net (i2c-master.sda, ble-module.P0[11])
+  net (i2c-master.scl, ble-module.P0[12])
+
+  ; uart
+  net (uart-nrf.rx, ble-module.P0[08])
+  net (uart-nrf.tx, ble-module.P0[06])
+  
+  ; 32 kHz crystal
+  inst lf-xtal : ocdb/epson/FC-135/component
+  cap-strap(lf-xtal.p[1], gnd, 9.0e-12)
+  cap-strap(lf-xtal.p[2], gnd, 9.0e-12)
+  net (lf-xtal.p[1], ble-module.P0[00])
+  net (lf-xtal.p[2], ble-module.P0[01])
+
+  ; gpio
+  ; nrf reset
+  net (reset, ble-module.P0[18])
+  res-strap(reset, vcc, 10.0e3)

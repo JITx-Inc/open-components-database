@@ -1,0 +1,84 @@
+#use-added-syntax(jitx)
+defpackage ocdb/abracon/AMPM:
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+pcb-landpattern VDFN :
+  for (l in grid-locs(2, 2, 1.9, 2.1), i in [1 4 2 3]) do :
+    pad p[i] : smd-pad(1.0, 0.9) at l
+
+  layer(Courtyard(Top)) = Rectangle(2.5 3.2)
+  layer(Silkscreen("pol", Top)) = Circle(-1.05 - 1.0, 0.95, 0.2)
+  ref-label()
+
+pcb-landpattern VFLGA-2 :
+  for (l in grid-locs(2, 2, 0.95, 1.55), i in [1 4 2 3]) do :
+    pad p[i] : smd-pad(0.7, 0.5) at l
+
+  layer(Courtyard(Top)) = Rectangle(1.6 2.0)
+  layer(Silkscreen("pol", Top)) = Circle(-0.45 - 0.75, 0.75, 0.2)
+  ref-label()
+
+;<test>
+frequency: 16.0e6
+<test>
+public pcb-component component (frequency:Double):
+  val         [mpn-s              ppm       package  ] = switch(frequency) :
+    10.0e6   : ["AMPMEFB-10.0000T"  25.0e-6  VDFN    ]  
+    12.0e6   : ["AMPMEFB-12.0000T"  25.0e-6  VDFN    ]  
+    12.288e6 : ["AMPMEFB-12.2880T"  25.0e-6  VDFN    ]  
+    16.0e6   : ["AMPMEFB-16.0000T"  25.0e-6  VDFN    ]  
+    19.2e6   : ["AMPMEFB-19.2000T"  25.0e-6  VDFN    ]  
+    20.0e6   : ["AMPMEFB-20.0000T"  25.0e-6  VDFN    ]  
+    24.0e6   : ["AMPMAFB-24.0000T"  25.0e-6  VFLGA-2 ]    
+    25.0e6   : ["AMPMEFB-25.0000T"  25.0e-6  VDFN    ]  
+    26.0e6   : ["AMPMEFB-26.0000T"  25.0e-6  VDFN    ]  
+    27.0e6   : ["AMPMEFB-27.0000T"  25.0e-6  VDFN    ]  
+    32.0e6   : ["AMPMEFB-32.0000T"  25.0e-6  VDFN    ]  
+    33.0e6   : ["AMPMEFB-33.0000T"  25.0e-6  VDFN    ]  
+    4.0e6    : ["AMPMEFB-4.0000T"   25.0e-6  VDFN    ]  
+    40.0e6   : ["AMPMEFB-40.0000T"  25.0e-6  VDFN    ]  
+    48.0e6   : ["AMPMEFB-48.0000T"  25.0e-6  VDFN    ]  
+    50.0e6   : ["AMPMAFB-50.0000T"  25.0e-6  VFLGA-2 ]    
+    8.0e6    : ["AMPMEFB-8.0000T"   25.0e-6  VDFN    ]  
+    80.0e6   : ["AMPMAFB-80.0000T"  25.0e-6  VFLGA-2 ]    
+    else:
+      fatal("Unsupported frequency for AMPM/component: %_" % [frequency])
+
+
+  manufacturer = "Abracon"
+  description = to-string("MEMS OSC XO %_MHZ SMD" % [frequency / 1.0e6])
+  mpn = mpn-s
+
+  pin-properties :
+    [pin:Ref | pads:Int ...  | side:Dir ]
+    [GND     | 2             | Down     ]
+    [OE      | 1             | Left     ]
+    [OUT     | 3             | Right     ]
+    [VDD     | 4             | Up       ]
+  
+  assign-landpattern(package)
+  make-box-symbol()
+
+public pcb-module module (frequency:Double):
+  port power :power
+  pin out
+  pin oe
+
+  inst osc : ocdb/abracon/AMPM/component(frequency)
+  net (osc.GND, power.gnd)
+  net (osc.VDD, power.vdd)
+  bypass-cap-strap(osc.VDD, osc.GND, 0.1e-6)
+  net (out, osc.OUT)
+  net (oe, osc.OE)
