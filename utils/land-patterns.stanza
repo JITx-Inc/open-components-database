@@ -466,6 +466,34 @@ public defn make-grid-landpattern (num-rows:Int,
         None()
   make-generic-landpattern(mapping)
 
+; 2D array of pins
+public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double, pad-ref, offset-x:Double, offset-y:Double) :
+  defn normalize (i:Int):
+    0.5 * to-double(i - 1)
+  
+  inside pcb-landpattern:
+    val n-col  = to-int(ceil(to-double(n-pin) / to-double(n-row)))
+    val origin = loc(offset-x, offset-y) * loc(
+      (normalize(n-row) * row-pitch), ; x
+      (normalize(n-col) * pin-pitch)  ; y
+    )
+
+    for i in 0 to n-col do :
+      for j in 0 to n-row do :
+        val idx = n-row * i + j + 1
+        val x = to-double(j) * row-pitch
+        val y = -1.0 * to-double(i) * pin-pitch
+        pad p[idx] : pad-ref at origin * loc(x, y)
+    
+public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double, pad-ref:JITXDef) :
+  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch, pad-ref, 0.0, 0.0)
+
+public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
+  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch, pth-pad(0.5), 0.0, 0.0)
+
+public defn make-pin-grid (n-pin:Int) :
+  make-pin-grid(n-pin, 1, 2.54, 2.54, pth-pad(0.5), 0.0, 0.0)
+
 ;==================================================================================
 ; Create a testpad
 public pcb-landpattern testpad (d:Double) :
