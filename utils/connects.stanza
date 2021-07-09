@@ -29,12 +29,13 @@ defn ensure-bundle-port! (port:JITXObject, bundle:Bundle):
 public defn connect-i2c-isolation (x:JITXObject,
                                    y:JITXObject,
                                    buffer:Instantiable):
-  within ensure-bundles!([x, y], [i2c, i2c], "call connect-isolation"):
-    inside pcb-module:
-      inst buf: buffer
-      net (x, buf.p[1])
-      net (y, buf.p[2])
-      buf
+  ensure-bundle-port!(x, i2c)
+  ensure-bundle-port!(y, i2c)  
+  inside pcb-module:
+    inst buf: buffer
+    net (x, buf.p[1])
+    net (y, buf.p[2])
+    buf
 
 ; Connect to i2c lines with a buffer, using a default component (TI ISO1540)
 public defn connect-i2c-isolation (x:JITXObject, y:JITXObject):
@@ -51,27 +52,29 @@ public defn connect-isolate (a:JITXObject, b:JITXObject):
 
 ; Connect PHY using a default component (Marvell 8831510-A0-NNB2C000)
 public defn connect-phy (x:JITXObject, y:JITXObject) :
-  within ensure-bundles!([x, y], [rgmii, ethernet-1000], "call connect-phy"):
-    inside pcb-module:
-      inst phy : ocdb/marvell/88E1510-A0-NNB2C000/module
-      net (x, phy.rgmii)
-      net (y.mdi, phy.mdi)
-      schematic-group(phy) = phy
-      phy
+  ensure-bundle-port!(x, rgmii)
+  ensure-bundle-port!(y, ethernet-1000)
+  inside pcb-module:
+    inst phy : ocdb/marvell/88E1510-A0-NNB2C000/module
+    net (x, phy.rgmii)
+    net (y.mdi, phy.mdi)
+    schematic-group(phy) = phy
+    phy
 
 ; Connect USB-2 over UART using FT232 USB to serial interface
 public defn connect-ft232 (x:JITXObject, y:JITXObject) :
-  within ensure-bundles!([x, y], [usb-2, uart-with([`dtr, `rts])],  "call connect-ft232"):
-    inside pcb-module :
-      inst xcvr : ocdb/future-designs/FT232RL/module
-      net (x, xcvr.usb-2)
-      net (y.tx, xcvr.uart.rx)
-      net (y.rx, xcvr.uart.tx)
-      net (y.dtr, xcvr.uart.dtr)
-      net (y.rts, xcvr.uart.rts)
-      
-      schematic-group(xcvr) = xcvr
-      xcvr
+  ensure-bundle-port!(x, usb-2)
+  ensure-bundle-port!(y, uart-with([`dtr, `rts])
+  inside pcb-module :
+    inst xcvr : ocdb/future-designs/FT232RL/module
+    net (x, xcvr.usb-2)
+    net (y.tx, xcvr.uart.rx)
+    net (y.rx, xcvr.uart.tx)
+    net (y.dtr, xcvr.uart.dtr)
+    net (y.rts, xcvr.uart.rts)
+    
+    schematic-group(xcvr) = xcvr
+    xcvr
 
 ; Connect USB-2 over UART using CP2105 
 public defn connect-cp2105 (usb:JITXObject, uart:JITXObject) :
