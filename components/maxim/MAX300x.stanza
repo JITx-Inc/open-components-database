@@ -1,0 +1,71 @@
+#use-added-syntax(jitx)
+defpackage ocdb/maxim/MAX300x:
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import ocdb/bundles
+  import ocdb/symbols
+  import ocdb/box-symbol
+
+public pcb-component component :
+  name = "MAX3001EEUP+T"
+  manufacturer = "Maxim Integrated"
+  mpn = "MAX3001EEUP+T"
+  description = "Voltage Level Translator Bidirectional 1 Circuit 8 Channel 4Mbps 20-TSSOP"
+  val generic-props = GenericPin(Interval(-0.3, 6.0, false), 15000.0)
+  pin-properties :
+    [pin:Ref     | pads:Int ...   | side:Dir | generic-pin:GenericPin]
+    [GND       | 11 | Down  | generic-props ]      
+    [VCC       | 19 | Right | generic-props ]      
+    [IO-VCC[1] | 20 | Right | generic-props ]            
+    [IO-VCC[2] | 18 | Right | generic-props ]            
+    [IO-VCC[3] | 17 | Right | generic-props ]            
+    [IO-VCC[4] | 16 | Right | generic-props ]            
+    [IO-VCC[5] | 15 | Right | generic-props ]            
+    [IO-VCC[6] | 14 | Right | generic-props ]            
+    [IO-VCC[7] | 13 | Right | generic-props ]            
+    [IO-VCC[8] | 12 | Right | generic-props ]            
+    [VL        | 2  | Left  | generic-props ]      
+    [IO-VL[1]  | 1  | Left  | generic-props ]            
+    [IO-VL[2]  | 3  | Left  | generic-props ]            
+    [IO-VL[3]  | 4  | Left  | generic-props ]            
+    [IO-VL[4]  | 5  | Left  | generic-props ]            
+    [IO-VL[5]  | 6  | Left  | generic-props ]            
+    [IO-VL[6]  | 7  | Left  | generic-props ]            
+    [IO-VL[7]  | 8  | Left  | generic-props ]            
+    [IO-VL[8]  | 9  | Left  | generic-props ]            
+    [EN        | 10 | Up    | generic-props ]     
+
+  make-box-symbol()
+  assign-landpattern(sop65-landpattern(20))
+
+  property(self.VCC.power-pin) = PowerPin(Interval(1.2, 5.5, false))
+  eval-when has-property?(VCC.rail-voltage):
+    property(self.VCC.power-pin) = PowerPin(Interval(1.65, property(VCC.rail-voltage), false))
+
+
+public pcb-module module :
+  port vcc:power
+  port vl:power
+  port io-vl : pin[[1 through 8]]
+  port io-vcc : pin[[1 through 8]]
+  pin en
+
+  inst buffer : ocdb/maxim/MAX300x/component
+  bypass-cap-strap(buffer.VCC, buffer.GND, 0.1)
+  bypass-cap-strap(buffer.VCC, buffer.GND, 1.0)
+  bypass-cap-strap(buffer.VL, buffer.GND, 0.1)
+
+  net (vcc.gnd vl.gnd, buffer.GND)
+  net (vcc.vdd, buffer.VCC)
+  net (vl.vdd, buffer.VL)
+  net (en, buffer.EN)
+  for i in 1 through 8 do :
+    net (io-vl[i], buffer.IO-VL[i])
+    net (io-vcc[i], buffer.IO-VCC[i])
