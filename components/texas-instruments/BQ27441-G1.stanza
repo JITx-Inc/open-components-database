@@ -1,0 +1,56 @@
+#use-added-syntax(jitx)
+defpackage ocdb/texas-instruments/BQ27441-G1 :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+public pcb-component component :
+  manufacturer = "Texas Instruments"
+  mpn = "BQ27441-G1"
+  description = "System-Side Impedance Track™ Fuel Gauge"
+
+  port i2c : i2c
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir ]
+    [BAT     | 6            | Left     ]
+    [BIN     | 10           | Right    ]
+    [GPOUT   | 12           | Right    ]
+    [NC      | 4, 9, 11     | Left     ]
+    [i2c.scl | 2            | Right    ]
+    [i2c.sda | 1            | Right    ]
+    [SRN     | 7            | Left     ]
+    [SRP     | 8            | Left     ]
+    [VDD     | 5            | Right    ]
+    [VSS     | 3            | Left     ]
+    [TP      | 13           | Left     ]
+
+  make-box-symbol()
+  assign-landpattern(dfn-landpattern(12, 0.4, [0.2, 0.85], -1.975, [4.0, 2.5], [2.45, 1.95]))
+
+  
+public pcb-module module :
+  inst ic : ocdb/texas-instruments/BQ27441-G1/component
+  pin gnd
+  pin batt-in
+  pin batt-out
+  port i2c-node : i2c
+
+  net (i2c-node, ic.i2c)
+
+  net (gnd, ic.TP, ic.VSS)
+  net (batt-in, ic.SRP, ic.BAT)
+  net (batt-out, ic.SRN)
+
+  res-strap(batt-in, batt-out, 1.0e-2)
+  res-strap(batt-in, ic.GPOUT, 10.0e3)
+  cap-strap(ic.VDD, gnd, 0.47e-6)

@@ -14,11 +14,13 @@ defpackage ocdb/texas-instruments/TLV62130 :
   import ocdb/generator-utils
   import ocdb/generic-components
   import ocdb/passive-circuits
+  import ocdb/property-structs
 
 public pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "TLV62130RGTR"
   description = "TLV62130x 3-V to 17-V 3-A Step-Down Converter In 3x3 QFN"
+  
   pin-properties :
     [pin:Ref   | pads:Int ... | side:Dir]
     [PVIN      | 11 12        | Left    ]
@@ -36,6 +38,21 @@ public pcb-component component :
     [PAD       | 17           | Down    ]
   assign-landpattern(qfn-landpattern(0.5, 3.0, 16, 0.24, 0.5, [1.68, 1.68]))
   make-box-symbol()
+
+  property(self.PVIN.power-pin) = PowerPin(Interval(3.0, 17.0, false))
+
+  eval-when has-property?(self.PVIN.rail-voltage) :
+    val vin = property(self.PVIN.rail-voltage)
+    property(self.PVIN.generic-pin) = GenericPin(Interval(-0.3, 20.0, false), 2000.0)
+    property(self.AVIN.generic-pin) = GenericPin(Interval(-0.3, 20.0, false), 2000.0)
+    property(self.EN.generic-pin) = GenericPin(Interval(-0.3, vin + 0.3, false), 2000.0)
+    property(self.SS.generic-pin) = GenericPin(Interval(-0.3, vin + 0.3, false), 2000.0)
+    property(self.DEF.generic-pin) = GenericPin(Interval(-0.3, 7.0, false), 2000.0)
+    property(self.FSW.generic-pin) = GenericPin(Interval(-0.3, 7.0, false), 2000.0)
+    property(self.SW.generic-pin) = GenericPin(Interval(-0.3, vin + 0.3, false), 2000.0)
+    property(self.VOS.generic-pin) = GenericPin(Interval(-0.3, 7.0, false), 2000.0)
+    property(self.PG.generic-pin) = GenericPin(Interval(-0.3, 7.0, false), 2000.0)
+    property(self.FB.generic-pin) = GenericPin(Interval(-0.3, 7.0, false), 2000.0)
 
 
 public pcb-module module (v-out:Double) :
@@ -69,6 +86,11 @@ public pcb-module module (v-out:Double) :
   make-voltage-divider(l.p[2], buck.FB, gnd, [0.78 0.8 0.82] 5.0e-6)
 
   cap-strap(vout, gnd, 22.0e-6)
+
+  property(l.p[2].power-supply-pin) = PowerSupplyPin(v-out, 3.0) 
+  
+
+
 
 public pcb-module mod :
   inst m : module(3.3)

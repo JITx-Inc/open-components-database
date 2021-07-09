@@ -1,0 +1,121 @@
+#use-added-syntax(jitx)
+defpackage ocdb/si-labs/CP2105 :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import ocdb/property-structs
+
+public pcb-component component :
+  manufacturer = "Silicon Labs"
+  description  = "IC SGL USB-DL UART BRIDGE 24QFN"
+  mpn          = "CP2105-F01-GM"
+
+  pin REGIN
+  pin VDD
+  pin RI_SCI
+  pin GND
+  pin VBUS
+  pin D+
+  pin D-
+  pin VIO
+  pin nRST
+  pin CTS_ECI
+  pin RTS_ECI
+  pin RXD_ECI
+  pin TXD_ECI
+  pin DSR_ECI
+  pin DTR_ECI
+  pin DCD_ECI
+  pin RI_ECI 
+  pin CTS_SCI
+  pin RTS_SCI
+  pin RXD_SCI
+  pin TXD_SCI
+  pin DSR_SCI
+  pin DTR_SCI
+  pin DCD_SCI
+  pin EPAD
+
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir]
+    [REGIN   | 7  | Up]
+    [VDD     | 6  | Up]
+    [RI_SCI  | 1  | Right]
+    [GND     | 2  | Down]
+    [VBUS    | 8  | Left]
+    [D+      | 3  | Left]
+    [D-      | 4  | Left]
+    [VIO     | 5  | Left]
+    [nRST    | 9  | Left]
+    [CTS_ECI | 10 | Right]
+    [RTS_ECI | 11 | Right]
+    [RXD_ECI | 12 | Right]
+    [TXD_ECI | 13 | Right]
+    [DSR_ECI | 14 | Right]
+    [DTR_ECI | 15 | Right]
+    [DCD_ECI | 16 | Right]
+    [RI_ECI  | 17 | Right]
+    [CTS_SCI | 18 | Right]
+    [RTS_SCI | 19 | Right]
+    [RXD_SCI | 20 | Right]
+    [TXD_SCI | 21 | Right]
+    [DSR_SCI | 22 | Right]
+    [DTR_SCI | 23 | Right]
+    [DCD_SCI | 24 | Right]
+    [EPAD    | 25 | Down]
+
+  make-box-symbol()
+  assign-landpattern(qfn-landpattern(0.5, 4.0, 24, 0.25, 0.4, [2.7 2.7]))
+
+  property(REGIN.power-pin) = PowerPin(Interval(3.0, 5.25, false))
+  property(VDD.power-pin) = PowerPin(Interval(3.0, 3.6, false))
+  eval-when has-property?(VDD.rail-voltage) :
+    property(VIO.power-pin) = PowerPin(Interval(1.8, property(VDD.rail-voltage), false))
+  eval-when has-property?(VIO.rail-voltage) :
+    val vdd  = property(VIO.rail-voltage)
+    val drive-props = DigitalOutput(CMOSOutput(Interval(0.0, 0.4, false), Interval(vdd - 0.2, vdd, false)), false, VIO, GND)
+    val input-props = DigitalInput(0.6, 0.7 * vdd, VIO, GND, 50.0e-6)
+    for o in [TXD_ECI DTR_ECI RTS_ECI TXD_SCI DTR_SCI RTS_SCI] do :
+      property(o.digital-output) = drive-props
+    for i in [RXD_ECI RXD_SCI] do :
+      property(i.digital-input) = input-props
+
+public pcb-module module :
+  port power : power
+  port usb-2 : usb-2
+  port e-uart : uart-with([`dtr `rts])
+  port s-uart : uart-with([`dtr `rts])
+  pin reset
+  pin vio
+  pin gnd
+  
+  public inst xcvr : ocdb/si-labs/CP2105/component
+  net (usb-2.vbus.vdd xcvr.VBUS)
+  net (power.vdd, xcvr.REGIN, xcvr.VDD)
+  net (usb-2.vbus.gnd xcvr.GND xcvr.EPAD power.gnd gnd)
+  net (xcvr.VIO vio)
+  net (xcvr.nRST reset)
+  net (usb-2.data.P xcvr.D+)
+  net (usb-2.data.N xcvr.D-)
+  
+  for cap_ in [4.7e-6, 0.1e-6] do :
+    bypass-cap-strap(xcvr.VDD, gnd, cap_)
+  res-strap(reset, vio, 4.7e3)
+
+  net (e-uart.rx  xcvr.RXD_ECI)
+  net (e-uart.tx  xcvr.TXD_ECI)
+  net (e-uart.rts xcvr.RTS_ECI)
+  net (e-uart.dtr xcvr.DTR_ECI)
+  net (s-uart.rx  xcvr.RXD_SCI)
+  net (s-uart.tx  xcvr.TXD_SCI)
+  net (s-uart.rts xcvr.RTS_SCI)
+  net (s-uart.dtr xcvr.DTR_SCI)
