@@ -373,7 +373,7 @@ defn print-bundle (
 
 defn print-spi (o:OutputStream, mcu:Stm32MCU):
   print-bundle(
-    o, mcu, "SPI", "spi"
+    o, mcu, "SPI", "spi()"
     ["MOSI", "MISO", "SCK", "NSS"]
     ["sdi", "sdo", "sck", "cs"]
   )
@@ -409,9 +409,9 @@ defn print-i2s (o:OutputStream, mcu:Stm32MCU):
     val mck? = contains?(pins, "MCLK")
     val sdmi? = contains?(pins, "SDI")
     if mck?:
-      print(optional, "MCK, ")
+      print(optional, "I2S-MCK, ")
     if sdmi?:
-      print(optional, "SDMI")
+      print(optional, "I2S-SDMI")
 
     val bundle-name = to-string("i2s([%_])" % [to-string(optional)])
     val pin-names = to-tuple(cat-all([
@@ -441,20 +441,23 @@ defenum UartCase:
   Uart4   ; 4 pin UART 
   Uart4De ; 4 pin UART with DE pin
 
+
+defn usart-or-uart-bundle (uart?:True|False, c:UartCase):
+  val base = "uart" when uart? else "usart"
+  val args = 
+      match(c):
+      Uart2:   "",
+      Uart2De: "[UART-DE]",
+      Uart4:   "[UART-CTS, UART-RTS]",
+      Uart4De: "[UART-CTS, UART-RTS, UART-DE]"
+  to-string("%_(%_)" % [base, args])
+
 ; ocdb bundle identifer for a given UART case
 defn uart-bundle (c: UartCase):
-  switch(c):
-    Uart2:   "uart()",
-    Uart2De: "uart([DE])",
-    Uart4:   "uart([CTS, RTS])",
-    Uart4De: "uart([CTS, RTS, DE])"
+  usart-or-uart-bundle(true, c)
 
 defn usart-bundle (c:UartCase):
-  switch(c):
-    Uart2:   "usart()",
-    Uart2De: "usart([DE])",
-    Uart4:   "usart([CTS, RTS])",
-    Uart4De: "usart([CTS, RTS, DE])"
+  usart-or-uart-bundle(false, c)
 
 ; the OCDB pin names for a UART case
 defn uart-ocdb-pins (c:UartCase):
