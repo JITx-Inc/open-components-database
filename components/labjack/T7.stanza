@@ -1,0 +1,114 @@
+#use-added-syntax(jitx)
+defpackage ocdb/labjack/T7:
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import ocdb/bundles
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/property-structs
+
+public pcb-module module : 
+  port AIN : pin[14]
+  port CIO : pin[4]
+  port EIO : pin[8]
+  port FIO : pin[8]
+  port MIO : pin[3]
+  port DAC : pin[2]
+
+  pin gnd
+  pin vs
+  pin vm-
+  pin vm+
+  pin constant-current-200uA
+  pin constant-current-10uA
+
+  public inst db37 : ocdb/amphenol/delta-d/component(37, "male", "right-angle")
+  public inst db15 : ocdb/amphenol/delta-d/component(15, "male", "right-angle")
+
+  ; DB37 nets from https://labjack.com/sites/default/files/2015/04/T7-Datasheet-Export-20150407.pdf pg77
+  net (db37.p[28],  vm+)
+  net (db37.p[9],   vm-)
+  net (db37.p[27],  vs)
+  net (db37.p[1],   gnd)
+  net (db37.p[30],  gnd)
+  net (db37.p[19],  gnd)
+  net (db37.p[8],   gnd)
+  net (db37.p[10],  gnd)
+  net (db37.p[37],  AIN[0])
+  net (db37.p[18],  AIN[1])
+  net (db37.p[36],  AIN[2])
+  net (db37.p[17],  AIN[3])
+  net (db37.p[35],  AIN[4])
+  net (db37.p[16],  AIN[5])
+  net (db37.p[34],  AIN[6])
+  net (db37.p[15],  AIN[7])
+  net (db37.p[14],  AIN[9])
+  net (db37.p[33],  AIN[8])
+  net (db37.p[32],  AIN[10])
+  net (db37.p[13],  AIN[11])
+  net (db37.p[31],  AIN[12])
+  net (db37.p[12],  AIN[13])
+
+  net (db37.p[6],   FIO[0])
+  net (db37.p[24],  FIO[1])
+  net (db37.p[5],   FIO[2])
+  net (db37.p[23],  FIO[3])
+  net (db37.p[4],   FIO[4])
+  net (db37.p[22],  FIO[5])
+  net (db37.p[3],   FIO[6])
+  net (db37.p[21],  FIO[7])
+
+  net (db37.p[25],  MIO[0])
+  net (db37.p[7],   MIO[1])
+  net (db37.p[26],  MIO[2])
+
+  net (db37.p[11],  DAC[0])
+  net (db37.p[29],  DAC[1])
+
+  net (db37.p[2],   constant-current-200uA)
+  net (db37.p[20],  constant-current-10uA)
+
+  ; DB15 nets from https://labjack.com/sites/default/files/2015/04/T7-Datasheet-Export-20150407.pdf pg78
+  net (db15.p[1],  vs)
+  net (db15.p[11], gnd)
+  net (db15.p[8],  gnd)
+  net (db15.p[9],  CIO[0])
+  net (db15.p[2],  CIO[1])
+  net (db15.p[10], CIO[2])
+  net (db15.p[3],  CIO[3])
+  net (db15.p[4],  EIO[0])
+  net (db15.p[12], EIO[1])
+  net (db15.p[5],  EIO[2])
+  net (db15.p[13], EIO[3])
+  net (db15.p[6],  EIO[4])
+  net (db15.p[14], EIO[5])
+  net (db15.p[7],  EIO[6])
+  net (db15.p[15], EIO[7])
+
+  for a in pins(AIN) do :
+    supports adc :
+      adc.adc => a
+
+  for d in pins(DAC) do :
+    supports dac :
+      dac.dac => d
+
+  for p in pins(CIO) do :
+    supports gpio :
+      gpio.gpio => p
+  for p in pins(EIO) do :
+    supports gpio :
+      gpio.gpio => p
+  for p in pins(FIO) do :
+    supports gpio :
+      gpio.gpio => p
+  for p in pins(MIO) do :
+    supports gpio :
+      gpio.gpio => p
