@@ -16,7 +16,7 @@ defpackage ocdb/connects :
 
 defn ensure-bundle-port! (port:JITXObject, bundle:Bundle):
   defn handle-failure ():
-    fatal("The port %_ is not of bundle %_." % [port, bundle])
+    fatal("The port %_ is not of bundle %_." % [ref(port), name(bundle)])
 
   match(port-type(p)):
     (b?:Bundle):
@@ -28,7 +28,7 @@ defn ensure-bundle-port! (port:JITXObject, bundle:Bundle):
 ; Connect two i2c lines with a buffer. 
 public defn connect-i2c-isolation (x:JITXObject,
                                    y:JITXObject,
-                                   buffer:Instantiable):
+                                   buffer:Instantiable) -> Instance :
   ensure-bundle-port!(x, i2c)
   ensure-bundle-port!(y, i2c)  
   inside pcb-module:
@@ -38,20 +38,19 @@ public defn connect-i2c-isolation (x:JITXObject,
     buf
 
 ; Connect to i2c lines with a buffer, using a default component (TI ISO1540)
-public defn connect-i2c-isolation (x:JITXObject, y:JITXObject):
+public defn connect-i2c-isolation (x:JITXObject, y:JITXObject) -> Instance :
   inside pcb-module:
     val buf = connect-i2c-isolation(x, y, ocdb/texas-instruments/ISO1540/component)
-    match(buf:Instance):
-      property(buf.VCC1.requires-power) = true
-      property(buf.VCC1.power-request) = [3.3 0.3 0.05]
+    property(buf.VCC1.requires-power) = true
+    property(buf.VCC1.power-request)  = [3.3 0.3 0.05]
     buf
     
 ; Wrapper around connect-i2c-isolation for backwards compatibility
-public defn connect-isolate (a:JITXObject, b:JITXObject):
+public defn connect-isolate (a:JITXObject, b:JITXObject) -> Instance :
   connect-i2c-isolation(a, b)
 
 ; Connect PHY using a default component (Marvell 8831510-A0-NNB2C000)
-public defn connect-phy (x:JITXObject, y:JITXObject) :
+public defn connect-phy (x:JITXObject, y:JITXObject) -> Instance :
   ensure-bundle-port!(x, rgmii)
   ensure-bundle-port!(y, ethernet-1000)
   inside pcb-module:
@@ -62,7 +61,7 @@ public defn connect-phy (x:JITXObject, y:JITXObject) :
     phy
 
 ; Connect USB-2 over UART using FT232 USB to serial interface
-public defn connect-ft232 (x:JITXObject, y:JITXObject) :
+public defn connect-ft232 (x:JITXObject, y:JITXObject) -> Instance :
   ensure-bundle-port!(x, usb-2)
   ensure-bundle-port!(y, uart-with([`dtr, `rts])
   inside pcb-module :
@@ -77,7 +76,7 @@ public defn connect-ft232 (x:JITXObject, y:JITXObject) :
     xcvr
 
 ; Connect USB-2 over UART using CP2105 
-public defn connect-cp2105 (usb:JITXObject, uart:JITXObject) :
+public defn connect-cp2105 (usb:JITXObject, uart:JITXObject) -> Instance  :
   inside pcb-module :
     public inst xcvr : ocdb/si-labs/CP2105/module
     net (usb, xcvr.usb-2)
