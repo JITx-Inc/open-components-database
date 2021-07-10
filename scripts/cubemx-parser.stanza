@@ -279,9 +279,9 @@ defn print-bundle (
 
 defn print-spi (o:OutputStream, mcu:Stm32MCU):
   print-bundle(
-    o, mcu, "SPI", "spi"
+    o, mcu, "SPI", "spi()"
     ["MOSI", "MISO", "SCK", "NSS"]
-    ["mosi", "miso", "sck", "ss"]
+    ["sdi", "sdo", "sck", "cs"]
   )
 
 defn print-i2c (o:OutputStream, mcu:Stm32MCU):
@@ -303,10 +303,17 @@ defenum UartCase:
 ; ocdb bundle identifer for a given UART case
 defn uart-bundle (c: UartCase):
   switch(c):
-    Uart2:   "uart",
-    Uart2De: "uart-with([`de])",
-    Uart4:   "uart4",
-    Uart4De: "uart4-with([`de])"
+    Uart2:   "uart()",
+    Uart2De: "uart([DTR])",
+    Uart4:   "uart([CTS, RTS])",
+    Uart4De: "uart([CTS, RTS, DTR])"
+
+defn usart-bundle (c:UartCase):
+  switch(c):
+    Uart2:   "usart()",
+    Uart2De: "usart([DTR])",
+    Uart4:   "usart([CTS, RTS])",
+    Uart4De: "usart([CTS, RTS, DTR])"
 
 ; the OCDB pin names for a UART case
 defn uart-ocdb-pins (c:UartCase):
@@ -353,8 +360,19 @@ defn uart-case (instance-name:String, mcu:Stm32MCU) -> UartCase:
         return(UartCase(c))
     fatal("Unsupported UART pin set: %," % [pins])
   
+defn print-usart (o:OutputStream, mcu:Stm32MCU):
+  for uart-block in filter({name(_0) == "USART"}, ip(mcu)) do:
+    val case = uart-case(instance-name(uart-block), mcu)
+    print-bundle-data(
+      o, mcu, 
+      instance-name(uart-block),
+      usart-bundle(case),
+      uart-cubemx-pins(case)
+      uart-ocdb-pins(case)
+    )
+
 defn print-uart (o:OutputStream, mcu:Stm32MCU):
-  for uart-block in filter({name(_0) == "UART" or name(_0) == "USART"}, ip(mcu)) do:
+  for uart-block in filter({name(_0) == "UART"}, ip(mcu)) do:
     val case = uart-case(instance-name(uart-block), mcu)
     print-bundle-data(
       o, mcu, 
