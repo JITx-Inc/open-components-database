@@ -12,7 +12,11 @@ defpackage ocdb/land-patterns :
   import ocdb/tolerance
   import ocdb/passive-land-sizes
 
+;==============================================================================
+;============================== Helpers =======================================
+;==============================================================================
 ; ====== Argument constraint Helpers ===========================================
+; Ensure that a value is even and positive.
 defn ensure-even-positive! (value: Int, name: String):
   if value < 2 or value % 2 == 1:
     fatal("%_ only supports a positive even number of pins." % [name])
@@ -63,18 +67,78 @@ public defn draw-polarity-marker (pad-1-ref:Ref):
       else:
         p2
 
-; Create a reference label at (x, y) with text anchor a
-public defn ref-label (x:Double, y:Double, a:Anchor) :
-  inside pcb-landpattern :
-    layer(Silkscreen("values", Top)) = Text(">REF", 0.7056, a, loc(x,y))
+; Create a reference label at (0, 0)
+; ====== Reference Label Helpers ===============================================
+; Creates a reference label from pose and anchor
+public defn ref-label (pose:Pose, anchor:Anchor):
+  inside pcb-landpattern:
+    layer(Silkscreen("values", Top)) = Text(">REF", MIN-SILKSCREEN-TEXT-HEIGHT, anchor, pose)
 
-; Create a reference label at (x, y)
+; Creates a reference label at a fixed pose
+public defn ref-label (pose:Pose):
+  ref-label(pose, C)
+
+; DEPRECATED: prefer ref-label(loc(x, y))
+; Creates a reference label at an x,y position and anchor
+public defn ref-label (x:Double, y:Double, anchor:Anchor):
+  ref-label(loc(x, y), anchor)
+
+; DEPRECATED: prefer ref-label(loc(x, y))
+; Creates a reference label at an x,y position with default anchor
 public defn ref-label (x:Double, y:Double) :
   ref-label(x,y,C)
 
-; Create a reference label at (0, 0)
+; Create a default reference label
 public defn ref-label () :
-  ref-label(0.0, 0.0)
+  ref-label(loc(0.0, 0.0))
+
+; Helper function to convert an anchor into a point.
+defn normalize-to-point (anchor:Anchor) -> Point:
+  val [v, h] = components(anchor)
+  val dx = match(h):
+    (hr:W) :  1.0
+    (hr:C) :  0.0
+    (hr:E) : -1.0
+  val dy = match(v) :
+    (vt:S) : 1.0
+    (vt:C) : 0.0
+    (vt:N) : 1.0
+  Point(dx, dy)
+
+; TODO move to internals
+defn times (p:Point, d:Dims) -> Point:
+  Point(x(p) * x(d), y(p) * y(d))
+
+; Helper function to convert an x/y width to length and width (by convention: longer side 
+; is on x axis and shorter side is on y)
+defn normalize-rotation (width:Double, height:Double) -> [Double, Double, Double]:
+  val rot = 90.0 when height > width else 0.0
+  [max(width, height), min(width, height), rot]
+
+; Normalize the position of a shape given an anchor and rotation.
+defn normalize-loc (s:Shape, anchor:Anchor, rot:Double):
+  val pose = Pose((0.5 * normalize-to-point(anchor)) * dims(s), rot, false)
+  pose * s 
+
+; Create a rectangle with normalized rotation and position.
+defn rectangle (anchor:Anchor, width:Double, height:Double):
+  val [length, width_, rot] = normalize-rotation(width, height)
+  normalize-loc(Rectangle(width, height), anchor,rot)
+
+; Create a capsule with normalized rotation and position.
+defn capsule (anchor:Anchor, width:Double, height:Double):
+  val [length, width_, rot] = normalize-rotation(width, height)
+  normalize-loc(Capsule(length, width_), anchor, rot)
+
+; Create a rounded rectangle with normalized rotation and position.
+defn round-rect (anchor:Anchor, width:Double, height:Double, r:Double):
+  val [length, width_, rot] = normalize-rotation(width, height)
+  normalize-loc(RoundedRectangle(length, width_ r), anchor, rot)
+  
+; Create a chamfered rectangle with normalized rotation and position.
+defn chamfered (anchor:Anchor, width:Double, height:Double, r:Double):
+  val [length, width_, rot] = normalize-rotation(width, height)
+  normalize-loc(ChamferedRectangle(length, width_, r), anchor, rot)
 
 ;==============================================================================
 ;=========================== Geometric Helpers ================================
@@ -174,6 +238,36 @@ public defn extant-dims () -> Dims:
     ]
     Dims(0.0, 0.0) when empty?(all-shapes) else dims(Union(all-shapes))
 
+; Create a rectangle with width, height, center x/y and default line width
+public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double) :
+  LineRectangle(w, h, xc, yc, MIN-SILKSCREEN-WIDTH)
+
+; Create a rectangle with width and height and default x/y position
+public defn LineRectangle (w:Double, h:Double) :
+  LineRectangle(w, h, 0.0, 0.0)
+
+; Create a rectangle from dims structure
+public defn LineRectangle (d:Dims): 
+  LineRectangle(x(d), y(d))
+
+; Create a rectangle around another shape
+public defn outline-bounding-box (s:Shape):
+  LineRectangle(dims(s))
+
+; Create a "+" symbol with a fixed length at a center point
+public defn PlusSymbol (center:Point, l:Double) -> Shape:
+  Union $ [
+    Line(MIN-SILKSCREEN-WIDTH, [center + Point(-0.5 * l, 0.0), center + Point(0.5 * l, 0.0)])
+    Line(MIN-SILKSCREEN-WIDTH, [center + Point(0.0, -0.5 * l), center + Point(0.0, 0.5 * l)])
+  ]
+
+; Create a 1mm x 1mm plus symbol at Point(x, y)
+public defn PlusSymbol (x:Double, y:Double) -> Shape:
+  PlusSymbol(Point(x, y), 1.0)
+
+;==============================================================================
+;================================= Pads =======================================
+;==============================================================================
 ; Apply a shape to the soldermask layer of a pcb-pad. 
 public defn apply-soldermask (mask-shape:Shape):
   inside pcb-pad:
@@ -185,9 +279,18 @@ public defn apply-soldermask (mask-shape:Shape):
 ; when expand? is true the soldermask shape is computed with expand(), else it is
 ; computed with offset()
 public defn apply-soldermask (amount:Double, expand?:True|False):
-  val func = expand when expand? else offset
+  val mask-shape = 
+    match(pad-shape(self)):
+      (s:Rectangle|Circle|RoundedRectangle|Segment):
+        val func = expand when expand? else offset
+        func(s, amount)
+      (s:ChamferedRectangle|DShape|Capsule):
+        expand(s, amount)
+      (s:Shape):
+        ; FIXME: allow offset/expand to be used for other shapes!!
+        s  
   inside pcb-landpattern:
-    apply-soldermask(func(pad-shape(self), amount))
+    apply-soldermask(mask-shape)
 
 ; Apply a default soldermask layer to a pcb-pad, using the SOLDER-MASK-REGISTRATION
 ; design variable and offset() method.
@@ -219,270 +322,302 @@ public defn soldermask-defined (p:Pad):
 public defn soldermask-defined (lp:LandPattern):
   pcb-landpattern SMD-l:
     name = to-string("%_, soldermask defined" % [name(lp)])
-
     for pad_ in pads(lp) do:
       pad (ref(pad_)): soldermask-defined(def-pad(pad_)) at pose(pad_)
-      
     for layer_ in layers(lp) do:
       layer(specifier(layer_)) = shape(layer_)
+
   SMD-l
 
-public pcb-pad smd-pad (anchor:Anchor, w:Double, h:Double) :
-  name = to-string("%_x%_ %_ SMD Pad" % [w,h,anchor])
+public pcb-pad smd-pad (s:Shape):
+  name  = "SMD Pad"
+  type  = SMD
+  shape = s
+  apply-soldermask()
+
+; Create an rectangular SMD pad 
+public defn smd-pad (anchor:Anchor, width:Double, height:Double):
+  smd-pad(Rectangle(anchor, width, height))
+
+; Create an SMD pad with a given width and height
+public defn smd-pad (width:Double, height:Double) :
+  smd-pad(C, width, height)
+
+; Create a BGA pad, with circular SMD
+public defn bga-pad (diameter:Double) :
+  smd-pad(Circle(diameter * 0.5))
+
+; Create a soldermask-defined BGA pad
+public pcb-pad soldermask-defined-bga-pad (
+  soldermask-opening-diameter:Double ; the diameter of the soldermask opening
+  overlap:Double                     ; the amount the soldermask overlaps the pad beneath
+):
+  val mask-shape = Circle(soldermask-opening-diameter * 0.5)
+  name  = "SMD BGA Pad"
+  shape = offset(mask-shape, -1. * overlap) as Circle
   type = SMD
-  shape = Rectangle(anchor, w, h)
-  layer(Paste(Top)) = Rectangle(anchor, w, h)
-  layer(SolderMask(Top)) = Rectangle(anchor, w, h)
+  layer(SolderMask(Top)) = mask-shape
 
-public pcb-pad bga-pad (d:Double) :
-  name = to-string("%_ BGA Pad" % [d])
+; Create an arbitrary testpoint pad
+public pcb-pad testpoint-pad (testpoint-shape:Shape):
+  name = "Test Point Pad"
+  shape = testpoint-shape
   type = SMD
-  shape = Circle(d / 2.0)
-  layer(Paste(Top)) = Circle(d / 2.0)
-  layer(SolderMask(Top)) = Circle(d / 2.0)
+  layer(SolderMask(Top)) = testpoint-shape
 
-public pcb-pad top-smd-testpoint-pad (d:Double) :
-  name  = to-string("Test Point Pad")
-  type  = SMD
-  shape = Circle(d / 2.0)
-  layer(Paste(Top)) = Circle(d / 2.0)
-  layer(SolderMask(Top)) = Circle(d / 2.0)
+; Create a circular test point pad
+public defn testpoint-pad (diameter:Double) :
+  testpoint-pad(Circle(0.5 * diameter))
 
-public pcb-pad btm-smd-testpoint-pad (d:Double) :
-  name  = to-string("Test Point Pad")
-  type  = SMD
-  shape = Circle(d / 2.0)
-  layer(Paste(Bottom)) = Circle(d / 2.0)
-  layer(SolderMask(Bottom)) = Circle(d / 2.0)
-
-public defn top-smd-testpoint-pad () :
-  top-smd-testpoint-pad(2.0)
-
-public defn btm-smd-testpoint-pad () :
-  btm-smd-testpoint-pad(2.0)
-
-public pcb-pad testpoint-pad (d:Double) :
-  name  = to-string("%_  Testpoint Pad" % [d])
-  type  = SMD
-  shape = Circle(d / 2.0)
-  layer(SolderMask(Top)) = Circle(d / 2.0)
-    
-public defn smd-pad (w:Double, h:Double) :
-  smd-pad(C,w,h)
-
-pcb-pad pth-pad (anchor:Anchor, drill-r:Double, pad-r:Double, mask-r:Double) :
-  name = to-string("%_ PTH Pad (drill = %_, pad = %_, mask = %_)" % [
-           anchor, drill-r, pad-r, mask-r])
+public pcb-pad pth-pad (pad-shape:Shape, hole-shape:Shape):
+  name = "PTH Pad"
+  shape = pad-shape
   type = TH
-  shape = Circle(anchor, pad-r)
-  layer(Cutout()) = Circle(anchor, drill-r)
-  layer(SolderMask(Top)) = Circle(anchor, mask-r)
-  layer(SolderMask(Bottom)) = Circle(anchor, mask-r)
+  apply-soldermask()
+  layer(Cutout()) = hole-shape
 
-public defn pth-pad (drill-r:Double, mask-r:Double) :
-  pth-pad(C, drill-r, mask-r, mask-r)
+public defn pth-pad (drill-r:Double, pad-r:Double):
+  pth-pad(Circle(pad-r), Circle(drill-r))
 
-public defn pth-pad (anchor:Anchor, drill-r:Double) :
-  pth-pad(anchor, drill-r, drill-r + 0.35, drill-r + 0.35)
+; Create a through hole circular pad
+public defn pth-pad (anchor:Anchor, drill-radius:Double, pad-radius:Double) :
+  pth-pad(Circle(anchor, pad-radius),  Circle(anchor, drill-radius))
 
-public defn pth-pad (drill-r:Double) :
-  pth-pad(C, drill-r)
+; Create a through hole circular pad with drill radius and anchor
+public defn pth-pad (anchor:Anchor, drill-radius:Double) :
+  pth-pad(anchor, drill-radius, drill-radius + SOLDER-MASK-REGISTRATION)
+
+public defn pth-pad (drill-radius:Double):
+  pth-pad(C, drill-radius)
+
+; Create an ovalcut pad, the shape is a Circle with a Capsule shaped hole.
+public defn pth-ovalcut-pad (anchor:Anchor, drill-size:Dims, pad-radius:Double, mask-radius:Double):
+  pth-pad(Circle(anchor, pad-radius), capsule(anchor, x(drill-size), y(drill-size)))
   
-pcb-pad pth-ovalcut-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-r:Double, mask-r:Double) :
-  name = to-string("%_ PTH Pad (drill = (%_, %_), pad = %_, mask = %_)" % [
-           anchor, drill-w, drill-h, pad-r, mask-r])
-  type = TH
-  shape = Circle(anchor, pad-r)
-  layer(Cutout()) = Capsule(drill-w, drill-h) when drill-w >= drill-h else
-                    Capsule(drill-h, drill-w, loc(0., 0., 90.))
-  layer(SolderMask(Top)) = Circle(anchor, mask-r)
-  layer(SolderMask(Bottom)) = Circle(anchor, mask-r)
+; Create an ocvalcut pad, the shape is a Circle with a Capsule shaped hole.
+public defn pth-ovalcut-pad (anchor:Anchor, drill-width:Double, drill-height:Double, pad-radius:Double, mask-radius:Double) :
+  pth-ovalcut-pad(anchor, Dims(drill-width, drill-height), pad-radius, mask-radius)
 
+; Create an ovalcut pad with a given drill width, drill height, and mask radius.
 public defn pth-ovalcut-pad (drill-w:Double, drill-h:Double, mask-r:Double) :
   pth-ovalcut-pad(C, drill-w, drill-h, mask-r, mask-r)
 
-pcb-pad oval-smd-pad (anchor:Anchor, w:Double, h:Double) :
-  name = to-string("%_x%_ %_ Oval SMD Pad" % [w,h,anchor])
-  type = SMD
-  if w >= h :
-    shape = Capsule(anchor, w, h)
-    layer(Paste(Top)) = Capsule(anchor, w, h)
-    layer(SolderMask(Top)) = Capsule(anchor, w, h)
-  else :
-    shape = Capsule(h, w, loc(0., 0., 90.))
-    layer(Paste(Top)) = Capsule(h, w, loc(0., 0., 90.))
-    layer(SolderMask(Top)) = Capsule(h, w, loc(0., 0., 90.))
+; Create a capsule shaped SMD pad with an anchor
+public defn oval-smd-pad (anchor:Anchor, width:Double, height:Double) :
+  smd-pad(capsule(anchor, width, height))  
 
+; Create a capsule shaped SMD pad
 public defn oval-smd-pad (w:Double, h:Double) :
   oval-smd-pad(C, w, h)
 
-pcb-pad oval-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
-  name = to-string("%_ Oval PTH Pad (drill = (%_, %_), pad = (%_, %_))" % [
-           anchor, drill-w, drill-h, pad-w, pad-h])
-  type = TH
-  if pad-w >= pad-h :
-    shape = Capsule(anchor, pad-w, pad-h)
-    layer(Cutout()) = Circle(anchor, drill-w) when drill-w == drill-h else
-                      Capsule(anchor, drill-w, drill-h)
-    layer(SolderMask(Top)) = Capsule(anchor, pad-w, pad-h)
-    layer(SolderMask(Bottom)) = Capsule(anchor, pad-w, pad-h)
-  else :
-    shape = Capsule(pad-h, pad-w, loc(0., 0., 90.))
-    layer(Cutout()) = Capsule(drill-h, drill-w, loc(0., 0., 90.))
-    layer(SolderMask(Top)) = Capsule(pad-h, pad-w, loc(0., 0., 90.))
-    layer(SolderMask(Bottom)) = Capsule(pad-h, pad-w, loc(0., 0., 90.))
+; Create a capsule shaped TH pad with anchor
+public defn oval-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
+  val shape = capsule(anchor, pad-w, pad-h)
+  val hole = capsule(anchor, drill-w, drill-h)
+  pth-pad(shape, hole)
 
+; Create a capsule shaped TH pad with a circular hole
 public defn oval-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
   oval-pth-pad(C, drill-r, drill-r, pad-w, pad-h)
 
+; Create a capsule shaped pth pad
 public defn oval-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
   oval-pth-pad(C, drill-w, drill-h, pad-w, pad-h)
 
-pcb-pad rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
-  name = to-string("%_ Rect PTH Pad (drill = (%_, %_), pad = (%_, %_))" % [
-           anchor, drill-w, drill-h, pad-w, pad-h])
-  type = TH
-  shape = Rectangle(pad-w, pad-h)
-  layer(Cutout()) = Circle(anchor, drill-w) when drill-w == drill-h else
-                    Capsule(anchor, drill-w, drill-h)
-  layer(SolderMask(Top)) = Rectangle(pad-w, pad-h)
-  layer(SolderMask(Bottom)) = Rectangle(pad-w, pad-h)
+; Create a rectangle pth pad with anchor, width, height, pad width, and pad height
+public defn rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double):
+  val shape = rectangle(anchor, pad-w, pad-h)
+  val hole  = capsule(anchor, drill-w, drill-h)
+  pth-pad(shape, hole)
 
+; Create a rectangle pth pad with drill 
 public defn rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
   rect-pth-pad(C, drill-r, drill-r, pad-w, pad-h)
 
 public defn rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
   rect-pth-pad(C, drill-w, drill-h, pad-w, pad-h)
 
-pcb-pad roundrect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
-  name = to-string("%_ RoundedRectangle PTH Pad (drill = (%_, %_), pad = (%_, %_, %_))" % [
-           anchor, drill-w, drill-h, pad-w, pad-h, pad-r])
-  type = TH
-  shape = RoundedRectangle(pad-w, pad-h, pad-r)
-  layer(Cutout()) = Circle(anchor, drill-w) when drill-w == drill-h else
-                    Capsule(anchor, drill-w, drill-h)
-  layer(SolderMask(Top)) = RoundedRectangle(pad-w, pad-h, pad-r)
-  layer(SolderMask(Bottom)) = RoundedRectangle(pad-w, pad-h, pad-r)
+public defn round-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  val shape = round-rect(anchor, pad-w, pad-h, pad-r)
+  val hole  = capsule(anchor, drill-w, drill-h)
+  pth-pad(shape, hole)
 
-public defn roundrect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
-  roundrect-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
+public defn round-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  round-rect-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
 
-public defn roundrect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
-  roundrect-pth-pad(C, drill-w, drill-h, pad-w, pad-h, pad-r)
+public defn round-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
+  smd-pad(round-rect(anchor, w, h, r))
 
-pcb-pad roundrect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
-  name = to-string("(%_, %_, %_) %_ RoundedRectangle SMD Pad" % [w,h,r,anchor])
-  type = SMD
-  shape = RoundedRectangle(anchor, w, h, r)
-  layer(Paste(Top)) = RoundedRectangle(anchor, w, h, r)
-  layer(SolderMask(Top)) = RoundedRectangle(anchor, w, h, r)
+public defn round-rect-smd-pad (w:Double, h:Double, r:Double) :
+  round-rect-smd-pad(C, w, h, r)
 
-public defn roundrect-smd-pad (w:Double, h:Double, r:Double) :
-  roundrect-smd-pad(C, w, h, r)
+public defn chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  val shape = chamfered(anchor, pad-w, pad-h, pad-r)
+  val hole  = capsule(anchor drill-w, drill-h)
+  pth-pad(shape, hole)
 
-pcb-pad chamferedrect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
-  name = to-string("%_ ChamferedRectangle PTH Pad (drill = (%_, %_), pad = (%_, %_, %_))" % [
-           anchor, drill-w, drill-h, pad-w, pad-h, pad-r])
-  type = TH
-  shape = ChamferedRectangle(pad-w, pad-h, pad-r)
-  layer(Cutout()) = Circle(anchor, drill-w) when drill-w == drill-h else
-                    Capsule(anchor, drill-w, drill-h)
-  layer(SolderMask(Top)) = ChamferedRectangle(pad-w, pad-h, pad-r)
-  layer(SolderMask(Bottom)) = ChamferedRectangle(pad-w, pad-h, pad-r)
+public defn chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  chamfered-rect-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
 
-public defn chamferedrect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
-  chamferedrect-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
+public defn chamfered-rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  chamfered-rect-pth-pad(C, drill-w, drill-h, pad-w, pad-h, pad-r)
 
-public defn chamferedrect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
-  chamferedrect-pth-pad(C, drill-w, drill-h, pad-w, pad-h, pad-r)
+public defn chamfered-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
+  smd-pad(chamfered(anchor, w, h, r))
 
-pcb-pad chamferedrect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
-  name = to-string("(%_, %_, %_) %_ ChamferedRectangle SMD Pad" % [w,h,r,anchor])
-  type = SMD
-  shape = ChamferedRectangle(anchor, w, h, r)
-  layer(Paste(Top)) = ChamferedRectangle(anchor, w, h, r)
-  layer(SolderMask(Top)) = ChamferedRectangle(anchor, w, h, r)
+public defn chamfered-rect-smd-pad (w:Double, h:Double, r:Double):
+  chamfered-rect-smd-pad(C, w, h, r)
 
-public defn chamferedrect-smd-pad (w:Double, h:Double, r:Double) :
-  chamferedrect-smd-pad(C, w, h, r)
+public defn dshape-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) : 
+  smd-pad(DShape(anchor, w, h, r))
 
-pcb-pad dshape-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
-  name = to-string("%_ DShape PTH Pad (drill = (%_, %_), pad = (%_, %_, %_))" % [
-           anchor, drill-w, drill-h, pad-w, pad-h, pad-r])
-  type = TH
-  shape = DShape(pad-w, pad-h, pad-r)
-  layer(Cutout()) = Circle(anchor, drill-w) when drill-w == drill-h else
-                    Capsule(anchor, drill-w, drill-h)
-  layer(SolderMask(Top)) = DShape(pad-w, pad-h, pad-r)
-  layer(SolderMask(Bottom)) = DShape(pad-w, pad-h, pad-r)
-
-public defn dshape-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
-  dshape-pth-pad(C, drill-r, drill-r, pad-w, pad-h, pad-r)
-
-public defn dshape-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
-  dshape-pth-pad(C, drill-w, drill-h, pad-w, pad-h, pad-r)
-
-pcb-pad dshape-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
-  name = to-string("(%_, %_, %_) %_ DShape SMD Pad" % [w,h,r,anchor])
-  type = SMD
-  shape = DShape(anchor, w, h, r)
-  layer(Paste(Top)) = DShape(anchor, w, h, r)
-  layer(SolderMask(Top)) = DShape(anchor, w, h, r)
-
-public defn dshape-smd-pad (w:Double, h:Double, r:Double) :
+public defn dshape-smd-pad (w:Double, h:Double, r:Double) : 
   dshape-smd-pad(C, w, h, r)
 
-public pcb-landpattern non-plated-hole-pkg (drill-r:Double, mask-r:Double) :
-  layer(Cutout()) = Circle(C, drill-r)
-  layer(SolderMask(Top)) = Circle(C, mask-r)
-  layer(SolderMask(Bottom)) = Circle(C, mask-r)
-  layer(Courtyard(Top)) = Rectangle((drill-r * 2.0), (drill-r * 2.0))
-  layer(Courtyard(Top)) = Rectangle((drill-r * 2.0), (drill-r * 2.0))
+public defn dshape-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, w:Double, h:Double, r:Double) : 
+  pth-pad(DShape(anchor, w, h, r), DShape(anchor, drill-w, drill-h, r))
 
-public defn non-plated-hole-pkg (drill-r:Double) :
-  non-plated-hole-pkg(drill-r, drill-r)
+public defn dshape-pth-pad (drill-w:Double, drill-h:Double, w:Double, h:Double, r:Double) : 
+  dshape-pth-pad(C, drill-w, drill-h, w, h, r)
 
-public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double, line-w:Double) :
-  val w2 = w / 2.0
-  val h2 = h / 2.0
-  Line(line-w, [
-    Point(xc - w2, yc - h2)
-    Point(xc + w2, yc - h2)
-    Point(xc + w2, yc + h2)
-    Point(xc - w2, yc + h2)
-    Point(xc - w2, yc - h2)])
+;==============================================================================
+;========================= Land Patterns ======================================
+;==============================================================================
+; Create a non-plated hole of arbitrary shape for hole and mask
+public pcb-landpattern non-plated-hole-landpattern (hole:Shape, mask:Shape):
+  layer(Cutout())           = hole
+  layer(SolderMask(Top))    = mask
+  layer(SolderMask(Bottom)) = mask
+  val d = dims(hole)
+  layer(Courtyard(Top))    = Rectangle(x(d), y(d))
+  layer(Courtyard(Bottom)) = Rectangle(x(d), y(d))
 
-public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double) :
-  LineRectangle(w, h, xc, yc, 0.254)
+; Create a non-plated hole landpattern with a hole shape
+public defn non-plated-hole-landpattern (hole:Shape):
+  non-plated-hole-landpattern(hole, offset(hole,  SOLDER-MASK-REGISTRATION))
 
-public defn LineRectangle (w:Double, h:Double) :
-  LineRectangle(w, h, 0.0, 0.0, 0.254)
+; Create a circular non-plated hole landpattern with given drill radius and mask radius
+public defn non-plated-hole-landpattern (drill-r:Double, mask-r:Double) :
+  non-plated-hole-landpattern(Circle(drill-r), Circle(mask-r))
 
-public defn PlusSymbol (x:Double, y:Double) :
-  Union([
-    Line(0.254, [ Point(x - 0.5, y), Point(x + 0.5, y) ])
-    Line(0.254, [ Point(x, y - 0.5), Point(x, y + 0.5) ])
-  ])
-; ====== Pad Collection Helpers ================================================
+; Create a non-plated hole landpattern with a given drill radius.
+public defn non-plated-hole-landpattern (drill-r:Double) :
+  non-plated-hole-landpattern(drill-r, drill-r)
+
+;==============================================================================
+;========================== Land Pattern Generators ===========================
+;==============================================================================
+
+;==============================================================================
+;========================== Pose Arrangement Helpers ==========================
+;==============================================================================
+; PinPadMapping is a not-yet-placed pad, with assigned name, pad, and pose
+public pcb-struct ocdb/land-patterns/PinPadMapping:
+  pad-name:  Ref,  ; the name of the pad
+  pad-shape: JITXDef, ; the corresponding pcb-pad
+  pose:      Pose,    ; the pose of the pad
+
+; A generic landpattern created from a sequence of PinPadMappings
+public defn make-generic-landpattern (pads:Seqable<PinPadMapping>):
+  inside pcb-landpattern:
+    for p in pads do:
+      pad (pad-name(p)): (pad-shape(p) as Pad) at pose(p)
+
+; Create a generic landpattern with a uniform pad
+public defn make-generic-landpattern (pad-names:Seqable<Ref>,
+                                      poses:Seqable<Pose>,
+                                      pad-shape:JITXDef):
+  val pads = 
+    for (pn in pad-names, pp in poses) seq:
+      PinPadMapping(pn, pad-shape, pp) 
+  make-generic-landpattern(to-tuple(pads))
+
+; Naming for a 2-column arrangment of pins 
+public defn soic-naming-convention (row:Int, column:Int, num-pins:Int) -> Ref:
+  if (column < 0) or (column > 1): 
+    fatal("soic naming convention supports a maximum of 2 columns")
+  switch(column):
+    0: IndexRef(Ref("p"), row + 1)
+    1: IndexRef(Ref("p"), num-pins - row)
+  
+; Create a two-column landpattern
+public defn make-two-column-landpattern (count: Int,    ; number of pads in the column
+                                         pitch: Double, ; pitch of the column
+                                         naming-convention: (Int, Int) -> Ref, ; naming convention
+                                         pad-convention: (Int, Int) -> JITXDef,
+                                         spacing:Double) :
+  val locs = grid-locs(count, 2, spacing, pitch)
+  val rcs  = 
+    for row in 0 to count seq-cat:
+      for col in 0 to 2 seq:
+        [row, col]
+
+  val mapping = to-tuple $ 
+    for (pose in locs, rc in rcs) seq:
+      val [row, col] = rc
+      PinPadMapping(naming-convention(row, col), pad-convention(row, col), pose)
+
+  make-generic-landpattern(mapping)
+
+public defn make-grid-landpattern (num-rows:Int,
+                                   num-cols:Int,
+                                   row-pitch:Double,
+                                   col-pitch:Double,
+                                   naming-convention: (Int, Int) -> Ref,
+                                   pad-convention: (Int, Int) -> JITXDef):
+  make-grid-landpattern(num-rows, num-cols, row-pitch, col-pitch, naming-convention, pad-convention, fn (r, c): true)
+
+; Create a grid landpattern
+public defn make-grid-landpattern (num-rows:Int,
+                                   num-cols:Int,
+                                   row-pitch:Double,
+                                   col-pitch:Double,
+                                   naming-convention: (Int, Int) -> Ref,
+                                   pad-convention: (Int, Int) -> JITXDef,
+                                   ignore?: (Int, Int) -> True|False):
+  val rcs = 
+    for r in 0 to num-rows seq-cat:
+      for c in 0 to num-cols seq:
+        [r, c]
+  val mapping = to-tuple $ 
+    for (coord in rcs, pose in grid-locs(num-rows, num-cols, row-pitch, col-pitch)) seq?:
+      val [c, r] = coord
+      if not ignore?(r, c):
+        One(PinPadMapping(naming-convention(r, c), pad-convention(r, c), pose))
+      else:
+        None()
+  make-generic-landpattern(mapping)
 
 ; 2D array of pins
-public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double, pad-ref) :
+public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double, pad-ref, offset-x:Double, offset-y:Double) :
+  defn normalize (i:Int):
+    0.5 * to-double(i - 1)
+  
   inside pcb-landpattern:
-    
-    val n-col = to-int(ceil(to-double(n-pin) / to-double(n-row)))
+    val n-col  = to-int(ceil(to-double(n-pin) / to-double(n-row)))
+    val origin = loc(offset-x, offset-y) * loc(
+      (normalize(n-row) * row-pitch), ; x
+      (normalize(n-col) * pin-pitch)  ; y
+    )
 
-    val l0 = loc((to-double(n-row - 1) * row-pitch) / -2.0, (to-double(n-col - 1) * pin-pitch) / 2.0)
-    
     for i in 0 to n-col do :
       for j in 0 to n-row do :
-        pad p[n-row * i + j + 1] : pad-ref at l0 * loc(to-double(j) * row-pitch, (- to-double(i) * pin-pitch))
+        val idx = n-row * i + j + 1
+        val x = to-double(j) * row-pitch
+        val y = -1.0 * to-double(i) * pin-pitch
+        pad p[idx] : pad-ref at origin * loc(x, y)
     
+public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double, pad-ref:JITXDef) :
+  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch, pad-ref, 0.0, 0.0)
+
 public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
-  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch, pth-pad(0.5))
+  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch, pth-pad(0.5), 0.0, 0.0)
 
 public defn make-pin-grid (n-pin:Int) :
-  make-pin-grid(n-pin, 1, 2.54, 2.54)
+  make-pin-grid(n-pin, 1, 2.54, 2.54, pth-pad(0.5), 0.0, 0.0)
 
+;==================================================================================
+; Create a testpad
 public pcb-landpattern testpad (d:Double) :
   pad tp : testpoint-pad(d) at loc(0.0,0.0)
 
@@ -521,25 +656,12 @@ public defn make-two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:
     if courtyard? : 
       layer(Courtyard(Top)) = Rectangle(w, h)
 
-; A generic pad transformation helper
-public defn pad-transformation (
-  lp: LandPattern,
-  xform: (LandPatternPad) -> False|Pad,
-) -> LandPattern :
-  pcb-landpattern new-lp:
-    for pad_ in pads(lp) do:
-      val def = 
-        match(xform(pad_)):
-          (p:Pad): p
-          (_:False): def-pad(pad_)
-      pad (ref(pad_)): def at pose(pad_)
-  new-lp
-
 public defn make-two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
   make-two-pin-landpattern(Z,G,X,w,h,true,false)
 
 public pcb-landpattern two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
   make-two-pin-landpattern(Z,G,X,w,h,true,false)
+
 public pcb-landpattern two-pin-polarized-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
   make-two-pin-landpattern(Z,G,X,w,h,true,true)
 
@@ -624,8 +746,8 @@ public defn make-soic127p-landpattern (n:Int, lead-span:Double) :
     
     layer(Courtyard(Top)) = Rectangle(c-w, c-h)
 
-    layer(Silkscreen("f-silk", Top)) = LineRectangle(c-w, c-h)
-    layer(Silkscreen("pol", Top)) = Circle(x0 - 2.0, y0, 0.254)
+    ; layer(Silkscreen("f-silk", Top)) = LineRectangle(c-w, c-h)
+    layer(Silkscreen("pol", Top)) = Circle(x0 - 2.0, y0, 0.2)
     ref-label()
 
 public defn make-soic127p-landpattern (n:Int) :
@@ -669,7 +791,7 @@ public defn make-sop65-landpattern (n:Int, lead-span:Double) :
     layer(Courtyard(Top)) = Rectangle(c-w, c-h)
 
     name = to-string("SOP65 with %_ pins." % [n])
-    layer(Silkscreen("pol", Top)) = Circle(x0 - 0.5, y0, 0.2)
+    layer(Silkscreen("pol", Top)) = Circle(x0 - 1.0, y0, 0.2)
     ref-label()
 
 public pcb-landpattern sop65-landpattern (n:Int, lead-span:Double) :
@@ -681,7 +803,7 @@ n: even positive
 public pcb-landpattern sop65-landpattern (n:Int) :
   make-sop65-landpattern(n, 6.4)
 
-public defn make-qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
+public defn make-qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double, corner-pads:[Pad,Pad]|False) :
   inside pcb-landpattern :
     var n = -1
     if n-pins % 4 == 0 :
@@ -695,6 +817,57 @@ public defn make-qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int
     val row-pos = to-list(row-locs(W, n, pin-pitch))
 
     val pin-pad = smd-pad(S, pad-width, pad-length + 0.3)
+
+    defn place-pads (pose:Pose, i:Int, ub:Int, lb:Int) :
+      match(corner-pads:[Pad,Pad]):
+        if i == lb:
+          pad p[i + 1] : corner-pads[0] at pose
+        else if i == ub:
+          pad p[i + 1] : corner-pads[1] at pose
+        else:
+          pad p[i + 1] : pin-pad at pose
+      else:
+        pad p[i + 1] : pin-pad at pose
+
+    for (i in 0 to n, l in row-pos) do :
+      place-pads(loc(x0, y0, -90.0) * l, i, 0, n - 1)
+    for (i in n to (n * 2), l in row-pos) do :
+      place-pads(loc((- y0), x0, 0.0) * l, i, n, n * 2 - 1)
+    for (i in (n * 2) to (n * 3), l in row-pos) do :
+      place-pads(loc((- x0), (- y0), 90.0) * l, i, n * 2, n * 3 - 1)
+    for (i in (n * 3) to (n * 4), l in row-pos) do :
+      place-pads(loc((y0), (- x0), 180.0) * l, i, n * 3, n * 4 - 1)
+
+    layer(Courtyard(Top)) = Rectangle(lead-span, lead-span)
+    layer(Silkscreen("pol",Top)) = Circle((lead-span / -2.0) - 1.0, y0, 0.2)
+    ref-label()
+
+public pcb-landpattern qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
+  make-qfn-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length, false)
+
+public pcb-landpattern qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double, corner-pads:[Pad,Pad]|False) :
+  make-qfn-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length, corner-pads)
+
+public pcb-landpattern qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double, hs:[Double,Double]) :
+  make-qfn-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length, false)
+  pad p[n-pins + 1] : smd-pad(hs[0],hs[1]) at loc(0.0, 0.0)  
+
+public defn make-qfp-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
+  inside pcb-landpattern :
+    var n = -1
+    
+    if n-pins % 4 == 0 :
+      n = n-pins / 4
+    else :
+      fatal("make-qfp-package is only for symmetric 4-sided qfps.")
+    
+    val pin-pad = smd-pad(S, pad-width, (pad-length + 0.3))
+    
+    val x0 = (- ((lead-span / 2.0) + 0.3))
+    val y0 = (to-double(n - 1) * pin-pitch) / 2.0
+    val l0 = loc(x0, y0, -90.0)
+    val row-pos = to-list(row-locs(W, n, pin-pitch))
+
     for (i in 0 to n, l in row-pos) do :
       pad p[i + 1] : pin-pad at loc(x0, y0, -90.0) * l
 
@@ -707,19 +880,12 @@ public defn make-qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int
     for (i in (n * 3) to (n * 4), l in row-pos) do :
       pad p[i + 1] : pin-pad at loc((y0), (- x0), 180.0) * l
 
-    val c-w = (lead-span + 0.3 * 2.0)
-    layer(Courtyard(Top)) = Rectangle(c-w, c-w)
-    layer(Silkscreen("f-silk",Top)) = LineRectangle(c-w, c-w)
-    layer(Silkscreen("pol",Top)) = Circle((lead-span / -2.0) - 1.0, y0, 0.254)
-    ref-label()
+    
+    layer(Courtyard(Top)) = Rectangle(lead-span, lead-span)
+    layer(Silkscreen("pol",Top)) = Circle((lead-span / -2.0) - 1.0, y0, 0.2)
 
-public pcb-landpattern qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
-  make-qfn-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length)
-
-public pcb-landpattern qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double, hs:[Double,Double]) :
-  make-qfn-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length)
-  pad p[n-pins + 1] : smd-pad(hs[0],hs[1]) at loc(0.0, 0.0)  
-
+public pcb-landpattern qfp-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
+  make-qfp-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length)
 
 public defn make-dfn-landpattern (
   n-pad:Int
@@ -765,18 +931,22 @@ public pcb-landpattern dfn-landpattern ( n-pad:Int, pad-pitch:Double, pad-dims:[
   make-dfn-landpattern(n-pad,pad-pitch,pad-dims,pad-x0,body-dims)
   pad p[n-pad + 1] : smd-pad(hs[0],hs[1]) at loc(0.0, 0.0)  
 
-
-;TODO: Until added to core
-; defn name! (r:Ref) :
-  ; name(r as VarRef)
-
-public defn red-alph-letter (idx:Int) : ["A" "B" "C" "D" "E" "F" "G" "H" "J" "K" "L" "M" "N" "P" "R" "T" "U" "V" "W" "Y" 
-   "AA" "AB" "AC" "AD" "AE" "AF" "AG" "AH" "AJ" "AK" "AL" "AM" "AN" "AP" "AR" "AT" "AU" "AV" "AW" "AY"  
-   "BA" "BB" "BC" "BD" "BE" "BF" "BG" "BH" "BJ" "BK" "BL" "BM" "BN" "BP" "BR" "BT" "BU" "BV" "BW" "BY"][idx]
+; returns the letter corresponding to a row in a bga package, for example:
+; A, B, C, D, E, E, F, G, H, J, K, L, M, N, P, R, T, U, V, W, Y
+; AA, AB, ... etc
+public defn red-alph-letter (idx:Int):
+  val table = "ABCDEFGHJKLMNPRTUVWY"
+  val buf = StringBuffer()
+  let loop (row: Int = idx):
+    if row >= length(table):
+      print(buf, table[row / length(table) - 1])
+      loop(row / length(table))
+  print(buf, table[idx % length(table)])
+  to-string(buf)
 
 public defn bga-pin-name (r:Int, c:Int) :
-     val letter = red-alph-letter(r)
-     Ref(string-join([letter, c + 1]))
+  val letter = red-alph-letter(r)
+  Ref(string-join([letter, c + 1]))
 
 public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>|False) :
   inside pcb-landpattern :
@@ -857,12 +1027,12 @@ public pcb-landpattern d-sod-123 :
 
 public pcb-landpattern QFN50P715X715X80-48 :
   name = "QFN50P715X715X80-48"
-  make-qfn-landpattern(0.5, 7.15, 48, 0.3, 0.5)
+  make-qfn-landpattern(0.5, 7.15, 48, 0.3, 0.5, false)
   pad p[49] : smd-pad(5.1,5.1) at loc(0.0, 0.0)
 
 public pcb-landpattern QFN50P400X400X85-24 :
   name = "QFN50P400X400X85-24"
-  make-qfn-landpattern(0.5, 4.0, 24, 0.25, 0.4)
+  make-qfn-landpattern(0.5, 4.0, 24, 0.25, 0.4, false)
   pad p[25] : smd-pad(2.5,2.5) at loc(0.0, 0.0)  
 
 public pcb-landpattern SOT95P280X100-3N :
@@ -921,9 +1091,10 @@ public pcb-landpattern SOT95P280X145-6N :
   ref-label()
 
 public pcb-landpattern pin-header-pkg (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
-  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch)
-
-  val n-col = to-int(ceil(to-double(n-pin) / to-double(n-row)))
+  val n-col  = to-int(ceil(to-double(n-pin) / to-double(n-row)))
+  val naming = fn (r, c): IndexRef(Ref("p"), n-row * r + c)
+  val pads   = fn (r, c): pth-pad(Circle(0.25), Circle(0.245))
+  make-grid-landpattern(n-row, n-col, row-pitch, pin-pitch, naming, pads)
 
   val c-w = to-double(n-row) * row-pitch
   val c-h = to-double(n-col) * pin-pitch
@@ -934,8 +1105,8 @@ public pcb-landpattern pin-header-pkg (n-pin:Int, n-row:Int, pin-pitch:Double, r
   
   ref-label()
 
-public pcb-landpattern top-smd-testpoint-pkg (d:Double) :
-  pad p : top-smd-testpoint-pad(d) at loc(0.0, 0.0)
+public pcb-landpattern smd-testpoint-pkg (d:Double) :
+  pad p : testpoint-pad(d) at loc(0.0, 0.0)
   layer(Courtyard(Top)) = Circle(d / 2.0)
   layer(Silkscreen("f-silk", Top)) = Circle(d / 2.0)
   ref-label()
@@ -945,22 +1116,6 @@ public pcb-landpattern btm-smd-testpoint-pkg (d:Double) :
   layer(Courtyard(Bottom)) = Circle(d / 2.0)
   layer(Silkscreen("f-silk", Bottom)) = Circle(d / 2.0)
   ref-label()
-
-public pcb-pad generic-smd-pad (
-  shape:Shape, 
-  solder-mask-defined?:True|False,
-  solder-mask-registration:Double
-):
-  val bigger-shape = offset(shape, solder-mask-registration)
-  val [pad-shape, mask-shape] = 
-    if solder-mask-defined?:
-      [bigger-shape, shape]
-    else:
-      [shape, bigger-shape]
-    
-  shape = pad-shape
-  type = SMD
-  layer(SolderMask(Top)) = mask-shape
 
 public defn make-ipc-compliant-two-pin-landpattern (length:Toleranced,      ; L
                                                     width:Toleranced,       ; W
@@ -1019,7 +1174,7 @@ public defn make-ipc-compliant-two-pin-landpattern (length:Toleranced,      ; L
       [IndexRef(Ref("p"), 1), IndexRef(Ref("p"), 2)]
 
     ; generate the landpattern
-    val pad_ = generic-smd-pad(Rectangle(land-length, land-width), solder-mask-defined?, SOLDER-MASK-REGISTRATION)
+    val pad_ = smd-pad(Rectangle(land-length, land-width))
     pad (refs[0]): pad_ at loc(x-min, 0.0)
     pad (refs[1]): pad_ at loc(x-max, 0.0)
 

@@ -13,20 +13,47 @@ defpackage ocdb/power-regulators :
   import jitx/powergen/api
   import jitx/powergen/gen
 
-val adm7154v = [1.2 1.8 2.5 2.8 3.0 3.3]
+val adm7154-voltages = [
+  1.2
+  1.8
+  2.5
+  2.8
+  3.0
+  3.3
+]
 
-for v in adm7154v do:
+; for v in adm7154-voltages do:
+;   within (input, output) =
+;     add-LDO("LDO"      ;description
+;             1.6e-6,       ;noise
+;             0.21,          ;drop out
+;             125.0,         ;tjmax
+;             36.7,          ;thetaja
+;             2.3, 5.5,     ;vin
+;             v, v,    ;vout
+;             0.0, 0.6) : ;iout
+;     inside pcb-module :        
+;       inst ps : ocdb/analog-devices/ADM7154/module(voltage(output))
+;       schematic-group(ps) = power
+;       ;Create nets
+;       net (ps.gnd, neg(input), neg(output))
+;       net (ps.vin, pos(input), ps.en)
+;       net (ps.vout, pos(output))
+
+val tlv = [1.5 1.8 2.5 3.3]
+for v in tlv do:
   within (input, output) =
-    add-LDO("LDO"      ;description
-            1.6e-6,       ;noise
-            0.21,          ;drop out
+    add-LDO("TLV743 LDO"      ;description
+            v * 0.014,       ;noise
+            0.48,          ;drop out
             125.0,         ;tjmax
-            36.7,          ;thetaja
-            2.3, 5.5,     ;vin
+            228.7,          ;thetaja
+            1.4, 5.5,     ;vin
             v, v,    ;vout
-            0.0, 0.6) : ;iout
+            0.0, 0.3) : ;iout
+
     inside pcb-module :        
-      inst ps : ocdb/analog-devices/ADM7154/module(voltage(output))
+      inst ps : ocdb/texas-instruments/TLV743P/module(voltage(output))
       schematic-group(ps) = power
       ;Create nets
       net (ps.gnd, neg(input), neg(output))
@@ -35,7 +62,7 @@ for v in adm7154v do:
 
 within (input, output) =
   add-switching-regulator(
-    "Buck-ti-TLV62130A",
+    "TLV62130A Buck",
     1.0,            ;max duty_cycle
     SwitchedNoise(2.5e6, 2.2e-6, 22.0e-6),  ;Noise(fs, L, C)
     0.90,           ;efficiency

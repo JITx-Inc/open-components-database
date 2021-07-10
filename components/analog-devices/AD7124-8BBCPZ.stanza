@@ -1,0 +1,176 @@
+#use-added-syntax(jitx)
+defpackage ocdb/analog-devices/AD7124-8BBCPZ :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/symbol-utils
+  import ocdb/generic-components
+  import ocdb/bundles
+  import ocdb/box-symbol
+  import ocdb/property-structs
+
+pcb-landpattern cp-32-12 :
+  pad p[1] : smd-pad(0.2, 0.799999) at loc(-2.45, 1.749999, 90.0)
+  pad p[2] : smd-pad(0.2, 0.799999) at loc(-2.45, 1.25, 90.0)
+  pad p[3] : smd-pad(0.2, 0.799999) at loc(-2.45, 0.750001, 90.0)
+  pad p[4] : smd-pad(0.2, 0.799999) at loc(-2.45, 0.25, 90.0)
+  pad p[5] : smd-pad(0.2, 0.799999) at loc(-2.45, -0.25, 90.0)
+  pad p[6] : smd-pad(0.2, 0.799999) at loc(-2.45, -0.750001, 90.0)
+  pad p[7] : smd-pad(0.2, 0.799999) at loc(-2.45, -1.25, 90.0)
+  pad p[8] : smd-pad(0.2, 0.799999) at loc(-2.45, -1.749999, 90.0)
+  pad p[9] : smd-pad(0.2, 0.799999) at loc(-1.749999, -2.45, 0.0)
+  pad p[10] : smd-pad(0.2, 0.799999) at loc(-1.25, -2.45, 0.0)
+  pad p[11] : smd-pad(0.2, 0.799999) at loc(-0.750001, -2.45, 0.0)
+  pad p[12] : smd-pad(0.2, 0.799999) at loc(-0.25, -2.45, 0.0)
+  pad p[13] : smd-pad(0.2, 0.799999) at loc(0.25, -2.45, 0.0)
+  pad p[14] : smd-pad(0.2, 0.799999) at loc(0.750001, -2.45, 0.0)
+  pad p[15] : smd-pad(0.2, 0.799999) at loc(1.25, -2.45, 0.0)
+  pad p[16] : smd-pad(0.2, 0.799999) at loc(1.749999, -2.45, 0.0)
+  pad p[17] : smd-pad(0.2, 0.799999) at loc(2.45, -1.749999, 90.0)
+  pad p[18] : smd-pad(0.2, 0.799999) at loc(2.45, -1.25, 90.0)
+  pad p[19] : smd-pad(0.2, 0.799999) at loc(2.45, -0.750001, 90.0)
+  pad p[20] : smd-pad(0.2, 0.799999) at loc(2.45, -0.25, 90.0)
+  pad p[21] : smd-pad(0.2, 0.799999) at loc(2.45, 0.25, 90.0)
+  pad p[22] : smd-pad(0.2, 0.799999) at loc(2.45, 0.750001, 90.0)
+  pad p[23] : smd-pad(0.2, 0.799999) at loc(2.45, 1.25, 90.0)
+  pad p[24] : smd-pad(0.2, 0.799999) at loc(2.45, 1.749999, 90.0)
+  pad p[25] : smd-pad(0.2, 0.799999) at loc(1.749999, 2.45, 0.0)
+  pad p[26] : smd-pad(0.2, 0.799999) at loc(1.25, 2.45, 0.0)
+  pad p[27] : smd-pad(0.2, 0.799999) at loc(0.750001, 2.45, 0.0)
+  pad p[28] : smd-pad(0.2, 0.799999) at loc(0.25, 2.45, 0.0)
+  pad p[29] : smd-pad(0.2, 0.799999) at loc(-0.25, 2.45, 0.0)
+  pad p[30] : smd-pad(0.2, 0.799999) at loc(-0.750001, 2.45, 0.0)
+  pad p[31] : smd-pad(0.2, 0.799999) at loc(-1.25, 2.45, 0.0)
+  pad p[32] : smd-pad(0.2, 0.799999) at loc(-1.749999, 2.45, 0.0)
+  pad p[33] : smd-pad(3.6, 3.6) at loc(0.0, -0.0, 0.0)
+
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(-2.627, 2.627), Point(-2.627, 2.182739) ]) ; ok
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(-2.182739, 2.627), Point(-2.627, 2.627) ]) ; ok
+  ref-label()
+
+
+public pcb-component component :
+; left
+  port VBIAS-IOUT-AIN : pin[14]
+  pin REFIN2P-VBIAS-IOUT-AIN14
+  pin REFIN2N-VBIAS-IOUT-AIN15
+  pin PSW
+; up
+  pin AVDD
+  pin REGCAPA
+  pin REFOUT
+  pin REFIN1+
+  pin REFIN1-
+  pin REGCAPD
+  pin IOVDD
+; right
+  pin DOUT-RDY ;*RDY
+  pin DIN
+  pin SCLK
+  pin *CS
+  pin *SYNC
+  pin CLK
+; down
+  pin AVSS
+  pin DGND
+  pin EPGND
+  val pkg = cp-32-12
+  val generic-props = GenericPin(Interval(-0.3, 3.6, false), 1500.0)
+
+  pin-properties :
+    [pin:Ref                   | pads:Int ... | side:Dir| generic-pin:GenericPin]
+    [VBIAS-IOUT-AIN[0]         | 4            | Left    | generic-props ]
+    [VBIAS-IOUT-AIN[1]         | 5            | Left    | generic-props ]
+    [VBIAS-IOUT-AIN[2]         | 6            | Left    | generic-props ]
+    [VBIAS-IOUT-AIN[3]         | 7            | Left    | generic-props ]
+    [VBIAS-IOUT-AIN[4]         | 8            | Left    | generic-props ]
+    [VBIAS-IOUT-AIN[5]         | 9            | Left    | generic-props ]
+    [VBIAS-IOUT-AIN[6]         | 10           | Left    | generic-props ]
+    [VBIAS-IOUT-AIN[7]         | 11           | Left    | generic-props ]
+    [VBIAS-IOUT-AIN[8]         | 14           | Left    | generic-props ]
+    [VBIAS-IOUT-AIN[9]         | 15           | Left    | generic-props ]
+    [VBIAS-IOUT-AIN[10]        | 16           | Left    | generic-props ]
+    [VBIAS-IOUT-AIN[11]        | 17           | Left    | generic-props ]
+    [VBIAS-IOUT-AIN[12]        | 18           | Left    | generic-props ]
+    [VBIAS-IOUT-AIN[13]        | 19           | Left    | generic-props ]
+    [REFIN2P-VBIAS-IOUT-AIN14  | 20           | Left    | generic-props ]
+    [REFIN2N-VBIAS-IOUT-AIN15  | 21           | Left    | generic-props ]
+    [PSW                       | 25           | Left    | generic-props ]
+    [AVDD                      | 26           | Up      | generic-props ]
+    [REGCAPA                   | 24           | Up      | generic-props ]
+    [REFOUT                    | 22           | Up      | generic-props ]
+    [REFIN1+                   | 12           | Up      | generic-props ]
+    [REFIN1-                   | 13           | Up      | generic-props ]
+    [REGCAPD                   | 1            | Up      | generic-props ]
+    [IOVDD                     | 2            | Up      | generic-props ]
+    [DOUT-RDY                  | 28           | Right   | generic-props ]
+    [DIN                       | 29           | Right   | generic-props ]
+    [SCLK                      | 30           | Right   | generic-props ]
+    [*CS                       | 32           | Right   | generic-props ]
+    [*SYNC                     | 27           | Right   | generic-props ]
+    [CLK                       | 31           | Right   | generic-props ]
+    [AVSS                      | 23           | Down    | generic-props ]
+    [DGND                      | 3            | Down    | generic-props ]
+    [EPGND                     | 33           | Down    | generic-props ]
+  name = "CP_32_12"
+  reference-prefix = "U"
+  mpn = "AD7124-8BBCPZ"
+  make-box-symbol()
+  assign-landpattern(cp-32-12)
+
+public pcb-module module :
+  port power : power
+  pin gnd
+  port spi : spi()
+  pin REFIN1+
+  pin REFIN1-
+  port VBIAS-IOUT-AIN : pin[14]
+  public inst adc : ocdb/analog-devices/AD7124-8BBCPZ/component
+  net (VBIAS-IOUT-AIN, adc.VBIAS-IOUT-AIN)
+ 
+  net (REFIN1+ adc.REFIN1+)
+  net (REFIN1- adc.REFIN1-)
+  net (adc.*CS spi.ss)
+  net (adc.SCLK spi.sck)
+  net (adc.DIN spi.mosi)
+  net (adc.DOUT-RDY spi.miso)
+  net (gnd, adc.AVSS, adc.DGND, power.gnd)
+  net (power.vdd, adc.AVDD, adc.IOVDD)
+  bypass-cap-strap(adc.AVDD, gnd, 1.0e-6)
+  bypass-cap-strap(adc.AVDD, gnd, 0.1e-6)
+  bypass-cap-strap(adc.IOVDD, gnd, 0.1e-6)
+  bypass-cap-strap(adc.REGCAPD, gnd, 0.1e-6)
+  bypass-cap-strap(adc.REGCAPA, gnd, 0.1e-6)
+
+
+public pcb-module rtd-4-wire (nominal-res:Double):
+  port rtd:rtd
+  inst adc : ocdb/analog-devices/AD7124-8BBCPZ/module
+  port spi : spi()
+  net (spi, adc.spi)
+  net (adc.VBIAS-IOUT-AIN[0], rtd.P[0])
+  pin gnd
+  net (gnd, adc.gnd)
+  res-strap(adc.VBIAS-IOUT-AIN[1], rtd.P[1], 1.0e3)
+  cap-strap(adc.VBIAS-IOUT-AIN[1], gnd, 0.01e-6)
+  res-strap(adc.VBIAS-IOUT-AIN[2], rtd.N[0], 1.0e3)
+  cap-strap(adc.VBIAS-IOUT-AIN[2], gnd, 0.01e-6)
+  cap-strap(adc.VBIAS-IOUT-AIN[1], adc.VBIAS-IOUT-AIN[2], 0.1e-6)
+
+  val rnom = closest-std-val(300.0, 1.0)
+  res-strap(adc.REFIN1+, rtd.N[1], 1.0e3)
+  inst r-ref : chip-resistor(rnom)
+  net (rtd.N[1], r-ref.p[1])
+  res-strap(adc.REFIN1-, r-ref.p[2], 1.0e3)
+  res-strap(gnd, r-ref.p[2], 250.0)
+
+
+
+
+

@@ -9,15 +9,15 @@ defpackage ocdb/db-parts :
     prefix(Capacitor) => EModel-
     prefix(Inductor) => EModel-
   import jitx/commands
-  import ocdb/defaults
 
+  import ocdb/defaults
   import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/symbols
   import ocdb/design-vars
 
 
-deftype Component
+public deftype Component
 public defmulti x (component: Component) -> Double
 public defmulti y (component: Component) -> Double
 public defmulti area (component: Component) -> Double
@@ -540,6 +540,7 @@ public defn Inductor (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tupl
   Inductor(json)
   ; Inductor("manufacturer", "mpn", "trust", 0.0, 0.0, 0.0, "mounting", false, false, Sourcing(false, 0, 0), [], "type", false, 0.0, false, false, false, false, false, false, false)
 
+
 ;============================================================
 ;====================== Printer =============================
 ;============================================================
@@ -619,11 +620,12 @@ defmethod print (o:OutputStream, esr:ESR) :
 defmethod print (o:OutputStream, s:Sourcing) :
   print(o, "ESR(price=%_, minimum-quantity=%_, stock=%_)" % [price(s), minimum-quantity(s), stock(s)])
 
-defn indented-list (items:Seqable) :
+public defn indented-list (items:Seqable) :
   new Printable :
     defmethod print (o:OutputStream, this) :
       val o2 = IndentedStream(o)
       do(lnprint{o2, _}, items)
+
 
 ;============================================================
 ;=================== Parsing utils ==========================
@@ -634,14 +636,14 @@ defn filter-json (json: JObject) :
   JObject(to-tuple $ filter({not contains?(["qty", "factory-stock"], key(_))}, entries(json)))
 
 
-defn parse-dimensions (dimensions: JObject) -> [Double, Double, Double|False] :
+public defn parse-dimensions (dimensions: JObject) -> [Double, Double, Double|False] :
   [dimensions["x"] as Double, dimensions["y"] as Double, optional-double(dimensions, "z")]
 
 defn optional-string (json: JObject, field: String) -> String|False :
   val j = get?(json, field)
   j as String when not (j is False or j is JNull)
 
-defn optional-double (json: JObject, field: String) -> Double|False :
+public defn optional-double (json: JObject, field: String) -> Double|False :
   val j = get?(json, field)
   j as Double when not (j is False or j is JNull)
 
@@ -649,7 +651,7 @@ public defstruct MinMaxRange :
   min: Double
   max: Double
 
-defn parse-rated-temperature (json: JObject) -> MinMaxRange|False :
+public defn parse-rated-temperature (json: JObject) -> MinMaxRange|False :
   val rated-temperature-json = get?(json, "rated-temperature")
   match(rated-temperature-json: JObject) :
     MinMaxRange(rated-temperature-json["min"] as Double, rated-temperature-json["max"] as Double)
