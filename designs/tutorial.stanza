@@ -12,32 +12,31 @@ defpackage ocdb/designs/tutorial :
   import ocdb/generator-utils
   import ocdb/checks
 
-val board-shape = RoundedRectangle(30.0, 25.0, 0.1)
+val board-shape = RoundedRectangle(30.0, 25.0, 3.0)
 
-; Our off-board connector with 5V power and can.
+; Our off-board connector with 5V power and uart (including the optional RTS pin).
 pcb-module can-connector :
   port power:power
-  port can:can
-  public inst connector : ocdb/phoenix/combicon-mc/component(4)
+  port uart:uart([UART-RTS])
+  public inst connector : ocdb/phoenix/combicon-mc/component(5)
   net (connector.p[1], power.gnd)
   net VIN (connector.p[2], power.vdd)
-  net (connector.p[3], can.canh)
-  net (connector.p[4], can.canl)
+  net (connector.p[3], uart.tx)
+  net (connector.p[4], uart.rx)
+  net (connector.p[5], uart.rts)
 
-  ocdb/terminations/terminate-can(can, power.gnd, "parallel")
   set-power-source(connector.p[2], connector.p[1], 5.0)
 
 pcb-module first-design :
   inst connector : can-connector
 
-  ; Choose the smallest 3.3V F0 mcu that will work for this design. Need 30ppm for the main clock.
-  inst stm : micro-controller([ "series" => "STM32F0" "min-supply-voltage.max" => 3.3])([`HSE-ppm => 30.0e-6 `boot => "flash"])
+  ; Choose the smallest 3.3V F0 mcu that will work for this design. Spec 30ppm for the main clock.
+  ; inst stm : micro-controller([ "series" => "STM32F0" "min-supply-voltage.max" => 3.3])([`HSE-ppm => 30.0e-6 `boot => "flash"])
+  inst stm : ocdb/st-microelectronics/STM32F031F4P6/module([`HSE-ppm => 30.0e-6 `boot => "flash"])
 
-  ; Add a CAN transceiver
-  inst xr : ocdb/texas-instruments/TCAN1051/module
-  require can-out:uart-with([`rts]) from stm.mcu
-  net UART (can-out, xr.uart-rts)
-  net CAN (xr.can, connector.can)
+  ; Hook up external uart
+  require ext-uart:uart([UART-RTS]) from stm.mcu
+  net (ext-uart, connector.uart)
 
   ; Add an accelerometer
   inst xl : ocdb/st-microelectronics/LIS3DH/module
@@ -48,9 +47,8 @@ pcb-module first-design :
   net WAKE (tap-detect.gpio, xl.int[1])
 
   ; Connect power, apply symbols
-  net (xr.power, connector.power)
   net (xl.power, stm.power)
-  net P3V3 (xl.vio, xr.vio, stm.power.vdd)
+  net P3V3 (xl.vio, stm.power.vdd)
   net GND (stm.power.gnd)
   symbol(P3V3) = ocdb/symbols/supply-sym
   symbol(GND) = ocdb/symbols/ground-sym

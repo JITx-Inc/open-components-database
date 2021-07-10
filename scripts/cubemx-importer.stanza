@@ -6,6 +6,7 @@ defpackage ocdb/scripts/cubemx-importer:
   import jitx/commands
   import jitx/xml
   import lang-utils
+  import pcre
 
 ;==============================================================================
 ;================================== IR ========================================
@@ -34,6 +35,14 @@ public defstruct Stm32MCU:
 ; An option for GPIO 
 defstruct GpioOption:
   gpio:Stm32Pin
+
+; An option for ADC 
+defstruct AdcOption:
+  adc:Stm32Pin
+
+; An option for DAC 
+defstruct DacOption:
+  dac:Stm32Pin
 
 ; An option for an SWD port
 defstruct SwdOption:
@@ -118,20 +127,30 @@ defmethod print (o:OutputStream, s:SwdOption):
   println(os, "swd.swdclk => self.%_" % [pin-name(swclk(s))])
 
 defmethod print (o:OutputStream, j:JtagOption):
-  val jtag = "jtag" when trstn(j) is-not False else "jtag-4"
+  val jtag = "jtag()" when trstn(j) is False else "jtag([JTAG-TRSTN])"
   println(o, "supports %_:" % [jtag])
   val os = IndentedStream(o)
   println(os, "%_.tck => self.%_" % [jtag, pin-name(tck(j))])
   println(os, "%_.tdi => self.%_" % [jtag, pin-name(tdi(j))])
   println(os, "%_.tdo => self.%_" % [jtag, pin-name(tdo(j))])
   println(os, "%_.tms => self.%_" % [jtag, pin-name(tms(j))])
-  if jtag == "jtag":
-    println(os, "jtag.trstn => self.%_" % [pin-name $ trstn(j) as Stm32Pin])
+  if trstn(j) is-not False:
+    println(os, "%_.trstn => self.%_" % [jtag, pin-name $ trstn(j) as Stm32Pin])
 
 defmethod print (o:OutputStream, opt:GpioOption):
   println(o, "supports gpio:")
   val os = IndentedStream(o)
   println(os, "gpio.gpio => self.%_" % [pin-name(gpio(opt))])
+
+defmethod print (o:OutputStream, opt:AdcOption):
+  println(o, "supports adc:")
+  val os = IndentedStream(o)
+  println(os, "adc.adc => self.%_" % [pin-name(adc(opt))])
+
+defmethod print (o:OutputStream, opt:DacOption):
+  println(o, "supports dac:")
+  val os = IndentedStream(o)
+  println(os, "dac.dac => self.%_" % [pin-name(dac(opt))])
 
 ;==============================================================================
 ;=============================== Helpers ======================================
@@ -139,7 +158,7 @@ defmethod print (o:OutputStream, opt:GpioOption):
 ; Algorithm to sanitize pin names.
 defn sanitize-pin-name (s:String) -> String:
   var s*: String = s
-  val chars = " -_"
+  val chars = " -_/"
   for c in chars do:
     match(index-of-char(s*, c)):
       (i:Int): s* = s*[0 to i]
@@ -268,6 +287,24 @@ defn jtag-pins (pins:Tuple<Stm32Pin>) -> False|JtagOption:
 defn gpio-pins (pins:Tuple<Stm32Pin>) -> Tuple<GpioOption>:
   to-tuple(seq(GpioOption, pins-with-signal(pins, "GPIO")))
 
+defn adc-pin? (s:String) -> True|False :
+  val b = not empty?(regex-match("^ADC.*_IN.*", s))
+  ; println("%_ : %_" % [s, b])
+  b
+
+; the adc pins of the mcu
+defn adc-pins (pins:Tuple<Stm32Pin>) -> Tuple<AdcOption>:
+  to-tuple(seq(AdcOption, pins-with-signal(pins, adc-pin?)))
+
+defn dac-pin? (s:String) -> True|False :
+  val b = not empty?(regex-match("^DAC.*_OUT.*", s))
+  ; println("%_ : %_" % [s, b])
+  b
+
+; the dac pins of the mcu
+defn dac-pins (pins:Tuple<Stm32Pin>) -> Tuple<DacOption>:
+  to-tuple(seq(DacOption, pins-with-signal(pins, dac-pin?)))
+
 ; code generator to map create supports statements from instance names
 defn print-bundle-data (
   o:OutputStream,   ; output stream to print to
@@ -336,9 +373,9 @@ defn print-bundle (
 
 defn print-spi (o:OutputStream, mcu:Stm32MCU):
   print-bundle(
-    o, mcu, "SPI", "spi"
+    o, mcu, "SPI", "spi()"
     ["MOSI", "MISO", "SCK", "NSS"]
-    ["mosi", "miso", "sck", "ss"]
+    ["sdo", "sdi", "sck", "cs"]
   )
 
 defn print-i2c (o:OutputStream, mcu:Stm32MCU):
@@ -347,6 +384,13 @@ defn print-i2c (o:OutputStream, mcu:Stm32MCU):
     ["SDA", "SCL"]
     ["sda", "scl"]
     suffix?{_, "SMBA"}
+  )
+
+defn print-can (o:OutputStream, mcu:Stm32MCU):
+  print-bundle(
+    o, mcu, "CAN", "can-interface"
+    ["RX", "TX"]
+    ["rx", "tx"]
   )
 
 defn print-oscillator (o:OutputStream, mcu:Stm32MCU):
@@ -367,28 +411,33 @@ defn print-oscillator (o:OutputStream, mcu:Stm32MCU):
 defn print-i2s (o:OutputStream, mcu:Stm32MCU):
   for ip-block in filter(prefix?{instance-name(_),"I2S"}, ip(mcu)) do:
     val pins = unique-pins-for(instance-name(ip-block), mcu)
-    var mclk?: True|False   = false
-    var duplex?: True|False = false
-    if contains?(pins, "MCLK"): 
-      mclk?   = true
-    if contains?(pins, "SDO") and contains?(pins, "SDI"):
-      duplex? = true
-    val bundle-name = to-string("i2s(%_, %_)" % [mclk?, duplex?])
+    val optional = StringBuffer()
+
+    val mck? = contains?(pins, "MCLK")
+    val sdmi? = contains?(pins, "SDI")
+    if mck?:
+      print(optional, "I2S-MCK, ")
+    if sdmi?:
+      print(optional, "I2S-SDMI")
+    
+    val bundle-name = "i2s()" when empty?(optional) else to-string("i2s([%_])" % [optional])
     val pin-names = to-tuple(cat-all([
-      ["mclk"] when mclk? else []
-      ["sdi" "sdo"] when duplex? else ["sd"]
-      ["ws" "bclk"]
+      ["mck"]  when mck? else []
+      ["sdmi"] when sdmi? else []
+      ["ws" "ck" "sdmo"]
     ]))
-    val signal-names = to-tuple(seq(
-      {upper-case(_0) when _0 != "bclk" else "CK"},
-      pin-names
-    )) 
+
+    val signal-names = to-tuple(cat-all([
+      ["MCLK"] when mck? else []
+      ["SDI"] when sdmi? else []
+      ["WS" "CK" "SDO"]
+    ]))
+
     print-bundle-data(
       o, mcu, instance-name(ip-block), bundle-name,
       signal-names
       pin-names
     )
-
 
 ;==============================================================================
 ;============================= UART edge cases ================================
@@ -399,13 +448,23 @@ defenum UartCase:
   Uart4   ; 4 pin UART 
   Uart4De ; 4 pin UART with DE pin
 
-; ocdb bundle identifer for a given UART case3
+
+defn usart-or-uart-bundle (uart?:True|False, c:UartCase):
+  val base = "uart" when uart? else "usart"
+  val args = 
+    switch(c):
+      Uart2:   "",
+      Uart2De: "[UART-DE]",
+      Uart4:   "[UART-CTS, UART-RTS]",
+      Uart4De: "[UART-CTS, UART-RTS, UART-DE]"
+  to-string("%_(%_)" % [base, args])
+
+; ocdb bundle identifer for a given UART case
 defn uart-bundle (c: UartCase):
-  switch(c):
-    Uart2:   "uart",
-    Uart2De: "uart-with([`de])",
-    Uart4:   "uart",
-    Uart4De: "uart-with([`de])"
+  usart-or-uart-bundle(true, c)
+
+defn usart-bundle (c:UartCase):
+  usart-or-uart-bundle(false, c)
 
 ; the OCDB pin names for a UART case
 defn uart-ocdb-pins (c:UartCase):
@@ -432,25 +491,37 @@ defn same-set?<?T> (l:Set<?T>, r:Set<?T>):
 ; determine which case we are handling
 defn uart-case (instance-name:String, mcu:Stm32MCU) -> UartCase:
   val pins = unique-pins-for(instance-name, mcu, suffix?{_, "CK"})
+  ;print-pins(pins)
   label<UartCase> return:
     for c in 0 to 4 do:
       val check = uart-cubemx-pins(UartCase(c))
       if same-set?(to-hashset<String>(uart-cubemx-pins(UartCase(c))), pins):
+        println("uart-case: Returning %_" % [UartCase(c)])
         return(UartCase(c))
     fatal("Unsupported UART pin set: %," % [pins])
-  
-defn print-uart (o:OutputStream, mcu:Stm32MCU):
-  for uart-block in filter({name(_0) == "UART" or name(_0) == "USART"}, ip(mcu)) do:
+
+defn print-usart (o:OutputStream, mcu:Stm32MCU):
+  for uart-block in filter({name(_0) == "USART"}, ip(mcu)) do:
     val case = uart-case(instance-name(uart-block), mcu)
-    val pins = to-tuple(filter(contains?{["rts", "tx" "rx"], _}, uart-ocdb-pins(case)))
-    val bundle = "uart-with([`rts])" when contains?(pins, "rts") else "uart"
+    print-bundle-data(
+      o, mcu,
+      instance-name(uart-block),
+      usart-bundle(case),
+      uart-cubemx-pins(case)
+      uart-ocdb-pins(case)
+    )
+
+defn print-uart (o:OutputStream, mcu:Stm32MCU):
+  for uart-block in filter({name(_0) == "UART"}, ip(mcu)) do:
+    val case = uart-case(instance-name(uart-block), mcu)
     print-bundle-data(
       o, mcu, 
       instance-name(uart-block),
-      bundle
-      to-tuple(seq(upper-case, pins))
-      pins
+      uart-bundle(case),
+      uart-cubemx-pins(case)
+      uart-ocdb-pins(case)
     )
+
 
 ;=============================================================================
 ;========================= Importer Algorithm ================================
@@ -463,10 +534,24 @@ import-stm32-mcu(supports-buf, mcu)
 println(to-string(supports-buf))
 ;<USAGE>
 public defn import-stm32-mcu (o:OutputStream, mcu:Stm32MCU):
-  ; println(o, "; Autogenerated by ocdb/scripts/cubemx-importer")
-  ; println(o, "; Family: %_, Package: %_" % [family(mcu), package(mcu)])
+  println(o, "; Autogenerated by ocdb/scripts/cubemx-importer")
+  println(o, "; Family: %_, Package: %_" % [family(mcu), package(mcu)])
+  
+  val newname = replace(replace(ref(mcu), "(", "_"), ")", "_")
+  println(o, "#use-added-syntax(jitx)
+defpackage ocdb/components/%_/supports:
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/bundles
+  import ocdb/property-structs
+
+public defn make-supports ():
+  inside pcb-component:" % [newname])
+  
   ; println(o, "pcb-component %_" % [ref(mcu)])
-  val os = IndentedStream(o)
+  val os = IndentedStream(o, 4)
   ; First find the SWD and JTAG options if they exist
   val swd  = swd-pins(pins(mcu)) ; fails if there are no swd pins
   println(os, swd)
@@ -477,9 +562,27 @@ public defn import-stm32-mcu (o:OutputStream, mcu:Stm32MCU):
   val gpio = gpio-pins(pins(mcu))
   do(println{os, _}, gpio)
 
+  val adc = adc-pins(pins(mcu))
+  do(println{os, _}, adc)
+
+  val dac = dac-pins(pins(mcu))
+  do(println{os, _}, dac)
+
   ; Next print the IP blocks we care about
   print-i2c(os, mcu)
+  print-can(os, mcu)
   print-spi(os, mcu)
   print-uart(os, mcu)
+  print-usart(os, mcu)
   print-i2s(os, mcu)
   print-oscillator(os, mcu)
+
+defn print-pins (pins:Tuple<Stm32Pin>):
+  for p in pins do:
+    print("%_," % [pin-name(p)])
+  println(" ")
+
+defn print-pins (pins:Set<String>):
+  for p in pins do:
+    print("%_, " % [p])
+  println(" ")
