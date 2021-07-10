@@ -1,0 +1,36 @@
+; Demonstration of transforming landpatterns to use soldermask-defined pads
+#use-added-syntax(jitx)
+defpackage demo:
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/box-symbol
+  import ocdb/land-patterns
+
+; A BGA package with 100 pins
+pcb-landpattern my-landpattern:
+  make-bga-pkg(
+    1.0, ; pitch:Double, 
+    0.5; pad-diam:Double, 
+    [4, 4]; n-pads:[Int Int], 
+    [5.0, 5.0]; courtyard:[Double Double],
+    false ; omit-pads:Tuple<Ref>|False
+  )
+  ref-label()
+
+pcb-component my-component (smd?:True|False):
+  ; ocdb/landpatterns/soldermask-defined is a transformation on pads and landpatterns
+  ; to convert into "soldermask defined" pads (SMD) where the soldermask opening is smaller
+  ; than the copper layer beneath them.
+  val lp = soldermask-defined(my-landpattern) when smd? else my-landpattern
+  assign-landpattern(lp)
+  make-box-symbol()
+
+pcb-module main-module:
+  inst smd-cmp:  my-component(true)
+  inst nsmd-cmp: my-component(false)
+
+make-default-board(main-module, 4, 10.0, 10.0)
+view-board()

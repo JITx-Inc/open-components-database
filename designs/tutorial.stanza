@@ -6,10 +6,64 @@ defpackage ocdb/designs/tutorial :
   import jitx/commands
   import ocdb/defaults
   import ocdb/generic-components
-  
-pcb-module my-design :
-  inst r : chip-resistor(1.0e3)
+  import ocdb/bundles
+  import ocdb/design-vars
+  import ocdb/micro-controllers
+  import ocdb/generator-utils
+  import ocdb/checks
 
-make-default-board(my-design, 4, 100.0, 75.0)
+val board-shape = RoundedRectangle(30.0, 25.0, 3.0)
+
+; Our off-board connector with 5V power and uart (including the optional RTS pin).
+pcb-module can-connector :
+  port power:power
+  port uart:uart([UART-RTS])
+  public inst connector : ocdb/phoenix/combicon-mc/component(5)
+  net (connector.p[1], power.gnd)
+  net VIN (connector.p[2], power.vdd)
+  net (connector.p[3], uart.tx)
+  net (connector.p[4], uart.rx)
+  net (connector.p[5], uart.rts)
+
+  set-power-source(connector.p[2], connector.p[1], 5.0)
+
+pcb-module first-design :
+  inst connector : can-connector
+
+  ; Choose the smallest 3.3V F0 mcu that will work for this design. Spec 30ppm for the main clock.
+  ; inst stm : micro-controller([ "series" => "STM32F0" "min-supply-voltage.max" => 3.3])([`HSE-ppm => 30.0e-6 `boot => "flash"])
+  inst stm : ocdb/st-microelectronics/STM32F031F4P6/module([`HSE-ppm => 30.0e-6 `boot => "flash"])
+
+  ; Hook up external uart
+  require ext-uart:uart([UART-RTS]) from stm.mcu
+  net (ext-uart, connector.uart)
+
+  ; Add an accelerometer
+  inst xl : ocdb/st-microelectronics/LIS3DH/module
+  require acc-i2c:i2c from stm.mcu
+  net (acc-i2c, xl.i2c)
+  add-open-drain-pullups(acc-i2c, stm.power.vdd)
+  require tap-detect:gpio from stm.mcu
+  net WAKE (tap-detect.gpio, xl.int[1])
+
+  ; Connect power, apply symbols
+  net (xl.power, stm.power)
+  net P3V3 (xl.vio, stm.power.vdd)
+  net GND (stm.power.gnd)
+  symbol(P3V3) = ocdb/symbols/supply-sym
+  symbol(GND) = ocdb/symbols/ground-sym
+
+  ; Mechanicals
+  add-mounting-holes(board-shape, "M2", [2 3])
+  place(connector.connector) at loc(-4.0, -12.5) on Top
+
+  ; Run the schematic review 
+  check-design(self)
+
+val powered-design = run-final-passes(transform-module(generate-power, first-design))
+make-default-board(powered-design, 4, board-shape)
+
 view-board()
 view-schematic()
+
+export-cad()

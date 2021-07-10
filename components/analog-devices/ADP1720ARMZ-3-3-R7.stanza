@@ -1,0 +1,66 @@
+#use-added-syntax(jitx)
+defpackage ocdb/analog-devices/ADP1720ARMZ-3-3-R7 :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/symbol-utils
+  import ocdb/generic-components
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/property-structs
+
+pcb-landpattern rm-8-adi :
+  pad p[1] : smd-pad(1.512799, 0.431) at loc(-2.1717, 0.974999, 0.0)
+  pad p[2] : smd-pad(1.512799, 0.431) at loc(-2.1717, 0.325001, 0.0)
+  pad p[3] : smd-pad(1.512799, 0.431) at loc(-2.1717, -0.325001, 0.0)
+  pad p[4] : smd-pad(1.512799, 0.431) at loc(-2.1717, -0.974999, 0.0)
+  pad p[5] : smd-pad(1.512799, 0.431) at loc(2.1717, -0.974999, 0.0)
+  pad p[6] : smd-pad(1.512799, 0.431) at loc(2.1717, -0.325001, 0.0)
+  pad p[7] : smd-pad(1.512799, 0.431) at loc(2.1717, 0.325001, 0.0)
+  pad p[8] : smd-pad(1.512799, 0.431) at loc(2.1717, 0.974999, 0.0)
+
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(-1.7272, -1.7272), Point(1.7272, -1.7272) ])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(1.7272, -1.7272), Point(1.7272, -1.523239) ])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(1.7272, 1.7272), Point(-1.7272, 1.7272) ])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(-1.7272, 1.7272), Point(-1.7272, 1.523239) ])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(-1.7272, -1.523239), Point(-1.7272, -1.7272) ])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [ Point(1.7272, 1.523239), Point(1.7272, 1.7272) ])
+  ref-label()
+
+public pcb-component component :
+  pin EN
+  pin IN
+  pin GND
+  pin OUT
+  val pkg = rm-8-adi
+  val generic-props = GenericPin(Interval(-0.3, 3.6, false), 1500.0)
+
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir| generic-pin:GenericPin]
+    [IN      | 2            | Left    | generic-props ]
+    [EN      | 4            | Left    | generic-props ]
+    [GND     | 1 5 6 7 8    | Down    | generic-props ]
+    [OUT     | 3            | Right   | generic-props ]
+  name = "RM_8_ADI"
+  reference-prefix = "U"
+  mpn = "ADP1720ARMZ-3.3-R7"
+  make-box-symbol()
+  assign-landpattern(pkg)
+
+public pcb-module module :
+  port power-in : power
+  port power-out : power
+  pin gnd
+
+  public inst ldo : ocdb/analog-devices/ADP1720ARMZ-3-3-R7/component
+  net (gnd, ldo.GND, power.gnd)
+  net (power-in.vdd, ldo.IN, ldo.EN)
+  net (power-out.vdd, ldo.OUT)
+  bypass-cap-strap(ldo.IN, gnd, 1.0e-6)
+  bypass-cap-strap(ldo.OUT, gnd, 1.0e-6)

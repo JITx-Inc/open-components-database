@@ -437,7 +437,7 @@ public defn db-jumper-persist-zero-res (nodes:Tuple<Tuple<JITXObject>>) :
 public defn db-jtag-to-cmp (pwr:JITXObject, cmp:JITXObject) :
   inside pcb-module :
     eval-when true :
-      require jtag:jtag from cmp
+      require jtag: jtag() from cmp
       db-jtag(pwr, jtag)
 
 ; Adds a FTDI connector to a component
@@ -451,7 +451,7 @@ public defn db-ftdi-two-comms (pwr:JITXObject, cmp:JITXObject) :
   inside pcb-module :
     eval-when true :
       if property(self.debug) :
-        require uart:uart from cmp
+        require uart: uart() from cmp
         db-ftdi(pwr, uart)
 
 ; Adds a FTDI connector with RTS and CTS to a component
@@ -465,7 +465,7 @@ public defn db-ftdi-four-comms (pwr:JITXObject, cmp:JITXObject) :
   inside pcb-module :
     eval-when true :
       if property(self.debug) :
-        require ftdi:uart4 from cmp
+        require ftdi: uart([UART-RTS, UART-CTS]) from cmp
         db-ftdi(pwr, ftdi)
 
 ; ====================
@@ -616,10 +616,10 @@ public defn db-ftdi (pwr:JITXObject, uart:JITXObject) :
         net (pwr.vdd, ftdi-conn.p[3])
         match(port-type(uart)) :
           (pa:Bundle) :
-            if pa == ocdb/bundles/uart :
+            if pa == /uart() :
               net (uart.rx, ftdi-conn.p[4]) 
               net (uart.tx, ftdi-conn.p[5])
-            else if pa == uart4 :
+            else if pa == /uart([UART-RTS, UART-CTS]) :
               net (uart.cts, ftdi-conn.p[2])
               net (uart.txd, ftdi-conn.p[4])
               net (uart.rxd, ftdi-conn.p[5])

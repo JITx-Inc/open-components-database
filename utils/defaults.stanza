@@ -4,6 +4,7 @@ defpackage ocdb/defaults :
   import collections
   import jitx
   import jitx/commands
+  import ocdb/generator-utils
 
 ;============================================================
 ;=================== Default Materials ======================
@@ -31,7 +32,7 @@ public pcb-material soldermask-default :
 ;============================================================
 ;============== Default Stackup, Rules, Board ===============
 ;============================================================
-
+; Creates a default stackup given a number of layers
 public pcb-stackup default-stackup (num-layers:Int) :
   name = "Default stackup"
   layer(2.03e-2, soldermask-default)
@@ -40,6 +41,7 @@ public pcb-stackup default-stackup (num-layers:Int) :
     layer(5.08e-2, copper-default)  
   layer(2.03e-2, soldermask-default)   
 
+; The default design rules.
 public pcb-rules default-rules :
   min-copper-width = 0.13 ; 5mil
   min-copper-copper-space = 0.2 ; 
@@ -53,36 +55,35 @@ public pcb-rules default-rules :
   max-board-width = 457.2 ; 18in
   max-board-height = 609.6 ; 24in
 
-public pcb-board default-board (num-layers:Int, width:Double, height:Double) :
+; Creates a pcb-board with default stackup given the number of layers and board outline.
+public pcb-board default-board (num-layers:Int, outline:Shape) :
   stackup = default-stackup(num-layers)
-  boundary = Rectangle(width, height)
-  signal-boundary = Rectangle(width, height)
+  boundary = outline
+  signal-boundary = outline
 
-public defn make-default-board (module:Instantiable, num-layers:Int, width:Double, height:Double) :
-  val brd-outline = Rectangle(width, height) 
-
-  pcb-board B :
-    stackup = default-stackup(num-layers)
-    boundary = brd-outline 
-    signal-boundary = brd-outline
-
+; Creates a design using the default board. 
+public defn make-default-board (module:Instantiable, num-layers:Int, outline:Shape) :
+  
   set-main-module(module)
-  set-board(B)
+  set-board(default-board(num-layers, outline))
   set-rules(ocdb/rules/bay-area-circuits-conservative-rules)
   run-checks("checks.txt")
 
 ;============================================================
 ;================= Single Module Design =====================
 ;============================================================
-
+; Create a design with a single module, given a board
 public defn make-single-module-design (module:Instantiable, board:Board) :
+  ; TODO: is this still necessary?
   pcb-module main-module :
     inst instance : module
     place(instance) at loc(0.0,0.0) on Top
 
-  set-main-module(module)
+  set-main-module(main-module)
   set-board(board)
   set-rules(default-rules)
 
+; Create a single moduel design on a board of 10x10mm.
 public defn make-single-module-design (module:Instantiable) :
-  make-single-module-design(module, default-board(4, 10.0, 10.0))
+  ; TODO: determine the bounds of the module for the board outline, if possible.
+  make-single-module-design(module, default-board(4, Rectangle(10.0, 10.0)))

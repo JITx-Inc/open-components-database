@@ -20,13 +20,15 @@ OPERATING-TEMPERATURE = [-20.0 50.0]
 OPTIMIZE-FOR = ["cost"]
 MIN-PKG = "0402"
 
+val board-shape = Rectangle(30.0, 18.0)
+
 ; PMS7003 particle counter interface via header pins
 pcb-module pms7003 :
   port vin : power
   port vin-mcu : power
   pin reset
   pin set
-  port uart : uart
+  port uart : uart()
   inst header : ocdb/amphenol/minitek127/component(10)
   place(header) at loc(0.0,0.0) on Top
   net (vin.gnd vin-mcu.gnd header.p[3] header.p[4])
@@ -38,8 +40,10 @@ pcb-module pms7003 :
   res-strap(vin-mcu.vdd, set, 10.0e3)
   res-strap(vin-mcu.vdd, reset, 10.0e3)
   property(header.p[1].power-pin) = PowerPin(Interval(4.5, 5.5, 5.0))
-  property(header.p[10].digital-output) = DigitalOutput(CMOSOutput(Interval(0.3, 0.5, false), Interval(2.2, 3.3, false)))
-  property(header.p[8].digital-input) = DigitalInput(0.8, 2.7)
+  property(header.p[10].digital-output) = DigitalOutput(CMOSOutput(Interval(0.3, 0.5, false), Interval(2.6, 3.3, false)), false, header.p[1], header.p[3])
+  property(header.p[8].digital-input) = DigitalInput(0.8, 2.6, header.p[1], header.p[3], 1.0e-6)
+  property(header.p[6].digital-input) = DigitalInput(0.8, 2.6, header.p[1], header.p[3], 1.0e-6)
+  property(header.p[9].digital-input) = DigitalInput(0.8, 2.6, header.p[1], header.p[3], 1.0e-6)
 
 pcb-module sensor-mote :
   ; Add USB connector
@@ -68,7 +72,7 @@ pcb-module sensor-mote :
   place(ant) at loc(9.0, 5.0, -90.0) on Top
 
   ; Use a connect statement to interface USB-2 to UART
-  connect-ft232(protected-usb, proc.uart)
+  val cp2105 = connect-cp2105(protected-usb, proc.uart) as JITXObject
 
   ; Add a humidty sensor, connect over i2c, add pullups.
   public inst hum : ocdb/texas-instruments/HDC1080/module
@@ -89,7 +93,8 @@ pcb-module sensor-mote :
   net PC-RX (pc-uart.tx particle-counter.uart.rx)
 
   ; Connect power to proc and sensors
-  net (hum.power, particle-counter.vin-mcu, proc.power, ldo.vout)
+  net (hum.power, particle-counter.vin-mcu, proc.power, ldo.vout, cp2105.power)
+  net (proc.power.vdd, cp2105.vio)
   net (protected-usb.vbus particle-counter.vin)
 
   ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
@@ -111,35 +116,33 @@ pcb-module sensor-mote :
 
   ; Add a ground plane
   geom(gnd):
-    copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = Rectangle(30.0, 18.0)
+    copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = board-shape
 
-  ; Apply groups to sub-circuits for schematic and layout
-  group-modules([[proc  ant] [hum] [usb ldo] [particle-counter]])
+  ; Apply groups to sub-circuits for schematic
+  schematic-group([proc, ant]) = proc
+  schematic-group([usb, ldo, cp2105]) = power
+  schematic-group(hum) = hum
+  schematic-group(particle-counter) = particle-counter
+  
   check-design(self)
 
 ; === Setup visualizations and exports ===
 ; Set the active design directory for CAD
 set-design("ble-mote")
 
-; Run a function to programmatically calculate voltages on rails
-var sensor-mote* = transform-module(propagate-rail-voltage, sensor-mote)
-sensor-mote* = run-evals(sensor-mote*)
-sensor-mote* = transform-module(propagate-rail-voltage, sensor-mote*)
-sensor-mote* = run-evals(sensor-mote*)
-
+val final-design = run-final-passes(sensor-mote)
 ; Configure design to have a default 4-layer stackup and design rules.
-make-default-board(sensor-mote*, 4, 30.0, 18.0)
+make-default-board(final-design, 4, Rectangle(30.0, 18.0))
 
-run-checks("BLE-MOTE-CHECKS.txt")
 ; Show the Schematic and PCB for the design
 view-board()
 view-schematic()
 
 ; ; Export CAD
-; set-export-board?(true)
+; set-export-board?(false)
 ; set-export-schematic?(true)
 ; set-export-backend(`kicad)
-; export-cad()
+export-cad()
 
 ; ; Solve and export Bill of Materials
 ; export-bom()
