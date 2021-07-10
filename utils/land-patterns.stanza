@@ -8,6 +8,9 @@ defpackage ocdb/land-patterns :
   import jitx/commands with:
     prefix(pad) => def-
   import ocdb/design-vars
+  import ocdb/land-protrusions
+  import ocdb/tolerance
+
 
 ;==============================================================================
 ;============================== Helpers =======================================
@@ -18,6 +21,53 @@ defn ensure-even-positive! (value: Int, name: String):
   if value < 2 or value % 2 == 1:
     fatal("%_ only supports a positive even number of pins." % [name])
 
+; ====== Silk screen helpers ===================================================
+public defn draw-polarity-marker (pad-1-ref:Ref):
+  ; find pad 1
+  inside pcb-landpattern:
+    val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
+    defn draw-line (origin:Pose):
+      val line-width = min-silk-width
+      val line-length = line-width * 3.0
+      val line = Line(line-width, [
+        Point(-0.5 * line-width, 0.0)
+        Point( 0.5 * line-width, 0.0)  
+      ])
+      layer(Silkscreen("pol", Top)) = origin * line
+
+    defn corner-pose () -> Pose:
+      val dims   = extant-dims()
+      val corner = Point(
+        x(dims) * -0.5,
+        y(dims) *  0.5
+      ) 
+      val center = corner + Point(
+        -0.5 * min-silk-width - PLACEMENT-TOLERANCE, 
+        0.5 * min-silk-width + PLACEMENT-TOLERANCE
+      )
+      Pose(center, 0.0, false)
+
+    defn pad-1-pose () -> Pose:
+      val pad-1    = find!({ref(_) == pad-1-ref}, pads(self))
+      val pad-dims = dims(pad-shape(def-pad(pad-1)))
+      val dims     = extant-dims()
+      val pad-loc  = pose(pad-1)
+      if x(dims) > y(dims):
+        val translation = -0.5 * x(pad-dims) 
+        println("...")
+        ; rotated 90 degrees
+      else:
+        println("...")
+      loc(0.0, 0.0)
+
+    val [p1, p2] = [corner-pose(), pad-1-pose()]
+    draw-line $ 
+      if x(center(p1)) > x(center(p2)) or y(center(p1)) > y(center(p2)):
+        p1
+      else:
+        p2
+
+; Create a reference label at (0, 0)
 ; ====== Reference Label Helpers ===============================================
 ; Creates a reference label from pose and anchor
 public defn ref-label (pose:Pose, anchor:Anchor):
@@ -93,6 +143,57 @@ defn chamfered (anchor:Anchor, width:Double, height:Double, r:Double):
 ;==============================================================================
 ;=========================== Geometric Helpers ================================
 ;==============================================================================
+; Creata a unit rectangle (width = length = 1.0)
+public defn unit-rectangle ():
+  Rectangle(1.0, 1.0)
+
+; Create a unit circle (diameter = 1.0)
+public defn unit-circle ():
+  Circle(0.5)
+
+; Create a unit rounded rectangle (width = length = 1.0)
+public defn unit-rounded-rectangle (radius:Double):
+  RoundedRectangle(1.0, 1.0, radius)
+
+; Create a unit d-shape (width = length = 1.0)
+public defn unit-d-shape (radius:Double):
+  DShape(1.0, 1.0, radius)
+
+; Create a unit chamfered rectangle (width = length = 1.0)
+public defn unit-chamfered-rectangle (radius:Double):
+  ChamferedRectangle(1.0, 1.0, radius)
+
+; Fit a shape inside dimensions. 
+public defn fit-dims (s:Shape, dims:Dims) -> Shape:
+  match(s):
+    (r:Rectangle):
+      Rectangle(x(dims), y(dims), pose(r))
+    (r:RoundedRectangle):
+      RoundedRectangle(x(dims), y(dims), ratio(r), pose(r))
+    (r:DShape):
+      DShape(x(dims), y(dims), ratio(r), pose(r))
+    (r:ChamferedRectangle):
+      ChamferedRectangle(x(dims), y(dims), ratio(r), pose(r))
+    (c:Circle):
+      Circle(center(c), 0.5 * min(x(dims), y(dims)))
+    (_:?):
+      throw(Exception("Unsupported shape: %_" % [s]))
+
+; ====== Land pattern utilities ===============================================
+; Find the extant dimensions of a landpattern given all its layers and pads.
+public defn extant-dims () -> Dims:
+  inside pcb-landpattern:
+    val all-shapes = cat-all $ [
+      for pad_ in pads(self) seq:
+        pose(pad_) * pad-shape(def-pad(pad_))
+      for pad_ in pads(self) seq-cat:
+        for layer in filter({specifier(_) is-not Silkscreen}, layers(def-pad(pad_))) seq:
+          pose(pad_) * shape(layer)
+      for layer-shape in filter({specifier(_) is-not Silkscreen}, layers(self)) seq:
+        shape(layer-shape)
+    ]
+    Dims(0.0, 0.0) when empty?(all-shapes) else dims(Union(all-shapes))
+
 ; Create a rectangle out of lines
 public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double, line-w:Double) :
   val w2 = w * 0.5
@@ -319,7 +420,7 @@ public defn round-rect-smd-pad (w:Double, h:Double, r:Double) :
 
 public defn chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   val shape = chamfered(anchor, pad-w, pad-h, pad-r)
-  val hole  = capsule(anchor drill-w, drill-h)
+  val hole  = capsule(anchor, drill-w, drill-h)
   pth-pad(shape, hole)
 
 public defn chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
@@ -531,7 +632,7 @@ public pcb-landpattern two-pin-landpattern (Z:Double, G:Double, X:Double, w:Doub
 public pcb-landpattern two-pin-polarized-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
   make-two-pin-landpattern(Z,G,X,w,h,true,true)
 
-public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False) :
+public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False):
   inside pcb-landpattern :
     val [Z, G, X, nr, nc] = switch(part-name) :
       "008004":[0.35, 0.10, 0.14, 0.35, 0.14]
@@ -976,3 +1077,133 @@ public pcb-landpattern smd-testpoint-pkg (d:Double) :
   layer(Courtyard(Top)) = Circle(d / 2.0)
   layer(Silkscreen("f-silk", Top)) = Circle(d / 2.0)
   ref-label()
+
+public defn make-ipc-compliant-two-pin-landpattern (length:Toleranced,      ; L
+                                                    width:Toleranced,       ; W
+                                                    lead-length:Toleranced, ; T
+                                                    lead-width?:False|Toleranced,  ; ...
+                                                    fabrication-tolerance:Double,
+                                                    placement-tolerance:Double
+                                                    density-level:DensityLevel,
+                                                    polarized?:True|False,
+                                                    solder-mask-defined?:True|False):
+  inside pcb-landpattern:
+    ; helper to compute the excess required by density level and tolerances
+    defn wiggle-room (C:Double):
+      val F = fabrication-tolerance
+      val P = placement-tolerance
+      sqrt(C * C + F * F + P * P)
+
+    ; compute the solder fillets based on the protrusion type
+    val land-protrusion-type = BigRectangularLeads when nominal(length) > 0.6 else SmallRectangularLeads
+    val fillets = lead-fillets(land-protrusion-type, density-level)
+
+    val Cw = max(plus(width), minus(length))
+    val Cl = max(plus(length), minus(length))
+    val Cs = 
+      let:
+        val a = max(plus(lead-length), minus(lead-length))
+        val b = max(plus(length), minus(length))
+        sqrt(a * a + b * b)
+    
+    ; compute the base dimensions of the lands
+    val Lmax = max(length)
+    val Lmin = min(length)
+    val Tmin = min(lead-length)
+    val Wmin = match(lead-width?):
+      (lead-width:Toleranced): 
+        min(lead-width)
+      (_:False):
+        min(width)
+    
+    val Smax = Lmax - 2.0 * Tmin
+    val [Jt, Jh, Js] = [toe(fillets), heel(fillets), side(fillets)]
+    val Zmax = Lmin + 2.0 * Jt + wiggle-room(Cl)
+    val Gmin = Smax - 2.0 * Jh - wiggle-room(Cs)
+    val Xmin = Wmin + 2.0 * Js + wiggle-room(Cw)
+
+    ; finalize the geometry
+    val land-length = 0.5 * (Zmax - Gmin)
+    val land-width  = Xmin
+
+    val x-max = 0.5 * Gmin + 0.5 * land-length
+    val x-min = -1.0 * x-max
+    ; println("land-length:%_, land-width:%_, x-min:%_, x-max:%_" % [land-length, land-width, x-min, x-max])
+
+    val refs: Tuple<Ref> = 
+      [Ref("a"), Ref("c")] when polarized? else 
+      [IndexRef(Ref("p"), 1), IndexRef(Ref("p"), 2)]
+
+    ; generate the landpattern
+    val pad_ = smd-pad(Rectangle(land-length, land-width))
+    pad (refs[0]): pad_ at loc(x-min, 0.0)
+    pad (refs[1]): pad_ at loc(x-max, 0.0)
+
+    val dims = extant-dims()
+    layer(Courtyard(Top)) = offset(Rectangle(x(dims), y(dims)), courtyard-excess(fillets))
+
+    if polarized?:
+      draw-polarity-marker(Ref("a"))
+    ref-label()
+
+public defn make-ipc-compliant-two-pin-landpattern (length:Toleranced,      ; L
+                                                    width:Toleranced,       ; W
+                                                    lead-length:Toleranced, ; T
+                                                    lead-width?:False|Toleranced,  ; ...
+                                                    density-level:DensityLevel,
+                                                    polarized?:True|False):
+  make-ipc-compliant-two-pin-landpattern(
+    length, width, lead-length, lead-width?, 
+    FABRICATION-TOLERANCE, PLACEMENT-TOLERANCE, 
+    density-level, polarized?,
+    false
+  )
+
+public defn make-ipc-compliant-two-pin-landpattern (length:Toleranced,      ; L
+                                                    width:Toleranced,       ; W
+                                                    lead-length:Toleranced, ; T
+                                                    density-level:DensityLevel,
+                                                    polarized?:True|False):
+  make-ipc-compliant-two-pin-landpattern(
+    length, width, lead-length, false, 
+    density-level, polarized?
+  )
+
+public pcb-landpattern ipc-compliant-two-pin-landpattern (length:Toleranced,
+                                                          width:Toleranced,
+                                                          lead-length:Toleranced,
+                                                          lead-width?:False|Toleranced,
+                                                          fabrication-tolerance:Double,
+                                                          placement-tolerance:Double
+                                                          density-level:DensityLevel,
+                                                          polarized?:True|False,
+                                                          solder-mask-defined?:True|False):
+  make-ipc-compliant-two-pin-landpattern(
+    length, width, lead-length, lead-width?,
+    fabrication-tolerance, placement-tolerance, 
+    density-level, polarized?
+    solder-mask-defined?
+  )
+
+public defn ipc-compliant-two-pin-landpattern (length:Toleranced,
+                                               width:Toleranced,
+                                               lead-length:Toleranced,
+                                               lead-width?:False|Toleranced,
+                                               density-level:DensityLevel,
+                                               polarized?:True|False):
+  ipc-compliant-two-pin-landpattern(
+    length, width, lead-length, lead-width?, 
+    FABRICATION-TOLERANCE, PLACEMENT-TOLERANCE, 
+    density-level, polarized?,
+    false
+  )
+
+public defn ipc-compliant-two-pin-landpattern (length:Toleranced,       ; L
+                                                width:Toleranced,       ; W
+                                                lead-length:Toleranced, ; T
+                                                density-level:DensityLevel,
+                                                polarized?:True|False):
+  ipc-compliant-two-pin-landpattern(
+    length, width, lead-length, false, 
+    density-level, polarized?
+  )
