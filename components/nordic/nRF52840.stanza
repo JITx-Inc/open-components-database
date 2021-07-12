@@ -3,6 +3,7 @@ defpackage ocdb/nordic/nRF52840 :
   import core
   import collections
   import math
+  import lang-utils
   import jitx
   import jitx/commands
 
@@ -13,6 +14,9 @@ defpackage ocdb/nordic/nRF52840 :
   import ocdb/generic-components
   import ocdb/box-symbol
   import ocdb/bundles
+  import ocdb/property-structs
+  import ocdb/generator-utils
+  import ocdb/checks
 
 pcb-landpattern xcvr-nrf52840-qiaa-r-pkg :
   pad A8 : bga-pad(0.275) at loc(-1.25, 3.25, 0.0)
@@ -102,8 +106,16 @@ pcb-landpattern xcvr-nrf52840-qiaa-r-pkg :
   ref-label()
 
 public pcb-component component :
+  ;=========================================================================
+  ; Metadata
+  name         = "XCVR_NRF52840-QIAA-R"
+  mpn          = "NRF52840-QIAA-R"
+  manufacturer = "Nordic Semiconductor"
+  description  = "Advanced Bluetooth 5, Thread and Zigbee multiprotocol SoC"
+  ;=========================================================================
   port P0 : pin[32]
   port P1 : pin[16]
+  pin XC2
   pin-properties :
     [ pin:Ref | pads:Ref ... | side:Dir | bank:Ref]
     [ P0[00]  | D2      | Right | io ] ;XL1 
@@ -183,41 +195,61 @@ public pcb-component component :
   make-box-symbol()
   assign-landpattern(xcvr-nrf52840-qiaa-r-pkg)
 
-  name = "XCVR_NRF52840-QIAA-R"
-  mpn = "NRF52840-QIAA-R"
-  manufacturer = "Nordic Semiconductor"
-  description = "Advanced Bluetooth 5, Thread and Zigbee multiprotocol SoC"
+  ; HFXO for 30ppm
+  property(XC2.crystal-oscillator) = CrystalOscillator(3.5e-3, 100.0e-6, 3.0e-12, 30.0e-6 * 32.0e6, 32.0e6)
+  ; LFXO for 50ppm
+  property(P0[01].crystal-oscillator) = CrystalOscillator(3.1e-6, 0.5e-6, 4.0e-12, 50.0e-6 * 32.768e3, 32.768e3)
 
 ; This module is a WIP.
-; public pcb-module module :
-;   port usb : usb-2
-;   pin gnd
-;   inst mcu : ocdb/nordic/nRF52840/component
+public pcb-module module :
+  port usb : usb-2
+  pin gnd
+  inst mcu : ocdb/nordic/nRF52840/component
 
-;   net (gnd, usb.vbus.gnd, mcu.VSS, mcu.VSS_PA)
+  net (gnd, usb.vbus.gnd, mcu.VSS, mcu.VSS_PA)
 
-;   ; Configure to be in normal voltage mode, DCDC1 enabled (config 5 from datasheet) TODO:make parmaetric
-;   ; Bypass caps
-;   bypass-cap-strap(mcu.DEC1, gnd, 100.0e-9)
-;   bypass-cap-strap(mcu.DEC3, gnd, 100.0e-12)
-;   bypass-cap-strap(mcu.DEC5, gnd, 820.0e-12)
-;   bypass-cap-strap(mcu.DECUSB, gnd, 4.7e-6)
-;   bypass-cap-strap(mcu.VBUS, gnd, 4.7e-6)
-;   bypass-cap-strap(mcu.DEC4, gnd, 1.0e-6)
-;   bypass-cap-strap(mcu.VDD[4], gnd, 1.0e-6)
-;   bypass-cap-strap(mcu.VDDH, gnd, 4.7e-6)
-;   bypass-cap-strap(mcu.VDD[3], gnd, 1.0e-6)
-;   bypass-cap-strap(mcu.VDD[0], gnd, 0.1e-6)
-;   bypass-cap-strap(mcu.VDD[1], gnd, 0.1e-6)
-;   bypass-cap-strap(mcu.VDD[2], gnd, 0.1e-6)
+  ; Configure to be in normal voltage mode, DCDC1 enabled (config 5 from datasheet)
+  ; Setup Bypass caps
+  for [pin_, cap_] in kvs([
+    mcu.DEC1    => 100.0e-9,
+    mcu.DEC3    => 100.0e-12,
+    mcu.DEC5    => 820.0e-12,
+    mcu.DECUSB  => 4.7e-6,
+    mcu.VBUS    => 4.7e-6,
+    mcu.DEC4    => 1.0e-6,
+    mcu.VDDH    => 4.7e-6,
+    mcu.VDD[0]  => 0.1e-6,
+    mcu.VDD[1]  => 0.1e-6,
+    mcu.VDD[2]  => 0.1e-6,
+    mcu.VDD[3]  => 1.0e-6,
+    mcu.VDD[4]  => 1.0e-6
+  ]) do:
+    bypass-cap-strap(pin_, gnd, cap_)
 
-;   inst pwr-ind : smd-inductor(["inductance" => 10.0e-6 "min-current-rating" => 50.0e-3])
-;   inst filt-ind : smd-inductor(["inductance" => 15.0e-9 "min-self-resonant-frequency" => 2.0e9 "material-core" => "ceramic"])
-;   net (pwr-ind.p[1] mcu.DCCH)
-;   net (pwr-ind.p[2] filt-ind.p[1])
-;   net (mcu.DEC4 mcu.DEC6 filt-ind.p[2])
-
-;   for i in 0 through 4 do : net (mcu.VDD[0] mcu.VDD[i])
-
-
+  inst pwr-ind : smd-inductor([
+    "inductance" => 10.0e-6 
+    "min-current-rating" => 50.0e-3 ])
   
+  inst filt-ind : smd-inductor([
+    "inductance" => 15.0e-9, 
+    "min-self-resonant-frequency" => 2.0e9,
+    "material-core" => "ceramic"])
+  
+  net (pwr-ind.p[1] mcu.DCCH)
+  net (pwr-ind.p[2] filt-ind.p[1])
+  net (mcu.DEC4 mcu.DEC6 filt-ind.p[2])
+
+  for i in 0 through 4 do : 
+    net (mcu.VDD[0] mcu.VDD[i])
+
+  inst lfosc : ocdb/epson/FC-135/component
+  net (mcu.P0[0] lfosc.p[1])
+  net (mcu.P0[1] lfosc.p[2])
+  val lf-cb = add-xtal-caps(lfosc, gnd)
+  check-oscillator(lfosc, property(mcu.P0[1].crystal-oscillator), lf-cb)
+
+  inst hfosc : ocdb/epson/TSX-3225/component(32.0e6)
+  net (mcu.XC1 hfosc.p[1])
+  net (mcu.XC2 hfosc.p[2])
+  val hf-cb = add-xtal-caps(hfosc, gnd)
+  check-oscillator(hfosc, property(mcu.XC2.crystal-oscillator), hf-cb)

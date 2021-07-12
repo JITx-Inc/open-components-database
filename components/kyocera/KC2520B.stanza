@@ -1,0 +1,57 @@
+#use-added-syntax(jitx)
+defpackage ocdb/kyocera/KC2520B:
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+;<test>
+freq: 40.0e6
+<test>
+public pcb-component component (freq:Double):
+  manufacturer = "Kyocera"
+  name = "KC2520B-C1"
+  mpn = 
+    switch(freq) :
+      40.0e6 : "KC252040.0000C10E00"
+      else : 
+        fatal("Unsupported or unconfirmed frequency: %_ MHz" % [freq * 1.0e-6])
+  description      = "MHz XO (Standard) CMOS Oscillator 1.6V ~ 3.63V Standby (Power Down) 4-SMD, No Lead"
+  reference-prefix = "X"
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir ]
+    [nINH    | 1            | Left  ]
+    [GND     | 2            | Right ]
+    [OUT     | 3            | Left  ]
+    [VCC     | 4            | Right ]
+
+  make-box-symbol()
+  assign-landpattern(XTAL-2520)
+
+pcb-landpattern XTAL-2520 :
+  for (i in 0 to 4, l in grid-locs(C, 2, 2, 1.85, 1.45)) do :
+    pad p[i + 1] : smd-pad(1.05, 0.95) at loc(0.0, 0.0) * l
+  layer(Courtyard(Top)) = Rectangle(2.5, 2.0)
+  ref-label()
+
+;<test>
+freq: 40.0e6
+<test>
+public pcb-module module (freq:Double) :
+  pin gnd
+  pin clkout
+  pin vcc
+
+  inst xtal : ocdb/kyocera/KC2520B/component(freq)
+  net (gnd xtal.GND)
+  net (clkout, xtal.OUT)
+  net (vcc, xtal.VCC)
+  cap-strap(gnd, vcc, 10.0e-9)
