@@ -34,6 +34,9 @@ public pcb-component component :
   make-box-symbol()
   assign-landpattern(soic127p-landpattern(8))
 
+  property(self.VIO.power-pin) = PowerPin(Interval(2.8, 5.5, false))
+  property(self.VCC.power-pin) = PowerPin(Interval(4.5, 5.5, false))
+
   ; Figure out what the io voltage level is in the design.
   eval-when has-property?(self.VIO.rail-voltage):
     val vdd = property(self.VIO.rail-voltage)
@@ -46,8 +49,7 @@ public pcb-component component :
 public pcb-module module:
   ; Set up ports
   port can : can
-  port uart : uart()
-  port uart-rts : /uart([UART-RTS])
+  port can-interface : can-interface
   pin s
   port power:power
   pin vcc
@@ -57,10 +59,10 @@ public pcb-module module:
   inst xcvr : ocdb/texas-instruments/TCAN1051/component
 
   net (xcvr.GND gnd power.gnd)
-  net (xcvr.TXD uart.tx uart-rts.tx)
-  net (xcvr.RXD uart.rx uart-rts.rx)
+  net (xcvr.TXD can-interface.tx)
+  net (xcvr.RXD can-interface.rx)
   net (xcvr.VIO vio)
-  net (xcvr.S s uart-rts.rts)
+  net (xcvr.S s)
   net (xcvr.VCC vcc, power.vdd)
   net (xcvr.CANH, can.canh)
   net (xcvr.CANL, can.canl)
