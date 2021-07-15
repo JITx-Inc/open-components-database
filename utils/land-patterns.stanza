@@ -20,60 +20,56 @@ defn ensure-even-positive! (value: Int, name: String):
   if value < 2 or value % 2 == 1:
     fatal("%_ only supports a positive even number of pins." % [name])
 
-; ====== Silk screen helpers ===================================================
-public defn draw-polarity-marker (pad-1-ref:Ref) :
+; find the angle of a pad away from the origin
+defn pad-angle (pad-ref:Ref) -> Double:
   inside pcb-landpattern:
-    val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
+    val pad-inst = find!({ref(_) == pad-ref}, pads(self))
+    val point = center(pose(pad-inst))
+    atan2(y(point), x(point))
+
+; ====== Silk screen helpers ===================================================
+public defn draw-polarity-marker (pad-ref:Ref, part-dims?:Dims|False) :
+  val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
+  inside pcb-landpattern:
     ; draw a line of `min-silk-width` width and length 3.0 * min-silk-width 
     ; centered at origin
     defn draw-line (origin:Pose):
-      val line-width = min-silk-width
+      val line-width  = min-silk-width
       val line-length = line-width * 3.0
       val line = Line(line-width, [
-        Point(-0.5 * line-width, 0.0)
-        Point( 0.5 * line-width, 0.0)  
+        Point(min-silk-width * 0.5, 0.0)
+        Point(line-width + min-silk-width * 0.5, 0.0)  
       ])
       layer(Silkscreen("pol", Top)) = origin * line
 
-  ; compute the positions of the pad-1 and corner
-  defn compute-poses () -> [Pose, Pose]:
-    val lp-dims = extant-dims()
-    val pad-1     = find!({ref(_) == pad-1-ref}, pads(self))
-    val pad-1-loc = center(pose(pad-1))
-    val pad-1-dims = dims(pad-shape(def-pad(pad-1)))
-    val pad-1-radius = 0.5 * sqrt(x(pad-1-dims) * x(pad-1-dims) + y(pad-1-dims) * y(pad-1-dims)) + SOLDER-MASK-REGISTRATION
-    println("pad-1-radius: %_, d:%_" % [pad-1-radius, pad-1-dims])
-    ; if the lp is wider than it is tall and the x position is positive, polarity marker goes to the right
-    ; if the lp is wider than it is tall and the x position is negative, polarity marker goes to the left
-    ; if the lp is taller than it is wide and the y position is positive, polarity marker goes up
-    ; if hte lp is taller than it is wide and the y poisition is negative, polarity marker goes down
-    val angle = 
-      if x(lp-dims) > y(lp-dims):
-        if x(pad-1-loc) > 0.0: 
-          0.0
-        else:
-          PI
-      else: 
-        if y(pad-1-loc) > 0.0:
-          0.5 * PI
-        else: 
-          1.5 * PI
-    
-    val corner =
-      if x(pad-1-loc) >= 0.0 and y(pad-1-loc) >= 0.0: 
-        loc(0.5 * x(lp-dims), 0.5 * y(lp-dims)) 
-      else if x(pad-1-loc) > 0.0 and y(pad-1-loc) < 0.0:
-        loc(-0.5 * x(lp-dims), 0.5 * y(lp-dims))
-      else if x(pad-1-loc) < 0.0 and y(pad-1-loc) >= 0.0:
-        loc(0.5 * x(lp-dims), -0.5 * y(lp-dims))
-      else:
-        loc(-0.5 * x(lp-dims), -0.5 * y(lp-dims))
-    val rotation = 90.0 when x(lp-dims) > y(lp-dims) else 0.0
-    val pose = pose(pad-1) * loc(cos(angle) * pad-1-radius, sin(angle) * pad-1-radius)
-    [sub-angle(corner, rotation), sub-angle(pose, rotation)]
+    defn part-pose () :
+      match(part-dims?) :
+        (_:False): 
+          loc(0.0, 0.0)
+        (d:Dims): 
+          loc(x(d) * -0.5,
+              y(d) *  0.5 + min-silk-width * 0.5 + PLACEMENT-TOLERANCE)
 
-  val [corner, pad-1] = compute-poses()
-  draw-line(corner when distance-to-center(corner) > distance-to-center(pad-1) else pad-1)
+    defn pad-pose ():
+      val lp-dims    = extant-dims()
+      val pad-1      = find!({ref(_) == pad-ref}, pads(self))
+      val pad-loc    = pose(pad-1)
+      val pad-dims   = dims(pad-shape(def-pad(pad-1)))
+      val R = SOLDER-MASK-REGISTRATION + min-silk-width * 0.5 + SILK-SOLDER-MASK-CLEARANCE + 0.01
+      loc(
+        x(pad-dims) * -0.5 + x(center(pad-loc)) - SOLDER-MASK-REGISTRATION
+        y(pad-dims) *  0.5 + y(center(pad-loc)) + R
+      )
+    
+    val [p1, p2] = [pad-pose(), part-pose()] 
+    draw-line $
+      if distance-to-center(p1) > distance-to-center(p2):
+        p1
+      else: 
+        p2
+
+public defn draw-polarity-marker (p:Ref):
+  draw-polarity-marker(p, false)
 
 ; Create a reference label at (0, 0)
 ; ====== Reference Label Helpers ===============================================
@@ -1138,8 +1134,8 @@ public defn make-ipc-compliant-two-pin-landpattern (length:Toleranced,      ; L
     val land-length = 0.5 * (Zmax - Gmin)
     val land-width  = Xmin
 
-    val x-max = 0.5 * Gmin + 0.5 * land-length
-    val x-min = -1.0 * x-max
+    val y-max = 0.5 * Gmin + 0.5 * land-length
+    val y-min = -1.0 * y-max
     ; println("land-length:%_, land-width:%_, x-min:%_, x-max:%_" % [land-length, land-width, x-min, x-max])
 
     val refs: Tuple<Ref> = 
@@ -1147,10 +1143,10 @@ public defn make-ipc-compliant-two-pin-landpattern (length:Toleranced,      ; L
       [IndexRef(Ref("p"), 1), IndexRef(Ref("p"), 2)]
 
     ; generate the landpattern
-    val pad_ = smd-pad(Rectangle(land-length, land-width))
-    println("xmin:%_, xmax:%_" % [x-min, x-max])
-    pad (refs[0]): pad_ at loc(x-min, 0.0)
-    pad (refs[1]): pad_ at loc(x-max, 0.0)
+    ; Note: by convention we swap here. 
+    val pad_ = smd-pad(Rectangle(land-width, land-length))
+    pad (refs[0]): pad_ at loc(0.0, y-max)
+    pad (refs[1]): pad_ at loc(0.0, y-min)
 
     val dims = extant-dims()
     layer(Courtyard(Top)) = offset(Rectangle(x(dims), y(dims)), courtyard-excess(fillets))
