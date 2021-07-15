@@ -22,7 +22,6 @@ defn ensure-even-positive! (value: Int, name: String):
 
 ; ====== Silk screen helpers ===================================================
 public defn draw-polarity-marker (pad-1-ref:Ref):
-  ; find pad 1
   inside pcb-landpattern:
     val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
     defn draw-line (origin:Pose):
@@ -42,27 +41,30 @@ public defn draw-polarity-marker (pad-1-ref:Ref):
       ) 
       val center = corner + Point(
         -0.5 * min-silk-width - PLACEMENT-TOLERANCE, 
-        0.5 * min-silk-width + PLACEMENT-TOLERANCE
+         0.5 * min-silk-width + PLACEMENT-TOLERANCE
       )
       Pose(center, 0.0, false)
 
     defn pad-1-pose () -> Pose:
+      val lp-dims  = extant-dims()
       val pad-1    = find!({ref(_) == pad-1-ref}, pads(self))
       val pad-dims = dims(pad-shape(def-pad(pad-1)))
-      val dims     = extant-dims()
       val pad-loc  = pose(pad-1)
-      if x(dims) > y(dims):
-        val translation = -0.5 * x(pad-dims) 
-        ; rotated 90 degrees
-      else:
-        println("...")
+      val direction = 
+        if x(lp-dims) > y(lp-dims):
+          90.0
+        else:
+          0.0
+      val pad-w  = x(pad-dims)
+      val pad-h  = y(pad-dims)
+      val radius = 0.5 * sqrt(pad-w * pad-w + pad-h * pad-h) 
+                 + 0.5 * min-silk-width 
+                 + PLACEMENT-TOLERANCE
+      
+      sub-angle(radius * cos(direction), radius * sin(direction)) * pad-loc, direction)
 
     val [p1, p2] = [corner-pose(), pad-1-pose()]
-    draw-line $ 
-      if x(center(p1)) > x(center(p2)) or y(center(p1)) > y(center(p2)):
-        p1
-      else:
-        p2
+    draw-line(p1 when distance-from-origin(p1) > distance-from-origin(p2) else p2)
 
 ; Create a reference label at (0, 0)
 ; ====== Reference Label Helpers ===============================================
@@ -140,6 +142,10 @@ defn chamfered (anchor:Anchor, width:Double, height:Double, r:Double):
 ;==============================================================================
 ;=========================== Geometric Helpers ================================
 ;==============================================================================
+public defn distance-from-origin (p:Pose) -> Double:
+  val [x, y] = [x(center(p)), y(center(p))]
+  sqrt(x * x + y * y)
+
 ; Creata a unit rectangle (width = length = 1.0)
 public defn unit-rectangle ():
   Rectangle(1.0, 1.0)
