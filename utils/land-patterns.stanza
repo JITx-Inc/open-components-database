@@ -50,8 +50,12 @@ public defn draw-polarity-marker (pad-ref:Ref, part-dims?:Dims|False) :
           loc(x(d) * -0.5,
               y(d) *  0.5 + min-silk-width * 0.5 + PLACEMENT-TOLERANCE)
 
+    defn distance (p:Pose):
+      val [x, y] = [x(center(p)), y(center(p))]
+      sqrt(x * x + y * y)
+    
     defn pad-pose ():
-      val lp-dims    = extant-dims()
+      val lp-dims    = extent-dims()
       val pad-1      = find!({ref(_) == pad-ref}, pads(self))
       val pad-loc    = pose(pad-1)
       val pad-dims   = dims(pad-shape(def-pad(pad-1)))
@@ -63,7 +67,7 @@ public defn draw-polarity-marker (pad-ref:Ref, part-dims?:Dims|False) :
     
     val [p1, p2] = [pad-pose(), part-pose()] 
     draw-line $
-      if distance-to-center(p1) > distance-to-center(p2):
+      if distance(p1) > distance(p2):
         p1
       else: 
         p2
@@ -148,7 +152,7 @@ defn chamfered (anchor:Anchor, width:Double, height:Double, r:Double):
 ;=========================== Geometric Helpers ================================
 ;==============================================================================
 ; ====== Land pattern utilities ===============================================
-; Find the extant dimensions of a landpattern given all its layers and pads.
+; Find the extent dimensions of a landpattern given all its layers and pads.
 public defn extent-dims () -> Dims:
   inside pcb-landpattern:
     val all-shapes = cat-all $ [
@@ -574,6 +578,14 @@ public pcb-landpattern dummy-landpattern (n:Int, courtyard:[Double,Double]):
 ; X - pad height
 ; w, h - width and height of courtyard in mm
 public defn make-two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double, courtyard?:True|False, polarized?:True|False) :
+  make-ipc-compliant-two-pin-landpattern(Toleranced(Z, 0.0) ; length
+                                         Toleranced(X, 0.0) ; width
+                                         Toleranced(0.5 * (Z - G), 0.0) ; lead-length
+                                         DensityLevelC              ; density-level
+                                         polarized?)
+
+
+public defn make-two-pin-landpattern-1 (Z:Double, G:Double, X:Double, w:Double, h:Double, courtyard?:True|False, polarized?:True|False) :
   inside pcb-landpattern :
     val Y = (Z - G) / 2.0 ; width of pad
     val C2 = (G + Y) / 2.0 ; distance between pad center and package centerline
@@ -600,7 +612,7 @@ public pcb-landpattern two-pin-landpattern (Z:Double, G:Double, X:Double, w:Doub
 public pcb-landpattern two-pin-polarized-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
   make-two-pin-landpattern(Z,G,X,w,h,true,true)
 
-public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False):
+public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False, v1?:True|False):
   inside pcb-landpattern :
     val [Z, G, X, nr, nc] = switch(part-name) :
       "008004":[0.35, 0.10, 0.14, 0.35, 0.14]
@@ -627,9 +639,15 @@ public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|Fals
         val nr = Z
         val nc = X
         [Z, G, X, nr, nc]
-    make-two-pin-landpattern(Z, G, X, nr, nc, courtyard?, polarized?)
+    if v1?:
+      make-two-pin-landpattern-1(Z, G, X, nr, nc, courtyard?, polarized?)
+    else:
+      make-two-pin-landpattern(Z, G, X, nr, nc, courtyard?, polarized?)
     external-names = ([part-name])
     ref-label()
+
+public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False):
+  make-ipc-two-pin-landpattern(part-name, courtyard?, polarized?, true)
 
 ;<test>
 part-name: "008004" "006003" "01007" "5040" ; last 3 are made up
@@ -922,22 +940,22 @@ public pcb-landpattern INDC1005X55 :
 
 public pcb-landpattern CAPT1005X55 :
   make-ipc-two-pin-landpattern("0402")
-  layer(Silkscreen("pol", Top)) = PlusSymbol(-1.7, 0.0)
+  draw-polarity-marker(IndexRef(Ref("p"), 1))
   ref-label()
 
 public pcb-landpattern CAPT1608X80 :
   make-ipc-two-pin-landpattern("0603")
-  layer(Silkscreen("pol", Top)) = PlusSymbol(-2.2, 0.0)
+  draw-polarity-marker(IndexRef(Ref("p"), 1))
   ref-label()
 
 public pcb-landpattern CAPT2012X125 :
   make-ipc-two-pin-landpattern("0805")
-  layer(Silkscreen("pol", Top)) = PlusSymbol(-2.4, 0.0)
+  draw-polarity-marker(IndexRef(Ref("p"), 1))
   ref-label()
 
 public pcb-landpattern CAPT3216X160 :
   make-ipc-two-pin-landpattern("1206")
-  layer(Silkscreen("pol", Top)) = PlusSymbol(-3.0, 0.0)
+  draw-polarity-marker(IndexRef(Ref("p"), 1))
   ref-label()
 
 public pcb-landpattern FUSC7330X390 :
@@ -1102,13 +1120,14 @@ public defn make-ipc-compliant-two-pin-landpattern (length:Toleranced,      ; L
       [Ref("a"), Ref("c")] when polarized? else 
       [IndexRef(Ref("p"), 1), IndexRef(Ref("p"), 2)]
 
+    println("land-width:%_, land-length:%_" % [land-width, land-length])
     ; generate the landpattern
-    ; Note: by convention we swap here. 
+    ; Note: by convention we swap x/y here. 
     val pad_ = smd-pad(Rectangle(land-width, land-length))
     pad (refs[0]): pad_ at loc(0.0, y-max)
     pad (refs[1]): pad_ at loc(0.0, y-min)
 
-    val dims = extant-dims()
+    val dims = extent-dims()
     layer(Courtyard(Top)) = offset(Rectangle(x(dims), y(dims)), courtyard-excess(fillets))
 
     if polarized?:

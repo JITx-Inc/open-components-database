@@ -10,6 +10,8 @@ defpackage ocdb/test/land-patterns:
   import ocdb/tolerance
   import ocdb/box-symbol
   import ocdb/rules
+  import ocdb/generic-components
+  import ocdb/passive-land-sizes
 
 pcb-component example-1:
   port p: pin[[1, 2]]
@@ -32,21 +34,31 @@ pcb-component example-2:
       Toleranced(3.2, 0.2),
       Toleranced(1.6, 0.2),
       Toleranced(0.8, 0.3),
-      Toleranced(1.2, 0.1), ; lead width if different
+      Toleranced(1.2, 0.1),
       DensityLevelC,
       true,
     )
-    val dims = extant-dims()
+    val dims = extent-dims()
     layer(Courtyard(Top)) = Rectangle(max(x(dims), 1.0), max(y(dims), 3.2))
 
   landpattern = lp(a => lp.a, c => lp.c)
   make-box-symbol()
 
+pcb-component example-3:
+  port p: pin[[1 2]]
+  val lp = chip-resistor-landpattern("0402", true)
+  landpattern = lp(p[1] => lp.p[1] 
+                   p[2] => lp.p[2])
+  make-box-symbol()
 pcb-module main-module:
   inst e1: example-1
-  inst e2: example-2
-
+  ;inst e2: example-3
+  inst e3: gen-res-cmp(1.0e3,  "0402")
+  ;inst e4: gen-tant-cap-cmp(1.0e-6, "0603")
+  place(e1) at loc(-1.5, 0.0) on Top
+  ;place(e2) at loc(0.0, 0.0) on Top
+  place(e3) at loc(1.5, 0.0) on Top
 set-rules(sierra-adv-rules)
 make-default-board(main-module, 2, Rectangle(10.0, 10.0))
-; view-board()
-view(example-2)
+view-board()
+; view(example-2)

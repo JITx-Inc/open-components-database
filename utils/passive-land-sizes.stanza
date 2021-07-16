@@ -1,11 +1,13 @@
 #use-added-syntax(jitx, tests)
-defpackage ocdb/passive-dimensions:
+defpackage ocdb/passive-land-sizes:
   import core
   import collections
   import math
   import lang-utils
   import jitx
   import jitx/commands
+  import ocdb/design-vars
+  import ocdb/land-patterns
   import ocdb/tolerance
 
 ; A helper struct to contain the physical dimensions of a 
@@ -14,6 +16,9 @@ public pcb-struct ocdb/passive-dimensions/PassiveDimensions:
   length:Toleranced,
   width:Toleranced,
   lead-length:Toleranced,
+
+defmethod print (o:OutputStream, d:PassiveDimensions):
+  print(o, "Dimensions(length:%_, width:%_, lead-length:%_)" % [length(d), width(d), lead-length(d)])
 
 ; Parse a part name to get its nominal dimensions. 
 defn parse (part-name:String, imperial?:True|False) -> Dims:
@@ -95,7 +100,7 @@ defn resistor-lead-length (package-length-mm:Double) -> Toleranced:
     ; This is a best guess, the lead length ~ 1/3rd of the package length with
     ; a manufacturing tolerance of +/- 15%. This is based on the values in the table
     ; above, and should be updated as the library matures. 
-    tol%(0.15, max(0.33 * package-length, 0.6), 0.15)
+    tol%(0.15, max(0.33 * package-length-mm, 0.6), 0.15)
   
 ; Retrieve the tolerance on length/width given the package length in mm. This is
 ; a best guess, based on the tables above.
@@ -105,11 +110,11 @@ defn resistor-tolerance (package-length-mm:Double) -> Double:
          tol  in [0.02, 0.03, 0.15, 0.20, 0.2, 0.2, 0.2, 0.2, 0.2]) do:
       if in-range?(Toleranced(base, tol), package-length-mm):
         return(tol)
-    0.15 * package-length
+    0.15 * package-length-mm
 
 ; Make a best guess at our resistor dimensions given the information we have available.
 public defn resistor-dimensions (part-name:String, imperial?:True|False) -> PassiveDimensions:
-  var dims = parse(part-name, imperial?)
+  var dims: Dims = parse(part-name, imperial?)
   if imperial?:
     dims = mil-to-mm(dims)
   val lead-length = resistor-lead-length(x(dims))
@@ -119,6 +124,15 @@ public defn resistor-dimensions (part-name:String, imperial?:True|False) -> Pass
     Toleranced(y(dims), tol),
     lead-length
   )
+
+public pcb-landpattern chip-resistor-landpattern (part-name:String, imperial?:True|False):
+  val dimensions = resistor-dimensions(part-name, imperial?)
+  println("%_" % [dimensions])
+  make-ipc-compliant-two-pin-landpattern(length(dimensions)
+                                         width(dimensions)
+                                         lead-length(dimensions)
+                                         DensityLevelC
+                                         imperial?)
 
 ;=======================================================================
 ;=========================== Tests =====================================
