@@ -272,6 +272,9 @@ public pcb-pad smd-pad (s:Shape):
   name  = "SMD Pad"
   type  = SMD
   shape = s
+  ; TODO: add the soldermask manually here with offset so it's 
+  ;       clear and we don't accidentally screw up assumptions 
+  ;       in callers
   apply-soldermask()
 
 ; Create an rectangular SMD pad 
@@ -1059,12 +1062,12 @@ public pcb-landpattern smd-testpoint-pkg (d:Double) :
 public defn make-two-pin-chip-landpattern (length:Toleranced,
                                            width:Toleranced,
                                            lead-length:Toleranced,
-                                           lead-width?:False|Toleranced
+                                           lead-width?:False|Toleranced, ; in case different from width
                                            fabrication-tolerance:Double,
                                            placement-tolerance:Double
                                            density-level:DensityLevel,
-                                           polarized?:True|False,
-                                           solder-mask-defined?:True|False):
+                                           polarized?:True|False):
+                                          ;  solder-mask-defined?:True|False): ; 
   inside pcb-landpattern:
     ; helper to compute the pad refs
     defn pad-refs () -> Tuple<Ref>:
@@ -1081,15 +1084,15 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
 
     ; compute the solder fillets based on the protrusion type
     val land-protrusion-type = BigRectangularLeads when nominal(length) > 0.6 else SmallRectangularLeads
+    ; lookup 
     val fillets = lead-fillets(land-protrusion-type, density-level)
 
-    val Cw = max(plus(width),  minus(width))
-    val Cl = max(plus(length), minus(length))
+    val Cw = max-tolerance(width)  ; is this the most reasonable? 
+    val Cl = max-tolerance(length) 
     val Cs = 
       let:
-        val a = max(plus(lead-length), minus(lead-length))
-        val b = max(plus(length), minus(length))
-        sqrt(a * a + b * b)
+        val Ct = max-tolerance(lead-length)
+        sqrt(Ct * Ct + Cl * Cl)
     
     ; compute the base dimensions of the lands
     val Lmax = max(length)
@@ -1111,20 +1114,28 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
     val land-length = 0.5 * (Zmax - Gmin)
     val land-width  = Xmin
 
+    ; ----------------------------------------------------
     val y-max = 0.5 * Gmin + 0.5 * land-length
     val y-min = -1.0 * y-max
 
     val refs = pad-refs()
-    val pad_ = smd-pad(Rectangle(land-width, land-length))
+    val pad_ = smd-pad(Rectangle(land-width, land-length)) ; pass in solder-mask-defined? 
+
     pad (refs[0]): pad_ at loc(0.0, y-max)
     pad (refs[1]): pad_ at loc(0.0, y-min)
 
-    val dims = extent-dims()
-    layer(Courtyard(Top)) = offset(Rectangle(x(dims), y(dims)), courtyard-excess(fillets))
-
+    val lp-x-size  = land-width + SOLDER-MASK-REGISTRATION
+    val lp-y-size  = Zmax + SOLDER-MASK-REGISTRATION
+    val cmp-x-size = max(width)
+    val cmp-y-size = max(length)
+    val cy-x-size  = max(lp-x-size, cmp-x-size)
+    val cy-y-size  = max(lp-y-size, cmp-y-size)
+  
+    layer(Courtyard(Top)) = offset(Rectangle(cy-x-size, cy-y-size), courtyard-excess(fillets))
     if polarized?:
       draw-polarity-marker(Ref("a"))
-    ref-label()
+
+    ref-label() ; TODO place the ref label in a better place
 
 public defn make-two-pin-chip-landpattern (length:Toleranced,
                                            width:Toleranced,
