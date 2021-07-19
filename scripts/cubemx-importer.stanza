@@ -439,6 +439,47 @@ defn print-i2s (o:OutputStream, mcu:Stm32MCU):
       pin-names
     )
 
+defn print-quad-spi (o:OutputStream, mcu:Stm32MCU):
+  for ip-block in filter(prefix?{instance-name(_),"QUADSPI"}, ip(mcu)) do:
+    val pins = unique-pins-for(instance-name(ip-block), mcu)
+    val optional = StringBuffer()
+
+    print-pins(pins)
+
+    val io0? = contains?(pins, "BK1_IO0")
+    val io1? = contains?(pins, "BK1_IO1")
+    val io2? = contains?(pins, "BK1_IO2")
+    val io3? = contains?(pins, "BK1_IO3")
+    val ncs? = contains?(pins, "NCS") or contains?(pins, "BK1_NCS")
+    val clk? = contains?(pins, "CLK")
+
+    val bundle-name = "quad-spi"
+    val pin-names = to-tuple(cat-all([
+      ["sdio0"] when io0? else []
+      ["sdio1"] when io1? else []
+      ["sdio2"] when io2? else []
+      ["sdio3"] when io3? else []
+      ["cs"]  when ncs? else []
+      ["sck"]  when clk? else []
+    ]))
+
+    do(println, pin-names)
+
+    val signal-names = to-tuple(cat-all([
+      ["IO0"] when io0? else []
+      ["IO1"] when io1? else []
+      ["IO2"] when io2? else []
+      ["IO3"] when io3? else []
+      ["NCS"] when ncs? else []
+      ["CLK"] when clk? else []
+    ]))
+
+    print-bundle-data(
+      o, mcu, instance-name(ip-block), bundle-name,
+      signal-names
+      pin-names
+    )
+
 ;==============================================================================
 ;============================= UART edge cases ================================
 ;==============================================================================
@@ -569,6 +610,7 @@ public defn make-supports ():
   do(println{os, _}, dac)
 
   ; Next print the IP blocks we care about
+  print-quad-spi(os, mcu)
   print-i2c(os, mcu)
   print-can(os, mcu)
   print-spi(os, mcu)
