@@ -578,14 +578,6 @@ public pcb-landpattern dummy-landpattern (n:Int, courtyard:[Double,Double]):
 ; X - pad height
 ; w, h - width and height of courtyard in mm
 public defn make-two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double, courtyard?:True|False, polarized?:True|False) :
-  make-ipc-compliant-two-pin-landpattern(Toleranced(Z, 0.0) ; length
-                                         Toleranced(X, 0.0) ; width
-                                         Toleranced(0.5 * (Z - G), 0.0) ; lead-length
-                                         DensityLevelC              ; density-level
-                                         polarized?)
-
-
-public defn make-two-pin-landpattern-1 (Z:Double, G:Double, X:Double, w:Double, h:Double, courtyard?:True|False, polarized?:True|False) :
   inside pcb-landpattern :
     val Y = (Z - G) / 2.0 ; width of pad
     val C2 = (G + Y) / 2.0 ; distance between pad center and package centerline
@@ -640,7 +632,7 @@ public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|Fals
         val nc = X
         [Z, G, X, nr, nc]
     if v1?:
-      make-two-pin-landpattern-1(Z, G, X, nr, nc, courtyard?, polarized?)
+      make-two-pin-landpattern(Z, G, X, nr, nc, courtyard?, polarized?)
     else:
       make-two-pin-landpattern(Z, G, X, nr, nc, courtyard?, polarized?)
     external-names = ([part-name])
@@ -1064,16 +1056,23 @@ public pcb-landpattern smd-testpoint-pkg (d:Double) :
   layer(Silkscreen("f-silk", Top)) = Circle(d / 2.0)
   ref-label()
 
-public defn make-ipc-compliant-two-pin-landpattern (length:Toleranced,      ; L
-                                                    width:Toleranced,       ; W
-                                                    lead-length:Toleranced, ; T
-                                                    lead-width?:False|Toleranced,  ; ...
-                                                    fabrication-tolerance:Double,
-                                                    placement-tolerance:Double
-                                                    density-level:DensityLevel,
-                                                    polarized?:True|False,
-                                                    solder-mask-defined?:True|False):
+public defn make-two-pin-chip-landpattern (length:Toleranced,
+                                           width:Toleranced,
+                                           lead-length:Toleranced,
+                                           lead-width?:False|Toleranced
+                                           fabrication-tolerance:Double,
+                                           placement-tolerance:Double
+                                           density-level:DensityLevel,
+                                           polarized?:True|False,
+                                           solder-mask-defined?:True|False):
   inside pcb-landpattern:
+    ; helper to compute the pad refs
+    defn pad-refs () -> Tuple<Ref>:
+      if polarized?:
+        [Ref("a"), Ref("c")]
+      else:
+        [IndexRef(Ref("p"), 1), IndexRef(Ref("p"), 2)]
+    
     ; helper to compute the excess required by density level and tolerances
     defn wiggle-room (C:Double):
       val F = fabrication-tolerance
@@ -1084,7 +1083,7 @@ public defn make-ipc-compliant-two-pin-landpattern (length:Toleranced,      ; L
     val land-protrusion-type = BigRectangularLeads when nominal(length) > 0.6 else SmallRectangularLeads
     val fillets = lead-fillets(land-protrusion-type, density-level)
 
-    val Cw = max(plus(width), minus(length))
+    val Cw = max(plus(width),  minus(length))
     val Cl = max(plus(length), minus(length))
     val Cs = 
       let:
@@ -1114,15 +1113,8 @@ public defn make-ipc-compliant-two-pin-landpattern (length:Toleranced,      ; L
 
     val y-max = 0.5 * Gmin + 0.5 * land-length
     val y-min = -1.0 * y-max
-    ; println("land-length:%_, land-width:%_, x-min:%_, x-max:%_" % [land-length, land-width, x-min, x-max])
 
-    val refs: Tuple<Ref> = 
-      [Ref("a"), Ref("c")] when polarized? else 
-      [IndexRef(Ref("p"), 1), IndexRef(Ref("p"), 2)]
-
-    println("land-width:%_, land-length:%_" % [land-width, land-length])
-    ; generate the landpattern
-    ; Note: by convention we swap x/y here. 
+    val refs = pad-refs()
     val pad_ = smd-pad(Rectangle(land-width, land-length))
     pad (refs[0]): pad_ at loc(0.0, y-max)
     pad (refs[1]): pad_ at loc(0.0, y-min)
@@ -1134,64 +1126,77 @@ public defn make-ipc-compliant-two-pin-landpattern (length:Toleranced,      ; L
       draw-polarity-marker(Ref("a"))
     ref-label()
 
-public defn make-ipc-compliant-two-pin-landpattern (length:Toleranced,      ; L
-                                                    width:Toleranced,       ; W
-                                                    lead-length:Toleranced, ; T
-                                                    lead-width?:False|Toleranced,  ; ...
-                                                    density-level:DensityLevel,
-                                                    polarized?:True|False):
-  make-ipc-compliant-two-pin-landpattern(
+public defn make-two-pin-chip-landpattern (length:Toleranced,
+                                           width:Toleranced,
+                                           lead-length:Toleranced,
+                                           lead-width?:False|Toleranced,  ; ...
+                                           density-level:DensityLevel,
+                                           polarized?:True|False):
+  make-two-pin-chip-landpattern(
     length, width, lead-length, lead-width?, 
     FABRICATION-TOLERANCE, PLACEMENT-TOLERANCE, 
     density-level, polarized?,
     false
   )
 
-public defn make-ipc-compliant-two-pin-landpattern (length:Toleranced,      ; L
-                                                    width:Toleranced,       ; W
-                                                    lead-length:Toleranced, ; T
-                                                    density-level:DensityLevel,
-                                                    polarized?:True|False):
-  make-ipc-compliant-two-pin-landpattern(
+public defn make-two-pin-chip-landpattern (length:Toleranced,
+                                           width:Toleranced,
+                                           lead-length:Toleranced,
+                                           density-level:DensityLevel,
+                                           polarized?:True|False):
+  make-two-pin-chip-landpattern(
     length, width, lead-length, false, 
     density-level, polarized?
   )
 
-public pcb-landpattern ipc-compliant-two-pin-landpattern (length:Toleranced,
-                                                          width:Toleranced,
-                                                          lead-length:Toleranced,
-                                                          lead-width?:False|Toleranced,
-                                                          fabrication-tolerance:Double,
-                                                          placement-tolerance:Double
-                                                          density-level:DensityLevel,
-                                                          polarized?:True|False,
-                                                          solder-mask-defined?:True|False):
-  make-ipc-compliant-two-pin-landpattern(
+; Create a two pin chip landpattern factoring in factory tolerances 
+public pcb-landpattern two-pin-chip-landpattern (length:Toleranced,
+                                                 width:Toleranced,
+                                                 lead-length:Toleranced,
+                                                 lead-width?:False|Toleranced,
+                                                 fabrication-tolerance:Double,
+                                                 placement-tolerance:Double
+                                                 density-level:DensityLevel,
+                                                 polarized?:True|False,
+                                                 solder-mask-defined?:True|False):
+  make-two-pin-chip-landpattern(
     length, width, lead-length, lead-width?,
     fabrication-tolerance, placement-tolerance, 
     density-level, polarized?
     solder-mask-defined?
   )
 
-public defn ipc-compliant-two-pin-landpattern (length:Toleranced,
-                                               width:Toleranced,
-                                               lead-length:Toleranced,
-                                               lead-width?:False|Toleranced,
-                                               density-level:DensityLevel,
-                                               polarized?:True|False):
-  ipc-compliant-two-pin-landpattern(
+; Createa a two pin chip landpattern with a custom lead width, if it exists.s
+public defn two-pin-chip-landpattern (length:Toleranced,
+                                      width:Toleranced,
+                                      lead-length:Toleranced,
+                                      lead-width?:False|Toleranced,
+                                      density-level:DensityLevel,
+                                      polarized?:True|False):
+  two-pin-chip-landpattern(
     length, width, lead-length, lead-width?, 
     FABRICATION-TOLERANCE, PLACEMENT-TOLERANCE, 
     density-level, polarized?,
     false
   )
 
-public defn ipc-compliant-two-pin-landpattern (length:Toleranced,       ; L
-                                                width:Toleranced,       ; W
-                                                lead-length:Toleranced, ; T
-                                                density-level:DensityLevel,
-                                                polarized?:True|False):
-  ipc-compliant-two-pin-landpattern(
+; Create a two-pin chip landpattern with a custom density level
+public defn two-pin-chip-landpattern (length:Toleranced,
+                                      width:Toleranced,
+                                      lead-length:Toleranced,
+                                      density-level:DensityLevel,
+                                      polarized?:True|False):
+  two-pin-chip-landpattern(
     length, width, lead-length, false, 
     density-level, polarized?
+  )
+
+; Create a two-pin chip landpattern given legnth, width, and lead-lengths
+public defn two-pin-chip-landpattern (length:Toleranced,
+                                      width:Toleranced,
+                                      lead-length:Toleranced,
+                                      polarized?:True|False):
+  two-pin-chip-landpattern(
+    length, width, lead-length, false, 
+    DensityLevelC, polarized?
   )
