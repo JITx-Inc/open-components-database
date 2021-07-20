@@ -418,24 +418,43 @@ defn print-i2s (o:OutputStream, mcu:Stm32MCU):
     val pins = unique-pins-for(instance-name(ip-block), mcu)
     val optional = StringBuffer()
 
-    val mck? = contains?(pins, "MCLK")
+    val mck? = contains?(pins, "MCK")
     val sdmi? = contains?(pins, "SDI")
+    val sd? = contains?(pins, "SD")
+    val sdo? = contains?(pins, "SDO")
+    val extsd? = contains?(pins, "ext_SD")
+    val ck? = contains?(pins, "CK")
+    val sck? = contains?(pins, "SCK")
+
     if mck?:
-      print(optional, "I2S-MCK, ")
+      print(optional, "I2S-MCK")
     if sdmi?:
-      print(optional, "I2S-SDMI")
+      if empty?(optional):
+        print(optional, "I2S-SDMI")
+      else:
+        print(optional, ", I2S-SDMI")
     
     val bundle-name = "i2s()" when empty?(optional) else to-string("i2s([%_])" % [optional])
     val pin-names = to-tuple(cat-all([
       ["mck"]  when mck? else []
       ["sdmi"] when sdmi? else []
-      ["ws" "ck" "sdmo"]
+      ["sdmo"] when sd? else []
+      ["sdmo"] when sdo? else []
+      ["sdmo"] when extsd? else []
+      ["ck"] when ck? else []
+      ["ck"] when sck? else []
+      ["ws"]
     ]))
 
     val signal-names = to-tuple(cat-all([
-      ["MCLK"] when mck? else []
+      ["MCK"] when mck? else []
       ["SDI"] when sdmi? else []
-      ["WS" "CK" "SDO"]
+      ["SD"] when sd? else []
+      ["SDO"] when sdo? else []
+      ["ext_SD"] when extsd? else []
+      ["CK"] when ck? else []
+      ["SCK"] when sck? else []
+      ["WS"]
     ]))
 
     print-bundle-data(
