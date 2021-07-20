@@ -413,34 +413,30 @@ defn print-oscillator (o:OutputStream, mcu:Stm32MCU):
       ["in", "out"]
     )
 
+; print-i2s currently ignores ext_SD and CKIN signals
 defn print-i2s (o:OutputStream, mcu:Stm32MCU):
   for ip-block in filter(prefix?{instance-name(_),"I2S"}, ip(mcu)) do:
     val pins = unique-pins-for(instance-name(ip-block), mcu)
-    val optional = StringBuffer()
 
     val mck? = contains?(pins, "MCK")
     val sdmi? = contains?(pins, "SDI")
     val sd? = contains?(pins, "SD")
     val sdo? = contains?(pins, "SDO")
-    val extsd? = contains?(pins, "ext_SD")
     val ck? = contains?(pins, "CK")
     val sck? = contains?(pins, "SCK")
 
-    if mck?:
-      print(optional, "I2S-MCK")
-    if sdmi?:
-      if empty?(optional):
-        print(optional, "I2S-SDMI")
-      else:
-        print(optional, ", I2S-SDMI")
-    
-    val bundle-name = "i2s()" when empty?(optional) else to-string("i2s([%_])" % [optional])
+    val optional = Vector<String>()
+    if mck?: 
+      add(optional, "I2S-MCK")
+    if sdmi?: 
+      add(optional, "I2S-SDMI")
+
+    val bundle-name = "i2s()" when empty?(optional) else to-string("i2s([%,])" % [optional])
     val pin-names = to-tuple(cat-all([
       ["mck"]  when mck? else []
       ["sdmi"] when sdmi? else []
       ["sdmo"] when sd? else []
       ["sdmo"] when sdo? else []
-      ["sdmo"] when extsd? else []
       ["ck"] when ck? else []
       ["ck"] when sck? else []
       ["ws"]
@@ -451,7 +447,6 @@ defn print-i2s (o:OutputStream, mcu:Stm32MCU):
       ["SDI"] when sdmi? else []
       ["SD"] when sd? else []
       ["SDO"] when sdo? else []
-      ["ext_SD"] when extsd? else []
       ["CK"] when ck? else []
       ["SCK"] when sck? else []
       ["WS"]
@@ -463,12 +458,13 @@ defn print-i2s (o:OutputStream, mcu:Stm32MCU):
       pin-names
     )
 
+; print-quad-spi currently ignores BK2 signals
 defn print-quad-spi (o:OutputStream, mcu:Stm32MCU):
   for ip-block in filter(prefix?{instance-name(_),"QUADSPI"}, ip(mcu)) do:
     val pins = unique-pins-for(instance-name(ip-block), mcu)
     val optional = StringBuffer()
 
-    print-pins(pins)
+    ; print-pins(pins)
 
     val io0? = contains?(pins, "BK1_IO0")
     val io1? = contains?(pins, "BK1_IO1")
@@ -489,7 +485,7 @@ defn print-quad-spi (o:OutputStream, mcu:Stm32MCU):
       ["sck"]  when clk? else []
     ]))
 
-    do(println, pin-names)
+    ;do(println, pin-names)
 
     val signal-names = to-tuple(cat-all([
       ["BK1_IO0"] when io0? else []
@@ -564,7 +560,7 @@ defn uart-case (instance-name:String, mcu:Stm32MCU) -> UartCase:
     for c in 0 to 4 do:
       val check = uart-cubemx-pins(UartCase(c))
       if same-set?(to-hashset<String>(uart-cubemx-pins(UartCase(c))), pins):
-        println("uart-case: Returning %_" % [UartCase(c)])
+        ; println("uart-case: Returning %_" % [UartCase(c)])
         return(UartCase(c))
     fatal("Unsupported UART pin set: %," % [pins])
 
@@ -655,3 +651,4 @@ defn print-pins (pins:Set<String>):
   for p in pins do:
     print("%_, " % [p])
   println(" ")
+
