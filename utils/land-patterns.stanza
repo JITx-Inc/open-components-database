@@ -144,26 +144,26 @@ public defn apply-soldermask (mask-shape:Shape):
 ; Create the soldermask layers based on the pad shape, using a fixed factor.
 ; when expand? is true the soldermask shape is computed with expand(), else it is
 ; computed with offset()
-public defn apply-soldermask (amount:Double, expand?:True|False):
+public defn apply-soldermask (amount:Double):
   val mask-shape = 
     match(pad-shape(self)):
       (s:Rectangle|Circle|RoundedRectangle|Segment|Capsule):
-        val func = expand when expand? else offset
-        func(s, amount)
+        offset(s, amount)
       (s:ChamferedRectangle|DShape):
         val d = dims(s)
-        val expansion = 1.0 + amount / max(x(d), y(d))
-        expand(s, expansion)
+        val expansion-factor = 1.0 + amount / max(x(d), y(d))
+        expand(s, expansion-factor)
       (s:Shape):
-        ; FIXME: allow offset/expand to be used for other shapes!!
-        s  
+        ; FIXME: for other shapes we need an implementation of offset
+        s
+
   inside pcb-landpattern:
     apply-soldermask(mask-shape)
 
 ; Apply a default soldermask layer to a pcb-pad, using the SOLDER-MASK-REGISTRATION
 ; design variable and offset() method.
 public defn apply-soldermask ():
-  apply-soldermask(SOLDER-MASK-REGISTRATION, false)
+  apply-soldermask(SOLDER-MASK-REGISTRATION)
 
 ; A "solder mask defined pad" is one where the soldermask opening is smaller than 
 ; the pad shape. This method takes a pad as an argument and converts it into a 
