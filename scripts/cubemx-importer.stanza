@@ -314,6 +314,11 @@ defn print-bundle-data (
   cubemx-signals:Tuple<String> ; signals in cubemx data we want to map
   ocdb-pins:Tuple<String>,     ; pins of the bundle we care about
 ):
+  ; in order to support indexing ew sanitize the pin names a bit first
+  defn sanitize (s:String):
+    replace(s, "[", "_") $> 
+    replace{_, "]", "_"}
+
   if length(ocdb-pins) != length(cubemx-signals):
     fatal("invalid mapping of cubemx signals to pcb-bundle data in ocdb.")
   
@@ -339,9 +344,9 @@ defn print-bundle-data (
   println(o, "supports %_:" % [ocdb-name])
   val os = IndentedStream(o)
   for (op in ocdb-pins, s in signals*) do:
-    println(os, "require %_-pin: %_" % [op, s])
+    println(os, "require %_-pin: %_" % [sanitize(op), s])
   for op in ocdb-pins do:
-    println(os, "%_.%_ => %_-pin.p" % [ocdb-name, op, op])
+    println(os, "%_.%_ => %_-pin.p" % [ocdb-name, op, sanitize(op)])
   println(o,"")
 
 defn print-bundle (
@@ -379,10 +384,10 @@ defn print-spi (o:OutputStream, mcu:Stm32MCU):
   )
 
 defn print-i2c (o:OutputStream, mcu:Stm32MCU):
-  print-bundle(
+  print-bundle(               
     o, mcu, "I2C", "i2c"
     ["SDA", "SCL"]
-    ["sda", "scl"]
+    ["sda", "scl"] 
     suffix?{_, "SMBA"}
   )
 
@@ -431,6 +436,50 @@ defn print-i2s (o:OutputStream, mcu:Stm32MCU):
       ["MCLK"] when mck? else []
       ["SDI"] when sdmi? else []
       ["WS" "CK" "SDO"]
+    ]))
+
+    print-bundle-data(
+      o, mcu, instance-name(ip-block), bundle-name,
+      signal-names
+      pin-names
+    )
+
+defn print-quad-spi (o:OutputStream, mcu:Stm32MCU):
+  for ip-block in filter(prefix?{instance-name(_),"QUADSPI"}, ip(mcu)) do:
+    val pins = unique-pins-for(instance-name(ip-block), mcu)
+    val optional = StringBuffer()
+
+    print-pins(pins)
+
+    val io0? = contains?(pins, "BK1_IO0")
+    val io1? = contains?(pins, "BK1_IO1")
+    val io2? = contains?(pins, "BK1_IO2")
+    val io3? = contains?(pins, "BK1_IO3")
+    val ncs? = contains?(pins, "NCS")
+    val bk1-ncs? = contains?(pins, "BK1_NCS")
+    val clk? = contains?(pins, "CLK")
+
+    val bundle-name = "quad-spi"
+    val pin-names = to-tuple(cat-all([
+      ["sdio[0]"] when io0? else []
+      ["sdio[1]"] when io1? else []
+      ["sdio[2]"] when io2? else []
+      ["sdio[3]"] when io3? else []
+      ["cs"]  when ncs? else []
+      ["cs"]  when bk1-ncs? else []
+      ["sck"]  when clk? else []
+    ]))
+
+    do(println, pin-names)
+
+    val signal-names = to-tuple(cat-all([
+      ["BK1_IO0"] when io0? else []
+      ["BK1_IO1"] when io1? else []
+      ["BK1_IO2"] when io2? else []
+      ["BK1_IO3"] when io3? else []
+      ["BK1_NCS"] when bk1-ncs? else []
+      ["NCS"] when ncs? else []
+      ["CLK"] when clk? else []
     ]))
 
     print-bundle-data(
@@ -569,6 +618,7 @@ public defn make-supports ():
   do(println{os, _}, dac)
 
   ; Next print the IP blocks we care about
+  print-quad-spi(os, mcu)
   print-i2c(os, mcu)
   print-can(os, mcu)
   print-spi(os, mcu)
