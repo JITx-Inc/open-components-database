@@ -44,6 +44,10 @@ defstruct AdcOption:
 defstruct DacOption:
   dac:Stm32Pin
 
+; An option for Timer
+defstruct TimerOption:
+  timer:Stm32Pin
+
 ; An option for an SWD port
 defstruct SwdOption:
   swdio:Stm32Pin
@@ -151,6 +155,11 @@ defmethod print (o:OutputStream, opt:DacOption):
   println(o, "supports dac:")
   val os = IndentedStream(o)
   println(os, "dac.dac => self.%_" % [pin-name(dac(opt))])
+
+defmethod print (o:OutputStream, opt:TimerOption):
+  println(o, "supports timer:")
+  val os = IndentedStream(o)
+  println(os, "timer.timer => self.%_" % [pin-name(timer(opt))])
 
 ;==============================================================================
 ;=============================== Helpers ======================================
@@ -304,6 +313,20 @@ defn dac-pin? (s:String) -> True|False :
 ; the dac pins of the mcu
 defn dac-pins (pins:Tuple<Stm32Pin>) -> Tuple<DacOption>:
   to-tuple(seq(DacOption, pins-with-signal(pins, dac-pin?)))
+
+; Only generates support statements for timer pins that have
+; format TIM[0-9]+_CH[0-9]+ - example TIM3_CH1
+; It ignores other types (exhaustive list of formats)
+; TIM15_BK, TIM15_BKIN, TIM15_CH1N, TIM19_ETR, TIM1_BK2,
+; TIM1_BKIN2, TIM1_BKIN2_COMP1, TIM1_BKIN_COMP1, TIMX_IC1
+defn timer-pin? (s:String) -> True|False :
+  val b = not empty?(regex-match("^TIM[0-9]+_CH[0-9]+[^N]", s))
+  ;println("%_ : %_" % [s, b])
+  b
+
+; the adc pins of the mcu
+defn timer-pins (pins:Tuple<Stm32Pin>) -> Tuple<TimerOption>:
+  to-tuple(seq(TimerOption, pins-with-signal(pins, timer-pin?)))
 
 ; code generator to map create supports statements from instance names
 defn print-bundle-data (
@@ -631,6 +654,9 @@ public defn make-supports ():
 
   val dac = dac-pins(pins(mcu))
   do(println{os, _}, dac)
+
+  val timers = timer-pins(pins(mcu))
+  do(println{os, _}, timers)
 
   ; Next print the IP blocks we care about
   print-quad-spi(os, mcu)
