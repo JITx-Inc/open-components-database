@@ -17,6 +17,15 @@ defpackage ocdb/checks:
 public defn check-design (module:JITXObject):
   inside pcb-module:
     for i in component-instances(module) do :
+
+      check rated-temperature(i)
+
+      if has-property?(i.capacitance) :
+        check capacitor-check(i)
+
+      if has-property?(i.resistance) :
+        check resistor-check(i)
+
       for p in pins(i) do :
         ; Check more pins once we get more voltage information from SPICE
         if has-property?(p.generic-pin) :
@@ -25,10 +34,7 @@ public defn check-design (module:JITXObject):
           check power-pin(p)
         if has-property?(p.reset-pin) :
           check reset-pin(p)
-      check rated-temperature(i)
 
-      if has-property?(i.capacitance) :
-        check capacitor-check(i)
     check io(module)
 
 defn get-other-pin (comp:JITXObject,  p:JITXObject) :
@@ -186,17 +192,19 @@ public pcb-check voltage-levels (p:JITXObject, range:[Double,Double,Double]) :
 public pcb-check resistor-check (r:JITXObject) :
   #CHECK(has-property?(r.resistor))
   #CHECK(has-property?(r.operating-point))
-  val [vpk i temp] = [lookup(property(r.operating-point), `voltage-pk) lookup(property(r.operating-point), `current-rms) property(r.temperature)]
+  val [vpk i temp] = [[min(peak-voltage(property(r.operating-point))) max(peak-voltage(property(r.operating-point)))] max(peak-current(property(r.operating-point))) OPERATING-TEMPERATURE[1]]
+
   val power = property(r.resistance) * pow(i, 2.0)
-  #CHECK(abs(vpk[0]) <= property(r.rated-voltage))
-  #CHECK(abs(vpk[1]) <= property(r.rated-voltage))
   if has-property?(r.derating) :
     ; Derate the power based on the piecewise linear curve from MFG
     val derating = PWL(property(r.derating))[temp]
     val pwr = derating * property(r.rated-power)
     #CHECK(pwr * DERATE-RESISTOR-POWER > power)
   else :
-    #CHECK(property(r.rated-power) * DERATE-RESISTOR-POWER > power)
+    ; Derate the power if MFG derating is missing
+    val derating = PWL([[0.0 1.0] [70.0 1.0] [125.0 0.0]])[temp]
+    val pwr = derating * property(r.rated-power)
+    #CHECK(pwr * DERATE-RESISTOR-POWER > power)
 
 public pcb-check capacitor-check (c:JITXObject) :
   #CHECK(has-property?(c.capacitor))
@@ -252,7 +260,7 @@ public pcb-check capacitor-check (c:JITXObject) :
 
     else : println("Unhandled type for capacitor check on %_" % [c])
 
-  #CHECK(temp >= min(operating-temperature(property(c.rated-temperature))))
+  #CHECK(OPERATING-TEMPERATURE[0] >= min(operating-temperature(property(c.rated-temperature))))
 
 ; Checks the frequency of an oscillator (o) against an interface on an IC (intf)
 public pcb-check oscillator-check-frequency (o:JITXObject, intf:CrystalOscillator) :

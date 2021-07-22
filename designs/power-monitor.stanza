@@ -19,30 +19,42 @@ OPERATING-TEMPERATURE = [-40.0, 90.0]
 
 pcb-module power-monitor :
   inst fmc :ocdb/samtec/ASP-134488-01/component
-  place(fmc) at loc(0.0, 35.0) on Top
+  place(fmc) at loc(0.0, -35.0) on Top
+  set-power-source(fmc.v12p0 ,fmc.gnd, 12.0)
 
   net GND (fmc.gnd)
-  set-power-source(fmc.v12p0 ,fmc.gnd, 12.0)
+  symbol(GND) = ocdb/symbols/ground-sym
 
   inst fpga : ocdb/microsemi/A2F200M3F-FGG256I/module
 
 ; Rails to monitor
-  val power-rails = [ PowerRail(fmc.v12p0,         Interval(11.9, 12.1, 12.0))
+  val power-rails = [ PowerRail(fmc.v12p0,         Interval(11.95, 12.05, 12.0))
                       PowerRail(fpga.src-1V5.vdd,  Interval(1.45, 1.55, 1.50))
                       PowerRail(fpga.src-3V3.vdd,  Interval(3.25, 3.35, 3.30))
                       PowerRail(fpga.src-io.vdd,   Interval(1.77, 1.83, 1.80))]
 
-  inst mon : ocdb/maxim/MAX1606x/module(power-rails)
 
-  ; symbol(P3V3) = ocdb/symbols/supply-sym
-  symbol(GND) = ocdb/symbols/ground-sym
-  property(self.gnd) = GND
+  inst mon : ocdb/maxim/MAX1606x/module(power-rails)
+  net (mon.power.gnd GND)
+  net (mon.power.vdd fmc.p3v3)
+
+  require POD:gpio[30] from fpga
+  require POD-ext:gpio[30] from fmc
+  net (POD, POD-ext)
+
+  require comm-bus:lvds[16] from fpga
+  require comm-bus-ext:lvds[16] from fmc
+  net (comm-bus, comm-bus-ext)
+  for i in ports(comm-bus) do :
+    ocdb/terminations/terminate-lvds(i)
 
   ; Mechanicals
   add-mounting-holes(board-shape, "M2", [2 3])
 
   ; Run the schematic review 
-  check-design(self)
+  property(self.gnd) = GND
+  eval-when true:
+    check-design(self)
 
 val powered-design = run-final-passes(transform-module(generate-power, power-monitor))
 make-default-board(powered-design, 4, board-shape)
