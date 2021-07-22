@@ -13,6 +13,7 @@ defpackage ocdb/passive-circuits:
   import ocdb/design-vars
   import ocdb/db-parts
   import ocdb/solvers/voltage-divider
+  import ocdb/property-structs
 
 
 ;======================================================
@@ -38,6 +39,20 @@ public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
   val solution = voltage-divider(v-in, v-out, current)
   match(solution: VoltageDividerSolution) :
     make-voltage-divider-module(in, out, lo, v-out, to-jitx(r1(solution)), to-jitx(r2(solution)), vo(solution))
+  else :
+    fatal("No solution for voltage divider.")
+
+public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
+                                  v-in:[Double,Double,Double],
+                                  v-out:[Double,Double,Double],
+                                  current:Double) :
+  ; println("Solving voltage divider [in=%_, out=%_, low=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A]"
+  ;         % [ref(in), ref(out), ref(lo), v-out[0], v-out[1], v-out[2], current])
+  ;Extract voltages from input pin
+
+  val solution = voltage-divider(v-in, v-out, current)
+  match(solution: VoltageDividerSolution) :
+    make-voltage-divider-module(in, out, lo, v-out, to-esir(r1(solution)), to-esir(r2(solution)), vo(solution))
   else :
     fatal("No solution for voltage divider.")
 

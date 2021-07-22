@@ -1,0 +1,53 @@
+#use-added-syntax(jitx)
+defpackage ocdb/designs/power-monitor :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/generic-components
+  import ocdb/bundles
+  import ocdb/design-vars
+  import ocdb/micro-controllers
+  import ocdb/generator-utils
+  import ocdb/property-structs
+  import ocdb/checks
+
+val board-shape = RoundedRectangle(3.55 * 25.4, 3.775 * 25.4, 1.0)
+
+OPERATING-TEMPERATURE = [-40.0, 90.0]
+
+pcb-module power-monitor :
+  inst fmc :ocdb/samtec/ASP-134488-01/component
+  place(fmc) at loc(0.0, 35.0) on Top
+
+  net GND (fmc.gnd)
+  set-power-source(fmc.v12p0 ,fmc.gnd, 12.0)
+
+  inst fpga : ocdb/microsemi/A2F200M3F-FGG256I/module
+
+; Rails to monitor
+  val power-rails = [ PowerRail(fmc.v12p0,         Interval(11.9, 12.1, 12.0))
+                      PowerRail(fpga.src-1V5.vdd,  Interval(1.45, 1.55, 1.50))
+                      PowerRail(fpga.src-3V3.vdd,  Interval(3.25, 3.35, 3.30))
+                      PowerRail(fpga.src-io.vdd,   Interval(1.77, 1.83, 1.80))]
+
+  inst mon : ocdb/maxim/MAX1606x/module(power-rails)
+
+  ; symbol(P3V3) = ocdb/symbols/supply-sym
+  symbol(GND) = ocdb/symbols/ground-sym
+  property(self.gnd) = GND
+
+  ; Mechanicals
+  add-mounting-holes(board-shape, "M2", [2 3])
+
+  ; Run the schematic review 
+  check-design(self)
+
+val powered-design = run-final-passes(transform-module(generate-power, power-monitor))
+make-default-board(powered-design, 4, board-shape)
+
+view-board()
+view-schematic()
+
+export-cad()
