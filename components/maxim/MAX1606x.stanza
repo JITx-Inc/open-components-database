@@ -13,6 +13,7 @@ defpackage ocdb/maxim/MAX1606x:
   import ocdb/symbols
   import ocdb/box-symbol
   import ocdb/property-structs
+  import ocdb/passive-circuits
 
 public pcb-component component :
   name = "MAX1606x+"
@@ -33,13 +34,13 @@ public pcb-component component :
     [SRT         | 11             | Left     | -             ]
     [nMARGIN     | 12             | Left     | -             ]
     [TOL         | 20             | Left     | generic-props ]
-    [nRESET      | 16             | Right    | generic-props ]
     [out[1]      | 15             | Right    | generic-props ]
     [out[2]      | 14             | Right    | generic-props ]
     [out[3]      | 13             | Right    | generic-props ]
     [out[4]      | 7              | Right    | generic-props ]
     [out[5]      | 8              | Right    | generic-props ]
     [out[6]      | 9              | Right    | generic-props ]
+    [nRESET      | 16             | Right    | generic-props ]
     [GND         | 5              | Down     | -             ]
     [PAD         | 21             | Down     | -             ]
     [VCC         | 6              | Up       | -             ]
@@ -55,9 +56,9 @@ public pcb-component component :
     for p in [self.TOL self.SRT self.nMR self.WDI self.nMARGIN] do :
       property(p.generic-pin) = GenericPin(Interval(-0.3, vdd + 0.3, false), 100.0)
 
-public pcb-module module :
+public pcb-module module (rails:Tuple<PowerRail>):
   port power:power
-  port in : pin[[1 through 6]]
+  port input : pin[[1 through 6]]
   port out : pin[[1 through 6]]
 
   pin wdi     
@@ -72,15 +73,24 @@ public pcb-module module :
   net (power.vdd monitor.VCC)
   net (power.gnd monitor.GND monitor.PAD)
   bypass-cap-strap(monitor.VCC, monitor.GND, 0.1e-6)
-  net (in, monitor.in)
+  ; net (in, monitor.in)
   net (out, monitor.out)
 
-  net (monitor.WDI     , wdi    ) 
-  net (monitor.nMR     , nmr    ) 
-  net (monitor.SRT     , srt    ) 
-  net (monitor.nMARGIN , nmargin) 
-  net (monitor.TOL     , tol    ) 
-  net (monitor.nRESET  , nreset )
+  net (monitor.WDI    , wdi    ) 
+  net (monitor.nMR    , nmr    ) 
+  net (monitor.SRT    , srt    ) 
+  net (monitor.nMARGIN, nmargin) 
+  net (monitor.TOL    , tol    ) 
+  net (monitor.nRESET , nreset )
+  net (monitor.TOL, monitor.VCC)
+  
+  eval-when true:
+    if not empty?(rails) :
+      for (r in rails, i in to-seq(1 to false)) do :
+        net (rail(r) input[i])
+        make-voltage-divider(input[i], monitor.in[i], power.gnd, [min(voltage(r)) (nominal(voltage(r)) as Double) max(voltage(r))],  [0.398 0.425 0.45], 0.1e-3)
+
+    schematic-group(self) = monitor
 
   
 
