@@ -27,16 +27,15 @@ public defn check-design (module:JITXObject):
         if has-property?(p.reset-pin) :
           check reset-pin(p)
       check rated-temperature(i)
+
+      if has-property?(i.capacitance) :
+        check capacitor-check(i)
     check io(module)
     check-all-landpatterns(module)
 
 defn get-other-pin (comp:JITXObject,  p:JITXObject) :
-  val pins = pins(comp)
-  var op
-  for ps in pins do :
-    if ps != p :
-      op  = ps
-  op
+  for ps in pins(comp) find! :
+    ps != p
 
 public pcb-check rated-temperature (component:JITXObject):
   ; println("%_ check temp-rating" % [ref(component)])
@@ -203,10 +202,10 @@ public pcb-check resistor-check (r:JITXObject) :
 
 public pcb-check capacitor-check (c:JITXObject) :
   #CHECK(has-property?(c.capacitor))
-  ; #CHECK(has-property?(c.operating-point))
-  ; #CHECK(has-property?(c.operating-point))
+  #CHECK(has-property?(c.operating-point))
 
-  val [vpk temp] = [lookup(property(c.operating-point), `voltage-pk) OPERATING-TEMPERATURE[1]]
+  val [vpk temp] = [[min(peak-voltage(property(c.operating-point))) max(peak-voltage(property(c.operating-point)))] OPERATING-TEMPERATURE[1]]
+  val max-temp = max(operating-temperature(property(c.rated-temperature)))
   switch(property(c.type)) :
 
     "ceramic" :
@@ -216,7 +215,7 @@ public pcb-check capacitor-check (c:JITXObject) :
       val vpk-derate-nom = PWL(DERATE-CAPACITOR-MLCC-VPK-NOM)[temp]
       #CHECK(vpk[0] <= (vpk-derate-nom * property(c.rated-voltage)))
       #CHECK(vpk[1] <= (vpk-derate-nom * property(c.rated-voltage)))
-      #CHECK(temp <= min(DERATE-CAPACITOR-MLCC-TEMP, property(c.rated-temperature)[1]))
+      #CHECK(temp <= min(DERATE-CAPACITOR-MLCC-TEMP, max-temp))
 
     "electrolytic" :
       #CHECK(has-property?(c.anode))
@@ -225,7 +224,7 @@ public pcb-check capacitor-check (c:JITXObject) :
 
       if (property(c.anode) == "tantalum" and property(c.electrolyte) == "polymer") :
         #CHECK(vpk[1]   <= (DERATE-CAPACITOR-ETANTPOLY-VPK * property(c.rated-voltage)))
-        #CHECK(temp  <= min(DERATE-CAPACITOR-ETANTPOLY-TEMP, property(c.rated-temperature)[1]))
+        #CHECK(temp  <= min(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp))
         #CHECK(i-pk  <= property(c.rated-current-pk))
         #CHECK(i-rms <= PWL(property(c.rated-current-rms))[temp])
         #CHECK(vpk[0]  >= 0.0)
@@ -239,11 +238,11 @@ public pcb-check capacitor-check (c:JITXObject) :
           val vpk-derate-nom = PWL(DERATE-CAPACITOR-ETANTMNO2-VPK-NOM)[temp]
           #CHECK(vpk[1]  <= (vpk-derate-wc * property(c.rated-voltage)))
           #CHECK(vpk[1]  <= (vpk-derate-nom * property(c.rated-voltage)))
-          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, property(c.rated-temperature)[1]))
-          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, property(c.rated-temperature)[1]))
+          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp))
+          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp))
         else if i-pk > 2.0 :
           #CHECK(vpk[1]  <= (DERATE-CAPACITOR-ETANTMNO2-VPK * property(c.rated-voltage)))
-          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, property(c.rated-temperature)[1]))
+          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp))
 
       else :
         println("Unhandled electrolytic type for capacitor check on %_" % [c])
@@ -251,11 +250,11 @@ public pcb-check capacitor-check (c:JITXObject) :
     "mica" :
       #CHECK(vpk[0] <= (DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage)))
       #CHECK(vpk[1] <= (DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage)))
-      #CHECK(temp <= min(DERATE-CAPACITOR-MICA-TEMP, property(c.rated-temperature)[1]))
+      #CHECK(temp <= min(DERATE-CAPACITOR-MICA-TEMP, max-temp))
 
     else : println("Unhandled type for capacitor check on %_" % [c])
 
-  #CHECK(temp >= property(c.rated-temperature)[0])
+  #CHECK(temp >= min(operating-temperature(property(c.rated-temperature))))
 
 ; Checks the frequency of an oscillator (o) against an interface on an IC (intf)
 public pcb-check oscillator-check-frequency (o:JITXObject, intf:CrystalOscillator) :
