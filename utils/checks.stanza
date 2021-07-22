@@ -9,6 +9,7 @@ defpackage ocdb/checks:
   import ocdb/space-derating
   import ocdb/generator-utils
   import ocdb/property-structs
+  import ocdb/design-vars
 
 ; ==== Check convenience functions ===
 ; ====================================
@@ -24,6 +25,7 @@ public defn check-design (module:JITXObject):
           check power-pin(p)
         if has-property?(p.reset-pin) :
           check reset-pin(p)
+      check rated-temperature(i)
     check io(module)
 
 defn get-other-pin (comp:JITXObject,  p:JITXObject) :
@@ -33,6 +35,14 @@ defn get-other-pin (comp:JITXObject,  p:JITXObject) :
     if ps != p :
       op  = ps
   op
+
+public pcb-check rated-temperature (component:JITXObject):
+  ; println("%_ check temp-rating" % [ref(component)])
+  #CHECK(has-property?(component.rated-temperature))
+  val temp = operating-temperature(property(component.rated-temperature))
+  ; println("Rating %_" % [temp])
+  #CHECK(contains?(temp, OPERATING-TEMPERATURE[0]))
+  #CHECK(contains?(temp, OPERATING-TEMPERATURE[1]))
 
 public pcb-check io (module:JITXObject) :
   val pins = to-tuple(seq-cat(pins, component-instances(module)))
@@ -191,8 +201,10 @@ public pcb-check resistor-check (r:JITXObject) :
 
 public pcb-check capacitor-check (c:JITXObject) :
   #CHECK(has-property?(c.capacitor))
-  #CHECK(has-property?(c.operating-point))
-  val [vpk temp] = [lookup(property(c.operating-point), `voltage-pk) property(c.temperature)]
+  ; #CHECK(has-property?(c.operating-point))
+  ; #CHECK(has-property?(c.operating-point))
+
+  val [vpk temp] = [lookup(property(c.operating-point), `voltage-pk) OPERATING-TEMPERATURE[1]]
   switch(property(c.type)) :
 
     "ceramic" :

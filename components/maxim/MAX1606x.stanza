@@ -12,37 +12,77 @@ defpackage ocdb/maxim/MAX1606x:
   import ocdb/bundles
   import ocdb/symbols
   import ocdb/box-symbol
+  import ocdb/property-structs
 
 public pcb-component component :
   name = "MAX1606x+"
   manufacturer = "Maxim Integrated"
   mpn = "MAX16061ETP+"
   description = "1% Accurate, Quad-/Hex-/Octal-Voltage µP Supervisors"
+  val generic-props = GenericPin(Interval(-0.3, 6.0, false), 100.0)
   pin-properties :
-    [pin:Ref     | pads:Int ...   | side:Dir]
-    [in[0]   | 17 | Left]
-    [in[1]   | 18 | Left]
-    [in[2]   | 19 | Left]
-    [in[3]   | 1  | Left]
-    [in[4]   | 2  | Left]
-    [in[5]   | 3  | Left]
-    [WDI     | 4  | Left]
-    [nMR     | 10 | Left]
-    [SRT     | 11 | Left]
-    [nMARGIN | 12 | Left]
-    [TOL     | 20 | Left]
-    [nRESET  | 16 | Right]
-    [out[0]  | 15 | Right]
-    [out[1]  | 14 | Right]
-    [out[2]  | 13 | Right]
-    [out[3]  | 7  | Right]
-    [out[4]  | 8  | Right]
-    [out[5]  | 9  | Right]
-    [GND     | 5  | Down]
-    [PAD     | 21  | Down]
-    [VCC     | 6  | Up]
+    [pin:Ref     | pads:Int ...   | side:Dir | generic-pin:GenericPin]
+    [in[1]       | 17             | Left     | generic-props ]
+    [in[2]       | 18             | Left     | generic-props ]
+    [in[3]       | 19             | Left     | generic-props ]
+    [in[4]       | 1              | Left     | generic-props ]
+    [in[5]       | 2              | Left     | generic-props ]
+    [in[6]       | 3              | Left     | generic-props ]
+    [WDI         | 4              | Left     | -             ]
+    [nMR         | 10             | Left     | -             ]
+    [SRT         | 11             | Left     | -             ]
+    [nMARGIN     | 12             | Left     | -             ]
+    [TOL         | 20             | Left     | generic-props ]
+    [nRESET      | 16             | Right    | generic-props ]
+    [out[1]      | 15             | Right    | generic-props ]
+    [out[2]      | 14             | Right    | generic-props ]
+    [out[3]      | 13             | Right    | generic-props ]
+    [out[4]      | 7              | Right    | generic-props ]
+    [out[5]      | 8              | Right    | generic-props ]
+    [out[6]      | 9              | Right    | generic-props ]
+    [GND         | 5              | Down     | -             ]
+    [PAD         | 21             | Down     | -             ]
+    [VCC         | 6              | Up       | -             ]
+
   make-box-symbol()
   assign-landpattern(qfn-landpattern(0.5, 4.0, 20, 0.25, 0.55, [2.1, 2.1]))
 
+  property(self.rated-temperature) = RatedTemperature(Interval(-40.0, 125.0, false))
+
+  property(self.VCC.power-pin) = PowerPin(Interval(1.0, 5.5, false))
+  eval-when has-property?(self.VCC.rail-voltage):
+    val vdd = property(self.VCC.rail-voltage)
+    for p in [self.TOL self.SRT self.nMR self.WDI self.nMARGIN] do :
+      property(p.generic-pin) = GenericPin(Interval(-0.3, vdd + 0.3, false), 100.0)
+
 public pcb-module module :
-  inst i : component
+  port power:power
+  port in : pin[[1 through 6]]
+  port out : pin[[1 through 6]]
+
+  pin wdi     
+  pin nmr     
+  pin srt     
+  pin nmargin 
+  pin tol     
+  pin nreset  
+
+  inst monitor : ocdb/maxim/MAX1606x/component
+
+  net (power.vdd monitor.VCC)
+  net (power.gnd monitor.GND monitor.PAD)
+  bypass-cap-strap(monitor.VCC, monitor.GND, 0.1e-6)
+  net (in, monitor.in)
+  net (out, monitor.out)
+
+  net (monitor.WDI     , wdi    ) 
+  net (monitor.nMR     , nmr    ) 
+  net (monitor.SRT     , srt    ) 
+  net (monitor.nMARGIN , nmargin) 
+  net (monitor.TOL     , tol    ) 
+  net (monitor.nRESET  , nreset )
+
+  
+
+
+
