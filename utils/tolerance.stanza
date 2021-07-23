@@ -6,9 +6,9 @@ defpackage ocdb/tolerance:
 
 ; A generic value with some tolerance. May be offcenter (upper tolerance != lower tolerance)
 public pcb-struct ocdb/tolerance/Toleranced:
-  nominal:Double,
-  plus:Double,
-  minus:Double,
+  tol+:Double,
+  tol-:Double,
+  typ: Double,
 
 defmethod print (o:OutputStream, t:Toleranced):
   println(o, "Toleranced(typ:%_, +:%_, -:%_)" % [nominal(t), plus(t), minus(t)])
@@ -33,45 +33,28 @@ public defn tol (tol+:Double, typ:Double, tol-:Double) -> Toleranced:
 
 ; Return the upper tolerance, as a percentage
 public defn tol+% (t:Toleranced) -> Double:
-  plus(t) / nominal(t)
+  tol+(t) / typ(t)
 
 ; Return the lower tolerance, as a percentage
 public defn tol-% (t:Toleranced) -> Double:
-  minus(t) / nominal(t)
+  tol-(t) / typ(t)
 
 ; Return the max value
-public defn max (t:Toleranced) -> Double:
-  nominal(t) + plus(t)
+public defn max-value (t:Toleranced) -> Double:
+  typ(t) + tol-(t)
 
 ; Return the min value
-public defn min (t:Toleranced) -> Double:
-  nominal(t) - minus(t)
-
-; Return the typical value
-public defn typ (t:Toleranced) -> Double:
-  nominal(t)
-
-; Return the upper tolerance
-public defn tol+ (t:Toleranced) -> Double:
-  plus(t)
-
-; Return the lower tolerance
-public defn tol- (t:Toleranced) -> Double:
-  minus(t)
+public defn min-value (t:Toleranced) -> Double:
+  typ(t) - tol-(t)
 
 ; Return the center of the value range
 public defn center (t:Toleranced) -> Double:
-  0.5 * (min(t) + max(t))
+  0.5 * (min-value(t) + max-value(t))
 
 ; Check if a value is within the tolerance's range.
 public defn in-range? (t:Toleranced, value:Double) -> True|False:
-  value >= min(t) and value <= max(t)
+  value >= mi-value(t) and value <= max-value(t)
  
-public defn max-tolerance (t:Toleranced) -> Double : 
-  max(minus(t), plus(t))
-
-public defn min-tolerance (t:Toleranced) -> Double : 
-  min(minus(t), plus(t))
-
+ ; Return the difference between max and min of the toleranced values
 public defn tolerance-range (t:Toleranced) -> Double:
-  max(t) - min(t)
+  max-value(t) - min-value(t)
