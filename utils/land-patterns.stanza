@@ -20,13 +20,6 @@ defn ensure-even-positive! (value: Int, name: String):
   if value < 2 or value % 2 == 1:
     fatal("%_ only supports a positive even number of pins." % [name])
 
-; find the angle of a pad away from the origin
-defn pad-angle (pad-ref:Ref) -> Double:
-  inside pcb-landpattern:
-    val pad-inst = find!({ref(_) == pad-ref}, pads(self))
-    val point = center(pose(pad-inst))
-    atan2(y(point), x(point))
-
 ; ====== Silk screen helpers ===================================================
 public defn draw-polarity-marker (pad-ref:Ref, part-dims?:Dims|False) :
   val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
@@ -55,7 +48,6 @@ public defn draw-polarity-marker (pad-ref:Ref, part-dims?:Dims|False) :
       sqrt(x * x + y * y)
     
     defn pad-pose ():
-      val lp-dims    = extent-dims()
       val pad-1      = find!({ref(_) == pad-ref}, pads(self))
       val pad-loc    = pose(pad-1)
       val pad-dims   = dims(pad-shape(def-pad(pad-1)))
@@ -152,20 +144,6 @@ defn chamfered (anchor:Anchor, width:Double, height:Double, r:Double):
 ;=========================== Geometric Helpers ================================
 ;==============================================================================
 ; ====== Land pattern utilities ===============================================
-; Find the extent dimensions of a landpattern given all its layers and pads.
-public defn extent-dims () -> Dims:
-  inside pcb-landpattern:
-    val all-shapes = cat-all $ [
-      for pad_ in pads(self) seq:
-        pose(pad_) * pad-shape(def-pad(pad_))
-      for pad_ in pads(self) seq-cat:
-        for layer in filter({specifier(_) is-not Silkscreen}, layers(def-pad(pad_))) seq:
-          pose(pad_) * shape(layer)
-      for layer-shape in filter({specifier(_) is-not Silkscreen}, layers(self)) seq:
-        shape(layer-shape)
-    ]
-    Dims(0.0, 0.0) when empty?(all-shapes) else dims(Union(all-shapes))
-
 ; Create a rectangle out of lines
 public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double, line-w:Double) :
   val w2 = w * 0.5
@@ -226,8 +204,8 @@ public defn apply-soldermask (amount:Double, expand?:True|False):
       (s:ChamferedRectangle|DShape|Capsule):
         expand(s, amount)
       (s:Shape):
-        s
-  
+        ; FIXME: allow offset/expand to be used for other shapes!!
+        s  
   inside pcb-landpattern:
     apply-soldermask(mask-shape)
 
@@ -607,7 +585,7 @@ public pcb-landpattern two-pin-landpattern (Z:Double, G:Double, X:Double, w:Doub
 public pcb-landpattern two-pin-polarized-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
   make-two-pin-landpattern(Z,G,X,w,h,true,true)
 
-public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False, v1?:True|False):
+public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False):
   inside pcb-landpattern :
     val [Z, G, X, nr, nc] = switch(part-name) :
       "008004":[0.35, 0.10, 0.14, 0.35, 0.14]
@@ -634,15 +612,9 @@ public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|Fals
         val nr = Z
         val nc = X
         [Z, G, X, nr, nc]
-    if v1?:
-      make-two-pin-landpattern(Z, G, X, nr, nc, courtyard?, polarized?)
-    else:
-      make-two-pin-landpattern(Z, G, X, nr, nc, courtyard?, polarized?)
+    make-two-pin-landpattern(Z, G, X, nr, nc, courtyard?, polarized?)
     external-names = ([part-name])
     ref-label()
-
-public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False):
-  make-ipc-two-pin-landpattern(part-name, courtyard?, polarized?, true)
 
 ;<test>
 part-name: "008004" "006003" "01007" "5040" ; last 3 are made up
@@ -1083,26 +1055,26 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
       sqrt(C * C + F * F + P * P)
 
     ; compute the solder fillets based on the protrusion type
-    ; if > 16xx (1.6mm), use big rectangular leads
-    val land-protrusion-type = BigRectangularLeads when nominal(length) > 1.6 else SmallRectangularLeads
+    val land-protrusion-type = BigRectangularLeads when nominal(length) > 0.6 else SmallRectangularLeads
     ; lookup 
     val fillets = lead-fillets(land-protrusion-type, density-level)
-    val Cw = tolerance-range(width)  ; is this the most reasonable? 
-    val Cl = tolerance-range(length) 
+
+    val Cw = max-tolerance(width)  ; is this the most reasonable? 
+    val Cl = max-tolerance(length) 
     val Cs = 
       let:
-        val Ct = tolerance-range(lead-length)
+        val Ct = max-tolerance(lead-length)
         sqrt(Ct * Ct + Cl * Cl)
     
     ; compute the base dimensions of the lands
-    val Lmax = max(length)
-    val Lmin = min(length)
-    val Tmin = min(lead-length)
+    val Lmax = max-value(length)
+    val Lmin = min-value(length)
+    val Tmin = min-value(lead-length)
     val Wmin = match(lead-width?):
       (lead-width:Toleranced): 
-        min(lead-width)
+        min-value(lead-width)
       (_:False):
-        min(width)
+        min-value(width)
     
     val Smax = Lmax - 2.0 * Tmin
     val [Jt, Jh, Js] = [toe(fillets), heel(fillets), side(fillets)]
@@ -1124,20 +1096,18 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
     pad (refs[0]): pad_ at loc(0.0, y-max)
     pad (refs[1]): pad_ at loc(0.0, y-min)
 
-    val lp-x-size  = land-width + 2.0 * SOLDER-MASK-REGISTRATION
-    val lp-y-size  = Zmax + 2.0 * SOLDER-MASK-REGISTRATION
-    val cmp-x-size = max(width)
-    val cmp-y-size = max(length)
-    val excess     = courtyard-excess(fillets)
-    val cy-x-size  = max(lp-x-size, cmp-x-size) + 2.0 * excess
-    val cy-y-size  = max(lp-y-size, cmp-y-size) + 2.0 * excess
+    val lp-x-size  = land-width + SOLDER-MASK-REGISTRATION
+    val lp-y-size  = Zmax + SOLDER-MASK-REGISTRATION
+    val cmp-x-size = max-value(width)
+    val cmp-y-size = max-value(length)
+    val cy-x-size  = max(lp-x-size, cmp-x-size)
+    val cy-y-size  = max(lp-y-size, cmp-y-size)
   
-    layer(Courtyard(Top)) = Rectangle(cy-x-size, cy-y-size)
+    layer(Courtyard(Top)) = offset(Rectangle(cy-x-size, cy-y-size), courtyard-excess(fillets))
     if polarized?:
       draw-polarity-marker(Ref("a"))
 
-    val text-x = 0.5 * (cy-x-size + MIN-SILKSCREEN-TEXT-HEIGHT)
-    ref-label(loc(text-x, 0.0, -90.0),C)
+    ref-label() ; TODO place the ref label in a better place
 
 public defn make-two-pin-chip-landpattern (length:Toleranced,
                                            width:Toleranced,
