@@ -1,0 +1,59 @@
+#use-added-syntax(jitx)
+defpackage pads :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/land-patterns
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+pcb-landpattern lp (n:Int) :
+  for i in 0 to n by 6 do :
+    val d = to-double(i) * 2.0
+    val drill = 0.5
+    val x = 1.0
+    val y = 2.0
+    pad p[i] : pth-pad(drill / 2., x / 2.) at loc(d, d)
+    pad p[i + 1] : oval-pth-pad(drill, x, y) at loc(d + 2.0, d + 2.0)
+    pad p[i + 2] : rect-pth-pad(drill, x, y) at loc(d + 4.0, d + 4.0)
+    pad p[i + 3] : round-rect-pth-pad(drill, x, y, 0.25) at loc(d + 6.0, d + 6.0)
+    pad p[i + 4] : dshape-pth-pad(drill, x, y, y, 0.5) at loc(d + 8.0, d + 8.0)
+    pad p[i + 5] : chamfered-rect-pth-pad(drill, x, y, y, 0.5) at loc(d + 10.0, d + 10.0)
+  ref-label()
+
+pcb-symbol sym (n:Int) :
+  for i in 0 to n do :
+    val d = to-double(i) * 2.54
+    pin p[i] at Point(d, d)
+
+pcb-component ldo-9000-sym (n:Int) :
+  name = "AP2112"
+  manufacturer = "Diodes Incorporated"
+  description = "600-mA, Low-Dropout Regulator"
+  mpn = "AP2112K-3.3TRG1"
+  reference-prefix = "A"
+
+  port p : pin[n]
+
+  val sym = sym(n)
+  val lp = lp(n)
+  symbol = sym(for i in 0 to n do : p[i] => sym.p[i])
+  landpattern = lp(for i in 0 to n do : p[i] => lp.p[i])
+
+pcb-module ldo :
+  val num-pins = 6
+  public inst l : ldo-9000-sym(num-pins)[4]
+
+set-export-backend(`kicad)
+make-default-board(ldo, 4, Rectangle(10.0, 10.0))
+
+view-board()
+;view-schematic()
+;export-cad()
