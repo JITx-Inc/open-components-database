@@ -21,7 +21,9 @@ defn ensure-even-positive! (value: Int, name: String):
     fatal("%_ only supports a positive even number of pins." % [name])
 
 ; ====== Silk screen helpers ===================================================
-public defn draw-polarity-marker (pad-ref:Ref, part-dims?:Dims|False) :
+; Create a polarity marker relative to a pad.
+; pda
+public defn draw-polarity-marker (pad-1:JITXObject, part-dims?:Dims|False) :
   val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
   inside pcb-landpattern:
     ; draw a line of `min-silk-width` width and length 3.0 * min-silk-width 
@@ -48,7 +50,6 @@ public defn draw-polarity-marker (pad-ref:Ref, part-dims?:Dims|False) :
       sqrt(x * x + y * y)
     
     defn pad-pose ():
-      val pad-1      = find!({ref(_) == pad-ref}, pads(self))
       val pad-loc    = pose(pad-1)
       val pad-dims   = dims(pad-shape(def-pad(pad-1)))
       val R = SOLDER-MASK-REGISTRATION + min-silk-width * 0.5 + SILK-SOLDER-MASK-CLEARANCE + 0.01
@@ -64,7 +65,7 @@ public defn draw-polarity-marker (pad-ref:Ref, part-dims?:Dims|False) :
       else: 
         p2
 
-public defn draw-polarity-marker (p:Ref):
+public defn draw-polarity-marker (p:JITXObject):
   draw-polarity-marker(p, false)
 
 ; Create a reference label at (0, 0)
@@ -252,9 +253,6 @@ public pcb-pad smd-pad (s:Shape):
   name  = "SMD Pad"
   type  = SMD
   shape = s
-  ; TODO: add the soldermask manually here with offset so it's 
-  ;       clear and we don't accidentally screw up assumptions 
-  ;       in callers
   apply-soldermask()
 
 ; Create an rectangular SMD pad 
@@ -965,22 +963,22 @@ public pcb-landpattern INDC1005X55 :
 
 public pcb-landpattern CAPT1005X55 :
   make-ipc-two-pin-landpattern("0402")
-  draw-polarity-marker(IndexRef(Ref("p"), 1))
+  draw-polarity-marker(self.p[1])
   ref-label()
 
 public pcb-landpattern CAPT1608X80 :
   make-ipc-two-pin-landpattern("0603")
-  draw-polarity-marker(IndexRef(Ref("p"), 1))
+  draw-polarity-marker(self.p[1])
   ref-label()
 
 public pcb-landpattern CAPT2012X125 :
   make-ipc-two-pin-landpattern("0805")
-  draw-polarity-marker(IndexRef(Ref("p"), 1))
+  draw-polarity-marker(self.p[1])
   ref-label()
 
 public pcb-landpattern CAPT3216X160 :
   make-ipc-two-pin-landpattern("1206")
-  draw-polarity-marker(IndexRef(Ref("p"), 1))
+  draw-polarity-marker(self.p[1])
   ref-label()
 
 public pcb-landpattern FUSC7330X390 :
@@ -1097,7 +1095,6 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
                                            placement-tolerance:Double
                                            density-level:DensityLevel,
                                            polarized?:True|False):
-                                          ;  solder-mask-defined?:True|False): ; 
   inside pcb-landpattern:
     ; helper to compute the pad refs
     defn pad-refs () -> Tuple<Ref>:
@@ -1164,7 +1161,7 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
   
     layer(Courtyard(Top)) = Rectangle(cy-x-size, cy-y-size)
     if polarized?:
-      draw-polarity-marker(Ref("a"))
+      draw-polarity-marker(self.a)
 
     val text-x = 0.5 * (cy-x-size + MIN-SILKSCREEN-TEXT-HEIGHT)
     ref-label(loc(text-x, 0.0, -90.0),C)

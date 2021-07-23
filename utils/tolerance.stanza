@@ -6,16 +6,12 @@ defpackage ocdb/tolerance:
 
 ; A generic value with some tolerance. May be offcenter (upper tolerance != lower tolerance)
 public pcb-struct ocdb/tolerance/Toleranced:
+  typ: Double,
   tol+:Double,
   tol-:Double,
-  typ: Double,
 
 defmethod print (o:OutputStream, t:Toleranced):
   println(o, "Toleranced(%_ <= %_ <= %_)" % [min-value(t), typ(t), max-value(t)])
-
-; Create a tolerance value with the same tolerance in both directions
-public defn Toleranced (value:Double, tolerance:Double) -> Toleranced:
-  Toleranced(value, tolerance, tolerance)
 
 ; Create a tolerance with minimum, typical, and maximum
 public defn min-typ-max (min:Double, typ:Double, max:Double) -> Toleranced:
@@ -28,8 +24,12 @@ public defn tol% (tol+:Double, typ:Double, tol-:Double) -> Toleranced:
   Toleranced(typ, plus, minus)
 
 ; Create a tolerance from differences higher and lower
-public defn tol (tol+:Double, typ:Double, tol-:Double) -> Toleranced:
+public defn tol (typ:Double, tol+:Double, tol-:Double) -> Toleranced:
   Toleranced(typ, tol+, tol-)
+
+; Create a tolerance with the same upper and lower tolerances
+public defn tol (typ:Double, tol+-:Double) -> Toleranced:
+  tol(typ, tol+-, tol+-)
 
 ; Return the upper tolerance, as a percentage
 public defn tol+% (t:Toleranced) -> Double:
