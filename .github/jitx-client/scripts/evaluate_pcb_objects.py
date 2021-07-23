@@ -55,12 +55,15 @@ class TestAnnotationError(Exception):
 class SkipTestError(Exception):
     pass
 
+class NoResolvedArgumentValueError(Exception):
+    pass
+
 def or_regex(strings: Iterable[str]) -> str:
     return "(?:" + "|".join([s.replace("|", "\|") for s in strings]) + ")"
 
 PACKAGE_REGEX = "[\w!?/-]+"
 VARIABLE_REGEX = "[\w!?-]+"
-VALUE_REGEX = '[-+.!?"\w\d]+'
+VALUE_REGEX = "[-+.!?\"'\w\d]+"
 TYPE_SAMPLE = {
     "Char": '"c"',
     "String": '"hello world"',
@@ -107,6 +110,7 @@ def is_stanza_file(filename: str) -> bool:
 # raises:
 #   TestAnnotationError: invalid annotation, can't determine arguments
 #   SkipTestError: this test should be skipped
+#   NoResolvedArgumentValueError: this test argument value was not resolved
 def choose_pcb_object_arguments(arg_name: str, arg_type: str, file: File, line_number: int) -> Optional[List[str]]:
     if file[line_number - 1].startswith(";<test>skip<test>"):
         # skip when no argument
@@ -133,8 +137,28 @@ def choose_pcb_object_arguments(arg_name: str, arg_type: str, file: File, line_n
             else:
                 raise TestAnnotationError(number)
     else:
-        return [TYPE_SAMPLE[arg_type]]
+        cursor = line_number + 1
+        # Detect function body
+        while cursor < len(file) and file[cursor][0] in ("\n", " ", ";") :
+            cursor += 1
 
+        function_code = [l for line in file[line_number + 1:cursor] if not re.match(" *\n", (l := remove_comment(line)))]
+        for line_idx, line in enumerate(function_code[:-1]) :
+            if f"switch({arg_name})" in line :
+                if (m := re.match(f" *({VALUE_REGEX}) *:", function_code[line_idx + 1])):
+                    return [m.group(1)]
+                else:
+                    print(f"Switch parsing failure: can't retrieve example value in\n```\n{line + function_code[line_idx + 1]}\n```")
+                    break
+
+        raise NoResolvedArgumentValueError()
+
+def remove_comment(line: str) -> str :
+    idx = line.find(';')
+    if idx >= 0:
+        return line[:idx] + "\n"
+    else:
+        return line
 
 def parse_pcb_objects(file: File, file_path: str) -> List[PcbObject]:
     objects = []
@@ -145,7 +169,9 @@ def parse_pcb_objects(file: File, file_path: str) -> List[PcbObject]:
                                          m.group(2),
                                          choose_pcb_object_arguments(m.group(3), m.group(4), file, line_number)))
             except SkipTestError:
-                print(f"> Skipped {file_path}")
+                print(f"> Skipped {file_path}.")
+            except NoResolvedArgumentValueError:
+                print(f"> Skipped {file_path}: no resolved argument value.")
             except TestAnnotationError as e:
                 print(e.message.format(filename=file_path))
                 exit(1)

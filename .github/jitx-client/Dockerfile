@@ -1,6 +1,6 @@
-FROM 335772445280.dkr.ecr.us-west-1.amazonaws.com/jitx-client:dev
-# To pull this image locally, need to authenticate with Mike's ECR assuming you have an AWS Mike profile with credentials:
-# aws ecr --profile mike get-login-password --region us-west-1 | docker login --username AWS --password-stdin 335772445280.dkr.ecr.us-west-1.amazonaws.com
+FROM 657302324634.dkr.ecr.us-west-2.amazonaws.com/jitx-client:latest
+# To pull this image locally, you need to authenticate with JITX's ECR assuming you have a jitx profile with credentials:
+# aws ecr --profile jitx get-login-password --region us-west-2 | docker login --username AWS --password-stdin 657302324634.dkr.ecr.us-west-2.amazonaws.com
 
 RUN apt install -y python3.8
 

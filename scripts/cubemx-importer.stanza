@@ -44,6 +44,10 @@ defstruct AdcOption:
 defstruct DacOption:
   dac:Stm32Pin
 
+; An option for Timer
+defstruct TimerOption:
+  timer:Stm32Pin
+
 ; An option for an SWD port
 defstruct SwdOption:
   swdio:Stm32Pin
@@ -151,6 +155,11 @@ defmethod print (o:OutputStream, opt:DacOption):
   println(o, "supports dac:")
   val os = IndentedStream(o)
   println(os, "dac.dac => self.%_" % [pin-name(dac(opt))])
+
+defmethod print (o:OutputStream, opt:TimerOption):
+  println(o, "supports timer:")
+  val os = IndentedStream(o)
+  println(os, "timer.timer => self.%_" % [pin-name(timer(opt))])
 
 ;==============================================================================
 ;=============================== Helpers ======================================
@@ -305,6 +314,20 @@ defn dac-pin? (s:String) -> True|False :
 defn dac-pins (pins:Tuple<Stm32Pin>) -> Tuple<DacOption>:
   to-tuple(seq(DacOption, pins-with-signal(pins, dac-pin?)))
 
+; Only generates support statements for timer pins that have
+; format TIM[0-9]+_CH[0-9]+ - example TIM3_CH1
+; It ignores other types (exhaustive list of formats)
+; TIM15_BK, TIM15_BKIN, TIM15_CH1N, TIM19_ETR, TIM1_BK2,
+; TIM1_BKIN2, TIM1_BKIN2_COMP1, TIM1_BKIN_COMP1, TIMX_IC1
+defn timer-pin? (s:String) -> True|False :
+  val b = not empty?(regex-match("^TIM[0-9]+_CH[0-9]+[^N]", s))
+  ;println("%_ : %_" % [s, b])
+  b
+
+; the adc pins of the mcu
+defn timer-pins (pins:Tuple<Stm32Pin>) -> Tuple<TimerOption>:
+  to-tuple(seq(TimerOption, pins-with-signal(pins, timer-pin?)))
+
 ; code generator to map create supports statements from instance names
 defn print-bundle-data (
   o:OutputStream,   ; output stream to print to
@@ -314,6 +337,11 @@ defn print-bundle-data (
   cubemx-signals:Tuple<String> ; signals in cubemx data we want to map
   ocdb-pins:Tuple<String>,     ; pins of the bundle we care about
 ):
+  ; in order to support indexing ew sanitize the pin names a bit first
+  defn sanitize (s:String):
+    replace(s, "[", "_") $> 
+    replace{_, "]", "_"}
+
   if length(ocdb-pins) != length(cubemx-signals):
     fatal("invalid mapping of cubemx signals to pcb-bundle data in ocdb.")
   
@@ -339,9 +367,9 @@ defn print-bundle-data (
   println(o, "supports %_:" % [ocdb-name])
   val os = IndentedStream(o)
   for (op in ocdb-pins, s in signals*) do:
-    println(os, "require %_-pin: %_" % [op, s])
+    println(os, "require %_-pin: %_" % [sanitize(op), s])
   for op in ocdb-pins do:
-    println(os, "%_.%_ => %_-pin.p" % [ocdb-name, op, op])
+    println(os, "%_.%_ => %_-pin.p" % [ocdb-name, op, sanitize(op)])
   println(o,"")
 
 defn print-bundle (
@@ -379,10 +407,10 @@ defn print-spi (o:OutputStream, mcu:Stm32MCU):
   )
 
 defn print-i2c (o:OutputStream, mcu:Stm32MCU):
-  print-bundle(
+  print-bundle(               
     o, mcu, "I2C", "i2c"
     ["SDA", "SCL"]
-    ["sda", "scl"]
+    ["sda", "scl"] 
     suffix?{_, "SMBA"}
   )
 
@@ -408,29 +436,88 @@ defn print-oscillator (o:OutputStream, mcu:Stm32MCU):
       ["in", "out"]
     )
 
+; print-i2s currently ignores ext_SD and CKIN signals
 defn print-i2s (o:OutputStream, mcu:Stm32MCU):
   for ip-block in filter(prefix?{instance-name(_),"I2S"}, ip(mcu)) do:
     val pins = unique-pins-for(instance-name(ip-block), mcu)
-    val optional = StringBuffer()
 
-    val mck? = contains?(pins, "MCLK")
+    val mck? = contains?(pins, "MCK")
     val sdmi? = contains?(pins, "SDI")
-    if mck?:
-      print(optional, "I2S-MCK, ")
-    if sdmi?:
-      print(optional, "I2S-SDMI")
-    
-    val bundle-name = "i2s()" when empty?(optional) else to-string("i2s([%_])" % [optional])
+    val sd? = contains?(pins, "SD")
+    val sdo? = contains?(pins, "SDO")
+    val ck? = contains?(pins, "CK")
+    val sck? = contains?(pins, "SCK")
+
+    val optional = Vector<String>()
+    if mck?: 
+      add(optional, "I2S-MCK")
+    if sdmi?: 
+      add(optional, "I2S-SDMI")
+
+    val bundle-name = "i2s()" when empty?(optional) else to-string("i2s([%,])" % [optional])
     val pin-names = to-tuple(cat-all([
       ["mck"]  when mck? else []
       ["sdmi"] when sdmi? else []
-      ["ws" "ck" "sdmo"]
+      ["sdmo"] when sd? else []
+      ["sdmo"] when sdo? else []
+      ["ck"] when ck? else []
+      ["ck"] when sck? else []
+      ["ws"]
     ]))
 
     val signal-names = to-tuple(cat-all([
-      ["MCLK"] when mck? else []
+      ["MCK"] when mck? else []
       ["SDI"] when sdmi? else []
-      ["WS" "CK" "SDO"]
+      ["SD"] when sd? else []
+      ["SDO"] when sdo? else []
+      ["CK"] when ck? else []
+      ["SCK"] when sck? else []
+      ["WS"]
+    ]))
+
+    print-bundle-data(
+      o, mcu, instance-name(ip-block), bundle-name,
+      signal-names
+      pin-names
+    )
+
+; print-quad-spi currently ignores BK2 signals
+defn print-quad-spi (o:OutputStream, mcu:Stm32MCU):
+  for ip-block in filter(prefix?{instance-name(_),"QUADSPI"}, ip(mcu)) do:
+    val pins = unique-pins-for(instance-name(ip-block), mcu)
+    val optional = StringBuffer()
+
+    ; print-pins(pins)
+
+    val io0? = contains?(pins, "BK1_IO0")
+    val io1? = contains?(pins, "BK1_IO1")
+    val io2? = contains?(pins, "BK1_IO2")
+    val io3? = contains?(pins, "BK1_IO3")
+    val ncs? = contains?(pins, "NCS")
+    val bk1-ncs? = contains?(pins, "BK1_NCS")
+    val clk? = contains?(pins, "CLK")
+
+    val bundle-name = "quad-spi"
+    val pin-names = to-tuple(cat-all([
+      ["sdio[0]"] when io0? else []
+      ["sdio[1]"] when io1? else []
+      ["sdio[2]"] when io2? else []
+      ["sdio[3]"] when io3? else []
+      ["cs"]  when ncs? else []
+      ["cs"]  when bk1-ncs? else []
+      ["sck"]  when clk? else []
+    ]))
+
+    ;do(println, pin-names)
+
+    val signal-names = to-tuple(cat-all([
+      ["BK1_IO0"] when io0? else []
+      ["BK1_IO1"] when io1? else []
+      ["BK1_IO2"] when io2? else []
+      ["BK1_IO3"] when io3? else []
+      ["BK1_NCS"] when bk1-ncs? else []
+      ["NCS"] when ncs? else []
+      ["CLK"] when clk? else []
     ]))
 
     print-bundle-data(
@@ -496,7 +583,7 @@ defn uart-case (instance-name:String, mcu:Stm32MCU) -> UartCase:
     for c in 0 to 4 do:
       val check = uart-cubemx-pins(UartCase(c))
       if same-set?(to-hashset<String>(uart-cubemx-pins(UartCase(c))), pins):
-        println("uart-case: Returning %_" % [UartCase(c)])
+        ; println("uart-case: Returning %_" % [UartCase(c)])
         return(UartCase(c))
     fatal("Unsupported UART pin set: %," % [pins])
 
@@ -568,7 +655,11 @@ public defn make-supports ():
   val dac = dac-pins(pins(mcu))
   do(println{os, _}, dac)
 
+  val timers = timer-pins(pins(mcu))
+  do(println{os, _}, timers)
+
   ; Next print the IP blocks we care about
+  print-quad-spi(os, mcu)
   print-i2c(os, mcu)
   print-can(os, mcu)
   print-spi(os, mcu)
@@ -586,3 +677,4 @@ defn print-pins (pins:Set<String>):
   for p in pins do:
     print("%_, " % [p])
   println(" ")
+
