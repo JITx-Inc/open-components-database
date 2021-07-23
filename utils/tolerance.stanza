@@ -11,15 +11,20 @@ public pcb-struct ocdb/tolerance/Toleranced:
   tol-:Double,
 
 defmethod print (o:OutputStream, t:Toleranced):
-  println(o, "Toleranced(%_ <= %_ <= %_)" % [min-value(t), typ(t), max-value(t)])
+  print(o, "Toleranced(%_ <= %_ <= %_)" % [min-value(t), typ(t), max-value(t)])
 
 ; Create a tolerance with minimum, typical, and maximum
 public defn min-typ-max (min:Double, typ:Double, max:Double) -> Toleranced:
-  Toleranced(typ, typ - min, max - typ)
+  val tol- = typ - min
+  val tol+ = max - typ
+  tol(typ, tol+, tol-)
 
 ; Create a tolerance from percentages higher and lower
-public defn tol% (tol+:Double, typ:Double, tol-:Double) -> Toleranced:
-  val plus = tol+ * typ
+public defn tol% (typ:Double, tol+:Double, tol-:Double) -> Toleranced:
+  val check = min-typ-max(0.0, 0.5, 1.0)
+  fatal("tol+ must be in range 0.0 <= tol+ <= 1.0") when not in-range?(check, tol+)
+  fatal("tol- must be in range 0.0 <= tol- <= 1.0") when not in-range?(check, tol-)
+  val plus  = tol+ * typ
   val minus = tol- * typ
   Toleranced(typ, plus, minus)
 
@@ -41,7 +46,7 @@ public defn tol-% (t:Toleranced) -> Double:
 
 ; Return the max value
 public defn max-value (t:Toleranced) -> Double:
-  typ(t) + tol-(t)
+  typ(t) + tol+(t)
 
 ; Return the min value
 public defn min-value (t:Toleranced) -> Double:
@@ -49,7 +54,7 @@ public defn min-value (t:Toleranced) -> Double:
 
 ; Return the center of the value range
 public defn center (t:Toleranced) -> Double:
-  0.5 * (min-value(t) + max-value(t))
+  min-value(t) + 0.5 * (max-value(t) - min-value(t))
 
 ; Check if a value is within the tolerance's range.
 public defn in-range? (t:Toleranced, value:Double) -> True|False:
