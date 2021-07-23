@@ -1113,15 +1113,15 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
       sqrt(C * C + F * F + P * P)
 
     ; compute the solder fillets based on the protrusion type
-    val land-protrusion-type = BigRectangularLeads when nominal(length) > 0.6 else SmallRectangularLeads
+    ; if > 16xx (1.6mm), use big rectangular leads
+    val land-protrusion-type = BigRectangularLeads when typ(length) > 1.6 else SmallRectangularLeads
     ; lookup 
     val fillets = lead-fillets(land-protrusion-type, density-level)
-
-    val Cw = max-tolerance(width)  ; is this the most reasonable? 
-    val Cl = max-tolerance(length) 
+    val Cw = tolerance-range(width)  ; is this the most reasonable? 
+    val Cl = tolerance-range(length) 
     val Cs = 
       let:
-        val Ct = max-tolerance(lead-length)
+        val Ct = tolerance-range(lead-length)
         sqrt(Ct * Ct + Cl * Cl)
     
     ; compute the base dimensions of the lands
@@ -1154,18 +1154,20 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
     pad (refs[0]): pad_ at loc(0.0, y-max)
     pad (refs[1]): pad_ at loc(0.0, y-min)
 
-    val lp-x-size  = land-width + SOLDER-MASK-REGISTRATION
-    val lp-y-size  = Zmax + SOLDER-MASK-REGISTRATION
+    val lp-x-size  = land-width + 2.0 * SOLDER-MASK-REGISTRATION
+    val lp-y-size  = Zmax + 2.0 * SOLDER-MASK-REGISTRATION
     val cmp-x-size = max-value(width)
     val cmp-y-size = max-value(length)
-    val cy-x-size  = max(lp-x-size, cmp-x-size)
-    val cy-y-size  = max(lp-y-size, cmp-y-size)
+    val excess     = courtyard-excess(fillets)
+    val cy-x-size  = max(lp-x-size, cmp-x-size) + 2.0 * excess
+    val cy-y-size  = max(lp-y-size, cmp-y-size) + 2.0 * excess
   
-    layer(Courtyard(Top)) = offset(Rectangle(cy-x-size, cy-y-size), courtyard-excess(fillets))
+    layer(Courtyard(Top)) = Rectangle(cy-x-size, cy-y-size)
     if polarized?:
       draw-polarity-marker(Ref("a"))
 
-    ref-label() ; TODO place the ref label in a better place
+    val text-x = 0.5 * (cy-x-size + MIN-SILKSCREEN-TEXT-HEIGHT)
+    ref-label(loc(text-x, 0.0, -90.0),C)
 
 public defn make-two-pin-chip-landpattern (length:Toleranced,
                                            width:Toleranced,
