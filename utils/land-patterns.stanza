@@ -1090,18 +1090,20 @@ public pcb-landpattern smd-testpoint-pkg (d:Double) :
   layer(Silkscreen("f-silk", Top)) = Circle(d / 2.0)
   ref-label()
 
-public defn make-two-pin-chip-landpattern (length:Toleranced,
-                                           width:Toleranced,
-                                           lead-length:Toleranced,
-                                           lead-width?:False|Toleranced, ; in case different from width
-                                           fabrication-tolerance:Double,
-                                           placement-tolerance:Double
-                                           density-level:DensityLevel,
-                                           polarized?:True|False):
+public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vertical) dimension of the package
+                                           width:Toleranced,  ; the width (horizontal) dimension of the package
+                                           lead-length:Toleranced, ; the length (vertical) dimension of the conductors/leads of the package
+                                           lead-width?:False|Toleranced, ; the width (horizontal) dimension of the conductors/leads of the package, if different from `length`
+                                           fabrication-tolerance:Double, ; the fabrication tolerance (F)
+                                           placement-tolerance:Double    ; the placement tolerance or accuracy (P)
+                                           density-level:DensityLevel,   ; the density level of the design (DensityLevelA|DensityLevelB|DensityLevelC)
+                                           anode-and-cathode?:True|False,; whether the pads should be named `a` and `c` (if false, p[1] and p[2])
+                                           polarized?:True|False         ; whether a polarity marker is required or not
+                                           ):
   inside pcb-landpattern:
     ; helper to compute the pad refs
     defn pad-refs () -> Tuple<Ref>:
-      if polarized?:
+      if anode-and-cathode?:
         [Ref("a"), Ref("c")]
       else:
         [IndexRef(Ref("p"), 1), IndexRef(Ref("p"), 2)]
@@ -1178,7 +1180,7 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
   make-two-pin-chip-landpattern(
     length, width, lead-length, lead-width?, 
     FABRICATION-TOLERANCE, PLACEMENT-TOLERANCE, 
-    density-level, polarized?,
+    density-level, polarized?, polarized?
   )
 
 public defn make-two-pin-chip-landpattern (length:Toleranced,
@@ -1204,7 +1206,7 @@ public pcb-landpattern two-pin-chip-landpattern (length:Toleranced,
   make-two-pin-chip-landpattern(
     length, width, lead-length, lead-width?,
     fabrication-tolerance, placement-tolerance, 
-    density-level, polarized?
+    density-level, polarized?, polarized?
   )
 
 ; Create a a two pin chip landpattern with a custom lead width, if it exists.
