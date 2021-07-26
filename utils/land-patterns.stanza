@@ -465,6 +465,7 @@ public defn make-generic-landpattern (pad-names:Seqable<Ref>,
 
 ; Naming for a 2-column arrangment of pins 
 public defn soic-naming-convention (row:Int, column:Int, num-pins:Int) -> Ref:
+  println("row:%_, col:%_" % [row, column])
   if (column < 0) or (column > 1): 
     fatal("soic naming convention supports a maximum of 2 columns")
   switch(column):
@@ -1040,6 +1041,101 @@ public pcb-landpattern smd-testpoint-pkg (d:Double) :
   layer(Silkscreen("f-silk", Top)) = Circle(d / 2.0)
   ref-label()
 
+public defn make-n-pin-soic-landpattern (num-pins:Int,
+                                         pitch:Double,
+                                         outer-length:Toleranced,
+                                         part-length:Toleranced,
+                                         part-width:Toleranced,
+                                         lead-type:LandProtrusionType,
+                                         lead-length:Toleranced,
+                                         lead-width:Toleranced,
+                                         fabrication-tolerance:Double,
+                                         placement-tolerance:Double,
+                                         density-level:DensityLevel):
+  fatal("n must be even") when (num-pins % 2) != 0
+  inside pcb-landpattern:
+    val length = outer-length
+    val width  = part-width
+
+    defn rms (s:Seqable<Double>) -> Double:
+      sqrt(sum(seq(fn (x:Double): x * x, s)))
+
+    defn wiggle-room (C:Double) -> Double:
+      rms([C, fabrication-tolerance, placement-tolerance])
+    
+    val [Jt, Jh, Js, courtyard-excess] = to-tuple(lead-fillets(lead-type, density-level))
+    val Lmax = max-value(length)
+    val Lmin = min-value(length)
+    val Tmin = min-value(lead-length)
+    val Wmin = min-value(lead-width)
+    val Smax = Lmax - 2.0 * Tmin
+    val Cw   = tolerance-range(width)
+    val Cl   = tolerance-range(length) 
+    val Cs   = rms([tolerance-range(lead-length), Cl])
+    val Zmax = Lmin + 2.0 * Jt + wiggle-room(Cl)
+    val Gmin = Smax - 2.0 * Jh - wiggle-room(Cs)
+    val Xmin = Wmin + 2.0 * Js + wiggle-room(Cw)
+
+    ;----------------------------------------------------
+    ; compute our pad sizes
+    val pad-x-dim = 0.5 * (Zmax - Gmin)
+    val pad-y-dim = Xmin
+    val pad_ = smd-pad(Rectangle(pad-x-dim, pad-y-dim))
+    
+    ;----------------------------------------------------
+    ; place the pads
+    val locs = to-tuple(grid-locs(num-pins / 2, 2, Gmin + pad-x-dim, pitch, false))
+    for (i in 0 to false, l in locs) do:
+      val name = soic-naming-convention(i % (num-pins / 2), i / (num-pins / 2), num-pins)
+      pad (name): pad_ at l
+
+    ;----------------------------------------------------
+    ; compute the courtyard    
+    val ys = to-tuple(seq(y{center(_)}, locs))
+    val lp-x-dim = Zmax + 2.0 * SOLDER-MASK-REGISTRATION
+    val lp-y-dim = pad-y-dim + maximum(ys) - minimum(ys) + 2.0 * SOLDER-MASK-REGISTRATION
+    val cy-x-dim = max(lp-x-dim, max-value(part-length)) + 2.0 * courtyard-excess
+    val cy-y-dim = max(lp-y-dim, max-value(part-width)) + 2.0 * courtyard-excess
+    layer(Courtyard(Top)) = Rectangle(cy-x-dim, cy-y-dim)
+
+    ;----------------------------------------------------
+    ; draw the orientation marker
+    val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
+    val line = Line(min-silk-width, [Point(min-silk-width * 0.5, 0.0),
+                                     Point(3.5 * min-silk-width, 0.0)])
+    val dist = SOLDER-MASK-REGISTRATION + SILK-SOLDER-MASK-CLEARANCE + min-silk-width * 0.5 + 0.01
+    val pol-x = -0.5 * lp-x-dim
+    val pol-y =  0.5 * lp-y-dim
+    layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * line
+      
+    ;----------------------------------------------------
+    ; place the reference label    
+    val text-y = 0.5 * (cy-y-dim + MIN-SILKSCREEN-TEXT-HEIGHT)
+    ref-label(0.0, text-y)
+
+    ;----------------------------------------------------
+    ; debugging, remove prior to merging
+    layer(Courtyard(Bottom)) = Rectangle(typ(part-length), typ(part-width))
+
+public defn make-n-pin-soic-landpattern (num-pins:Int,
+                                         pitch:Double,
+                                         outer-length:Toleranced,
+                                         length:Toleranced,
+                                         width:Toleranced,
+                                         lead-length:Toleranced,
+                                         lead-width:Toleranced):
+  make-n-pin-soic-landpattern(num-pins,
+                               pitch
+                               outer-length,
+                               length,
+                               width,
+                               BigGullWingLeads,
+                               lead-length,
+                               lead-width,
+                               FABRICATION-TOLERANCE,
+                               PLACEMENT-TOLERANCE,
+                               DensityLevelC)
+
 public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vertical) dimension of the package
                                            width:Toleranced,  ; the width (horizontal) dimension of the package
                                            lead-length:Toleranced, ; the length (vertical) dimension of the conductors/leads of the package
@@ -1106,6 +1202,7 @@ public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vert
     pad (refs[0]): pad_ at loc(0.0, y-max)
     pad (refs[1]): pad_ at loc(0.0, y-min)
 
+    ; ----------------------------------------------------
     val lp-x-size  = land-width + 2.0 * SOLDER-MASK-REGISTRATION
     val lp-y-size  = Zmax + 2.0 * SOLDER-MASK-REGISTRATION
     val cmp-x-size = max-value(width)
