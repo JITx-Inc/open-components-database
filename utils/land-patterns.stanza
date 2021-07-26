@@ -465,7 +465,6 @@ public defn make-generic-landpattern (pad-names:Seqable<Ref>,
 
 ; Naming for a 2-column arrangment of pins 
 public defn soic-naming-convention (row:Int, column:Int, num-pins:Int) -> Ref:
-  println("row:%_, col:%_" % [row, column])
   if (column < 0) or (column > 1): 
     fatal("soic naming convention supports a maximum of 2 columns")
   switch(column):
@@ -1063,6 +1062,8 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,
     defn wiggle-room (C:Double) -> Double:
       rms([C, fabrication-tolerance, placement-tolerance])
     
+    ;----------------------------------------------------
+    ; Compute adjustments to dimensions using IPC formula
     val [Jt, Jh, Js, courtyard-excess] = to-tuple(lead-fillets(lead-type, density-level))
     val Lmax = max-value(length)
     val Lmin = min-value(length)
@@ -1112,10 +1113,6 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,
     ; place the reference label    
     val text-y = 0.5 * (cy-y-dim + MIN-SILKSCREEN-TEXT-HEIGHT)
     ref-label(0.0, text-y)
-
-    ;----------------------------------------------------
-    ; debugging, remove prior to merging
-    layer(Courtyard(Bottom)) = Rectangle(typ(part-length), typ(part-width))
 
 public defn make-n-pin-soic-landpattern (num-pins:Int,
                                          pitch:Double,
