@@ -1,0 +1,75 @@
+#use-added-syntax(jitx)
+defpackage ocdb/test/land-patterns:
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/design-vars
+  import ocdb/land-patterns
+  import ocdb/tolerance
+  import ocdb/box-symbol
+  import ocdb/rules
+  import ocdb/generic-components
+  import ocdb/symbols
+
+pcb-component vishay-resistor-1005 :
+  name = "Generic Vishay Resistor"
+  description = "Generic chip resistor, 1005 package"
+  reference-prefix = "R"
+  port p: pin[[1, 2]]
+
+  val lp  = two-pin-chip-landpattern(
+    tol(1.0, 0.05),
+    tol(0.5, 0.05),
+    tol(0.25, 0.05),
+    false
+  )
+  
+  val sym = resistor-sym(false)
+  
+  landpattern = 
+    lp(p[1] => lp.p[1], p[2] => lp.p[2])
+  symbol = 
+    sym(p[1] => sym.p[1], p[2] => sym.p[2])
+
+pcb-component example-1:
+  port p: pin[[1, 2]]
+  reference-prefix = "R"
+  val lp = two-pin-chip-landpattern(
+    tol(1.0, 0.05, 0.06)  ; length of the component
+    tol(0.5,  0.05)  ; width of the component
+    tol(0.25, 0.05) ; lead length of the component
+    DensityLevelC ; density-level,
+    false         ; polarized?:True|False,
+  )
+  landpattern = lp(p[1] => lp.p[1], p[2] => lp.p[2])
+  make-box-symbol()
+  
+pcb-component example-2:
+  pin a
+  pin c
+  reference-prefix = "C"
+  pcb-landpattern lp:
+    make-two-pin-chip-landpattern(
+      tol(3.2, 0.2),
+      tol(1.6, 0.2),
+      tol(0.8, 0.3),
+      tol(1.2, 0.1),
+      DensityLevelC,
+      true,
+    )
+
+  landpattern = lp(a => lp.a, c => lp.c)
+  make-box-symbol()
+
+pcb-module main-module:
+  inst e1: example-1
+  inst e2: example-2
+  inst e3: vishay-resistor-1005
+  place(e1) at loc(-3.0, 0.0) on Top
+  place(e2) at loc(0.0, 0.0) on Top
+  place(e3) at loc(3.0, 0.0) on Top
+set-rules(sierra-adv-rules)
+make-default-board(main-module, 2, Rectangle(12.0, 5.0))
+view-board()

@@ -8,6 +8,8 @@ defpackage ocdb/land-patterns :
   import jitx/commands with:
     prefix(pad) => def-
   import ocdb/design-vars
+  import ocdb/land-protrusions
+  import ocdb/tolerance
 
 ;==============================================================================
 ;============================== Helpers =======================================
@@ -18,6 +20,8 @@ defn ensure-even-positive! (value: Int, name: String):
   if value < 2 or value % 2 == 1:
     fatal("%_ only supports a positive even number of pins." % [name])
 
+; ====== Silk screen helpers ===================================================
+; Create a reference label at (0, 0)
 ; ====== Reference Label Helpers ===============================================
 ; Creates a reference label from pose and anchor
 public defn ref-label (pose:Pose, anchor:Anchor):
@@ -93,6 +97,7 @@ defn chamfered (anchor:Anchor, width:Double, height:Double, r:Double):
 ;==============================================================================
 ;=========================== Geometric Helpers ================================
 ;==============================================================================
+; ====== Land pattern utilities ===============================================
 ; Create a rectangle out of lines
 public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double, line-w:Double) :
   val w2 = w * 0.5
@@ -106,7 +111,7 @@ public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double, line-w:Doub
 
 ; Create a rectangle with width, height, center x/y and default line width
 public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double) :
-  LineRectangle(w, h, xc, yc, MIN-SILKSCREEN-WIDTH)
+  LineRectangle(w, h, xc, yc, clearance(current-rules(), MinSilkscreenWidth))
 
 ; Create a rectangle with width and height and default x/y position
 public defn LineRectangle (w:Double, h:Double) :
@@ -122,10 +127,10 @@ public defn outline-bounding-box (s:Shape):
 
 ; Create a "+" symbol with a fixed length at a center point
 public defn PlusSymbol (center:Point, l:Double) -> Shape:
-  Union $ [
-    Line(MIN-SILKSCREEN-WIDTH, [center + Point(-0.5 * l, 0.0), center + Point(0.5 * l, 0.0)])
-    Line(MIN-SILKSCREEN-WIDTH, [center + Point(0.0, -0.5 * l), center + Point(0.0, 0.5 * l)])
-  ]
+  val min-width = clearance(current-rules(), MinSilkscreenWidth)
+  loc(x(center), y(center)) * 
+    Union([Line(min-width, [Point(-0.5 * l, 0.0), Point(0.5 * l, 0.0)])
+           Line(min-width, [Point(0.0, -0.5 * l), Point(0.0, 0.5 * l)])])
 
 ; Create a 1mm x 1mm plus symbol at Point(x, y)
 public defn PlusSymbol (x:Double, y:Double) -> Shape:
@@ -321,7 +326,7 @@ public defn round-rect-smd-pad (w:Double, h:Double, r:Double) :
 
 public defn chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   val shape = chamfered(anchor, pad-w, pad-h, pad-r)
-  val hole  = capsule(anchor drill-w, drill-h)
+  val hole  = capsule(anchor, drill-w, drill-h)
   pth-pad(shape, hole)
 
 public defn chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
@@ -591,7 +596,7 @@ public pcb-landpattern two-pin-landpattern (Z:Double, G:Double, X:Double, w:Doub
 public pcb-landpattern two-pin-polarized-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
   make-two-pin-landpattern(Z,G,X,w,h,true,true)
 
-public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False) :
+public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False):
   inside pcb-landpattern :
     val [Z, G, X, nr, nc] = switch(part-name) :
       "008004":[0.35, 0.10, 0.14, 0.35, 0.14]
@@ -1034,3 +1039,181 @@ public pcb-landpattern smd-testpoint-pkg (d:Double) :
   layer(Courtyard(Top)) = Circle(d / 2.0)
   layer(Silkscreen("f-silk", Top)) = Circle(d / 2.0)
   ref-label()
+
+public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vertical) dimension of the package
+                                           width:Toleranced,  ; the width (horizontal) dimension of the package
+                                           lead-length:Toleranced, ; the length (vertical) dimension of the conductors/leads of the package
+                                           lead-width?:False|Toleranced, ; the width (horizontal) dimension of the conductors/leads of the package, if different from `length`
+                                           fabrication-tolerance:Double, ; the fabrication tolerance (F)
+                                           placement-tolerance:Double    ; the placement tolerance or accuracy (P)
+                                           density-level:DensityLevel,   ; the density level of the design (DensityLevelA|DensityLevelB|DensityLevelC)
+                                           anode-and-cathode?:True|False,; whether the pads should be named `a` and `c` (if false, p[1] and p[2])
+                                           polarized?:True|False         ; whether a polarity marker is required or not
+                                           ):
+  inside pcb-landpattern:
+    ; helper to compute the pad refs
+    defn pad-refs () -> Tuple<Ref>:
+      if anode-and-cathode?:
+        [Ref("a"), Ref("c")]
+      else:
+        [IndexRef(Ref("p"), 1), IndexRef(Ref("p"), 2)]
+    
+    ; helper to compute the excess required by density level and tolerances
+    defn wiggle-room (C:Double):
+      val F = fabrication-tolerance
+      val P = placement-tolerance
+      sqrt(C * C + F * F + P * P)
+
+    ; compute the solder fillets based on the protrusion type
+    ; if > 16xx (1.6mm), use big rectangular leads
+    val land-protrusion-type = BigRectangularLeads when typ(length) > 1.6 else SmallRectangularLeads
+    ; lookup 
+    val fillets = lead-fillets(land-protrusion-type, density-level)
+    val Cw = tolerance-range(width)  ; is this the most reasonable? 
+    val Cl = tolerance-range(length) 
+    val Cs = 
+      let:
+        val Ct = tolerance-range(lead-length)
+        sqrt(Ct * Ct + Cl * Cl)
+    
+    ; compute the base dimensions of the lands
+    val Lmax = max-value(length)
+    val Lmin = min-value(length)
+    val Tmin = min-value(lead-length)
+    val Wmin = match(lead-width?):
+      (lead-width:Toleranced): 
+        min-value(lead-width)
+      (_:False):
+        min-value(width)
+    
+    val Smax = Lmax - 2.0 * Tmin
+    val [Jt, Jh, Js] = [toe(fillets), heel(fillets), side(fillets)]
+    val Zmax = Lmin + 2.0 * Jt + wiggle-room(Cl)
+    val Gmin = Smax - 2.0 * Jh - wiggle-room(Cs)
+    val Xmin = Wmin + 2.0 * Js + wiggle-room(Cw)
+
+    ; finalize the geometry
+    val land-length = 0.5 * (Zmax - Gmin)
+    val land-width  = Xmin
+
+    ; ----------------------------------------------------
+    val y-max = 0.5 * Gmin + 0.5 * land-length
+    val y-min = -1.0 * y-max
+
+    val refs = pad-refs()
+    val pad_ = smd-pad(Rectangle(land-width, land-length)) ; pass in solder-mask-defined? 
+
+    pad (refs[0]): pad_ at loc(0.0, y-max)
+    pad (refs[1]): pad_ at loc(0.0, y-min)
+
+    val lp-x-size  = land-width + 2.0 * SOLDER-MASK-REGISTRATION
+    val lp-y-size  = Zmax + 2.0 * SOLDER-MASK-REGISTRATION
+    val cmp-x-size = max-value(width)
+    val cmp-y-size = max-value(length)
+    val excess     = courtyard-excess(fillets)
+    val cy-x-size  = max(lp-x-size, cmp-x-size) + 2.0 * excess
+    val cy-y-size  = max(lp-y-size, cmp-y-size) + 2.0 * excess
+  
+    layer(Courtyard(Top)) = Rectangle(cy-x-size, cy-y-size)
+    
+    ; draw the polarity marker
+    if polarized?:
+      val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
+      ; the formula for placing the polarity marker is:
+      ;   for marker line M:
+      ;   
+      ;   M is placed a distance M_dist away from the land pattern 
+      ;   in the top-level corner, which is the corner of the land pattern 
+      ;   closest to p[1]/a. 
+      ; 
+      ;   - M_length = 3.0 * min-silk-width
+      ;   - M_width  = min-silk-width
+      ; 
+      ;   M_dist = SOLDER-MASK-REGISTRATION + SILK-SOLDER-MASK-CLEARANCE + min-silk-width * 0.5 + 0.01
+      ; 
+      ; assumptions:
+      ;   - the pad dimensions are outside the bounds of the part. This is guaranteed by the computation above.
+      ;   - the land pattern is centered about the origin
+      ;   - the pad corresponding to p[1] or a is centered about its origin.
+      ; 
+      val line = Line(min-silk-width, [Point(min-silk-width * 0.5, 0.0),
+                                       Point(3.5 * min-silk-width, 0.0)])
+      val dist = SOLDER-MASK-REGISTRATION + SILK-SOLDER-MASK-CLEARANCE + min-silk-width * 0.5 + 0.01
+      val pol-x = -0.5 * max(lp-x-size, cmp-x-size)
+      val pol-y =  0.5 * max(lp-y-size, cmp-y-size) + dist
+      layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y) * line
+      
+    val text-x = 0.5 * (cy-x-size + MIN-SILKSCREEN-TEXT-HEIGHT)
+    ref-label(loc(text-x, 0.0, -90.0),C)
+
+public defn make-two-pin-chip-landpattern (length:Toleranced,
+                                           width:Toleranced,
+                                           lead-length:Toleranced,
+                                           lead-width?:False|Toleranced,
+                                           density-level:DensityLevel,
+                                           polarized?:True|False):
+  make-two-pin-chip-landpattern(
+    length, width, lead-length, lead-width?, 
+    FABRICATION-TOLERANCE, PLACEMENT-TOLERANCE, 
+    density-level, polarized?, polarized?
+  )
+
+public defn make-two-pin-chip-landpattern (length:Toleranced,
+                                           width:Toleranced,
+                                           lead-length:Toleranced,
+                                           density-level:DensityLevel,
+                                           polarized?:True|False):
+  make-two-pin-chip-landpattern(
+    length, width, lead-length, false, 
+    density-level, polarized?
+  )
+
+; Create a two pin chip landpattern factoring in factory tolerances and controlling 
+; whether the pads should be considered "solder mask defined" 
+public pcb-landpattern two-pin-chip-landpattern (length:Toleranced,
+                                                 width:Toleranced,
+                                                 lead-length:Toleranced,
+                                                 lead-width?:False|Toleranced,
+                                                 fabrication-tolerance:Double,
+                                                 placement-tolerance:Double
+                                                 density-level:DensityLevel,
+                                                 polarized?:True|False):
+  make-two-pin-chip-landpattern(
+    length, width, lead-length, lead-width?,
+    fabrication-tolerance, placement-tolerance, 
+    density-level, polarized?, polarized?
+  )
+
+; Create a a two pin chip landpattern with a custom lead width, if it exists.
+public defn two-pin-chip-landpattern (length:Toleranced,
+                                      width:Toleranced,
+                                      lead-length:Toleranced,
+                                      lead-width?:False|Toleranced,
+                                      density-level:DensityLevel,
+                                      polarized?:True|False):
+  two-pin-chip-landpattern(
+    length, width, lead-length, lead-width?, 
+    FABRICATION-TOLERANCE, PLACEMENT-TOLERANCE, 
+    density-level, polarized?
+  )
+
+; Create a two-pin chip landpattern with a custom density level
+public defn two-pin-chip-landpattern (length:Toleranced,
+                                      width:Toleranced,
+                                      lead-length:Toleranced,
+                                      density-level:DensityLevel,
+                                      polarized?:True|False):
+  two-pin-chip-landpattern(
+    length, width, lead-length, false, 
+    density-level, polarized?
+  )
+
+; Create a two-pin chip landpattern given legnth, width, and lead-lengths
+public defn two-pin-chip-landpattern (length:Toleranced,
+                                      width:Toleranced,
+                                      lead-length:Toleranced,
+                                      polarized?:True|False):
+  two-pin-chip-landpattern(
+    length, width, lead-length, false, 
+    DensityLevelC, polarized?
+  )
