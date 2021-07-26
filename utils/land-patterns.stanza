@@ -21,56 +21,6 @@ defn ensure-even-positive! (value: Int, name: String):
     fatal("%_ only supports a positive even number of pins." % [name])
 
 ; ====== Silk screen helpers ===================================================
-; Create a polarity marker relative to a pad.
-; 
-; pad-1: the pad to mark for the polarity 
-; part-dims?: optional. If provided, the generator will use these to determine where
-;             to place the pad, and guarantee it is not underneath the part.
-public defn draw-polarity-marker (pad-1:JITXObject, part-dims?:Dims|False) :
-  val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
-  inside pcb-landpattern:
-    ; draw a line of `min-silk-width` width and length 3.0 * min-silk-width 
-    ; centered at origin
-    defn draw-line (origin:Pose):
-      val line-width  = min-silk-width
-      val line-length = line-width * 3.0
-      val line = Line(line-width, [
-        Point(min-silk-width * 0.5, 0.0)
-        Point(line-width + min-silk-width * 0.5, 0.0)  
-      ])
-      layer(Silkscreen("pol", Top)) = origin * line
-
-    defn part-pose () :
-      match(part-dims?) :
-        (_:False): 
-          loc(0.0, 0.0)
-        (d:Dims): 
-          loc(x(d) * -0.5,
-              y(d) *  0.5 + min-silk-width * 0.5 + PLACEMENT-TOLERANCE)
-
-    defn distance (p:Pose):
-      val [x, y] = [x(center(p)), y(center(p))]
-      sqrt(x * x + y * y)
-    
-    defn pad-pose ():
-      val pad-loc    = pose(pad-1)
-      val pad-dims   = dims(pad-shape(def-pad(pad-1)))
-      val R = SOLDER-MASK-REGISTRATION + min-silk-width * 0.5 + SILK-SOLDER-MASK-CLEARANCE + 0.01
-      loc(
-        x(pad-dims) * -0.5 + x(center(pad-loc)) - SOLDER-MASK-REGISTRATION
-        y(pad-dims) *  0.5 + y(center(pad-loc)) + R
-      )
-    
-    val [p1, p2] = [pad-pose(), part-pose()] 
-    draw-line $
-      if distance(p1) > distance(p2):
-        p1
-      else: 
-        p2
-
-public defn draw-polarity-marker (p:JITXObject):
-  draw-polarity-marker(p, false)
-
 ; Create a reference label at (0, 0)
 ; ====== Reference Label Helpers ===============================================
 ; Creates a reference label from pose and anchor
@@ -966,22 +916,22 @@ public pcb-landpattern INDC1005X55 :
 
 public pcb-landpattern CAPT1005X55 :
   make-ipc-two-pin-landpattern("0402")
-  draw-polarity-marker(self.p[1])
+  layer(Silkscreen("pol", Top)) = PlusSymbol(-1.7, 0.0)
   ref-label()
 
 public pcb-landpattern CAPT1608X80 :
   make-ipc-two-pin-landpattern("0603")
-  draw-polarity-marker(self.p[1])
+  layer(Silkscreen("pol", Top)) = PlusSymbol(-2.2, 0.0)
   ref-label()
 
 public pcb-landpattern CAPT2012X125 :
   make-ipc-two-pin-landpattern("0805")
-  draw-polarity-marker(self.p[1])
+  layer(Silkscreen("pol", Top)) = PlusSymbol(-2.4, 0.0)
   ref-label()
 
 public pcb-landpattern CAPT3216X160 :
   make-ipc-two-pin-landpattern("1206")
-  draw-polarity-marker(self.p[1])
+  layer(Silkscreen("pol", Top)) = PlusSymbol(-3.0, 0.0)
   ref-label()
 
 public pcb-landpattern FUSC7330X390 :
@@ -1165,16 +1115,41 @@ public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vert
     val cy-y-size  = max(lp-y-size, cmp-y-size) + 2.0 * excess
   
     layer(Courtyard(Top)) = Rectangle(cy-x-size, cy-y-size)
+    
+    ; draw the polarity marker
     if polarized?:
-      draw-polarity-marker(self.a)
-
+      val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
+      ; the formula for placing the polarity marker is:
+      ;   for marker line M:
+      ;   
+      ;   M is placed a distance M_dist away from the land pattern 
+      ;   in the top-level corner, which is the corner of the land pattern 
+      ;   closest to p[1]/a. 
+      ; 
+      ;   - M_length = 3.0 * min-silk-width
+      ;   - M_width  = min-silk-width
+      ; 
+      ;   M_dist = SOLDER-MASK-REGISTRATION + SILK-SOLDER-MASK-CLEARANCE + min-silk-width * 0.5 + 0.01
+      ; 
+      ; assumptions:
+      ;   - the pad dimensions are outside the bounds of the part. This is guaranteed by the computation above.
+      ;   - the land pattern is centered about the origin
+      ;   - the pad corresponding to p[1] or a is centered about its origin.
+      ; 
+      val line = Line(min-silk-width, [Point(min-silk-width * 0.5, 0.0),
+                                       Point(3.5 * min-silk-width, 0.0)])
+      val dist = SOLDER-MASK-REGISTRATION + SILK-SOLDER-MASK-CLEARANCE + min-silk-width * 0.5 + 0.01
+      val pol-x = -0.5 * max(lp-x-size, cmp-x-size)
+      val pol-y =  0.5 * max(lp-y-size, cmp-y-size) + dist
+      layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y) * line
+      
     val text-x = 0.5 * (cy-x-size + MIN-SILKSCREEN-TEXT-HEIGHT)
     ref-label(loc(text-x, 0.0, -90.0),C)
 
 public defn make-two-pin-chip-landpattern (length:Toleranced,
                                            width:Toleranced,
                                            lead-length:Toleranced,
-                                           lead-width?:False|Toleranced,  ; ...
+                                           lead-width?:False|Toleranced,
                                            density-level:DensityLevel,
                                            polarized?:True|False):
   make-two-pin-chip-landpattern(
