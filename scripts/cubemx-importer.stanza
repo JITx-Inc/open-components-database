@@ -191,7 +191,7 @@ defn ref-ify (s:String) -> Ref:
 
   ; internal helper. Prints failure message.
   defn fail () -> Void:
-    fatal("Could not parse %_ as a pin or pad ref." % [s])
+    throw(Exception("Could not parse %_ as a pin or pad ref." % [s]))
   
   ; main program
   defn driver (s:String):
@@ -343,13 +343,13 @@ defn print-bundle-data (
     replace{_, "]", "_"}
 
   if length(ocdb-pins) != length(cubemx-signals):
-    fatal("invalid mapping of cubemx signals to pcb-bundle data in ocdb.")
+    throw(Exception("invalid mapping of cubemx signals to pcb-bundle data in ocdb."))
   
   ; collect data
   val pins* = pins-with-signal(pins(mcu), prefix?{_, instance-name})
   val signals* = to-tuple(seq(to-string{"%__%_" % [instance-name, _]}, cubemx-signals))
   if empty?(pins*):
-    fatal("Missing pins for %_" % [instance-name])
+    throw(Exception("Missing pins for %_" % [instance-name]))
   
   ; print private bundles
   for s in signals* do:
@@ -585,7 +585,7 @@ defn uart-case (instance-name:String, mcu:Stm32MCU) -> UartCase:
       if same-set?(to-hashset<String>(uart-cubemx-pins(UartCase(c))), pins):
         ; println("uart-case: Returning %_" % [UartCase(c)])
         return(UartCase(c))
-    fatal("Unsupported UART pin set: %," % [pins])
+    throw(Exception("Unsupported UART pin set: %," % [pins]))
 
 defn print-usart (o:OutputStream, mcu:Stm32MCU):
   for uart-block in filter({name(_0) == "USART"}, ip(mcu)) do:
