@@ -27,6 +27,14 @@ deftest constructors:
     #EXPECT(max-value(tolerance) == 1.5)
     #EXPECT(center(tolerance) == 1.0)
 
+defn expect-fatal (body:() -> ?):
+  var caught? = false
+  execute-with-error-handler(
+    body,
+    fn (): caught? = true
+  )
+  #EXPECT(caught?)
+
 deftest percentages: 
   let: 
     val tolerance = min-typ-max(0.75, 1.0, 1.5)
@@ -34,8 +42,10 @@ deftest percentages:
     #EXPECT(tol+%(tolerance) == 0.50)
   let:
     val tolerance = tol(0.0, 0.5)
-    #EXPECT(tol+%(tolerance) == DOUBLE-POSITIVE-INFINITY)
-    #EXPECT(tol-%(tolerance) == DOUBLE-POSITIVE-INFINITY)
+    within expect-fatal():
+      tol+%(tolerance)
+    within expect-fatal():
+      tol-%(tolerance)
     
 deftest range:
   let:
