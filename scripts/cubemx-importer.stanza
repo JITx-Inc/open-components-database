@@ -484,6 +484,7 @@ defn print-i2s (o:OutputStream, mcu:Stm32MCU):
 ; print uart or usart. The implementation is the same except names.
 ; The expected input for the variable uart-or-usart is "UART" or "USART"
 defn print-uart-or-usart (o:OutputStream, mcu:Stm32MCU, uart-or-usart:String):
+  print("Printing %_" %[uart-or-usart])
   for ip-block in filter(prefix?{instance-name(_), uart-or-usart}, ip(mcu)) do:
     val pins = unique-pins-for(instance-name(ip-block), mcu)
     print-pins(pins)
@@ -519,20 +520,21 @@ defn print-uart-or-usart (o:OutputStream, mcu:Stm32MCU, uart-or-usart:String):
       add(optional, "UART-NSS")
 
     var bundle-name
-    if uart_or_usart == "UART":
+    if uart-or-usart == "UART":
       bundle-name = "uart()" when empty?(optional) else to-string("uart([%,])" % [optional])
     else:
       bundle-name = "usart()" when empty?(optional) else to-string("usart([%,])" % [optional])
+
     val pin-names = to-tuple(cat-all([
-      ["UART-DTR"]  when dtr? else []
-      ["UART-CTS"] when cts? else []
-      ["UART-DCD"] when dcd? else []
-      ["UART-RI"] when ri? else []
-      ["UART-DST"] when dst? else []
-      ["UART-RTS"] when rts? else []
-      ["UART-CK"] when ck? else []
-      ["UART-DE"] when de? else []
-      ["UART-NSS"] when nss? else []
+      ["dtr"]  when dtr? else []
+      ["cts"] when cts? else []
+      ["dcd"] when dcd? else []
+      ["ri"] when ri? else []
+      ["dst"] when dst? else []
+      ["rts"] when rts? else []
+      ["ck"] when ck? else []
+      ["de"] when de? else []
+      ["nss"] when nss? else []
       ["rx"]
       ["tx"]
     ]))
@@ -541,7 +543,7 @@ defn print-uart-or-usart (o:OutputStream, mcu:Stm32MCU, uart-or-usart:String):
       ["DTR"] when dtr? else []
       ["CTS"] when cts? else []
       ["DCD"] when dcd? else []
-      ["RT"] when ri? else []
+      ["RI"] when ri? else []
       ["DST"] when dst? else []
       ["RTS"] when rts? else []
       ["CK"] when ck? else []
@@ -601,90 +603,6 @@ defn print-quad-spi (o:OutputStream, mcu:Stm32MCU):
       signal-names
       pin-names
     )
-
-;==============================================================================
-;============================= UART edge cases ================================
-;==============================================================================
-defenum UartCase:
-  Uart2   ; 2 pin UART
-  Uart2De ; 2 pin UART with DE pin
-  Uart4   ; 4 pin UART 
-  Uart4De ; 4 pin UART with DE pin
-
-
-defn usart-or-uart-bundle (uart?:True|False, c:UartCase):
-  val base = "uart" when uart? else "usart"
-  val args = 
-    switch(c):
-      Uart2:   "",
-      Uart2De: "[UART-DE]",
-      Uart4:   "[UART-CTS, UART-RTS]",
-      Uart4De: "[UART-CTS, UART-RTS, UART-DE]"
-  to-string("%_(%_)" % [base, args])
-
-; ocdb bundle identifer for a given UART case
-defn uart-bundle (c: UartCase):
-  usart-or-uart-bundle(true, c)
-
-defn usart-bundle (c:UartCase):
-  usart-or-uart-bundle(false, c)
-
-; the OCDB pin names for a UART case
-defn uart-ocdb-pins (c:UartCase):
-  switch(c):
-    Uart2:   ["tx", "rx"]
-    Uart2De: ["tx", "rx", "de"]
-    Uart4:   ["tx", "rx", "cts", "rts"]
-    Uart4De: ["tx", "rx", "cts", "rts", "de"]
-
-; the CubeMX pin names for a UART case
-defn uart-cubemx-pins (c:UartCase):
-  to-tuple(seq(upper-case, uart-ocdb-pins(c)))
-
-; helper to determine if two sets have the same elements
-defn same-set?<?T> (l:Set<?T>, r:Set<?T>):
-  label<True|False> return:
-    if length(l) != length(r):
-      return(false)
-    for e in l do: 
-      if not r[e]:
-        return(false)
-    true
-
-; determine which case we are handling
-defn uart-case (instance-name:String, mcu:Stm32MCU) -> UartCase:
-  val pins = unique-pins-for(instance-name, mcu, suffix?{_, "CK"})
-  ;print-pins(pins)
-  label<UartCase> return:
-    for c in 0 to 4 do:
-      val check = uart-cubemx-pins(UartCase(c))
-      if same-set?(to-hashset<String>(uart-cubemx-pins(UartCase(c))), pins):
-        ; println("uart-case: Returning %_" % [UartCase(c)])
-        return(UartCase(c))
-    throw(Exception("Unsupported UART pin set: %," % [pins]))
-
-defn print-usart (o:OutputStream, mcu:Stm32MCU):
-  for uart-block in filter({name(_0) == "USART"}, ip(mcu)) do:
-    val case = uart-case(instance-name(uart-block), mcu)
-    print-bundle-data(
-      o, mcu,
-      instance-name(uart-block),
-      usart-bundle(case),
-      uart-cubemx-pins(case)
-      uart-ocdb-pins(case)
-    )
-
-defn print-uart (o:OutputStream, mcu:Stm32MCU):
-  for uart-block in filter({name(_0) == "UART"}, ip(mcu)) do:
-    val case = uart-case(instance-name(uart-block), mcu)
-    print-bundle-data(
-      o, mcu, 
-      instance-name(uart-block),
-      uart-bundle(case),
-      uart-cubemx-pins(case)
-      uart-ocdb-pins(case)
-    )
-
 
 ;=============================================================================
 ;========================= Importer Algorithm ================================
