@@ -400,11 +400,41 @@ defn print-bundle (
       print-bundle-data(o, mcu, instance-name(ip-block), ocdb-name, cubemx-signals, ocdb-pins)
 
 defn print-spi (o:OutputStream, mcu:Stm32MCU):
-  print-bundle(
-    o, mcu, "SPI", "spi()"
-    ["MOSI", "MISO", "SCK", "NSS"]
-    ["sdo", "sdi", "sck", "cs"]
-  )
+  for ip-block in filter(prefix?{instance-name(_),"SPI"}, ip(mcu)) do:
+    val pins = unique-pins-for(instance-name(ip-block), mcu)
+
+    val sdo? = contains?(pins, "MOSI")
+    val sdi? = contains?(pins, "MISO")
+    val cs? = contains?(pins, "NSS")
+
+    val optional = Vector<String>()
+    if sdo?: 
+      add(optional, "SPI-SDO")
+    if sdi?: 
+      add(optional, "SPI-SDI")
+    if cs?: 
+      add(optional, "SPI-CS")
+
+    val bundle-name = "spi()" when empty?(optional) else to-string("spi([%,])" % [optional])
+    val pin-names = to-tuple(cat-all([
+      ["sdo"]  when sdo? else []
+      ["sdi"] when sdi? else []
+      ["cs"] when cs? else []
+      ["sck"]
+    ]))
+
+    val signal-names = to-tuple(cat-all([
+      ["MOSI"] when sdo? else []
+      ["MISO"] when sdi? else []
+      ["NSS"] when cs? else []
+      ["SCK"]
+    ]))
+
+    print-bundle-data(
+      o, mcu, instance-name(ip-block), bundle-name,
+      signal-names
+      pin-names
+    )
 
 defn print-i2c (o:OutputStream, mcu:Stm32MCU):
   print-bundle(               
