@@ -1042,20 +1042,19 @@ public pcb-landpattern smd-testpoint-pkg (d:Double) :
 
 public defn make-n-pin-soic-landpattern (num-pins:Int,            ; number of pins of the component
                                          pitch:Double,            ; pitch of the pins of the component
-                                         outer-length:Toleranced, ; the "outer length" (x-dimension) of the component, from lead-to-lead
-                                         part-length:Toleranced,  ; the length of the part/package (x-dimension)
-                                         part-width:Toleranced,   ; the width of the part/package (y-dimension)
+                                         outer-x:Toleranced,      ; the "outer length" (x-dimension) of the component, from lead-to-lead
+                                         part-x:Toleranced,       ; the length of the part/package (x-dimension)
+                                         part-y:Toleranced,       ; the width of the part/package (y-dimension)
                                          lead-type:LandProtrusionType, ; the lead/land protrusion type of the part
-                                         lead-length:Toleranced, ; the length (x-dimension) of the leads
-                                         lead-width:Toleranced,  ; the width (y-dimension) of the leads
-                                         fabrication-tolerance:Double,
-                                         placement-tolerance:Double,
-                                         density-level:DensityLevel):
+                                         lead-x:Toleranced,  ; the length (x-dimension) of the leads
+                                         lead-y:Toleranced,  ; the width (y-dimension) of the leads
+                                         fabrication-tolerance:Double, ; the fabrication tolerance (F)
+                                         placement-tolerance:Double,   ; the placement tolerance/accuracy (P)
+                                         density-level:DensityLevel):  ; the density level of the design
   fatal("n must be even") when (num-pins % 2) != 0
   inside pcb-landpattern:
-    val length = outer-length
-    val width  = part-width
-
+    ; layer(Silkscreen("f-silk", Bottom)) = LineRectangle(typ(part-x), typ(part-y))
+    
     defn rms (s:Seqable<Double>) -> Double:
       sqrt(sum(seq(fn (x:Double): x * x, s)))
 
@@ -1065,27 +1064,33 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,            ; number of pi
     ;----------------------------------------------------
     ; Compute adjustments to dimensions using IPC formula
     val [Jt, Jh, Js, courtyard-excess] = to-tuple(lead-fillets(lead-type, density-level))
-    val Lmax = max-value(length)
-    val Lmin = min-value(length)
-    val Tmin = min-value(lead-length)
-    val Wmin = min-value(lead-width)
+    val Lmax = max-value(outer-x)
+    val Lmin = min-value(outer-x)
+    val Tmin = min-value(lead-x)
+    val Wmin = min-value(lead-y)
     val Smax = Lmax - 2.0 * Tmin
-    val Cw   = tolerance-range(width)
-    val Cl   = tolerance-range(length) 
-    val Cs   = rms([tolerance-range(lead-length), Cl])
+    val Cw   = tolerance-range(lead-y)
+    val Cl   = tolerance-range(outer-x) 
+    val Cs   = rms([tolerance-range(lead-x), Cl])
     val Zmax = Lmin + 2.0 * Jt + wiggle-room(Cl)
     val Gmin = Smax - 2.0 * Jh - wiggle-room(Cs)
     val Xmin = Wmin + 2.0 * Js + wiggle-room(Cw)
 
+    ; layer(Silkscreen("f-silk", Top)) = LineRectangle(Zmax, typ(part-y))
+    ; layer(Silkscreen("f-silk", Top)) = LineRectangle(Gmin, typ(part-y))
+
     ;----------------------------------------------------
     ; compute our pad sizes
-    val pad-x-dim = 0.5 * (Zmax - Gmin)
-    val pad-y-dim = Xmin
-    val pad_ = smd-pad(Rectangle(pad-x-dim, pad-y-dim))
+    val pad-x = 0.5 * (Zmax - Gmin)
+    val pad-y = Xmin
+    val pad_ = smd-pad(Rectangle(pad-x, pad-y))
     
     ;----------------------------------------------------
     ; place the pads
-    val locs = to-tuple(grid-locs(num-pins / 2, 2, Gmin + pad-x-dim, pitch, false))
+    val locs = to-tuple(grid-locs(num-pins / 2, 2, Gmin + pad-x, pitch, false))
+    ; layer(Silkscreen("f-silk", Bottom)) = locs[0] * LineRectangle(typ(lead-x), typ(lead-y))
+    ; layer(Silkscreen("f-silk", Top))    = locs[0] * LineRectangle(pad-x, Xmin)
+
     for (i in 0 to false, l in locs) do:
       val name = soic-naming-convention(i % (num-pins / 2), i / (num-pins / 2), num-pins)
       pad (name): pad_ at l
@@ -1094,9 +1099,9 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,            ; number of pi
     ; compute the courtyard    
     val ys = to-tuple(seq(y{center(_)}, locs))
     val lp-x-dim = Zmax + 2.0 * SOLDER-MASK-REGISTRATION
-    val lp-y-dim = pad-y-dim + maximum(ys) - minimum(ys) + 2.0 * SOLDER-MASK-REGISTRATION
-    val cy-x-dim = max(lp-x-dim, max-value(part-length)) + 2.0 * courtyard-excess
-    val cy-y-dim = max(lp-y-dim, max-value(part-width)) + 2.0 * courtyard-excess
+    val lp-y-dim = pad-y + maximum(ys) - minimum(ys) + 2.0 * SOLDER-MASK-REGISTRATION
+    val cy-x-dim = max(lp-x-dim, max-value(part-x)) + 2.0 * courtyard-excess
+    val cy-y-dim = max(lp-y-dim, max-value(part-y)) + 2.0 * courtyard-excess
     layer(Courtyard(Top)) = Rectangle(cy-x-dim, cy-y-dim)
 
     ;----------------------------------------------------
@@ -1113,7 +1118,11 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,            ; number of pi
     ; place the reference label    
     val text-y = 0.5 * (cy-y-dim + MIN-SILKSCREEN-TEXT-HEIGHT)
     ref-label(0.0, text-y)
-
+    ; layer(Silkscreen("f-silk", Bottom)) = Line(min-silk-width, [
+    ;   Point(-0.5 * typ(outer-x), 3.5)
+    ;   Point( 0.5 * typ(outer-x), 3.5)
+    ; ])
+    ; false
 public defn make-n-pin-soic-landpattern (num-pins:Int,
                                          pitch:Double,
                                          outer-length:Toleranced,
