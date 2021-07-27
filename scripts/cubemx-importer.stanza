@@ -481,6 +481,82 @@ defn print-i2s (o:OutputStream, mcu:Stm32MCU):
       pin-names
     )
 
+; print uart or usart. The implementation is the same except names.
+; The expected input for the variable uart-or-usart is "UART" or "USART"
+defn print-uart-or-usart (o:OutputStream, mcu:Stm32MCU, uart-or-usart:String):
+  for ip-block in filter(prefix?{instance-name(_), uart-or-usart}, ip(mcu)) do:
+    val pins = unique-pins-for(instance-name(ip-block), mcu)
+    print-pins(pins)
+
+    val dtr? = contains?(pins, "DTR")
+    val cts? = contains?(pins, "CTS")
+    val dcd? = contains?(pins, "DCD")
+    val ri? = contains?(pins, "RI")
+    val dst? = contains?(pins, "DST")
+    val rts? = contains?(pins, "RTS")
+    val ck? = contains?(pins, "CK")
+    val de? = contains?(pins, "DE")
+    val nss? = contains?(pins, "NSS")
+
+    val optional = Vector<String>()
+    if dtr?: 
+      add(optional, "UART-DTR")
+    if cts?: 
+      add(optional, "UART-CTS")
+    if dcd?: 
+      add(optional, "UART-DCD")
+    if ri?: 
+      add(optional, "UART-RI")
+    if dst?: 
+      add(optional, "UART-DST")
+    if rts?: 
+      add(optional, "UART-RTS")
+    if ck?: 
+      add(optional, "UART-CK")
+    if de?: 
+      add(optional, "UART-DE")
+    if nss?: 
+      add(optional, "UART-NSS")
+
+    var bundle-name
+    if uart_or_usart == "UART":
+      bundle-name = "uart()" when empty?(optional) else to-string("uart([%,])" % [optional])
+    else:
+      bundle-name = "usart()" when empty?(optional) else to-string("usart([%,])" % [optional])
+    val pin-names = to-tuple(cat-all([
+      ["UART-DTR"]  when dtr? else []
+      ["UART-CTS"] when cts? else []
+      ["UART-DCD"] when dcd? else []
+      ["UART-RI"] when ri? else []
+      ["UART-DST"] when dst? else []
+      ["UART-RTS"] when rts? else []
+      ["UART-CK"] when ck? else []
+      ["UART-DE"] when de? else []
+      ["UART-NSS"] when nss? else []
+      ["rx"]
+      ["tx"]
+    ]))
+
+    val signal-names = to-tuple(cat-all([
+      ["DTR"] when dtr? else []
+      ["CTS"] when cts? else []
+      ["DCD"] when dcd? else []
+      ["RT"] when ri? else []
+      ["DST"] when dst? else []
+      ["RTS"] when rts? else []
+      ["CK"] when ck? else []
+      ["DE"] when de? else []
+      ["NSS"] when nss? else []
+      ["RX"]
+      ["TX"]
+    ]))
+
+    print-bundle-data(
+      o, mcu, instance-name(ip-block), bundle-name,
+      signal-names
+      pin-names
+    )
+
 ; print-quad-spi currently ignores BK2 signals
 defn print-quad-spi (o:OutputStream, mcu:Stm32MCU):
   for ip-block in filter(prefix?{instance-name(_),"QUADSPI"}, ip(mcu)) do:
@@ -663,8 +739,8 @@ public defn make-supports ():
   print-i2c(os, mcu)
   print-can(os, mcu)
   print-spi(os, mcu)
-  print-uart(os, mcu)
-  print-usart(os, mcu)
+  print-uart-or-usart(os, mcu, "UART")
+  print-uart-or-usart(os, mcu, "USART")
   print-i2s(os, mcu)
   print-oscillator(os, mcu)
 
