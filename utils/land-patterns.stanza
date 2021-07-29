@@ -1040,22 +1040,27 @@ public pcb-landpattern smd-testpoint-pkg (d:Double) :
   layer(Silkscreen("f-silk", Top)) = Circle(d / 2.0)
   ref-label()
 
+; Helper struct to contain the results of the IPC formula in section 3 of 
+; 7351-B
 defstruct IpcResults:
   Zmax:Double,
   Gmin:Double,
   Xmin:Double,
 
+; Helper to compute the pad size from the formula results
 defn pad-size (i:IpcResults) -> Dims:
   Dims(0.5 * (Zmax(i) - Gmin(i)), Xmin(i))
 
-public defn ipc-formula (
-  L:Toleranced,
-  T:Toleranced,
-  W:Toleranced,
-  P:Double,
-  F:Double,
-  fillets:LeadFillets, 
+; the IPC formula
+defn ipc-formula (
+  L:Toleranced, ; the distance from edge-of-lead to edge-of-lead on the exterior of the land pattern
+  T:Toleranced, ; the nominal size of the leads, in the same dimension as L
+  W:Toleranced, ; the nominal size of hte leads, in the dimension orthogonal to L
+  P:Double,     ; placement tolerance/accuracy
+  F:Double,     ; fabrication tolerance/accuracy
+  fillets:LeadFillets, ; looked up using lead-fillets(lead-type, density-level)
 ):
+  ; compute root-mean-squared of a sequence of numbers
   defn rms (s:Seqable<Double>):
     sqrt(sum(seq(fn (x:Double): x * x, s)))
   val [Jt, Jh, Js, _] = to-tuple(fillets)
@@ -1068,14 +1073,20 @@ public defn ipc-formula (
   val C_W  = tolerance-range(W)
   val C_T  = tolerance-range(T)
   val C_S  = rms([C_L, C_T])
-  val Zmax = Lmin + 2.0 * Jt + rms([C_L, P, F])
-  val Gmin = Smax - 2.0 * Jh - rms([C_S, P, F])
-  val Xmin = Wmin + 2.0 * Js + rms([C_W, P, F])
+  val Zmax = Lmin + 2.0 * Jt + rms([C_L, P, F]) ; the distance from edge of land to edge of land on the exterior of the land pattern
+  val Gmin = Smax - 2.0 * Jh - rms([C_S, P, F]) ; the distance from edge of land to edge of land on the interior of the land pattern
+  val Xmin = Wmin + 2.0 * Js + rms([C_W, P, F]) ; the size of the land in the dimension orthogonal to Z and G.
   IpcResults(Zmax, Gmin, Xmin)
-
-
-public defn make-n-pin-soic-landpattern (num-pins:Int,            ; number of pins of the component
-                                         pitch:Double,            ; pitch of the pins of the component
+   
+; Create an `n` pin SOIC land pattern. 
+;
+; Restrictions:
+; - n must be even
+; - the leads are oriented on the left and right sides of the land pattern
+; - p[1] is the top left pin
+;
+public defn make-n-pin-soic-landpattern (num-pins:Int,       ; number of pins of the component
+                                         pitch:Double,       ; pitch of the pins of the component
                                          outer-x:Toleranced, ; the "outer length" (x-dimension) of the component, from lead-to-lead
                                          part-x:Toleranced,  ; the length of the part/package (x-dimension)
                                          part-y:Toleranced,   ; the width of the part/package (y-dimension)
@@ -1115,9 +1126,9 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,            ; number of pi
     ; compute the courtyard
     val [max-y, min-y] = fork-on-seq(seq(y{center(_)}, locs), maximum, minimum)
     val lp-y-dim = y(pad-sz) + max-y - min-y
-    val lp-sz   = Dims(Zmax(ipc), y(pad-sz) + max-y - min-y) + 2.0 * SOLDER-MASK-REGISTRATION
+    val lp-sz   = enlarge(Dims(Zmax(ipc), y(pad-sz) + max-y - min-y), 2.0 * SOLDER-MASK-REGISTRATION)
     val part-sz = Dims(max-value(part-x), max-value(part-y))
-    val cy-sz   = max(lp-sz, part-sz) + 2.0 * courtyard-excess(lead-fillets)
+    val cy-sz   = enlarge(max(lp-sz, part-sz), 2.0 * courtyard-excess(lead-fillets))
     layer(Courtyard(Top)) = Rectangle(cy-sz)
         
     ;----------------------------------------------------
@@ -1126,10 +1137,11 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,            ; number of pi
     val line-length = 3.0 * line-width - line-width
     val dist  = SOLDER-MASK-REGISTRATION + SILK-SOLDER-MASK-CLEARANCE + line-width * 0.5 + 0.01
     val pad-loc = center(locs[0])
-    val pol-x = -0.5 * x(pad-loc)
-    val pol-y =  0.5 * y(pad-loc) + dist
+    println("pad-loc:%_" % [pad-loc])
+    val pol-x = min(-0.5 * x(part-sz), x(pad-loc) - 0.5 * x(pad-sz))
+    val pol-y = max( 0.5 * y(part-sz), y(pad-loc) + 0.5 * y(pad-sz))
     layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * Line(line-width, [Point(0.0, 0.0), Point(line-length, 0.0)])
-      
+    
     ;----------------------------------------------------
     ; place the reference label    
     val text-y = 0.5 * (y(cy-sz) + MIN-SILKSCREEN-TEXT-HEIGHT)
@@ -1137,20 +1149,20 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,            ; number of pi
 
 public defn make-n-pin-soic-landpattern (num-pins:Int,
                                          pitch:Double,
-                                         outer-length:Toleranced,
-                                         length:Toleranced,
-                                         width:Toleranced,
-                                         lead-length:Toleranced,
-                                         lead-width:Toleranced) :
+                                         outer-x:Toleranced,
+                                         part-x:Toleranced,
+                                         part-y:Toleranced,
+                                         lead-x:Toleranced,
+                                         lead-y:Toleranced) :
   val lead-type = BigGullWingLeads when pitch > 0.0625 else SmallGullWingLeads
   make-n-pin-soic-landpattern(num-pins,
                               pitch
-                              outer-length,
-                              length,
-                              width,
+                              outer-x,
+                              part-x,
+                              part-y,
                               lead-type,
-                              lead-length,
-                              lead-width,
+                              lead-x,
+                              lead-y,
                               FABRICATION-TOLERANCE,
                               PLACEMENT-TOLERANCE,
                               DensityLevelC)
@@ -1180,7 +1192,7 @@ public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vert
 
     ; ----------------------------------------------------
     ; place the pads
-    val pad-sz = pad-size(ipc)
+    val pad-sz = transpose(pad-size(ipc))
     val y-max = 0.5 * Gmin(ipc) + 0.5 * y(pad-sz)
     val y-min = (- y-max)
 
@@ -1194,9 +1206,9 @@ public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vert
     
     ; ----------------------------------------------------
     ; compute the courtyard
-    val lp-sz   = Dims(x(pad-sz), Zmax(ipc)) + 2.0 * SOLDER-MASK-REGISTRATION
+    val lp-sz   = enlarge(Dims(x(pad-sz), Zmax(ipc)), 2.0 * SOLDER-MASK-REGISTRATION)
     val part-sz = Dims(max-value(width), max-value(length))
-    val cy-sz   = max(lp-sz, part-sz) + 2.0 * courtyard-excess(lead-fillets)
+    val cy-sz   = enlarge(max(lp-sz, part-sz), 2.0 * courtyard-excess(lead-fillets))
     layer(Courtyard(Top)) = Rectangle(cy-sz)
     
     ; ----------------------------------------------------
