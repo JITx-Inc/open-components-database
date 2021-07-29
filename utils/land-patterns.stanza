@@ -1056,13 +1056,9 @@ defn ipc-formula (
   L:Toleranced, ; the distance from edge-of-lead to edge-of-lead on the exterior of the land pattern
   T:Toleranced, ; the nominal size of the leads, in the same dimension as L
   W:Toleranced, ; the nominal size of hte leads, in the dimension orthogonal to L
-  P:Double,     ; placement tolerance/accuracy
-  F:Double,     ; fabrication tolerance/accuracy
   fillets:LeadFillets, ; looked up using lead-fillets(lead-type, density-level)
 ):
   ; compute root-mean-squared of a sequence of numbers
-  defn rms (s:Seqable<Double>):
-    sqrt(sum(seq(fn (x:Double): x * x, s)))
   val [Jt, Jh, Js, _] = to-tuple(fillets)
   val Lmax = max-value(L)
   val Lmin = min-value(L)
@@ -1072,10 +1068,10 @@ defn ipc-formula (
   val C_L  = tolerance-range(L)
   val C_W  = tolerance-range(W)
   val C_T  = tolerance-range(T)
-  val C_S  = rms([C_L, C_T])
-  val Zmax = Lmin + 2.0 * Jt + rms([C_L, P, F]) ; the distance from edge of land to edge of land on the exterior of the land pattern
-  val Gmin = Smax - 2.0 * Jh - rms([C_S, P, F]) ; the distance from edge of land to edge of land on the interior of the land pattern
-  val Xmin = Wmin + 2.0 * Js + rms([C_W, P, F]) ; the size of the land in the dimension orthogonal to Z and G.
+  val C_S  = sqrt(C_L * C_L + C_T * C_T)
+  val Zmax = Lmin + 2.0 * Jt + C_L ; the distance from edge of land to edge of land on the exterior of the land pattern
+  val Gmin = Smax - 2.0 * Jh - C_S ; the distance from edge of land to edge of land on the interior of the land pattern
+  val Xmin = Wmin + 2.0 * Js + C_W ; the size of the land in the dimension orthogonal to Z and G.
   IpcResults(Zmax, Gmin, Xmin)
    
 ; Create an `n` pin SOIC land pattern. 
@@ -1093,8 +1089,6 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,       ; number of pins of
                                          lead-type:LandProtrusionType, ; the lead/land protrusion type of the part
                                          lead-x:Toleranced, ; the length (x-dimension) of the leads
                                          lead-y:Toleranced,  ; the width (y-dimension) of the leads
-                                         fabrication-tolerance:Double,
-                                         placement-tolerance:Double,
                                          density-level:DensityLevel):
   fatal("n must be even") when (num-pins % 2) != 0
   val lead-fillets = lead-fillets(lead-type, density-level)
@@ -1104,7 +1098,6 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,       ; number of pins of
     ; Compute adjustments to dimensions using IPC formula
     val ipc = ipc-formula(
       outer-x, lead-x, lead-y, 
-      placement-tolerance, fabrication-tolerance,
       lead-fillets
     )
 
@@ -1137,7 +1130,6 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,       ; number of pins of
     val line-length = 3.0 * line-width - line-width
     val dist  = SOLDER-MASK-REGISTRATION + SILK-SOLDER-MASK-CLEARANCE + line-width * 0.5 + 0.01
     val pad-loc = center(locs[0])
-    println("pad-loc:%_" % [pad-loc])
     val pol-x = min(-0.5 * x(part-sz), x(pad-loc) - 0.5 * x(pad-sz))
     val pol-y = max( 0.5 * y(part-sz), y(pad-loc) + 0.5 * y(pad-sz))
     layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * Line(line-width, [Point(0.0, 0.0), Point(line-length, 0.0)])
@@ -1163,16 +1155,12 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,
                               lead-type,
                               lead-x,
                               lead-y,
-                              FABRICATION-TOLERANCE,
-                              PLACEMENT-TOLERANCE,
                               DensityLevelC)
 
 public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vertical) dimension of the package
                                            width:Toleranced,  ; the width (horizontal) dimension of the package
                                            lead-length:Toleranced, ; the length (vertical) dimension of the conductors/leads of the package
                                            lead-width?:False|Toleranced, ; the width (horizontal) dimension of the conductors/leads of the package, if different from `length`
-                                           fabrication-tolerance:Double, ; the fabrication tolerance (F)
-                                           placement-tolerance:Double    ; the placement tolerance or accuracy (P)
                                            density-level:DensityLevel,   ; the density level of the design (DensityLevelA|DensityLevelB|DensityLevelC)
                                            anode-and-cathode?:True|False,; whether the pads should be named `a` and `c` (if false, p[1] and p[2])
                                            polarized?:True|False         ; whether a polarity marker is required or not
@@ -1186,7 +1174,6 @@ public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vert
     ; compute the base dimensions of the lands
     val ipc = ipc-formula(
       length, lead-length, width when lead-width? is False else lead-width? as Toleranced,
-      placement-tolerance, fabrication-tolerance,
       lead-fillets
     )
 
@@ -1250,7 +1237,6 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
                                            polarized?:True|False):
   make-two-pin-chip-landpattern(
     length, width, lead-length, lead-width?, 
-    FABRICATION-TOLERANCE, PLACEMENT-TOLERANCE, 
     density-level, polarized?, polarized?
   )
 
@@ -1270,28 +1256,13 @@ public pcb-landpattern two-pin-chip-landpattern (length:Toleranced,
                                                  width:Toleranced,
                                                  lead-length:Toleranced,
                                                  lead-width?:False|Toleranced,
-                                                 fabrication-tolerance:Double,
-                                                 placement-tolerance:Double
                                                  density-level:DensityLevel,
                                                  polarized?:True|False):
   make-two-pin-chip-landpattern(
     length, width, lead-length, lead-width?,
-    fabrication-tolerance, placement-tolerance, 
     density-level, polarized?, polarized?
   )
 
-; Create a a two pin chip landpattern with a custom lead width, if it exists.
-public defn two-pin-chip-landpattern (length:Toleranced,
-                                      width:Toleranced,
-                                      lead-length:Toleranced,
-                                      lead-width?:False|Toleranced,
-                                      density-level:DensityLevel,
-                                      polarized?:True|False):
-  two-pin-chip-landpattern(
-    length, width, lead-length, lead-width?, 
-    FABRICATION-TOLERANCE, PLACEMENT-TOLERANCE, 
-    density-level, polarized?
-  )
 
 ; Create a two-pin chip landpattern with a custom density level
 public defn two-pin-chip-landpattern (length:Toleranced,
