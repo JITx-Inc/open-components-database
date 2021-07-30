@@ -12,6 +12,53 @@ defpackage ocdb/test/land-patterns:
   import ocdb/rules
   import ocdb/generic-components
   import ocdb/symbols
+  import ocdb/land-protrusions
+
+pcb-component QFP:
+  pcb-landpattern LQFP48:
+    make-quad-landpattern(
+      24, 24   ; pins on north/south and east/west faces
+      0.5, 0.5 ; pitch on north/south and east/west faces
+      min-typ-max(8.8, 9.0, 9.2), min-typ-max(8.8, 9.0, 9.2) ; outer-x, outer-y ("D" and "E")
+      min-typ-max(6.8, 7.0, 7.2), min-typ-max(6.8, 7.0, 7.2) ; part-x, part-y (D1, E1)
+      min-typ-max(0.45, 0.6, 0.75), min-typ-max(0.17, 0.22, 0.27) ; lead-x, lead-y (L, b)
+      SmallGullWingLeads
+    )
+  port p : pin[[1]]
+  val lp = LQFP48
+  landpattern = 
+    lp(p[1] => lp.p[1])
+  make-box-symbol()
+
+pcb-component QFN:
+  pcb-landpattern MLPQ-UT8:
+    make-quad-landpattern(
+      2,  ; pins on north/south faces
+      6,  ; pins on east/west faces
+      0.4 ; pitch on north-south faces
+      0.4 ; pitch on east-west faces
+      tol(1.5, 0.0) ; outer-x
+      tol(1.5, 0.0) ; outer-y
+      tol(1.5, 0.0) ; part-x
+      tol(1.5, 0.0) ; part-y
+      min-typ-max(0.30, 0.35, 0.40) ; lead-dim-1
+      min-typ-max(0.15, 0.20, 0.25) ; lead-dim-2
+      QuadFlatNoLeads
+    )
+  val lp = MLPQ-UT8
+  port p: pin[[1 through 8]]
+  landpattern = 
+    lp(
+      p[1] => lp.p[1]
+      p[2] => lp.p[2]
+      p[3] => lp.p[3]
+      p[4] => lp.p[4]
+      p[5] => lp.p[5]
+      p[6] => lp.p[6]
+      p[7] => lp.p[7]
+      p[8] => lp.p[8]
+    )
+  make-box-symbol()
 
 pcb-component SOIC-CMP:
   pcb-landpattern SO8N:
@@ -81,10 +128,14 @@ pcb-module main-module:
   inst e1: example-1
   inst e2: SOIC-CMP
   inst e3: example-2
+  inst e4: QFN
+  inst e5: QFP
   place(e1) on Top
   place(e2) on Top
   place(e3) on Top 
+  place(e4) on Top
+
 set-rules(sierra-adv-rules)
 make-default-board(main-module, 2, Rectangle(12.0, 12.0))
 ; view-board()
-view(SOIC-CMP)
+view(QFP)

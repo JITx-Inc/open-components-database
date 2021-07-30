@@ -1071,7 +1071,149 @@ defn ipc-formula (L:Toleranced, ; the distance from edge-of-lead to edge-of-lead
   val Gmin = Smax - 2.0 * Jh - C_S ; the distance from edge of land to edge of land on the interior of the land pattern
   val Xmin = Wmin + 2.0 * Js + C_W ; the size of the land in the dimension orthogonal to Z and G.
   IpcResults(Zmax, Gmin, Xmin)
-   
+
+; A helper struct to compute the indices of a quad landpattern
+defstruct QuadIdx:
+  east:  Tuple<Int> ; the pin indices on the east face of the land pattern
+  south: Tuple<Int> ; the pin indices on the south face of hte land pattern
+  west:  Tuple<Int> ; the pin indiices on the west face of the land pattern
+  north: Tuple<Int> ; the pin inidices on the north face of the land pattern
+
+; printer for debugging QuadIdx
+defmethod print (o:OutputStream, q:QuadIdx):
+  print(o, "QuadIdx:")
+  val os = IndentedStream(o)
+  lnprint(os, "North:%_" % [north(q)])
+  lnprint(os, "South:%_" % [south(q)])
+  lnprint(os, "East:%_" %  [east(q)])
+  lnprint(os, "West:%_" %  [west(q)])
+
+; Compute the indices of a landpattern on each face
+defn QuadIdx (num-pins-ns:Int, num-pins-ew:Int):
+  val idx-e = to-tuple $ 1 through num-pins-ew / 2
+  val idx-s = to-tuple $ (maximum(idx-e) + 1) through (maximum(idx-e) + 1 + num-pins-ns / 2 - 1)
+  val idx-w = to-tuple $ reverse $ (maximum(idx-s) + 1) through (maximum(idx-s) + 1 + num-pins-ew / 2 - 1)
+  val idx-n = to-tuple $ reverse $ (maximum(idx-w) + 1) through (maximum(idx-w) + 1 + num-pins-ns / 2 - 1)
+  QuadIdx(idx-e, idx-s, idx-w, idx-n)
+
+; Get the north/south indices, in one tuple
+defn north-south (q:QuadIdx):
+  to-tuple(cat-all([north(q), south(q)]))
+
+; Get the east/west indicies, in one tuple
+defn east-west (q:QuadIdx):
+  to-tuple(cat-all([east(q), west(q)]))
+
+public defn make-quad-landpattern (num-pins-ns: Int,    ; the number of pins on the north/south faces
+                                   num-pins-ew: Int,    ; the number of pins on the east/west faces
+                                   pitch-ns: Double,    ; the pitch of pins on the north/south faces
+                                   pitch-ew: Double,    ; the pitch of pins on the east/west faces
+                                   outer-x: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the x direction
+                                   outer-y: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the y direction
+                                   part-x: Toleranced,  ; the size of the package in the x direction
+                                   part-y: Toleranced,  ; the size of hte package in the y direction
+                                   lead-dim-1: Toleranced, ; the dimension of the leads in the x direction on the east/west faces
+                                   lead-dim-2: Toleranced, ; the dimension of the leads in the y direction on the east/west faces
+                                   lead-type:  LandProtrusionType, ; the type of the leads
+                                   density-level: DensityLevel):   ; the density level of the design
+  ensure-even-positive!(num-pins-ns, "make-qfn-land-pattern")
+  ensure-even-positive!(num-pins-ew, "make-qfn-land-pattern")
+  val lead-fillets = lead-fillets(lead-type, density-level)
+  inside pcb-landpattern:
+    ;----------------------------------------------------------
+    ; compute dimensions
+    ; layer(Courtyard(Bottom)) = Rectangle(typ(part-x), typ(part-y))
+    val ipc-ns = ipc-formula(outer-x, lead-dim-1, lead-dim-2, 0.0, 0.0, lead-fillets)
+    val ipc-ew = ipc-formula(outer-y, lead-dim-1, lead-dim-2, 0.0, 0.0, lead-fillets)
+    val pad-sz-ns = transpose(pad-size(ipc-ns))
+    val pad-sz-ew = pad-size(ipc-ew)
+
+    ;----------------------------------------------------------
+    ; compute pad locations
+    val grid-sz-ns = Dims(pitch-ns, Gmin(ipc-ew) + y(pad-sz-ns))
+    val grid-sz-ew = Dims(Gmin(ipc-ew) + x(pad-sz-ew), pitch-ew)
+
+    val locs-ns = to-tuple $ grid-locs(2, num-pins-ns / 2, x(grid-sz-ns), y(grid-sz-ns), true)
+    val locs-ew = to-tuple $ grid-locs(num-pins-ew / 2, 2, x(grid-sz-ew), y(grid-sz-ew), false)
+    val idx = QuadIdx(num-pins-ns, num-pins-ew)
+    
+    ; layer(Courtyard(Top)) = Rectangle(Zmax(ipc-ew),Zmax(ipc-ns))
+    ; layer(Courtyard(Top)) = Rectangle(Gmin(ipc-ew),Gmin(ipc-ns))
+    ; layer(Courtyard(Bottom)) = locs-ew[0] * Rectangle(max-value(lead-dim-1), max-value(lead-dim-2))
+    
+    for (idx in north-south(idx), loc in locs-ns) do : 
+      pad p[idx]: smd-pad(Rectangle(pad-sz-ns)) at loc
+    
+    for (idx in east-west(idx), loc in locs-ew) do : 
+      pad p[idx]: smd-pad(Rectangle(pad-sz-ew)) at loc
+
+    ;----------------------------------------------------------
+    ; Compute the courtyard
+    val part-sz = Dims(max-value(part-x), max-value(part-y))
+    val lp-sz   = enlarge(Dims(Zmax(ipc-ew), Zmax(ipc-ns)), 2.0 * SOLDER-MASK-REGISTRATION)
+    val cy-sz   = enlarge(max(part-sz, lp-sz), courtyard-excess(lead-fillets))
+    layer(Courtyard(Top)) = Rectangle(cy-sz)
+  
+    ;----------------------------------------------------------
+    ; Place the polarity marker
+    val line-width  = clearance(current-rules(), MinSilkscreenWidth)
+    val line-length = 3.0 * line-width - line-width
+    val dist  = SOLDER-MASK-REGISTRATION + SILK-SOLDER-MASK-CLEARANCE + line-width * 0.5 + 0.01
+    val pad-loc = center(locs-ew[0])
+    val pol-x = min(-0.5 * x(part-sz), x(pad-loc) - 0.5 * x(pad-sz-ew))
+    val pol-y = max( 0.5 * y(part-sz), y(pad-loc) + 0.5 * y(pad-sz-ew))
+    layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * Line(line-width, [Point(0.0, 0.0), Point(line-length, 0.0)])
+
+    ;----------------------------------------------------------
+    ; Place the reference label
+    val text-y = 0.5 * (y(cy-sz) + MIN-SILKSCREEN-TEXT-HEIGHT)
+    ref-label(0.0, text-y)
+
+    
+public defn make-quad-landpattern (num-pins-ns: Int,    ; the number of pins on the north/south faces
+                                   num-pins-ew: Int,    ; the number of pins on the east/west faces
+                                   pitch-ns: Double,    ; the pitch of pins on the north/south faces
+                                   pitch-ew: Double,    ; the pitch of pins on the east/west faces
+                                   outer-x: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the x direction
+                                   outer-y: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the y direction
+                                   part-x: Toleranced,  ; the size of the package in the x direction
+                                   part-y: Toleranced,  ; the size of hte package in the y direction
+                                   lead-dim-1: Toleranced, ; the dimension of the leads in the x direction on the east/west faces
+                                   lead-dim-2: Toleranced, ; the dimension of the leads in the y direction on the east/west faces
+                                   lead-type: LandProtrusionType
+                                  ):
+  make-quad-landpattern(
+    num-pins-ns, num-pins-ew, 
+    pitch-ns, pitch-ew,
+    outer-x, outer-y,
+    part-x, part-y
+    lead-dim-1, lead-dim-2,
+    lead-type,
+    DensityLevelC
+  )
+
+public defn make-quad-landpattern (num-pins-ns: Int,    ; the number of pins on the north/south faces
+                                   num-pins-ew: Int,    ; the number of pins on the east/west faces
+                                   pitch-ns: Double,    ; the pitch of pins on the north/south faces
+                                   pitch-ew: Double,    ; the pitch of pins on the east/west faces
+                                   outer-x: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the x direction
+                                   outer-y: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the y direction
+                                   part-x: Toleranced,  ; the size of the package in the x direction
+                                   part-y: Toleranced,  ; the size of hte package in the y direction
+                                   lead-dim-1: Toleranced, ; the dimension of the leads in the x direction on the east/west faces
+                                   lead-dim-2: Toleranced, ; the dimension of the leads in the y direction on the east/west faces
+                                  ):
+  val lead-type = BigGullWingLeads when min(pitch-ns, pitch-ew) > 0.0625 else SmallGullWingLeads
+  make-quad-landpattern(
+    num-pins-ns, num-pins-ew, 
+    pitch-ns, pitch-ew,
+    outer-x, outer-y,
+    part-x, part-y
+    lead-dim-1, lead-dim-2,
+    lead-type,
+    DensityLevelC
+  )
+
 ; Create an `n` pin SOIC land pattern. 
 ;
 ; Restrictions:
