@@ -70,7 +70,7 @@ defstruct OscillatorOption:
 ;==============================================================================
 public defn Stm32Pin (elt:Elt):
   Stm32Pin(
-    ref-ify(sanitize-pin-name(get-String(elt, `Name)))
+    ref-ify(extract-pin-name(get-String(elt, `Name)))
     get-String(elt, `Position)
     get-String(elt, `Type)
     to-tuple(seq(get-String{_, `Name}, get-children(elt, `Signal)))
@@ -173,6 +173,81 @@ defn sanitize-pin-name (s:String) -> String:
       (i:Int): s* = s*[0 to i]
       (_:?): false
   s*
+
+defn get-numbers-in-string (s:String) -> Vector<[Int, Int]>:
+  val arr = Vector<[Int, Int]>()
+  var start = -1
+  var end = -1
+  for i in 0 to length(s) do :
+    if (digit?(s[i])) :
+      if (start == -1) :
+        start = i
+      else if (start >= 0) :
+        end = i
+        add(arr, [start, end])
+        start = -1
+        end = -1
+  if (start >= 0):
+    end = length(s)
+    add(arr, [start, end])
+  arr
+
+defn extract-pin-name (raw:String) -> String:
+  val ret1 = sanitize-pin-name(raw)
+  ;println(ret1)
+  ;handle special cases first
+  val arr = get-numbers-in-string(ret1)
+  val l = length(ret1)
+  if ( suffix?(ret1, "_C") or
+      suffix?(ret1, "_INN") or
+      suffix?(ret1, "_VINM") or
+      prefix?(ret1, "DSI_D") or
+      prefix?(ret1, "DSIHOST_D") or
+      prefix?(ret1, "DDR_DQS")) :
+    ; These have array length of 1
+    val [start, end] = arr[0]
+    val pref = ret1[0 to start]
+    val sufx = ret1[end to l]
+    val num = ret1[start to end]
+    val ret = to-string("%_%_%_" % [pref, sufx, num])
+    ;println("1: %_" % [ret])
+    ret
+  else if ( prefix?(ret1, "UCPD1_DBCC")):
+    ; These have array length of 1
+    val [start, end] = arr[1]
+    val num = ret1[start to end]
+    val ret = to-string("UCPD1_DBCC%_" % [num])
+    ;println("2: %_" % [ret])
+    ret
+  else if ( length(arr) == 0 or 
+            prefix?(ret1, "VDD") or
+            prefix?(ret1, "VSS") or
+            prefix?(ret1, "RF") or
+            prefix?(ret1, "BYPASS") or
+            prefix?(ret1, "V12PHYHS") or
+            prefix?(ret1, "V15SMPS")) :
+    ;println("3: %_" % [ret1])
+    ret1
+  else if (index-of-chars(ret1 ,"OSC32") is-not False ) :
+    val ret = ret1[0 to index-of-chars(ret1 ,"OSC32")]
+    ;println("4: %_ to %_" % [ret1, ret])
+    ret
+  else if ((index-of-chars(ret1 ,"BOOT") is-not False ) and
+              (not prefix?(ret1, "BOOT"))) :
+    val ret = ret1[0 to index-of-chars(ret1 ,"BOOT")]
+    ;println("5: %_ to %_" % [ret1, ret])
+    ret
+  else if (length(arr) == 1) :
+    val [start, end] = arr[0]
+    val pref = ret1[0 to start]
+    val sufx = ret1[end to l]
+    val num = ret1[start to end]
+    val ret = to-string("%_%_%_" % [pref, sufx, num])
+    ;println("6: %_ to %_" % [ret1, ret])
+    ret
+  else :
+    ret1
+
 ; Algorithm to convert a string to a Ref. 
 ; - "abcdef1" becomes abcdef[1]
 ; - "123" becomes p[123]
