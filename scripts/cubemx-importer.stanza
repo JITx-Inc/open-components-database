@@ -182,13 +182,16 @@ defn get-numbers-in-string (s:String) -> Vector<[Int, Int]>:
     if (digit?(s[i])) :
       if (start == -1) :
         start = i
-      else if (start >= 0) :
-        end = i
-        add(arr, [start, end])
-        start = -1
-        end = -1
-  if (start >= 0):
+    else if (start >= 0) :
+      end = i
+      ;println(("6: Adding %_ from %_ to %_") % [s, start, end])
+      add(arr, [start, end])
+      start = -1
+      end = -1
+
+  if (start >= 0) :
     end = length(s)
+    ;println(("7: Adding %_ from %_ to %_") % [s, start, end])
     add(arr, [start, end])
   arr
 
@@ -210,14 +213,14 @@ defn extract-pin-name (raw:String) -> String:
     val sufx = ret1[end to l]
     val num = ret1[start to end]
     val ret = to-string("%_%_%_" % [pref, sufx, num])
-    ;println("1: %_" % [ret])
+    ;println("1: %_ ==> %_" % [raw, ret])
     ret
   else if ( prefix?(ret1, "UCPD1_DBCC")):
     ; These have array length of 1
     val [start, end] = arr[1]
     val num = ret1[start to end]
     val ret = to-string("UCPD1_DBCC%_" % [num])
-    ;println("2: %_" % [ret])
+    ;println("2: %_ ==> %_" % [raw, ret])
     ret
   else if ( length(arr) == 0 or 
             prefix?(ret1, "VDD") or
@@ -226,26 +229,28 @@ defn extract-pin-name (raw:String) -> String:
             prefix?(ret1, "BYPASS") or
             prefix?(ret1, "V12PHYHS") or
             prefix?(ret1, "V15SMPS")) :
-    ;println("3: %_" % [ret1])
+    ;println("3: %_ ==> %_" % [raw, ret1])
     ret1
   else if (index-of-chars(ret1 ,"OSC32") is-not False ) :
     val ret = ret1[0 to index-of-chars(ret1 ,"OSC32")]
-    ;println("4: %_ to %_" % [ret1, ret])
+    ;println("4: %_ ==> %_" % [raw, ret])
     ret
   else if ((index-of-chars(ret1 ,"BOOT") is-not False ) and
               (not prefix?(ret1, "BOOT"))) :
     val ret = ret1[0 to index-of-chars(ret1 ,"BOOT")]
-    ;println("5: %_ to %_" % [ret1, ret])
+    ;println("5: %_ ==> %_" % [raw, ret])
     ret
   else if (length(arr) == 1) :
     val [start, end] = arr[0]
+    ;println("6: start:%_ ==> end:%_" % [start, end])
     val pref = ret1[0 to start]
     val sufx = ret1[end to l]
     val num = ret1[start to end]
     val ret = to-string("%_%_%_" % [pref, sufx, num])
-    ;println("6: %_ to %_" % [ret1, ret])
+    ;println("6: num = %_, %_ ==> %_" % [num, raw, ret])
     ret
   else :
+    ;println("7: %_ ==> %_" % [raw, ret1])
     ret1
 
 ; Algorithm to convert a string to a Ref. 
