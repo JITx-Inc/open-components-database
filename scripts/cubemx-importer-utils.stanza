@@ -1,7 +1,8 @@
 defpackage ocdb/scripts/cubemx-importer-utils:
   import core
   import collections
-
+  import jitx
+  import pcre
 
 ; Algorithm to sanitize pin names.
 defn sanitize-pin-name (s:String) -> String:
@@ -91,3 +92,42 @@ public defn extract-pin-name (raw:String) -> String:
   else :
     ;println("7: %_ ==> %_" % [raw, ret1])
     ret1
+
+; Algorithm to convert a string to a Ref. 
+; - "abcdef1" becomes abcdef[1]
+; - "123" becomes p[123]
+public defn ref-ify (s:String) -> Ref:
+  ; internal helper. Returns the baseref and integer if the value ends in a number, 
+  ; false otherwise
+  defn ends-in-number? (s) -> False|[String, Int]:
+    var ref-end = length(s) - 1
+    while digit?(s[ref-end]) and ref-end > 0:
+      ref-end = ref-end - 1
+    val [start, end] = [s[0 through ref-end], s[(ref-end + 1) to false]]
+    if empty?(end):
+      false
+    else:
+      [start, to-int(end)]
+
+  ; internal helper. Prints failure message.
+  defn fail () -> Void:
+    throw(Exception("Could not parse %_ as a pin or pad ref." % [s]))
+  
+  ; main program
+  defn driver (s:String):
+    if letter?(s[0]):
+      ; extract the ref from a string
+      match(ends-in-number?(s)):
+        (_:False): Ref(s)
+        (p:[String, Int]):
+          val [prefix, postfix] = p
+          IndexRef(Ref(prefix), postfix)
+    else if digit?(s[0]):
+      match(to-int(s)):
+        (i:Int): IndexRef(Ref("p"), i)
+        (_:?): fail()
+    else:
+      fail()
+  
+  ; Launch!
+  driver(s)
