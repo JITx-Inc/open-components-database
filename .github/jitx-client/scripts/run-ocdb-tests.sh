@@ -2,7 +2,9 @@
 set -e
 
 echo "Launching ocdb tests depending on jitx-client..."
-jitx run-test open-components-database/tests/test-stm-pin-parsing.stanza
+cd open-components-database/tests/
+jitx run-test test-stm-pin-parsing.stanza
+cd ../..
 
 echo "Searching for pcb objects and generating tests..."
 python3.8 scripts/evaluate_pcb_objects.py
