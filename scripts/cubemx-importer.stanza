@@ -2,11 +2,12 @@
 defpackage ocdb/scripts/cubemx-importer:
   import core
   import collections
-  import jitx
-  import jitx/commands
-  import jitx/xml
-  import lang-utils
   import pcre
+
+  import jitx
+  import jitx/xml
+
+  import ocdb/scripts/cubemx-importer-utils
 
 ;==============================================================================
 ;================================== IR ========================================
@@ -32,15 +33,15 @@ public defstruct Stm32MCU:
   pins:Tuple<Stm32Pin> ; pins of the mcu
   ip: Tuple<Stm32Ip>   ; ip blocks of the mcu
 
-; An option for GPIO 
+; An option for GPIO
 defstruct GpioOption:
   gpio:Stm32Pin
 
-; An option for ADC 
+; An option for ADC
 defstruct AdcOption:
   adc:Stm32Pin
 
-; An option for DAC 
+; An option for DAC
 defstruct DacOption:
   dac:Stm32Pin
 
@@ -70,7 +71,7 @@ defstruct OscillatorOption:
 ;==============================================================================
 public defn Stm32Pin (elt:Elt):
   Stm32Pin(
-    ref-ify(sanitize-pin-name(get-String(elt, `Name)))
+    ref-ify(extract-pin-name(get-String(elt, `Name)))
     get-String(elt, `Position)
     get-String(elt, `Type)
     to-tuple(seq(get-String{_, `Name}, get-children(elt, `Signal)))
@@ -164,53 +165,6 @@ defmethod print (o:OutputStream, opt:TimerOption):
 ;==============================================================================
 ;=============================== Helpers ======================================
 ;==============================================================================
-; Algorithm to sanitize pin names.
-defn sanitize-pin-name (s:String) -> String:
-  var s*: String = s
-  val chars = " -_/"
-  for c in chars do:
-    match(index-of-char(s*, c)):
-      (i:Int): s* = s*[0 to i]
-      (_:?): false
-  s*
-; Algorithm to convert a string to a Ref. 
-; - "abcdef1" becomes abcdef[1]
-; - "123" becomes p[123]
-defn ref-ify (s:String) -> Ref:
-  ; internal helper. Returns the baseref and integer if the value ends in a number, 
-  ; false otherwise
-  defn ends-in-number? (s) -> False|[String, Int]:
-    var ref-end = length(s) - 1
-    while digit?(s[ref-end]) and ref-end > 0:
-      ref-end = ref-end - 1
-    val [start, end] = [s[0 through ref-end], s[(ref-end + 1) to false]]
-    if empty?(end):
-      false
-    else:
-      [start, to-int(end)]
-
-  ; internal helper. Prints failure message.
-  defn fail () -> Void:
-    throw(Exception("Could not parse %_ as a pin or pad ref." % [s]))
-  
-  ; main program
-  defn driver (s:String):
-    if letter?(s[0]):
-      ; extract the ref from a string
-      match(ends-in-number?(s)):
-        (_:False): Ref(s)
-        (p:[String, Int]):
-          val [prefix, postfix] = p
-          IndexRef(Ref(prefix), postfix)
-    else if digit?(s[0]):
-      match(to-int(s)):
-        (i:Int): IndexRef(Ref("p"), i)
-        (_:?): fail()
-    else:
-      fail()
-  
-  ; Launch!
-  driver(s)
 
 ; find pins with a signal
 public defn pins-with-signal (pins:Tuple<Stm32Pin>, signal:String):
