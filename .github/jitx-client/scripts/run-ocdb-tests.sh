@@ -2,6 +2,8 @@
 set -e
 
 echo "Launching ocdb unit-tests, they do not depend on jitx-client..."
+export PATH=$PATH:/root/.jitx/current/stanza
+export STANZA_CONFIG=/root/.jitx/current/
 cd open-components-database
 stanza run-test tests/test-stm-pin-parsing.stanza
 cd ..
