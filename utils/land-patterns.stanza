@@ -212,6 +212,10 @@ public pcb-pad smd-pad (s:Shape):
 public defn smd-pad (anchor:Anchor, width:Double, height:Double):
   smd-pad(Rectangle(anchor, width, height))
 
+; Create a rectangular SMD pad 
+public defn smd-pad (d:Dims):
+  smd-pad(Rectangle(d))
+
 ; Create an SMD pad with a given width and height
 public defn smd-pad (width:Double, height:Double) :
   smd-pad(C, width, height)
@@ -733,6 +737,7 @@ public pcb-landpattern sop65-landpattern (n:Int) :
   make-sop65-landpattern(n, 6.4)
 
 public defn make-qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double, corner-pads:[Pad,Pad]|False) :
+  println("called make-qfn-landpattern")
   inside pcb-landpattern :
     var n = -1
     if n-pins % 4 == 0 :
@@ -1047,6 +1052,9 @@ defstruct IpcResults:
   Gmin:Double,
   Xmin:Double,
 
+defmethod print (o:OutputStream, i:IpcResults):
+  print(o, "IpcResults(Zmax:%_, Gmin:%_, Xmin:%_" % [Zmax(i), Gmin(i), Xmin(i)])
+
 ; Helper to compute the pad size from the formula results
 defn pad-size (i:IpcResults) -> Dims:
   Dims(0.5 * (Zmax(i) - Gmin(i)), Xmin(i))
@@ -1104,10 +1112,14 @@ defn north-south (q:QuadIdx):
 defn east-west (q:QuadIdx):
   to-tuple(cat-all([east(q), west(q)]))
 
-public defn make-quad-landpattern (num-pins-ns: Int,    ; the number of pins on the north/south faces
-                                   num-pins-ew: Int,    ; the number of pins on the east/west faces
-                                   pitch-ns: Double,    ; the pitch of pins on the north/south faces
-                                   pitch-ew: Double,    ; the pitch of pins on the east/west faces
+public defn make-quad-landpattern (num-pins-north: Int, ; the number of pins on the north face
+                                   num-pins-south: Int, ; the number of pins on the south face
+                                   num-pins-east: Int,  ; the number of pins on the east face
+                                   num-pins-west: Int,  ; the number of pins on the west face
+                                   pitch-north:Double,  ; the pitch on the north face
+                                   pitch-south:Double,  ; the pitch on the south face
+                                   pitch-east:Double,   ; the pitch on the east face
+                                   pitch-west:Double,   ; the pithc on the west face
                                    outer-x: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the x direction
                                    outer-y: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the y direction
                                    part-x: Toleranced,  ; the size of the package in the x direction
@@ -1116,10 +1128,11 @@ public defn make-quad-landpattern (num-pins-ns: Int,    ; the number of pins on 
                                    lead-dim-2: Toleranced, ; the dimension of the leads in the y direction on the east/west faces
                                    lead-type:  LandProtrusionType, ; the type of the leads
                                    density-level: DensityLevel):   ; the density level of the design
-  ensure-even-positive!(num-pins-ns, "make-qfn-land-pattern")
-  ensure-even-positive!(num-pins-ew, "make-qfn-land-pattern")
   val lead-fillets = lead-fillets(lead-type, density-level)
   inside pcb-landpattern:
+    layer(Courtyard(Bottom)) = Rectangle(max-value(part-x), max-value(part-y))
+    layer(Courtyard(Bottom)) = Rectangle(max-value(outer-x), max-value(outer-y))
+    
     ;----------------------------------------------------------
     ; compute dimensions
     ; layer(Courtyard(Bottom)) = Rectangle(typ(part-x), typ(part-y))
@@ -1127,26 +1140,53 @@ public defn make-quad-landpattern (num-pins-ns: Int,    ; the number of pins on 
     val ipc-ew = ipc-formula(outer-y, lead-dim-1, lead-dim-2, 0.0, 0.0, lead-fillets)
     val pad-sz-ns = transpose(pad-size(ipc-ns))
     val pad-sz-ew = pad-size(ipc-ew)
+    ; layer(Courtyard(Top)) = Rectangle(Zmax(ipc-ew), Zmax(ipc-ns))
+    ; layer(Courtyard(Top)) = Rectangle(Gmin(ipc-ew), Gmin(ipc-ns))
 
     ;----------------------------------------------------------
     ; compute pad locations
-    val grid-sz-ns = Dims(pitch-ns, Gmin(ipc-ew) + y(pad-sz-ns))
-    val grid-sz-ew = Dims(Gmin(ipc-ew) + x(pad-sz-ew), pitch-ew)
+    var acc = 0
 
-    val locs-ns = to-tuple $ grid-locs(2, num-pins-ns / 2, x(grid-sz-ns), y(grid-sz-ns), true)
-    val locs-ew = to-tuple $ grid-locs(num-pins-ew / 2, 2, x(grid-sz-ew), y(grid-sz-ew), false)
-    val idx = QuadIdx(num-pins-ns, num-pins-ew)
+    val x-shift = 0.5 * (Zmax(ipc-ew) - x(pad-sz-ew))
+    val y-shift = 0.5 * (Zmax(ipc-ns) - y(pad-sz-ns))
+    val x-shift-nom = 0.5 * max-value(outer-x) - 0.5 * max-value(lead-dim-1)
+    val y-shift-nom = 0.5 * max-value(outer-y) - 0.5 * max-value(lead-dim-1)
     
-    ; layer(Courtyard(Top)) = Rectangle(Zmax(ipc-ew),Zmax(ipc-ns))
-    ; layer(Courtyard(Top)) = Rectangle(Gmin(ipc-ew),Gmin(ipc-ns))
-    ; layer(Courtyard(Bottom)) = locs-ew[0] * Rectangle(max-value(lead-dim-1), max-value(lead-dim-2))
-    
-    for (idx in north-south(idx), loc in locs-ns) do : 
-      pad p[idx]: smd-pad(Rectangle(pad-sz-ns)) at loc
-    
-    for (idx in east-west(idx), loc in locs-ew) do : 
-      pad p[idx]: smd-pad(Rectangle(pad-sz-ew)) at loc
+    val pad-1-loc = to-tuple(grid-locs(num-pins-east, 2, 2.0 * x-shift, pitch-east))[0]
+    defn layout-pads (dir:Dir, n:Int, p:Double):
+      val nominal-locs = switch(dir):
+        Up: reverse $ to-list $ shift-locs(0.0, y-shift-nom, row-locs(n, p))
+        Down: shift-locs(0.0, (- y-shift-nom), row-locs(n, p))
+        Left: shift-locs((- x-shift-nom), 0.0, col-locs(n, p))
+        Right: reverse $ to-list $ shift-locs(x-shift-nom, 0.0, col-locs(n, p))
+      for loc in nominal-locs do:
+        layer(Courtyard(Bottom)) = 
+          if (dir == Up) or (dir == Down):
+            loc * Rectangle(max-value(lead-dim-2), max-value(lead-dim-1))
+          else:
+            loc * Rectangle(max-value(lead-dim-1), max-value(lead-dim-2))
+      
+      val locs = switch(dir):
+        Up: reverse(to-list $ shift-locs(0.0, y-shift, row-locs(n, p)))
+        Down: shift-locs(0.0, (- y-shift), row-locs(n, p))
+        Left: shift-locs((- x-shift), 0.0, col-locs(n, p))
+        Right: reverse(to-list $ shift-locs(x-shift, 0.0, col-locs(n, p)))
+      val def = switch(dir):
+        Up: smd-pad(pad-sz-ns)
+        Down: smd-pad(pad-sz-ns)
+        Left: smd-pad(pad-sz-ew)
+        Right: smd-pad(pad-sz-ew)
+        
+      val idx = acc to (acc + n)
+      acc = acc + n
+      for (i in idx, loc in locs) do:
+        pad p[i + 1]: def at loc
 
+    layout-pads(Left, num-pins-east,  pitch-east)
+    layout-pads(Down, num-pins-south, pitch-south)
+    layout-pads(Right,num-pins-west,  pitch-west)
+    layout-pads(Up,   num-pins-north, pitch-north)
+    
     ;----------------------------------------------------------
     ; Compute the courtyard
     val part-sz = Dims(max-value(part-x), max-value(part-y))
@@ -1159,7 +1199,7 @@ public defn make-quad-landpattern (num-pins-ns: Int,    ; the number of pins on 
     val line-width  = clearance(current-rules(), MinSilkscreenWidth)
     val line-length = 3.0 * line-width - line-width
     val dist  = SOLDER-MASK-REGISTRATION + SILK-SOLDER-MASK-CLEARANCE + line-width * 0.5 + 0.01
-    val pad-loc = center(locs-ew[0])
+    val pad-loc = center(pad-1-loc)
     val pol-x = min(-0.5 * x(part-sz), x(pad-loc) - 0.5 * x(pad-sz-ew))
     val pol-y = max( 0.5 * y(part-sz), y(pad-loc) + 0.5 * y(pad-sz-ew))
     layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * Line(line-width, [Point(0.0, 0.0), Point(line-length, 0.0)])
@@ -1169,50 +1209,36 @@ public defn make-quad-landpattern (num-pins-ns: Int,    ; the number of pins on 
     val text-y = 0.5 * (y(cy-sz) + MIN-SILKSCREEN-TEXT-HEIGHT)
     ref-label(0.0, text-y)
 
-    
-public defn make-quad-landpattern (num-pins-ns: Int,    ; the number of pins on the north/south faces
-                                   num-pins-ew: Int,    ; the number of pins on the east/west faces
-                                   pitch-ns: Double,    ; the pitch of pins on the north/south faces
-                                   pitch-ew: Double,    ; the pitch of pins on the east/west faces
-                                   outer-x: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the x direction
-                                   outer-y: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the y direction
-                                   part-x: Toleranced,  ; the size of the package in the x direction
-                                   part-y: Toleranced,  ; the size of hte package in the y direction
-                                   lead-dim-1: Toleranced, ; the dimension of the leads in the x direction on the east/west faces
-                                   lead-dim-2: Toleranced, ; the dimension of the leads in the y direction on the east/west faces
-                                   lead-type: LandProtrusionType
-                                  ):
-  make-quad-landpattern(
-    num-pins-ns, num-pins-ew, 
-    pitch-ns, pitch-ew,
-    outer-x, outer-y,
-    part-x, part-y
-    lead-dim-1, lead-dim-2,
-    lead-type,
-    DensityLevelC
-  )
+public defn make-quad-landpattern (num-pins:Int, pitch:Double, outer-xy:Toleranced, package-xy:Toleranced, lead-x:Toleranced, lead-y:Toleranced, lead-type:LandProtrusionType):
+  fatal("make-quad-landpattern(...) failed: num-pins must be divisible by 4. Called with: %_." % [num-pins]) when (num-pins % 4 != 0) or (num-pins <= 0)
+  fatal("make-quad-landpattern(...) failed: pitch must be greater than 0. Called with: %_." % [pitch]) when pitch <= 0.0
+  make-quad-landpattern(num-pins / 4, num-pins / 4, num-pins / 4, num-pins / 4, 
+                        pitch, pitch, pitch, pitch, 
+                        outer-xy, outer-xy, 
+                        package-xy, package-xy, 
+                        lead-x, lead-y, lead-type, DensityLevelC)
 
-public defn make-quad-landpattern (num-pins-ns: Int,    ; the number of pins on the north/south faces
-                                   num-pins-ew: Int,    ; the number of pins on the east/west faces
-                                   pitch-ns: Double,    ; the pitch of pins on the north/south faces
-                                   pitch-ew: Double,    ; the pitch of pins on the east/west faces
-                                   outer-x: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the x direction
-                                   outer-y: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the y direction
-                                   part-x: Toleranced,  ; the size of the package in the x direction
-                                   part-y: Toleranced,  ; the size of hte package in the y direction
-                                   lead-dim-1: Toleranced, ; the dimension of the leads in the x direction on the east/west faces
-                                   lead-dim-2: Toleranced, ; the dimension of the leads in the y direction on the east/west faces
-                                  ):
-  val lead-type = BigGullWingLeads when min(pitch-ns, pitch-ew) > 0.0625 else SmallGullWingLeads
-  make-quad-landpattern(
-    num-pins-ns, num-pins-ew, 
-    pitch-ns, pitch-ew,
-    outer-x, outer-y,
-    part-x, part-y
-    lead-dim-1, lead-dim-2,
-    lead-type,
-    DensityLevelC
-  )
+public defn make-qfn-landpattern (num-pins:Int, pitch:Double, package-xy:Toleranced, lead-x:Toleranced, lead-y:Toleranced):
+  make-quad-landpattern(num-pins,
+                        pitch,
+                        package-xy,
+                        package-xy, 
+                        lead-x, lead-y, QuadFlatNoLeads)
+
+public defn make-qfn-landpattern (num-pins:[Int, Int, Int, Int], pitch:Double, package-xy:Toleranced, lead-x:Toleranced, lead-y:Toleranced):
+  make-quad-landpattern(num-pins[0], num-pins[1], num-pins[2], num-pins[3], 
+                        pitch, pitch, pitch, pitch,
+                        package-xy, package-xy,
+                        package-xy, package-xy,
+                        lead-x, lead-y, QuadFlatNoLeads, DensityLevelC)
+
+public defn make-qfp-landpattern (num-pins:Int, pitch:Double, outer-xy:Toleranced, package-xy:Toleranced, lead-x:Toleranced, lead-y:Toleranced):
+  val lead-type = BigGullWingLeads when pitch >= 0.0625 else SmallGullWingLeads
+  make-quad-landpattern(num-pins, 
+                        pitch,
+                        outer-xy, 
+                        package-xy, 
+                        lead-x, lead-y, lead-type)
 
 ; Create an `n` pin SOIC land pattern. 
 ;
