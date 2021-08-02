@@ -52,14 +52,14 @@ public defn extract-pin-name (raw:String) -> String:
     val pref = ret1[0 to start]
     val sufx = ret1[end to l]
     val num = ret1[start to end]
-    val ret = to-string("%_%_%_" % [pref, sufx, num])
+    val ret = to-string("%_%_[%_]" % [pref, sufx, num])
     ;println("1: %_ ==> %_" % [raw, ret])
     ret
   else if ( prefix?(ret1, "UCPD1_DBCC")):
     ; These have array length of 1
     val [start, end] = arr[1]
     val num = ret1[start to end]
-    val ret = to-string("UCPD1_DBCC%_" % [num])
+    val ret = to-string("UCPD1_DBCC[%_]" % [num])
     ;println("2: %_ ==> %_" % [raw, ret])
     ret
   else if ( length(arr) == 0 or
@@ -72,12 +72,22 @@ public defn extract-pin-name (raw:String) -> String:
     ;println("3: %_ ==> %_" % [raw, ret1])
     ret1
   else if (index-of-chars(ret1 ,"OSC32") is-not False ) :
-    val ret = ret1[0 to index-of-chars(ret1 ,"OSC32")]
+    val ret2 = ret1[0 to index-of-chars(ret1 ,"OSC32")]
+    val [start, end] = arr[0]
+    val pref = ret2[0 to start]
+    val sufx = ret2[end to length(ret2)]
+    val num = ret2[start to end]
+    val ret = to-string("%_%_[%_]" % [pref, sufx, num])
     ;println("4: %_ ==> %_" % [raw, ret])
     ret
   else if ((index-of-chars(ret1 ,"BOOT") is-not False ) and
               (not prefix?(ret1, "BOOT"))) :
-    val ret = ret1[0 to index-of-chars(ret1 ,"BOOT")]
+    val ret2 = ret1[0 to index-of-chars(ret1 ,"BOOT")]
+    val [start, end] = arr[0]
+    val pref = ret2[0 to start]
+    val sufx = ret2[end to length(ret2)]
+    val num = ret2[start to end]
+    val ret = to-string("%_%_[%_]" % [pref, sufx, num])
     ;println("5: %_ ==> %_" % [raw, ret])
     ret
   else if (length(arr) == 1) :
@@ -86,7 +96,7 @@ public defn extract-pin-name (raw:String) -> String:
     val pref = ret1[0 to start]
     val sufx = ret1[end to l]
     val num = ret1[start to end]
-    val ret = to-string("%_%_%_" % [pref, sufx, num])
+    val ret = to-string("%_%_[%_]" % [pref, sufx, num])
     ;println("6: num = %_, %_ ==> %_" % [num, raw, ret])
     ret
   else :
@@ -109,6 +119,15 @@ public defn ref-ify (s:String) -> Ref:
     else:
       [start, to-int(end)]
 
+  defn has-array-bracket? (s) -> False|[String, Int]:
+    val match-result = regex-match("(.*)\\[([0-9]+)\\]", s)
+    if empty?(match-result) :
+      false
+    else:
+      val [start, end] = [match-result[1], match-result[2]]
+      ;println("start %_, end %_" % [start, end])
+      [start, to-int(end) as Int]
+
   ; internal helper. Prints failure message.
   defn fail () -> Void:
     throw(Exception("Could not parse %_ as a pin or pad ref." % [s]))
@@ -117,7 +136,7 @@ public defn ref-ify (s:String) -> Ref:
   defn driver (s:String):
     if letter?(s[0]):
       ; extract the ref from a string
-      match(ends-in-number?(s)):
+      match(has-array-bracket?(s)):
         (_:False): Ref(s)
         (p:[String, Int]):
           val [prefix, postfix] = p
