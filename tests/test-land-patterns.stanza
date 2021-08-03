@@ -13,6 +13,20 @@ defpackage ocdb/test/land-patterns:
   import ocdb/generic-components
   import ocdb/symbols
 
+pcb-component SOIC-CMP:
+  pcb-landpattern SO8N:
+    make-n-pin-soic-landpattern(8,    ; num-pins
+                                1.27, ; pin-pitch
+                                tol(6.0, 0.2), ;outer-length
+                                tol(3.9, 0.1), ;part-length
+                                tol(4.9, 0.1), ;part-width
+                                min-typ-max(0.4, 1.04, 1.27),  ; lead-width
+                                min-typ-max(0.28, 0.38, 0.48)) ; lead-length 
+  port p: pin[[1 2]]
+  val lp = SO8N
+  landpattern = lp(p[1] => lp.p[1], p[2] => lp.p[2])
+  make-box-symbol()
+
 pcb-component vishay-resistor-1005 :
   name = "Generic Vishay Resistor"
   description = "Generic chip resistor, 1005 package"
@@ -65,11 +79,12 @@ pcb-component example-2:
 
 pcb-module main-module:
   inst e1: example-1
-  inst e2: example-2
-  inst e3: vishay-resistor-1005
-  place(e1) at loc(-3.0, 0.0) on Top
-  place(e2) at loc(0.0, 0.0) on Top
-  place(e3) at loc(3.0, 0.0) on Top
+  inst e2: SOIC-CMP
+  inst e3: example-2
+  place(e1) on Top
+  place(e2) on Top
+  place(e3) on Top 
 set-rules(sierra-adv-rules)
-make-default-board(main-module, 2, Rectangle(12.0, 5.0))
-view-board()
+make-default-board(main-module, 2, Rectangle(12.0, 12.0))
+; view-board()
+view(SOIC-CMP)
