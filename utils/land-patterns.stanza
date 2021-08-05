@@ -1102,8 +1102,8 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
                                    pitch-south:Double,  ; the pitch on the south face
                                    pitch-east:Double,   ; the pitch on the east face
                                    pitch-north:Double,  ; the pitch on the north face
-                                   component-length: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the x direction
-                                   component-width: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the y direction
+                                   lead-span-1: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the x direction
+                                   lead-span-2: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the y direction
                                    package-length: Toleranced,  ; the size of the package in the x direction
                                    package-width: Toleranced,  ; the size of hte package in the y direction
                                    lead-length: Toleranced, ; the dimension of the leads in the x direction on the east/west faces
@@ -1115,8 +1115,8 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
   inside pcb-landpattern: 
     ;----------------------------------------------------------
     ; compute dimensions
-    val ipc-ns = ipc-formula(component-length, lead-length, lead-width, lead-fillets)
-    val ipc-ew = ipc-formula(component-width, lead-length, lead-width, lead-fillets)
+    val ipc-ns = ipc-formula(lead-span-1, lead-length, lead-width, lead-fillets)
+    val ipc-ew = ipc-formula(lead-span-2, lead-length, lead-width, lead-fillets)
     val pad-sz-ns = transpose(pad-size(ipc-ns))
     val pad-sz-ew = pad-size(ipc-ew)
 
@@ -1190,7 +1190,7 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
 
 public defn make-quad-landpattern (num-pins:Int, 
                                    pitch:Double, 
-                                   component-size:Toleranced, 
+                                   lead-span:Toleranced, 
                                    package-size:Toleranced, 
                                    lead-length:Toleranced, 
                                    lead-width:Toleranced, 
@@ -1200,44 +1200,46 @@ public defn make-quad-landpattern (num-pins:Int,
     fatal("make-quad-landpattern(...) failed: pitch must be greater than 0. Called with: %_." % [pitch])
   make-quad-landpattern(num-pins / 4, num-pins / 4, num-pins / 4, num-pins / 4, 
                         pitch, pitch, pitch, pitch, 
-                        component-size, component-size, 
+                        lead-span, lead-span, 
                         package-size, package-size, 
-                        lead-length, lead-width, lead-type, DensityLevelC)
+                        lead-length, lead-width, lead-type, DENSITY-LEVEL)
   
 public defn make-qfn-landpattern (num-pins:Int, 
                                   pitch:Double, 
-                                  package-size:Toleranced, 
-                                  lead-length:Toleranced, 
-                                  lead-width:Toleranced):
+                                  package-length:Toleranced, 
+                                  terminal-length:Toleranced, 
+                                  terminal-width:Toleranced):
   make-quad-landpattern(num-pins,
                         pitch,
-                        package-size,
-                        package-size, 
-                        lead-length, lead-width, QuadFlatNoLeads)
+                        package-length,
+                        package-length, 
+                        terminal-length, terminal-width, QuadFlatNoLeads)
 
 public defn make-qfn-landpattern (num-pins:[Int, Int, Int, Int], 
                                   pitch:Double, 
-                                  package-size:Toleranced, 
-                                  lead-length:Toleranced, 
-                                  lead-width:Toleranced):
+                                  package-length:Toleranced, 
+                                  terminal-length:Toleranced, 
+                                  terminal-width:Toleranced):
   make-quad-landpattern(num-pins[0], num-pins[1], num-pins[2], num-pins[3], 
                         pitch, pitch, pitch, pitch,
-                        package-size, package-size,
-                        package-size, package-size,
-                        lead-length, lead-width, QuadFlatNoLeads, DensityLevelC)
+                        package-length, package-length,
+                        package-length, package-length,
+                        terminal-length, terminal-width, 
+                        QuadFlatNoLeads, DENSITY-LEVEL)
 
 public defn make-qfp-landpattern (num-pins:Int, 
                                   pitch:Double, 
-                                  component-size:Toleranced, 
-                                  package-size:Toleranced, 
+                                  lead-span:Toleranced, 
+                                  package-length:Toleranced, 
                                   lead-length:Toleranced, 
                                   lead-width:Toleranced):
   val lead-type = BigGullWingLeads when pitch >= 0.0625 else SmallGullWingLeads
   make-quad-landpattern(num-pins, 
                         pitch,
-                        component-size, 
-                        package-size, 
-                        lead-length, lead-width, lead-type)
+                        lead-span, 
+                        package-length, 
+                        lead-length, lead-width, 
+                        lead-type)
 
 ; Create an `n` pin SOIC land pattern. 
 ;
@@ -1248,7 +1250,7 @@ public defn make-qfp-landpattern (num-pins:Int,
 ;
 public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number of pins of the component
                                          pitch:Double,                 ; pitch of the pins of the component
-                                         component-length:Toleranced,  ; the overall length of the component, from terminal-edge to terminal-edge
+                                         lead-span:Toleranced,  ; the overall length of the component, from terminal-edge to terminal-edge
                                          package-length:Toleranced,    ; the length of the package 
                                          package-width:Toleranced,     ; the width of the package
                                          lead-type:LandProtrusionType, ; the lead/land protrusion type of the part
@@ -1262,7 +1264,7 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number 
     ;----------------------------------------------------
     ; Compute adjustments to dimensions using IPC formula
     val ipc = ipc-formula(
-      component-length, terminal-length, terminal-width, 
+      lead-span, terminal-length, terminal-width, 
       lead-fillets
     )
 
@@ -1306,7 +1308,7 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number 
 
 public defn make-n-pin-soic-landpattern (num-pins:Int,
                                          pitch:Double,
-                                         component-length:Toleranced,
+                                         lead-span:Toleranced,
                                          package-length:Toleranced,
                                          package-width:Toleranced,
                                          terminal-length:Toleranced,
@@ -1314,19 +1316,19 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,
   val lead-type = BigGullWingLeads when pitch > 0.0625 else SmallGullWingLeads
   make-n-pin-soic-landpattern(num-pins,
                               pitch
-                              component-length,
+                              lead-span,
                               package-length,
                               package-width,
                               lead-type,
                               terminal-length,
                               terminal-width,
-                              DensityLevelC)
+                              DENSITY-LEVEL)
 
 public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vertical) dimension of the package
                                            width:Toleranced,  ; the width (horizontal) dimension of the package
                                            lead-length:Toleranced, ; the length (vertical) dimension of the conductors/leads of the package
                                            lead-width?:False|Toleranced, ; the width (horizontal) dimension of the conductors/leads of the package, if different from `length`
-                                           density-level:DensityLevel,   ; the density level of the design (DensityLevelA|DensityLevelB|DensityLevelC)
+                                           density-level:DensityLevel,   ; the density level of the design (DensityLevelA|DensityLevelB|DENSITY-LEVEL)
                                            anode-and-cathode?:True|False,; whether the pads should be named `a` and `c` (if false, p[1] and p[2])
                                            polarized?:True|False         ; whether a polarity marker is required or not
                                            ):
@@ -1447,5 +1449,5 @@ public defn two-pin-chip-landpattern (length:Toleranced,
                                       polarized?:True|False):
   two-pin-chip-landpattern(
     length, width, lead-length, false, 
-    DensityLevelC, polarized?
+    DENSITY-LEVEL, polarized?
   )
