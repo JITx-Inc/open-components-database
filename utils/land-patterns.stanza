@@ -103,6 +103,17 @@ defn chamfered (anchor:Anchor, width:Double, height:Double, r:Double):
 ;==============================================================================
 ;=========================== Geometric Helpers ================================
 ;==============================================================================
+defn shift-locs (x:Double, y:Double, s:Seqable<Pose>):
+  seq({loc(x, y) * _}, s)
+
+defn max-distance (p1:Point, p2:Point) -> Point:
+  defn radius (p:Point):
+    sqrt(x(p) * x(p) + y(p) * y(p))
+  if radius(p1) > radius(p2):
+    p1
+  else:
+    p2
+
 ; ====== Land pattern utilities ===============================================
 ; Create a rectangle out of lines
 public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double, line-w:Double) :
@@ -158,12 +169,8 @@ public defn apply-soldermask (mask-shape:Shape):
 public defn apply-soldermask (amount:Double):
   val mask-shape = 
     match(pad-shape(self)):
-      (s:Rectangle|Circle|RoundedRectangle|Segment|Capsule|DShape|ChamferedRectangle):
-        offset(s, amount)
-      (s:ChamferedRectangle|DShape):
-        val d = dims(s)
-        val expansion-factor = 1.0 + amount / max(x(d), y(d))
-        expand(s, expansion-factor)
+      (s:Rectangle|Circle|RoundedRectangle|Capsule|DShape|ChamferedRectangle):
+        expand(s, amount)
       (s:Shape):
         ; FIXME: for other shapes we need an implementation of offset
         s
@@ -1108,7 +1115,6 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
   inside pcb-landpattern: 
     ;----------------------------------------------------------
     ; compute dimensions
-    ; layer(Courtyard(Bottom)) = Rectangle(typ(package-length), typ(package-width))
     val ipc-ns = ipc-formula(component-length, lead-length, lead-width, lead-fillets)
     val ipc-ew = ipc-formula(component-width, lead-length, lead-width, lead-fillets)
     val pad-sz-ns = transpose(pad-size(ipc-ns))
@@ -1116,19 +1122,27 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
 
     ;----------------------------------------------------------
     ; compute pad locations 
-    val x-shift = 0.5 * (Gmin(ipc-ew) + x(pad-sz-ew))
-    val y-shift = 0.5 * (Gmin(ipc-ns) + y(pad-sz-ns))
-    println("x-shift:%_, y-shift:%_" % [x-shift, y-shift])
+    val x-shift = 0.5 * (Zmax(ipc-ew) - x(pad-sz-ew))
+    val y-shift = 0.5 * (Zmax(ipc-ns) - y(pad-sz-ns))
+
     val pad-1-loc = to-tuple(grid-locs(num-pins-east, 2, 2.0 * x-shift, pitch-east))[0]
     var pin-count = 0 ; accumulator, holds the number of pins we have laid out
 
     defn layout-pads (dir:Dir, num-pins:Int, pitch:Double):
       val locs = switch(dir):
-        Up:    to-tuple $ shift-locs(-0.5 * x-shift,        y-shift, row-locs(W, num-pins, pitch))
-        Down:  to-tuple $ shift-locs( 0.5 * x-shift, -1.0 * y-shift, row-locs(E, num-pins, pitch))
-        Left:  to-tuple $ shift-locs(-1.0 * x-shift,  0.5 * y-shift, col-locs(N, num-pins, pitch))
-        Right: to-tuple $ shift-locs(       x-shift, -0.5 * y-shift, col-locs(S, num-pins, pitch))
-      ;println("%_:[%,]" % [dir, locs])
+        Up: 
+          shift-locs{0.0, y-shift, _ } $
+          reverse(to-list(row-locs(num-pins, pitch)))
+        Down: 
+          shift-locs{0.0, (- y-shift), _ } $
+          row-locs(num-pins, pitch)
+        Left:  
+          shift-locs{(- x-shift), 0.0, _ } $
+          col-locs(num-pins, pitch)
+        Right: 
+          shift-locs{x-shift, 0.0, _ } $
+          reverse(to-list(col-locs(num-pins, pitch)))
+      
       val pad-dims = 
         if contains?([Left, Right], dir): pad-sz-ew
         else: pad-sz-ns        
@@ -1154,10 +1168,20 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
     val line-width  = clearance(current-rules(), MinSilkscreenWidth)
     val line-length = 3.0 * line-width - line-width
     val dist  = SOLDER-MASK-REGISTRATION + SILK-SOLDER-MASK-CLEARANCE + line-width * 0.5 + 0.01
+    
     val pad-loc = center(pad-1-loc)
-    val pol-x = min(-0.5 * x(part-sz), x(pad-loc) - 0.5 * x(pad-sz-ew))
-    val pol-y = max( 0.5 * y(part-sz), y(pad-loc) + 0.5 * y(pad-sz-ew))
-    layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * Line(line-width, [Point(0.0, 0.0), Point(line-length, 0.0)])
+    val p1 = Point(
+      x(pad-loc) - 0.5 * x(pad-sz-ew),
+      y(pad-loc) + 0.5 * y(pad-sz-ew) + dist
+    )
+    val p2 = Point(
+      -0.5 * x(part-sz) - line-width * 0.5,
+       0.5 * y(part-sz) - line-width * 0.5,
+    )
+    val pol = max-distance(p1, p2)
+    layer(Silkscreen("pol", Top)) = Line(line-width, [
+      pol, pol + Point(line-length, 0.0)
+    ])
 
     ;----------------------------------------------------------
     ; Place the reference label
