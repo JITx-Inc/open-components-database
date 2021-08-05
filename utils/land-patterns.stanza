@@ -1885,3 +1885,73 @@ public defn make-two-pin-axial-landpattern (length:Toleranced,
                                  diameter,
                                  lead-diameter,
                                  false)
+
+
+;==================================================================================================
+; Create a grid of bga pad names and their matching locations
+public defn make-bga-grid (rows:Int, cols:Int, pitch:Double) -> Seqable<[Ref, Loc]>:
+  val locs = grid-locs(rows, cols, pitch, pitch)
+  val refs = 
+    for r in 0 to rows seq-cat:
+      for c in 0 to cols seq:
+        bga-pin-name(r, c), 
+  zip(refs, locs)
+
+; Create a staggerd bga matrix, where every other pad has been removed
+public defn make-staggered-bga-grid (rows:Int, cols:Int, pitch:Double):
+  var tick? = false
+  val locs = for loc in grid-locs(rows * 2, cols * 2, pitch, pitch) filter:
+    tick? = not tick?
+    tick?
+  val refs = 
+    for r in 0 to rows seq-cat:
+      for c in 0 to cols seq:
+        bga-pin-name(r, c)
+  zip(refs, locs)
+
+public defn remove-from-bga-grid (bga-grid:Seqable<[Ref, Pose]>, remove?:(Ref) -> True|False) -> Seqable<[Ref, Loc]>:
+  for [ref, loc] in bga-grid filter:
+    not remove?(ref)
+
+public defn remove-from-bga-grid (bga-grid:Seqable<[Ref, Pose]>, rows-cols:Tuple<Ref]>):
+  remove-from-bga-grid(bga-grid, contains?{rows-cols, _})
+
+public defn remove-from-bga-grid (bga-grid:Seqable<[Ref, Pose]>, rows-cols:Tuple<[Int, Int]>):
+  val rows-cols* = to-tuple $ 
+    for [r, c] in rows-cols seq:
+      bga-pin-name(r, c)
+  remove-from-bga-grid(bga-grid, rows-cols)
+
+; reference: IPC 7351-B p. 79
+defn bga-pad-size (collapsible?:True|False, 
+                   nominal-ball-diameter:Double):
+  val reduction = 
+    if collapsible?:
+      if nominal-ball-diameter > 0.50: 
+        0.25
+      else if nominal-ball-diameter > 0.20: 
+        0.20
+      else:
+        0.15
+    else:
+      if nominal-ball-diameter > 0.50:
+        0.15
+      else if nominal-ball-diameter > 0.20:
+        0.10
+      else:
+        0.05
+  nominal-ball-diameter * (1.0 - reduction)
+
+public defn make-bga-landpattern (bga-grid:Seqable<[Ref, Pose]>, 
+                                  collapsible-balls?:True|False,
+                                  solder-mask-defined?:True|False,
+                                  nominal-ball-size:Double):
+  inside pcb-landpattern:
+    val pad-size = bga-pad-size(collapsible-balls?, nominal-ball-size)
+    val def = 
+      if solder-mask-defined?:
+        solder-mask-defined-bga-pad(pad-size, SOLDER-MASK-REGISTRATION) ; TODO: verify this computation
+      else:
+        bga-pad(pad-size)
+    for [ref, loc] in bga-grid do:
+      pad (ref): def at loc
