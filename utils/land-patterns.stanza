@@ -1129,7 +1129,7 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
                                    terminal-width: Toleranced,  ; the dimension of the leads in the y direction on the east/west faces
                                    lead-type:  LandProtrusionType, ; the type of the leads
                                    density-level: DensityLevel     ; the density level of the design
-                                   thermal-pad?: Shape|False):     ; an optional thermal pad
+                                   exposed-metal-heat-feature?: Shape|False):     ; an optional thermal pad
   val lead-fillets = lead-fillets(lead-type, density-level)  
   inside pcb-landpattern: 
     ;----------------------------------------------------------
@@ -1210,7 +1210,7 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
     val text-y = 0.5 * (y(cy-sz) + min-silkscreen-text-height)
     ref-label(0.0, text-y)
 
-    make-thermal-pad(thermal-pad?, 
+    make-thermal-pad(exposed-metal-heat-feature?, 
                      Dims(Gmin(ipc-ew), ipc-ns), 
                      num-pins-west + num-pins-south + num-pins-east + num-pins-north)
   
@@ -1280,7 +1280,7 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
                                    terminal-length: Toleranced, ; the dimension of the leads in the x direction on the east/west faces
                                    terminal-width: Toleranced, ; the dimension of the leads in the y direction on the east/west faces
                                    lead-type:  LandProtrusionType, ; the type of the leads
-                                   thermal-pad?: Shape|False, ; the thermal pad
+                                   exposed-metal-heat-feature?: Shape|False, ; the thermal pad
 ):
   make-quad-landpattern(num-pins-west, num-pins-south, num-pins-east, num-pins-north,
                         pitch-west,    pitch-south,    pitch-east,    pitch-north,
@@ -1288,7 +1288,7 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
                         package-length, package-width,
                         terminal-length, terminal-width,
                         lead-type, DENSITY-LEVEL,
-                        thermal-pad?)
+                        exposed-metal-heat-feature?)
 
 ; Create a quad landpattern with optional thermal pad
 public defn make-quad-landpattern (num-pins:Int, 
@@ -1298,14 +1298,14 @@ public defn make-quad-landpattern (num-pins:Int,
                                    terminal-length:Toleranced, 
                                    terminal-width:Toleranced, 
                                    lead-type:LandProtrusionType
-                                   thermal-pad?:Shape|False):
+                                   exposed-metal-heat-feature?:Shape|False):
   ensure-divisible!(num-pins, 4, "make-quad-landpattern(num-pins, ...)")
   make-quad-landpattern(num-pins / 4, num-pins / 4, num-pins / 4, num-pins / 4, 
                         pitch, pitch, pitch, pitch, 
                         lead-span, lead-span, 
                         package-size, package-size, 
                         terminal-length, terminal-width, lead-type, 
-                        DENSITY-LEVEL, thermal-pad?)
+                        DENSITY-LEVEL, exposed-metal-heat-feature?)
   
 ; Create a default quad landpattern with no thermal pad
 public defn make-quad-landpattern (num-pins:Int, 
@@ -1330,14 +1330,14 @@ public defn make-qfn-landpattern (num-pins:Int,
                                   package-size:Toleranced, 
                                   terminal-length:Toleranced, 
                                   terminal-width:Toleranced,
-                                  thermal-pad?:Shape|False):
+                                  exposed-metal-heat-feature?:Shape|False):
   make-quad-landpattern(num-pins,
                         pitch,
                         package-size,
                         package-size, 
                         terminal-length, terminal-width, 
                         QuadFlatNoLeads, 
-                        thermal-pad?)
+                        exposed-metal-heat-feature?)
 
 ; Create a QFN with no thermal pad
 public defn make-qfn-landpattern (num-pins:Int, 
@@ -1365,14 +1365,14 @@ public defn make-qfn-landpattern (num-pins:[Int, Int, Int, Int],
                                   package-size:Toleranced, 
                                   terminal-length:Toleranced, 
                                   terminal-width:Toleranced,
-                                  thermal-pad?:Shape|False):
+                                  exposed-metal-heat-feature?:Shape|False):
   make-quad-landpattern(num-pins[0], num-pins[1], num-pins[2], num-pins[3], 
                         pitch, pitch, pitch, pitch,
                         package-size, package-size,
                         package-size, package-size,
                         terminal-length, terminal-width, 
                         QuadFlatNoLeads, DENSITY-LEVEL, 
-                        thermal-pad?)
+                        exposed-metal-heat-feature?)
 
 ; Create a QFN landpattern with no thermal pad and different number of pins per side
 public defn make-qfn-landpattern (num-pins:[Int, Int, Int, Int], 
@@ -1389,7 +1389,7 @@ public defn make-qfp-landpattern (num-pins:Int,
                                   package-length:Toleranced, 
                                   lead-length:Toleranced, 
                                   lead-width:Toleranced
-                                  thermal-pad?:Shape|False):
+                                  exposed-metal-heat-feature?:Shape|False):
   val lead-type = BigGullWingLeads when pitch >= 0.0625 else SmallGullWingLeads
   make-quad-landpattern(num-pins, 
                         pitch,
@@ -1397,7 +1397,7 @@ public defn make-qfp-landpattern (num-pins:Int,
                         package-length, 
                         lead-length, lead-width,
                         lead-type, 
-                        thermal-pad?)
+                        exposed-metal-heat-feature?)
 
 ; Create a QFP landpattern with no thermal pad
 public defn make-qfp-landpattern (num-pins:Int, 
@@ -1424,7 +1424,7 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number 
                                          terminal-length:Toleranced,   ; the length of the terminals
                                          terminal-width:Toleranced,    ; the width of the terminals
                                          density-level:DensityLevel,   ; the density level of the design
-                                         thermal-pad?:False|Shape):    ; an optional shape of a thermal pad
+                                         exposed-metal-heat-feature?:False|Shape):    ; an optional shape of a thermal pad
   fatal("n must be even") when (num-pins % 2) != 0
   val lead-fillets = lead-fillets(lead-type, density-level)
 
@@ -1479,7 +1479,7 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number 
 
     ;----------------------------------------------------
     ; place the thermal pad
-    make-thermal-pad(thermal-pad?, Dims(Gmin(ipc), min-value(package-width)), num-pins)
+    make-thermal-pad(exposed-metal-heat-feature?, Dims(Gmin(ipc), min-value(package-width)), num-pins)
 
 ; Create an SOIC landpattern with default density level and optional thermal pad
 public defn make-n-pin-soic-landpattern (num-pins:Int, ; the number of pins of the component
@@ -1489,7 +1489,7 @@ public defn make-n-pin-soic-landpattern (num-pins:Int, ; the number of pins of t
                                          package-width:Toleranced,    ; the width of the package
                                          terminal-length:Toleranced,  ; the length of terminals or leads of the package
                                          terminal-width:Toleranced,   ; the width of the terminals or leads of the package
-                                         thermal-pad?:False|Shape) :  ; an optional thermal pad shape
+                                         exposed-metal-heat-feature?:False|Shape) :  ; an optional thermal pad shape
   val lead-type = BigGullWingLeads when pitch > 0.0625 else SmallGullWingLeads
   make-n-pin-soic-landpattern(num-pins,
                               pitch
@@ -1500,7 +1500,7 @@ public defn make-n-pin-soic-landpattern (num-pins:Int, ; the number of pins of t
                               terminal-length,
                               terminal-width,
                               DENSITY-LEVEL, 
-                              thermal-pad?)
+                              exposed-metal-heat-feature?)
 
 ; Create an SOIC landpattern with default denity level and no thermal pad
 public defn make-n-pin-soic-landpattern (num-pins:Int, ; the number of pins of the component
@@ -1525,7 +1525,7 @@ public defn make-dfn-landpattern (num-pins:Int,                 ; number of pins
                                   package-width:Toleranced,     ; the width of the package
                                   terminal-length:Toleranced,   ; the length of the terminals
                                   terminal-width:Toleranced,    ; the width of the terminals
-                                  thermal-pad?:False|Shape):    ; an optional shape of a thermal pad
+                                  exposed-metal-heat-feature?:False|Shape):    ; an optional shape of a thermal pad
   make-n-pin-soic-landpattern(num-pins, 
                               pitch,
                               package-length, 
@@ -1533,7 +1533,7 @@ public defn make-dfn-landpattern (num-pins:Int,                 ; number of pins
                               SmallOutlineNoLeads,
                               terminal-length, terminal-width,
                               DENSITY-LEVEL,
-                              thermal-pad?)
+                              exposed-metal-heat-feature?)
 
 public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vertical) dimension of the package
                                            width:Toleranced,  ; the width (horizontal) dimension of the package
