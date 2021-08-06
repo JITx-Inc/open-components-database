@@ -1075,6 +1075,21 @@ defmethod print (o:OutputStream, i:IpcResults):
 defn pad-size (i:IpcResults) -> Dims:
   Dims(0.5 * (Zmax(i) - Gmin(i)), Xmin(i))
 
+; Helper function to apply a thermal pad shape, if it is provided. Assumes that the
+; land pattern is centered at (0.0, 0.0).
+defn make-thermal-pad (shape?:False|Shape, max-thermal-dims:Dims, num-pins:Int):
+  if num-pins < 0:
+    fatal("make-thermal-pad(...) failed: num-pins must positive. Called with %_" % [num-pins])
+  match(shape?:Shape):
+    val thermal-dims = dims(shape?)
+    if x(thermal-dims) >= x(max-thermal-dims) or
+       y(thermal-dims) >= y(max-thermal-dims):
+      fatal("make-thermal-pad(...) failed: shape exceeds maximum thermal pad dimensions. Called with %_, while the maximum dimensions are %_." % [
+        shape?, max-thermal-dims
+      ])
+      inside pcb-landpattern:
+        pad p[num-pins + 1]: smd-pad(shape?) at loc(0.0, 0.0)
+
 ; the IPC formula
 defn ipc-formula (L:Toleranced, ; the distance from edge-of-lead to edge-of-lead on the exterior of the land pattern
                   T:Toleranced, ; the nominal size of the leads, in the same dimension as L
@@ -1195,10 +1210,9 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
     val text-y = 0.5 * (y(cy-sz) + min-silkscreen-text-height)
     ref-label(0.0, text-y)
 
-    ; Place the thermal pad, if necessary
-    match(thermal-pad?:Shape):
-      val num-pins = num-pins-west + num-pins-south + num-pins-east + num-pins-north
-      pad p[num-pins + 1]: smd-pad(thermal-pad?) at loc(0.0, 0.0)
+    make-thermal-pad(thermal-pad?, 
+                     Dims(Gmin(ipc-ew), ipc-ns), 
+                     num-pins-west + num-pins-south + num-pins-east + num-pins-north)
   
 public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on the west face
                                    num-pins-south: Int, ; the number of pins on the south face
@@ -1465,8 +1479,7 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number 
 
     ;----------------------------------------------------
     ; place the thermal pad
-    match(thermal-pad?:Shape):
-      pad p[num-pins + 1]: smd-pad(thermal-pad?) at loc(0.0, 0.0)
+    make-thermal-pad(thermal-pad?, Dims(Gmin(ipc), min-value(package-width)), num-pins)
 
 ; Create an SOIC landpattern with default density level and optional thermal pad
 public defn make-n-pin-soic-landpattern (num-pins:Int, ; the number of pins of the component
@@ -1505,6 +1518,22 @@ public defn make-n-pin-soic-landpattern (num-pins:Int, ; the number of pins of t
                               terminal-length,
                               terminal-width,
                               false)
+
+public defn make-dfn-landpattern (num-pins:Int,                 ; number of pins of the component
+                                  pitch:Double,                 ; pitch of the pins of the component
+                                  package-length:Toleranced,    ; the length of the package 
+                                  package-width:Toleranced,     ; the width of the package
+                                  terminal-length:Toleranced,   ; the length of the terminals
+                                  terminal-width:Toleranced,    ; the width of the terminals
+                                  thermal-pad?:False|Shape):    ; an optional shape of a thermal pad
+  make-n-pin-soic-landpattern(num-pins, 
+                              pitch,
+                              package-length, 
+                              package-length, package-width,
+                              SmallOutlineNoLeads,
+                              terminal-length, terminal-width,
+                              DENSITY-LEVEL,
+                              thermal-pad?)
 
 public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vertical) dimension of the package
                                            width:Toleranced,  ; the width (horizontal) dimension of the package
