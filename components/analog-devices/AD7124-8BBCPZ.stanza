@@ -56,33 +56,9 @@ pcb-landpattern cp-32-12 :
 
 
 public pcb-component component :
-; left
-  port VBIAS-IOUT-AIN : pin[14]
-  pin REFIN2P-VBIAS-IOUT-AIN14
-  pin REFIN2N-VBIAS-IOUT-AIN15
-  pin PSW
-; up
-  pin AVDD
-  pin REGCAPA
-  pin REFOUT
-  pin REFIN1+
-  pin REFIN1-
-  pin REGCAPD
-  pin IOVDD
-; right
-  pin DOUT-RDY ;*RDY
-  pin DIN
-  pin SCLK
-  pin *CS
-  pin *SYNC
-  pin CLK
-; down
-  pin AVSS
-  pin DGND
-  pin EPGND
   val pkg = cp-32-12
   val generic-props = GenericPin(Interval(-0.3, 3.6, false), 1500.0)
-
+  port spi:spi-peripheral
   pin-properties :
     [pin:Ref                   | pads:Int ... | side:Dir| generic-pin:GenericPin]
     [VBIAS-IOUT-AIN[0]         | 4            | Left    | generic-props ]
@@ -109,10 +85,10 @@ public pcb-component component :
     [REFIN1-                   | 13           | Up      | generic-props ]
     [REGCAPD                   | 1            | Up      | generic-props ]
     [IOVDD                     | 2            | Up      | generic-props ]
-    [DOUT-RDY                  | 28           | Right   | generic-props ]
-    [DIN                       | 29           | Right   | generic-props ]
-    [SCLK                      | 30           | Right   | generic-props ]
-    [*CS                       | 32           | Right   | generic-props ]
+    [spi.sdo                  | 28           | Right   | generic-props ]
+    [spi.sdi                       | 29           | Right   | generic-props ]
+    [spi.sck                      | 30           | Right   | generic-props ]
+    [spi.cs                       | 32           | Right   | generic-props ]
     [*SYNC                     | 27           | Right   | generic-props ]
     [CLK                       | 31           | Right   | generic-props ]
     [AVSS                      | 23           | Down    | generic-props ]
@@ -127,7 +103,7 @@ public pcb-component component :
 public pcb-module module :
   port power : power
   pin gnd
-  port spi : spi()
+  port spi : spi-peripheral
   pin REFIN1+
   pin REFIN1-
   port VBIAS-IOUT-AIN : pin[14]
@@ -136,10 +112,7 @@ public pcb-module module :
  
   net (REFIN1+ adc.REFIN1+)
   net (REFIN1- adc.REFIN1-)
-  net (adc.*CS spi.cs)
-  net (adc.SCLK spi.sck)
-  net (adc.DIN spi.sdo)
-  net (adc.DOUT-RDY spi.sdi)
+  net (adc.spi spi)
   net (gnd, adc.AVSS, adc.DGND, power.gnd)
   net (power.vdd, adc.AVDD, adc.IOVDD)
   bypass-cap-strap(adc.AVDD, gnd, 1.0e-6)
@@ -152,7 +125,7 @@ public pcb-module module :
 public pcb-module rtd-4-wire (nominal-res:Double):
   port rtd:rtd
   inst adc : ocdb/analog-devices/AD7124-8BBCPZ/module
-  port spi : spi()
+  port spi : spi-peripheral
   net (spi, adc.spi)
   net (adc.VBIAS-IOUT-AIN[0], rtd.P[0])
   pin gnd
