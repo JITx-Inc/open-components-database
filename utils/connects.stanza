@@ -85,3 +85,21 @@ public defn connect-cp2105 (usb:JITXObject, uart:JITXObject) -> Instance  :
     net (uart.dtr, xcvr.e-uart.dtr)
     net (uart.rts, xcvr.e-uart.rts)
     xcvr
+
+; Connects a SPI controller to 1 or more peripherals, pulls gpio for peripherals[1..n] for cs
+public defn connect-spi (controller:JITXObject, peripherals:Tuple<JITXObject>) :
+  inside pcb-module :
+    for p in peripherals do :
+      net (controller.sck p.sck)
+      if p == spi-peripheral :
+        net (controller.copi p.sdi)
+        net (controller.cipo p.sdo)
+      else if p == spi-controller :
+        net (controller.copi p.copi)
+        net (controller.cipo p.cipo)
+    val base = containing-instance(controller) as JITXObject
+    net (controller.cs peripherals[0].cs)
+    if length(peripherals) > 1 :
+      for i in peripherals 1 through length(peripherals) do :
+        require cs:gpio from base 
+        net (cs.gpio i.cs)
