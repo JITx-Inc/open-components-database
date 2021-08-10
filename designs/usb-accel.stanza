@@ -1,0 +1,50 @@
+#use-added-syntax(jitx)
+defpackage ocdb/designs/usb-accel :
+
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+
+  import ocdb/bundles
+  import ocdb/connects
+  import ocdb/defaults
+  import ocdb/design-vars
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import ocdb/property-structs
+  import ocdb/checks
+  import ocdb/micro-controllers
+
+val BOARD-SHAPE = RoundedRectangle(50.0, 50.0, 0.25)
+pcb-module accel:  
+  inst accel : ocdb/st-microelectronics/LIS3DH/module
+  inst mcu : ocdb/st-microelectronics/STM32F105VBH6/module([])
+  require intrpts:gpio[2] from mcu.mcu
+  inst usb : micro-usb-connector
+  inst ldo : ocdb/diodes-incorporated/AP2112/module
+  require spi:spi-controller() from mcu.mcu
+;   require spi:spi from mcu
+;   connect-spi(mcu.spi accel.spi)
+; require pc-ctrl:gpio[2] from proc
+  net (intrpts[0].gpio accel.int[1])
+  net (intrpts[1].gpio accel.int[2])
+  
+  ; Create a protected power and data interface for USB-2
+  net gnd (mcu.power.gnd usb.usb-2.vbus.gnd)
+  val protected-usb = ocdb/protection/esd-clamp(usb.usb-2, gnd) as JITXObject
+  net P5V0 (ldo.vin.vdd ldo.en mcu.mcu.PA[9] usb.usb-2.vbus.vdd)
+  net (mcu.mcu.PA[11] usb.usb-2.data.N)
+  net (mcu.mcu.PA[12] usb.usb-2.data.P)
+  ; Specify a power regulator and name power nets
+;   net (ldo.vin protected-usb.vbus)
+  net P3V3 (ldo.vout.vdd accel.power.vdd)
+  net (gnd accel.power.gnd)
+  symbol(P5V0) = ocdb/symbols/supply-sym
+  symbol(P3V3) = ocdb/symbols/supply-sym
+  symbol(gnd) = ocdb/symbols/ground-sym  
+
+make-default-board(accel, 4, BOARD-SHAPE)
+view-board()
+view-schematic()
