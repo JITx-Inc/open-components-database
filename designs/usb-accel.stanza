@@ -19,28 +19,35 @@ defpackage ocdb/designs/usb-accel :
 
 val BOARD-SHAPE = RoundedRectangle(50.0, 50.0, 0.25)
 pcb-module accel:  
+  port power : power
   inst accel : ocdb/st-microelectronics/LIS3DH/module
   inst mcu : ocdb/st-microelectronics/STM32F105VBH6/module([])
   require intrpts:gpio[2] from mcu.mcu
   inst usb : micro-usb-connector
   inst ldo : ocdb/diodes-incorporated/AP2112/module
-  require spi:spi-controller() from mcu.mcu
-;   require spi:spi from mcu
-;   connect-spi(mcu.spi accel.spi)
-; require pc-ctrl:gpio[2] from proc
+  require spi1:spi-controller() from mcu.mcu
+  connect-spi(mcu.mcu, spi1, [accel.spi])
   net (intrpts[0].gpio accel.int[1])
   net (intrpts[1].gpio accel.int[2])
+
+  require spi2:spi-controller() from mcu.mcu
+  inst spi-other-mcu : ocdb/st-microelectronics/STM32F105VBH6/module([])
+  require spi-from-other:spi-controller() from spi-other-mcu.mcu
+  inst adc : ocdb/analog-devices/AD7124-8BBCPZ/module[4]
+  connect-spi(mcu.mcu, spi2, [spi-from-other adc[0].spi adc[1].spi adc[2].spi adc[3].spi])
   
+
   ; Create a protected power and data interface for USB-2
-  net gnd (mcu.power.gnd usb.usb-2.vbus.gnd)
+  net gnd (mcu.power.gnd usb.usb-2.vbus.gnd power.gnd)
   val protected-usb = ocdb/protection/esd-clamp(usb.usb-2, gnd) as JITXObject
   net P5V0 (ldo.vin.vdd ldo.en mcu.mcu.PA[9] usb.usb-2.vbus.vdd)
   net (mcu.mcu.PA[11] usb.usb-2.data.N)
   net (mcu.mcu.PA[12] usb.usb-2.data.P)
   ; Specify a power regulator and name power nets
 ;   net (ldo.vin protected-usb.vbus)
-  net P3V3 (ldo.vout.vdd accel.power.vdd)
+  net P3V3 (ldo.vout.vdd accel.power.vdd mcu.power.vdd power.vdd)
   net (gnd accel.power.gnd)
+  net (power adc[0].power adc[1].power adc[2].power adc[3].power)  
   symbol(P5V0) = ocdb/symbols/supply-sym
   symbol(P3V3) = ocdb/symbols/supply-sym
   symbol(gnd) = ocdb/symbols/ground-sym  
