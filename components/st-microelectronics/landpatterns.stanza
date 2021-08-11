@@ -1,0 +1,183 @@
+#use-added-syntax(jitx)
+defpackage ocdb/st-microelectronics/landpatterns:
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/land-patterns
+  import ocdb/defaults
+  import ocdb/box-symbol
+  import ocdb/design-vars
+  import ocdb/tolerance
+
+;================================================================
+; Missing Datasheets
+;================================================================
+
+; public pcb-landpattern LFBGA448:
+;   fatal("unimplemented")
+
+; public pcb-landpattern TFBGA257:
+;   fatal("unimplemented")
+
+; public pcb-landpattern TFBGA361:
+;   fatal("unimplemented")
+
+; public pcb-landpattern EWLCSP49:
+;   fatal("unimplemented") ; TODO find datasheet
+
+; public pcb-landpattern EWLCSP66:
+;   fatal("unimplemented") ; TODO find datasheet
+
+; public pcb-landpattern WLCSP59:
+;   fatal("unimplemented") ; TODO find datasheet
+
+;================================================================
+; Weird Edge Cases
+;================================================================
+; public pcb-landpattern TFBGA240+25:
+;   fatal("unimplemented") ; todo: handle TFBGA240
+
+; public pcb-landpattern UFBGA176+25:
+;   fatal("unimplemented") ; todo: handle UFBGA176+25
+
+;==============================================================================
+;============================= Grid Array Packages ============================
+;==============================================================================
+
+public pcb-landpattern UFBGA64:
+  make-bga-landpattern(8, 8, 0.5, 0.28, tol(5.0, 0.15), tol(5.0, 0.15), FullMatrix())
+
+public pcb-landpattern UFBGA132:
+  make-bga-landpattern(12, 12, 0.5, 0.28, tol(7.0, 0.05), tol(7.0, 0.05), ThermallyEnhancedMatrix(
+    5 through 8, 5 through 8,
+    6 through 7, 6 through 7,
+  ))
+
+public pcb-landpattern LFBGA100:
+  make-bga-landpattern(10, 10, 0.8, 0.5, tol(10.0, 0.15), tol(10.0, 0.15), FullMatrix())
+
+public pcb-landpattern LFBGA144:
+  make-bga-landpattern(12, 12, 0.8, 0.4, tol(10.0, 0.1), tol(10.0, 0.1), FullMatrix())
+
+public pcb-landpattern LFBGA354:
+  defn depop? (r:Int, c:Int):
+    (c == 19 and contains?([5, 15], r)) or
+    (c == 16 and contains?([6, 8, 10, 12, 14], r))
+  make-bga-landpattern(19, 19, 0.8, 0.4, tol(16.0, 0.15), tol(16.0, 0.15), depop?)
+
+public pcb-landpattern TFBGA100:
+  make-bga-landpattern(10, 10, 0.8, 0.4, tol(8.0, 0.05), tol(8.0, 0.05), FullMatrix())
+
+public pcb-landpattern TFBGA216:
+  make-bga-landpattern(14, 14, 0.8, 0.4, tol(13.0, 0.15), tol(13.0, 0.15), PerimeterMatrix(7 through 9, 7 through 9))
+
+public pcb-landpattern TFBGA225:
+  make-bga-landpattern(15, 15, 0.8, 0.4, tol(13.0, 0.15), tol(13.0, 0.15), FullMatrix())
+
+public pcb-landpattern TFBGA64:
+  make-bga-landpattern(8, 8, 0.5, 0.3, tol(0.5, 0.15), tol(0.5, 0.15), FullMatrix())
+
+public pcb-landpattern UFBGA100:
+  defn depop? (r:Int, c:Int):
+    (r == 2 and (c == 5 or c == 6)) or
+    (r == 9 and (c == 5 or c == 6)) or
+    (c == 2 and (r == 5 or r == 6)) or
+    (c == 9 and (r == 5 or r == 6)) or
+    ((r >= 3 and r <= 8) and  (c >= 3 and c <= 8))
+  make-bga-landpattern(12, 12, 0.50, 0.25, tol(7.0, 0.05), tol(7.0, 0.05), depop?)
+
+public pcb-landpattern UFBGA121:
+  make-bga-landpattern(11, 11, 0.5, 0.290, tol(6.0, 0.15), tol(6.0, 0.15), FullMatrix())
+
+public pcb-landpattern UFBGA129:
+  defn depop? (r:Int, c:Int):
+    (contains?([0, 12], r) and contains?([3, 4, 8, 9], c)) or
+    (contains?([0, 12], c) and contains?([3, 4, 8, 9], r)) or
+    (contains?([3, 5, 7, 9], r) and contains?([4, 6, 8], c)) or
+    (contains?([4, 6, 8], r) and contains?([3, 5, 7, 9], c))
+  make-bga-landpattern(13, 13, 0.50, 0.29, tol(7.0, 0.15), tol(7.0, 0.15), depop?)
+
+public pcb-landpattern UFBGA144:
+  make-bga-landpattern(14, 14, 0.8, 0.4, tol(10.0, 0.15), tol(10.0, 0.15), FullMatrix())
+
+public pcb-landpattern UFBGA169:
+  make-bga-landpattern(13, 13, 0.5, 0.28, tol(7.0, 0.05), tol(7.0, 0.05), FullMatrix())
+  
+public pcb-landpattern UFBGA73:
+  defn depop? (r:Int, c:Int):
+    switch(r):
+      1: c == 3 or c == 6
+      3: c == 9
+      4: c == 1
+      6: c == 9
+      7: c == 1
+      9: c == 4 or c == 7
+      else:
+        false
+  make-bga-landpattern(9, 9, 0.5, 0.29, tol(5.0, 0.15), tol(5.0, 0.15) depop?)
+
+public pcb-landpattern WLCSP18:
+  make-bga-landpattern(5, 7, 0.40, 0.25, tol(1.86, 0.02), tol(2.14, 0.02), EquilateralTriangleMatrix())
+
+public pcb-landpattern WLCSP20:
+  make-bga-landpattern(5, 4, 0.4, 0.25, tol(1.94, 0.02), tol(2.40, 0.02), FullMatrix())
+
+public pcb-landpattern WLCSP25:
+  make-bga-landpattern(5, 5, 0.4, 0.25, tol(2.30, 0.02), tol(2.48, 0.02), FullMatrix())
+  
+public pcb-landpattern WLCSP36:
+  make-bga-landpattern(6, 6, 0.4, 0.25, tol(2.605, 0.035), tol(2.704, 0.035), FullMatrix())
+
+public pcb-landpattern WLCSP49:
+  make-bga-landpattern(7, 7, 0.5, 0.33, tol(3.89, 0.02), tol(3.74, 0.02), FullMatrix())
+
+public pcb-landpattern WLCSP52:
+  make-bga-landpattern(8, 13, 0.40, 0.25, tol(1.86, 0.02), tol(2.14, 0.02), EquilateralTriangleMatrix())
+
+public pcb-landpattern WLCSP63:
+  make-bga-landpattern(9, 7, 0.4, 0.27, tol(3.228, 0.035), tol(4.164, 0.035), FullMatrix())
+
+public pcb-landpattern WLCSP64:
+  make-bga-landpattern(8, 8, 0.4, 0.270, tol(4.539, 0.035), tol(4.911, 0.035), FullMatrix())
+
+public pcb-landpattern WLCSP66:
+  make-bga-landpattern(9, 8, 0.4, 0.270, tol(3.767, 0.035), tol(4.229, 0.035), PerimeterMatrix(4 through 6, 4 through 5))
+
+public pcb-landpattern WLCSP72:
+  make-bga-landpattern(9, 9, 0.4, 0.270, tol(4.4084, 0.035), tol(3.7594, 0.035), PerimeterMatrix(5 through 8, 5 through 8))
+
+public pcb-landpattern WLCSP81:
+  make-bga-landpattern(9, 9, 0.4, 0.270, tol(4.223, 0.035), tol(3.969, 0.035), FullMatrix())
+
+public pcb-landpattern WLCSP90:
+  make-bga-landpattern(9, 10, 0.4, 0.270, tol(4.02, 0.02), tol(4.27, 0.02), FullMatrix())
+
+public pcb-landpattern WLCSP100:
+  make-bga-landpattern(10, 10, 0.4, 0.25, tol(4.4, 0.02), tol(4.38, 0.02), FullMatrix())
+
+public pcb-landpattern WLCSP104:
+  defn depop? (r:Int, c:Int):
+    contains?([5, 6, 7, 8], r) and c == 5
+  make-bga-landpattern(12 , 9, 0.4, 0.25, tol(4.095, 0.034), tol(5.094, 0.035), depop?)
+
+public pcb-landpattern WLCSP115:
+  make-bga-landpattern(21, 11, 0.35, 0.24, tol(3.73, 0.02), tol(4.15, 0.02), EquilateralTriangleMatrix())
+
+public pcb-landpattern WLCSP132:
+  make-bga-landpattern(12, 11, 0.35, 0.24, tol(4.57, 0.03), tol(4.37, 0.03), FullMatrix())
+
+public pcb-landpattern WLCSP143:
+  make-bga-landpattern(11, 13, 0.4, 0.25, tol(4.521, 0.035), tol(5.547, 0.035), FullMatrix())
+
+public pcb-landpattern WLCSP144:
+  make-bga-landpattern(12, 12, 0.4, 0.25, tol(5.24, 0.02), tol(5.24, 0.02), FullMatrix())
+
+public pcb-landpattern WLCSP156:
+  make-bga-landpattern(12, 13, 0.35, 0.24, tol(4.96, 0.02), tol(4.64, 0.02), FullMatrix())
+
+public pcb-landpattern WLCSP168:
+  make-bga-landpattern(14, 12, 0.4, 0.25, tol(4.891, 0.035), tol(5.692, 0.035), FullMatrix())
+
+public pcb-landpattern WLCSP180:
+  make-bga-landpattern(14, 13, 0.4, 0.25, tol(5.337, 0.035), tol(6.095, 0.035), PerimeterMatrix(7 through 8, 7 to 8))
