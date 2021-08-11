@@ -894,9 +894,23 @@ public defn red-alph-letter (idx:Int):
   print(buf, table[idx % length(table)])
   to-string(buf)
 
+public defn bga-row-name (idx:Int, omitted:String):
+  val table = to-tuple $
+    for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" filter:
+      not contains?(upper-case(omitted), ch)
+  val buf = StringBuffer()
+  let loop (row: Int = idx):
+    if row >= length(table):
+      print(buf, table[row / length(table) - 1])
+      loop(row / length(table))
+  print(buf, table[idx % length(table)])
+  to-string(buf)
+
+public defn bga-row-name (idx:Int):
+  bga-row-name(idx, "IOQSUXZ")
+
 public defn bga-pin-name (r:Int, c:Int) :
-  val letter = red-alph-letter(r)
-  Ref(string-join([letter, c + 1]))
+  IndexRef(Ref(bga-row-name(r)), c + 1)
 
 public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>|False) :
   inside pcb-landpattern :
@@ -1888,70 +1902,162 @@ public defn make-two-pin-axial-landpattern (length:Toleranced,
 
 
 ;==================================================================================================
-; Create a grid of bga pad names and their matching locations
-public defn make-bga-grid (rows:Int, cols:Int, pitch:Double) -> Seqable<[Ref, Loc]>:
-  val locs = grid-locs(rows, cols, pitch, pitch)
-  val refs = 
-    for r in 0 to rows seq-cat:
-      for c in 0 to cols seq:
-        bga-pin-name(r, c), 
-  zip(refs, locs)
+;====================================== BGA Land Patterns =========================================
+;==================================================================================================
+pcb-pad bga-pad (typical-ball-diameter:Double,      ; the typical/nominal size of the bga balls
+                 solder-mask-defined?:True|False    ; whether the pad is solder-mask-defined or not
+                 collapsible?:True|False,           ; whether the balls are collapsible or not
+                 density-level:DensityLevel,        ; the density level of the design
+                 solder-mask-registration:Double,   ; the solder-mask registration of the design
+                 ):
+  name = "BGA Pad"
+  type = SMD
 
-; Create a staggerd bga matrix, where every other pad has been removed
-public defn make-staggered-bga-grid (rows:Int, cols:Int, pitch:Double):
-  var tick? = false
-  val locs = for loc in grid-locs(rows * 2, cols * 2, pitch, pitch) filter:
-    tick? = not tick?
-    tick?
-  val refs = 
-    for r in 0 to rows seq-cat:
-      for c in 0 to cols seq:
-        bga-pin-name(r, c)
-  zip(refs, locs)
+  val adjustment = switch(density-level):
+    DensityLevelA: 0.75 when collapsible? else 1.15
+    DensityLevelB: 0.80 when collapsible? else 1.10
+    DensityLevelC: 0.85 when collapsible? else 1.05
 
-public defn remove-from-bga-grid (bga-grid:Seqable<[Ref, Pose]>, remove?:(Ref) -> True|False) -> Seqable<[Ref, Loc]>:
-  for [ref, loc] in bga-grid filter:
-    not remove?(ref)
+  val definition-diameter = typical-ball-diameter * adjustment
+  val referenced-diameter = definition-diameter + solder-mask-registration * 2.0
 
-public defn remove-from-bga-grid (bga-grid:Seqable<[Ref, Pose]>, rows-cols:Tuple<Ref]>):
-  remove-from-bga-grid(bga-grid, contains?{rows-cols, _})
+  if solder-mask-defined?:
+    shape = Circle(0.5 * definition-diameter)
+    layer(SolderMask(Top)) = Circle(0.5 * referenced-diameter)
+  else:
+    shape = Circle(0.5 * referenced-diameter)
+    layer(SolderMask(Top)) = Circle(0.5 * definition-diameter)
+defn bga-pad (typical-ball-diameter:Double,      ; the typical/nominal size of the bga balls
+              solder-mask-defined?:True|False    ; whether the pad is solder-mask-defined or not
+              collapsible?:True|False,           ; whether the balls are collapsible or not
+              ):
+  bga-pad(typical-ball-diameter, 
+          solder-mask-defined?, 
+          collapsible?, 
+          DENSITY-LEVEL, 
+          SOLDER-MASK-REGISTRATION)
 
-public defn remove-from-bga-grid (bga-grid:Seqable<[Ref, Pose]>, rows-cols:Tuple<[Int, Int]>):
-  val rows-cols* = to-tuple $ 
-    for [r, c] in rows-cols seq:
-      bga-pin-name(r, c)
-  remove-from-bga-grid(bga-grid, rows-cols)
+public deftype BGAModifier
+public defmulti depopulated? (m:BGAModifier, r:Int, c:Int) -> True|False
+public defmulti locs (m:BGAModifier, nr:Int, nc:Int, pitch:Double) -> Seqable<Pose>
+defmethod depopulated? (m:BGAModifier, r:Int, c:Int) -> True|False:
+  false
+defmethod locs (m:BGAModifier, nr:Int, nc:Int, pitch:Double):
+  grid-locs(nr, nc, pitch, pitch)
 
-; reference: IPC 7351-B p. 79
-defn bga-pad-size (collapsible?:True|False, 
-                   nominal-ball-diameter:Double):
-  val reduction = 
-    if collapsible?:
-      if nominal-ball-diameter > 0.50: 
-        0.25
-      else if nominal-ball-diameter > 0.20: 
-        0.20
-      else:
-        0.15
-    else:
-      if nominal-ball-diameter > 0.50:
-        0.15
-      else if nominal-ball-diameter > 0.20:
-        0.10
-      else:
-        0.05
-  nominal-ball-diameter * (1.0 - reduction)
+public defstruct FullMatrix <: BGAModifier
+public defstruct EquilateralTriangleMatrix <: BGAModifier
+public defstruct StaggeredMatrix <: BGAModifier
+public defstruct PerimeterMatrix <: BGAModifier:
+  rows:Range,
+  cols:Range,
 
-public defn make-bga-landpattern (bga-grid:Seqable<[Ref, Pose]>, 
-                                  collapsible-balls?:True|False,
-                                  solder-mask-defined?:True|False,
-                                  nominal-ball-size:Double):
+public defstruct ThermallyEnhancedMatrix <: BGAModifier:
+  perimeter-rows:Range,
+  perimeter-cols:Range,
+  interior-rows:Range,
+  interior-cols:Range,
+
+defmethod depopulated? (m:StaggeredMatrix, r:Int, c:Int): 
+  ((r + 1) % 2) == (c % 2)
+
+defmethod depopulated? (m:EquilateralTriangleMatrix, r:Int, c:Int): 
+  ((r + 1) % 2) == (c % 2)
+
+defmethod depopulated? (m:PerimeterMatrix, r:Int, c:Int):
+  contains?(rows(m), r) and contains?(cols(m), c)
+
+defmethod depopulated? (m:ThermallyEnhancedMatrix, r:Int, c:Int):
+  (contains?(perimeter-rows(m), r) and contains?(perimeter-cols(m), c)) and not
+  (contains?(interior-rows(m), r) and contains?(interior-cols(m), c))
+
+defmethod locs (m:EquilateralTriangleMatrix, nr:Int, nc:Int, pitch:Double):
+  val vertical   = sqrt(3.0) * 0.5 * pitch
+  val horizontal = pitch * 0.5
+  grid-locs(nr, nc, horizontal, vertical)
+
+; Helper function to create an array of pads for a BGA landpattern
+defn layout-bga-pads (pad-def:Pad,  ; the pad that will be placed at each location
+                      pitch:Double, ; the pitch (vertical and horizontal) of the BGA
+                      num-rows:Int, ; the number of rows of the BGA
+                      num-cols:Int, ; the number of columns of the BGA
+                      locs:Seq<Pose>,
+                      depop?:(Int, Int) -> True|False): ; a callback to identify whether the pad at (row, col) is depopulated
   inside pcb-landpattern:
-    val pad-size = bga-pad-size(collapsible-balls?, nominal-ball-size)
-    val def = 
-      if solder-mask-defined?:
-        solder-mask-defined-bga-pad(pad-size, SOLDER-MASK-REGISTRATION) ; TODO: verify this computation
-      else:
-        bga-pad(pad-size)
-    for [ref, loc] in bga-grid do:
-      pad (ref): def at loc
+    val pads = 
+      for r in 0 to num-rows seq-cat:
+        for c in 0 to num-cols seq:
+          [r, c]
+    for ([r, c] in pads, pose in locs) do:
+      if not depop?(r, c):
+        pad (bga-pin-name(r, c)): pad-def at pose
+
+public defn make-bga-landpattern (num-rows:Int,
+                                  num-cols:Int,
+                                  pitch:Double,
+                                  ball-diameter:Double,
+                                  package-length:Toleranced,
+                                  package-width:Toleranced,
+                                  solder-mask-defined?:True|False,
+                                  modifier:BGAModifier|((Int, Int) -> True|False),
+                                  density-level:DensityLevel):
+  fatal("make-bga-landpattern-failed(...), num-rows must be positive. Called with: %_." % [num-rows]) when num-rows <= 0
+  fatal("make-bga-landpattern-failed(...), num-cols must be positive. Called with: %_." % [num-cols]) when num-cols <= 0
+  fatal("make-bga-landpattern-failed(...), pitch must be positive. Called with: %_." % [pitch]) when pitch <= 0.0
+  fatal("make-bga-landpattern-failed(...), ball-diameter be positive. Called with: %_." % [ball-diameter]) when ball-diameter <= 0.0
+  inside pcb-landpattern:
+    ;-------------------------------------------------------------
+    ; Compute the pad definition
+    val pad-def = bga-pad(ball-diameter, solder-mask-defined?, true)
+    
+    ;-------------------------------------------------------------
+    ; Layout the pads
+    ; helper to check if a pad is depopulated or not
+    defn depop? (r:Int, c:Int):
+      match(modifier):
+        (cbk:(Int, Int) -> True|False): 
+          cbk(r, c),
+        (m:BGAModifier): 
+          depopulated?(m, r, c)
+
+    val locs = ; pad locations
+      match(modifier):
+        (cbk:(Int, Int) -> True|False): 
+          grid-locs(num-rows, num-cols, pitch, pitch)
+        (m:BGAModifier): 
+          locs(m, num-rows, num-cols, pitch)
+
+    val idx = ; pad indices
+      for r in 0 to num-rows seq-cat:
+        for c in 0 to num-cols seq: 
+          [r, c]
+    
+    ; layout the pad given indices and locations
+    for ([r, c] in idx, loc in locs) do:
+      if not depop?(r, c):
+        pad (bga-pin-name(r, c)): pad-def at loc
+
+    ;-------------------------------------------------------------
+    ; Compute the courtyard
+    val courtyard-excess = bga-courtyard-excess(density-level)
+    val pkg-sz = Dims(max-value(package-length), max-value(package-width))
+    val cy-sz = enlarge(pkg-sz, 2.0 * courtyard-excess)
+    layer(Courtyard(Top)) = Rectangle(cy-sz)
+
+public defn make-bga-landpattern (num-rows:Int,
+                                  num-cols:Int,
+                                  pitch:Double,
+                                  ball-diameter:Double,
+                                  package-length:Toleranced,
+                                  package-width:Toleranced,
+                                  modifier:BGAModifier|((Int, Int) -> True|False),
+):
+  make-bga-landpattern(num-rows, 
+                       num-cols, pitch, 
+                       ball-diameter, 
+                       package-length, 
+                       package-width, 
+                       true,
+                       modifier, 
+                       DENSITY-LEVEL)
+
