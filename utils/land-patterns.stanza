@@ -881,20 +881,21 @@ public pcb-landpattern dfn-landpattern ( n-pad:Int, pad-pitch:Double, pad-dims:[
   make-dfn-landpattern(n-pad,pad-pitch,pad-dims,pad-x0,body-dims)
   pad p[n-pad + 1] : smd-pad(hs[0],hs[1]) at loc(0.0, 0.0)  
 
-; returns the letter corresponding to a row in a bga package, for example:
-; A, B, C, D, E, E, F, G, H, J, K, L, M, N, P, R, T, U, V, W, Y
-; AA, AB, ... etc
-public defn red-alph-letter (idx:Int):
-  val table = "ABCDEFGHJKLMNPRTUVWY"
-  val buf = StringBuffer()
-  let loop (row: Int = idx):
-    if row >= length(table):
-      print(buf, table[row / length(table) - 1])
-      loop(row / length(table))
-  print(buf, table[idx % length(table)])
-  to-string(buf)
-
-public defn bga-row-name (idx:Int, omitted:String):
+; Returns the name of a row given its index and a list of omitted
+; characters.
+; 
+; The algorithm is a realization of this description from JEDEC JC-11:
+;
+; > When a package is viewed ... with the A1 corner in the upper left position, 
+; > terminal rows are lettered from top to bottom starting with A and 
+; > terminal columns are numbered from left to right starting with 1. 
+; > ... For packages with greater than 20 rows (i.e.,  following rows W and Y),  
+; > the 21st row is designated AA and subsequent rows are designated AB, AC, etc.
+;
+; The modification is we abstract over the omitted characters to support non-
+; standard naming conventions. 
+;
+public defn bga-row-name (idx:Int, omitted:String) -> Ref:
   val table = to-tuple $
     for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" filter:
       not contains?(upper-case(omitted), ch)
@@ -904,13 +905,20 @@ public defn bga-row-name (idx:Int, omitted:String):
       print(buf, table[row / length(table) - 1])
       loop(row / length(table))
   print(buf, table[idx % length(table)])
-  to-string(buf)
+  Ref(to-string(buf))
 
-public defn bga-row-name (idx:Int):
-  bga-row-name(idx, "IOQSUXZ")
+; for backwards compat
+public defn red-alph-letter (r:Int):
+  to-string(bga-row-name(r))
 
-public defn bga-pin-name (r:Int, c:Int) :
-  IndexRef(Ref(bga-row-name(r)), c + 1)
+public defn bga-pin-name (row:Int, column:Int) -> Ref:
+  bga-row-name(row)[column + 1]
+
+public defn bga-pin-name (row:Int, column:Int, omitted?:String|False) -> Ref:
+  val omitted = match(omitted?):
+    (_:False): "IOQSXZ"
+    (s:String): s
+  bga-row-name(row, s)[column + 1]
 
 public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>|False) :
   inside pcb-landpattern :
@@ -918,8 +926,7 @@ public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], court
     defn make-pad (r:Int, c:Int) :
       val x = ((to-double(n-pads[0]) - 1.0) / -2.0 + to-double(c)) * pitch
       val y = ((to-double(n-pads[1]) - 1.0) / 2.0 - to-double(r)) * pitch
-      val letter = red-alph-letter(r)
-      val name = Ref(letter)[c + 1]
+      val name = bga-pin-name(r, c)
 
       match(omit-pads:Tuple<Ref>):
         if not contains?(omit-pads, name) :
@@ -1976,15 +1983,17 @@ defmethod locs (m:EquilateralTriangleMatrix, nr:Int, nc:Int, pitch:Double):
   val horizontal = pitch * 0.5
   grid-locs(nr, nc, horizontal, vertical)
 
-public defn make-bga-landpattern (num-rows:Int,
-                                  num-cols:Int,
-                                  pitch:Double,
-                                  ball-diameter:Double,
-                                  package-length:Toleranced,
-                                  package-width:Toleranced,
-                                  solder-mask-defined?:True|False,
-                                  modifier:BGAModifier|((Int, Int) -> True|False),
-                                  density-level:DensityLevel):
+public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
+                                  num-cols:Int, ; the number of columns of the package
+                                  pitch:Double, ; the pitch of the solder bumps
+                                  ball-diameter:Double, ; the nominal/typical diameter of the solder balls
+                                  collapsible-balls?:True|False, ; whether the balls are collapsible or not
+                                  package-length:Toleranced,     ; the length of the package
+                                  package-width:Toleranced,        ; the width of the package
+                                  solder-mask-defined?:True|False, ; whether the pads will be "solder mask defined" or not
+                                  modifier:BGAModifier|((Int, Int) -> True|False), ; the modifier that controls which pads are depopulated
+                                  density-level:DensityLevel, ; the density level of the design
+                                  row-characters-omitted?:String|False): ; which characters are omitted from the row names
   fatal("make-bga-landpattern-failed(...), num-rows must be positive. Called with: %_." % [num-rows]) when num-rows <= 0
   fatal("make-bga-landpattern-failed(...), num-cols must be positive. Called with: %_." % [num-cols]) when num-cols <= 0
   fatal("make-bga-landpattern-failed(...), pitch must be positive. Called with: %_." % [pitch]) when pitch <= 0.0
@@ -2019,7 +2028,8 @@ public defn make-bga-landpattern (num-rows:Int,
     ; layout the pad given indices and locations
     for ([r, c] in idx, loc in locs) do:
       if not depop?(r, c):
-        pad (bga-pin-name(r, c)): pad-def at loc
+        val pin-name = bga-pin-name(r, c, row-characters-omitted?)
+        pad (pin-name): pad-def at loc
 
     ;-------------------------------------------------------------
     ; Compute the courtyard
@@ -2027,6 +2037,18 @@ public defn make-bga-landpattern (num-rows:Int,
     val pkg-sz = Dims(max-value(package-length), max-value(package-width))
     val cy-sz = enlarge(pkg-sz, 2.0 * courtyard-excess)
     layer(Courtyard(Top)) = Rectangle(cy-sz)
+
+
+public defn make-bga-landpattern (num-rows:Int,
+                                  num-cols:Int,
+                                  pitch:Double,
+                                  ball-diameter:Double,
+                                  package-length:Toleranced,
+                                  package-width:Toleranced,
+                                  solder-mask-defined?:True|False,
+                                  modifier:BGAModifier|((Int, Int) -> True|False),
+                                  density-level:DensityLevel):
+  make-bga-landpattern(num-rows, num-cols, pitch, ball-diameter, package-length, package-width, solder-mask-defined?, modifier, density-level, false)
 
 public defn make-bga-landpattern (num-rows:Int,
                                   num-cols:Int,
