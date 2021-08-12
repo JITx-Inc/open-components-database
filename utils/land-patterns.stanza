@@ -909,16 +909,16 @@ public defn bga-row-name (idx:Int, omitted:String) -> Ref:
 
 ; for backwards compat
 public defn red-alph-letter (r:Int):
-  to-string(bga-row-name(r))
-
-public defn bga-pin-name (row:Int, column:Int) -> Ref:
-  bga-row-name(row)[column + 1]
+  to-string(bga-row-name(r, "IOQSXZ"))
 
 public defn bga-pin-name (row:Int, column:Int, omitted?:String|False) -> Ref:
   val omitted = match(omitted?):
     (_:False): "IOQSXZ"
     (s:String): s
-  bga-row-name(row, s)[column + 1]
+  bga-row-name(row, omitted)[column + 1]
+
+public defn bga-pin-name (row:Int, column:Int) -> Ref:
+  bga-pin-name(row, column, false)
 
 public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>|False) :
   inside pcb-landpattern :
@@ -1911,14 +1911,20 @@ public defn make-two-pin-axial-landpattern (length:Toleranced,
 ;==================================================================================================
 ;====================================== BGA Land Patterns =========================================
 ;==================================================================================================
+public pcb-enum ocdb/land-patterns/BGAPadType:
+  SolderMaskDefined,
+  NonSolderMaskDefined,
+  Collapsible,
+  
 pcb-pad bga-pad (typical-ball-diameter:Double,      ; the typical/nominal size of the bga balls
-                 solder-mask-defined?:True|False    ; whether the pad is solder-mask-defined or not
-                 collapsible?:True|False,           ; whether the balls are collapsible or not
-                 density-level:DensityLevel,        ; the density level of the design
+                 pad-type:BGAPadType,               ; the bga pad type, (collapsible, solder mask defined, or non-soldermask defined)
                  solder-mask-registration:Double,   ; the solder-mask registration of the design
+                 density-level:DensityLevel,        ; the density level of the design
                  ):
   name = "BGA Pad"
   type = SMD
+  val solder-mask-defined? = pad-type is SolderMaskDefined
+  val collapsible? = pad-type is Collapsible
 
   val adjustment = switch(density-level):
     DensityLevelA: 0.75 when collapsible? else 1.15
@@ -1934,15 +1940,13 @@ pcb-pad bga-pad (typical-ball-diameter:Double,      ; the typical/nominal size o
   else:
     shape = Circle(0.5 * referenced-diameter)
     layer(SolderMask(Top)) = Circle(0.5 * definition-diameter)
-defn bga-pad (typical-ball-diameter:Double,      ; the typical/nominal size of the bga balls
-              solder-mask-defined?:True|False    ; whether the pad is solder-mask-defined or not
-              collapsible?:True|False,           ; whether the balls are collapsible or not
-              ):
+
+defn bga-pad (typical-ball-diameter:Double, ; the typical/nominal size of the bga balls
+              pad-type:BGAPadType):
   bga-pad(typical-ball-diameter, 
-          solder-mask-defined?, 
-          collapsible?, 
-          DENSITY-LEVEL, 
-          SOLDER-MASK-REGISTRATION)
+          pad-type,
+          SOLDER-MASK-REGISTRATION,
+          DENSITY-LEVEL)
 
 public deftype BGAModifier
 public defmulti depopulated? (m:BGAModifier, r:Int, c:Int) -> True|False
@@ -1987,13 +1991,13 @@ public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
                                   num-cols:Int, ; the number of columns of the package
                                   pitch:Double, ; the pitch of the solder bumps
                                   ball-diameter:Double, ; the nominal/typical diameter of the solder balls
-                                  collapsible-balls?:True|False, ; whether the balls are collapsible or not
-                                  package-length:Toleranced,     ; the length of the package
-                                  package-width:Toleranced,        ; the width of the package
-                                  solder-mask-defined?:True|False, ; whether the pads will be "solder mask defined" or not
+                                  pad-type:BGAPadType,  ; whether the pads will be "solder mask defined" or not
+                                  package-length:Toleranced, ; the length of the package
+                                  package-width:Toleranced,  ; the width of the package
                                   modifier:BGAModifier|((Int, Int) -> True|False), ; the modifier that controls which pads are depopulated
-                                  density-level:DensityLevel, ; the density level of the design
-                                  row-characters-omitted?:String|False): ; which characters are omitted from the row names
+                                  row-characters-omitted?:String|False, ; which characters are omitted from the row names
+                                  mirrored?:True|False, ; controls whether the pads are mirrored or not
+                                  density-level:DensityLevel):, ; the density level of the design
   fatal("make-bga-landpattern-failed(...), num-rows must be positive. Called with: %_." % [num-rows]) when num-rows <= 0
   fatal("make-bga-landpattern-failed(...), num-cols must be positive. Called with: %_." % [num-cols]) when num-cols <= 0
   fatal("make-bga-landpattern-failed(...), pitch must be positive. Called with: %_." % [pitch]) when pitch <= 0.0
@@ -2001,7 +2005,7 @@ public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
   inside pcb-landpattern:
     ;-------------------------------------------------------------
     ; Compute the pad definition
-    val pad-def = bga-pad(ball-diameter, solder-mask-defined?, true)
+    val pad-def = bga-pad(ball-diameter, pad-type)
     
     ;-------------------------------------------------------------
     ; Layout the pads
@@ -2013,12 +2017,13 @@ public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
         (m:BGAModifier): 
           depopulated?(m, r, c)
 
-    val locs = ; pad locations
+    val locs = to-vector<Pose> $ ; pad locations 
       match(modifier):
         (cbk:(Int, Int) -> True|False): 
           grid-locs(num-rows, num-cols, pitch, pitch)
         (m:BGAModifier): 
           locs(m, num-rows, num-cols, pitch)
+    reverse!(locs) when mirrored?
 
     val idx = ; pad indices
       for r in 0 to num-rows seq-cat:
@@ -2038,18 +2043,6 @@ public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
     val cy-sz = enlarge(pkg-sz, 2.0 * courtyard-excess)
     layer(Courtyard(Top)) = Rectangle(cy-sz)
 
-
-public defn make-bga-landpattern (num-rows:Int,
-                                  num-cols:Int,
-                                  pitch:Double,
-                                  ball-diameter:Double,
-                                  package-length:Toleranced,
-                                  package-width:Toleranced,
-                                  solder-mask-defined?:True|False,
-                                  modifier:BGAModifier|((Int, Int) -> True|False),
-                                  density-level:DensityLevel):
-  make-bga-landpattern(num-rows, num-cols, pitch, ball-diameter, package-length, package-width, solder-mask-defined?, modifier, density-level, false)
-
 public defn make-bga-landpattern (num-rows:Int,
                                   num-cols:Int,
                                   pitch:Double,
@@ -2057,13 +2050,63 @@ public defn make-bga-landpattern (num-rows:Int,
                                   package-length:Toleranced,
                                   package-width:Toleranced,
                                   modifier:BGAModifier|((Int, Int) -> True|False),
-):
-  make-bga-landpattern(num-rows, 
-                       num-cols, pitch, 
-                       ball-diameter, 
-                       package-length, 
-                       package-width, 
-                       true,
+                                  row-characters-omitted?:False|String,
+                                  mirrored?:True|False,):
+  make-bga-landpattern(num-rows, num-cols,
+                       pitch, ball-diameter, Collapsible,
+                       package-length, package-width,
                        modifier, 
+                       row-characters-omitted?, 
+                       mirrored?,
                        DENSITY-LEVEL)
 
+; Create a BGA land pattern default mirroring (false), default row naming (omitting the characters "IOQSXZ"), 
+; default pad type (Collapsible) and default density level. A depopulation modifier may be supplied to control
+; which pads are depopulated.
+public defn make-bga-landpattern (num-rows:Int,
+                                  num-cols:Int,
+                                  pitch:Double,
+                                  ball-diameter:Double,
+                                  package-length:Toleranced,
+                                  package-width:Toleranced,
+                                  modifier:BGAModifier|((Int, Int) -> True|False)):
+  make-bga-landpattern(num-rows, num-cols,
+                       pitch, ball-diameter, Collapsible,
+                       package-length, package-width,
+                       modifier, 
+                       false, ; row-characters-omitted >
+                       false, ; mirrored?
+                       DENSITY-LEVEL)
+
+; Create a BGA land pattern with default modifier (no pads depopulated), default mirroring (false), 
+; default row naming (omitting the characters "IOQSXZ"), and density level pulled from the design variables.
+; The pad type may be supplied (SolderMaskDefined, NonSolderMaskDefined, and Collapsible)
+public defn make-bga-landpattern (num-rows:Int,
+                                  num-cols:Int,
+                                  pitch:Double,
+                                  ball-diameter:Double,
+                                  pad-type:BGAPadType,
+                                  package-length:Toleranced,
+                                  package-width:Toleranced,
+                                  modifier:BGAModifier|((Int, Int) -> True|False)):
+  make-bga-landpattern(num-rows, num-cols,
+                       pitch, ball-diameter, pad-type,
+                       package-length, package-width,
+                       modifier, 
+                       false, ; row-characters-omitted
+                       false, ; mirrored?
+                       DENSITY-LEVEL)
+
+; Create a BGA land pattern with default modifier (no pads depopulated), default mirroring (false), 
+; default row naming (omitting the characters "IOQSXZ"), default pad type (Collapsible), and 
+; density level pulled from the design variables.
+public defn make-bga-landpattern (num-rows:Int,
+                                  num-cols:Int,
+                                  pitch:Double,
+                                  ball-diameter:Double,
+                                  package-length:Toleranced,
+                                  package-width:Toleranced):
+  make-bga-landpattern(num-rows, num-cols,
+                       pitch, ball-diameter, Collapsible,
+                       package-length, package-width,
+                       FullMatrix()) ; modifier
