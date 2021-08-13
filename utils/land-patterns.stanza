@@ -2017,13 +2017,12 @@ public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
         (m:BGAModifier): 
           depopulated?(m, r, c)
 
-    val locs = to-vector>Pose> $ ; pad locations 
+    val locs = ; pad locations 
       match(modifier):
         (cbk:(Int, Int) -> True|False): 
           grid-locs(num-rows, num-cols, pitch, pitch)
         (m:BGAModifier): 
           locs(m, num-rows, num-cols, pitch)
-    reverse!(locs) when mirrored?
 
     val idx = ; pad indices
       for r in 0 to num-rows seq-cat:
@@ -2033,7 +2032,8 @@ public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
     ; layout the pad given indices and locations
     for ([r, c] in idx, loc in locs) do:
       if not depop?(r, c):
-        val pin-name = bga-pin-name(r, c, row-characters-omitted?)
+        val c* = c when not mirrored? else (num-cols - c - 1)
+        val pin-name = bga-pin-name(r, c*, row-characters-omitted?)
         pad (pin-name): pad-def at loc
 
     ;-------------------------------------------------------------
