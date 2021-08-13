@@ -1453,3 +1453,83 @@ public defn two-pin-chip-landpattern (length:Toleranced,
     length, width, lead-length, false, 
     DENSITY-LEVEL, polarized?
   )
+
+defn hole-to-lead-diameter (d:DensityLevel) -> [Double, Double]:
+  switch(d):
+    DensityLevelA: [0.70, 0.25],
+    DensityLevelB: [0.70, 0.20],
+    DensityLevelC: [0.60, 0.15],
+
+public defn make-two-pin-axial-landpattern (length:Double,
+                                            diameter:Double,
+                                            weld:Double,
+                                            lead-diameter:Toleranced, 
+                                            bend-length:Double,
+                                            bend-radius:Double,
+                                            polarized?:True|False,
+                                            density-level:DensityLevel
+                                            ):
+  inside pcb-landpattern:  
+    ; Lookup design rules
+    ; TODO: make these design rules, not design variables
+    val min-outer-layer-pad-size = MIN-OUTER-LAYER-PAD-SIZE
+    val max-hole-size-tolerance  = MAX-HOLE-SIZE-TOLERANCE
+    val min-hole-size-tolerance  = MIN-HOLE-SIZE-TOLERANCE
+    val hole-position-tolerance  = HOLE-POSITION-TOLERANCE
+
+    ;------------------------------------------------------------
+    ; Compute the pad definition
+    val [min-h2l, max-h2l] = hole-to-lead-diameter(density-level)
+    val max-hole-diam = min-value(lead-diameter) - max-hole-size-tolerance + max-h2l
+    val min-hole-diam = max-value(lead-diameter) + min-hole-size-tolerance + min-h2l
+    val hole-diameter = 0.5 * (max-hole-diam + min-hole-diam)
+    val pad-size = hole-diameter + maximum([
+      0.5 + max-hole-size-tolerance,
+      max-hole-size-tolerance + hole-position-tolerance + 50.0e-6,
+      min-outer-layer-pad-size,
+    ])
+    val pad-def = pth-pad(Circle(pad-size * 0.5), Circle(hole-diameter * 0.5))
+
+    ;------------------------------------------------------------
+    ; Place the pads
+    val pad-spacing = length + 2.0 * (weld + bend-length + bend-radius)
+    val y1 = 0.5 * pad-spacing
+    val y2 = (- y1)
+
+    if polarized?:
+      pad a: pad-def at loc(0.0, y1)
+      pad c: pad-def at loc(0.0, y2)
+    else:
+      pad p[1]: pad-def at loc(0.0, y1)
+      pad p[2]: pad-def at loc(0.0, y2)
+
+    ;------------------------------------------------------------
+    ; Compute the courtyard
+    val pad-diam = pad-size + 2.0 * SOLDER-MASK-REGISTRATION
+    val courtyard-excess = 1.0 ; why not? 
+    val cy-sz = Dims(max(diameter, pad-diam), pad-diam + pad-spacing) $> enlarge{_, courtyard-excess}
+    layer(Courtyard(Top))    = Rectangle(cy-sz)
+    layer(Courtyard(Bottom)) = Rectangle(cy-sz)
+    layer(Silkscreen("F-silk", Top)) = Rectangle(diameter, length)
+    ref-label(loc(0.5 * x(cy-sz) + MIN-SILKSCREEN-TEXT-HEIGHT, 0.0, 270.0))
+
+public defn make-two-pin-axial-landpattern (length:Double,
+                                            diameter:Double,
+                                            weld:Double,
+                                            lead-diameter:Toleranced, 
+                                            polarized?:True|False,
+                                            ):
+  val bend-length = 1.0
+  val bend-radius = 
+    if typ(lead-diameter) < 0.8: typ(lead-diameter)
+    else if typ(lead-diameter) < 1.2: 1.5 * typ(lead-diameter)
+    else: 2.0 * typ(lead-diameter)
+  
+  make-two-pin-axial-landpattern(length,
+                                 diameter,
+                                 1.0,
+                                 lead-diameter,
+                                 bend-length,
+                                 bend-radius
+                                 polarized?,
+                                 DENSITY-LEVEL)
