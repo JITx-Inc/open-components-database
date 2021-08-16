@@ -94,18 +94,18 @@ public defn connect-cp2105 (usb:JITXObject, uart:JITXObject) -> Instance  :
 
 ; Connects a SPI controller to 1 or more peripherals, pulls gpio for peripherals[1..n] for cs
 public defn connect-spi (base:JITXObject, controller:JITXObject, peripherals:Tuple<JITXObject>) :
+  fatal("connect-spi(base,controller, peripherals) needs at least 1 peripheral to execute.")  when empty?(peripherals)
   inside pcb-module :
     for p in peripherals do :
       net (controller.sck p.sck)
-      ; if port-type(p) == spi-peripheral() :
       if has-pin?(p, "sdi") :
         net (controller.copi p.sdi)
+      if has-pin?(p, "sdo") :
         net (controller.cipo p.sdo)
-      ; else if port-type(p) == spi-controller() :
-      else if has-pin?(p, "copi") :
+      if has-pin?(p, "copi") :
         net (controller.copi p.copi)
+      if has-pin?(p, "cipo") :
         net (controller.cipo p.cipo)
-    ; val base = containing-instance(controller) as JITXObject
     net (controller.cs peripherals[0].cs)
     if length(peripherals) > 1 :
       for i in peripherals[1 to length(peripherals)] do :
