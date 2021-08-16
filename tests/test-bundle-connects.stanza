@@ -1,0 +1,50 @@
+#use-added-syntax(jitx, tests)
+defpackage ocdb/tests/bundle-connects: 
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/connects
+  import ocdb/bundles
+
+  import ocdb/defaults
+  import ocdb/design-vars
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import ocdb/property-structs
+  import ocdb/checks
+  import ocdb/micro-controllers
+    
+deftest connect-spi-01 :
+  pcb-module accel:  
+    ; connect mcu spi with cip and copi to accelerometer spi using SDI and SDO
+    inst accel : ocdb/st-microelectronics/LIS3DH/module
+    inst mcu : ocdb/st-microelectronics/STM32F105VBH6/module([])
+    require spi1:spi-controller() from mcu.mcu
+    connect-spi(mcu.mcu, spi1, [accel.spi])
+
+    require spi2:spi-controller() from mcu.mcu
+    inst spi-other-mcu : ocdb/st-microelectronics/STM32F105VBH6/module([])
+    require spi-from-other:spi-controller() from spi-other-mcu.mcu
+    inst adc : ocdb/analog-devices/AD7124-8BBCPZ/module[4]
+
+    ; connet main mcu to other mcu with spi-controller and other peripheral spi
+    connect-spi(mcu.mcu, spi2, [spi-from-other adc[0].spi adc[1].spi adc[2].spi adc[3].spi])
+    ; check spi cipo sdo, copi sdi, sck, and gpio for cs
+    ; spi 1 checks
+    #ASSERT(connected?([accel.spi.sdi spi1.copi]))
+    #ASSERT(connected?([accel.spi.sdo spi1.cipo]))
+    #ASSERT(connected?([accel.spi.sck spi1.sck]))
+    #ASSERT(connected?([accel.spi.cs spi1.cs]))
+
+    ; spi 2 checks    
+    #ASSERT(connected?([spi2.copi spi-from-other.copi adc[0].spi.sdi adc[1].spi.sdi  adc[2].spi.sdi  adc[3].spi.sdi]))
+    #ASSERT(connected?([spi2.cipo spi-from-other.cipo adc[0].spi.sdo adc[1].spi.sdo  adc[2].spi.sdo  adc[3].spi.sdo]))
+    #ASSERT(connected?([spi2.sck spi-from-other.sck adc[0].spi.sck adc[1].spi.sck  adc[2].spi.sck  adc[3].spi.sck]))
+    #ASSERT(connected?([spi2.cs spi-from-other.cs]))
+    #ASSERT(not connected?([spi2.cs adc[0].spi.cs adc[1].spi.cs adc[2].spi.cs  adc[3].spi.cs])) 
+    ; [TODO] replace above with function that checks if each net in the Tuple is not connected to each other net in the Tuple
+
+    ; #ASSERT(connected?([accel.spi.sdo spi1.copi])) ; this should fail
+  make-default-board(accel, 4, RoundedRectangle(50.0, 50.0, 0.25))
+;   print-def(accel)
