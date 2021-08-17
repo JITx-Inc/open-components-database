@@ -1967,7 +1967,7 @@ defn bga-pad-names (num-rows:Int, num-cols:Int, row-chars-omitted?:False|String)
   ; at a given index
   val row-chars = to-tuple $
     for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" filter:
-      not contains?(upper-case(omitted), ch)
+      not contains?(upper-case(row-chars-omitted), ch)
   
   ; helper function to create pad names given indices, follows the convention
   ; "A" "B" "C" ... "AA" "AB" "AC" ... "BA" "BB" "BC" ... etc
@@ -1976,9 +1976,9 @@ defn bga-pad-names (num-rows:Int, num-cols:Int, row-chars-omitted?:False|String)
     clear(buf)
     let loop (row: Int = idx):
       if row >= length(row-chars):
-        print(buf, row-chars[row / length(table) - 1])
+        print(buf, row-chars[row / length(row-chars) - 1])
       loop(row / length(row-chars))
-    print(buf, row-chars[idx % length(table)])
+    print(buf, row-chars[idx % length(row-chars)])
     Ref(to-string(buf))
   
   ; Construct a lookup table of pad names
@@ -2042,7 +2042,7 @@ public defstruct ThermallyEnhancedMatrix <: BGAModifier:
 
 public defn CustomDepop (f:(Int, Int) -> True|False): 
   new BGAModifier:
-    defmethod depop? (this, r:Int, c:Int):
+    defmethod depopulated? (this, r:Int, c:Int):
       f(r, c)
 
 defmethod depopulated? (m:StaggeredMatrix, r:Int, c:Int): 
@@ -2096,11 +2096,11 @@ public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
     val pad-locs  = locs(modifier, num-rows, num-cols, pitch)
 
     ; Calculate pad names
-    val pad-names = bga-pad-names(num-rows, num-cols, row-characters-omitted)
+    val pad-names = bga-pad-names(num-rows, num-cols, row-characters-omitted?)
     
     ; Layout the pad given indices and locations
-    for ([row, col] in pin-indices, loc in pin-locs) do:
-      if not depop?(modifier, row, col):
+    for ([row, col] in pin-indices, loc in pad-locs) do:
+      if not depopulated?(modifier, row, col):
         pad (pad-names[row, col]): pad-def at loc
 
     ;-------------------------------------------------------------
@@ -2116,7 +2116,7 @@ public defn make-bga-landpattern (num-rows:Int,
                                   ball-diameter:Double,
                                   package-length:Toleranced,
                                   package-width:Toleranced,
-                                  modifier:BGAModifier|((Int, Int) -> True|False),
+                                  modifier:BGAModifier,
                                   row-characters-omitted?:False|String,
                                   mirrored?:True|False,):
   make-bga-landpattern(num-rows, num-cols,
@@ -2136,7 +2136,7 @@ public defn make-bga-landpattern (num-rows:Int,
                                   ball-diameter:Double,
                                   package-length:Toleranced,
                                   package-width:Toleranced,
-                                  modifier:BGAModifier|((Int, Int) -> True|False)):
+                                  modifier:BGAModifier):
   make-bga-landpattern(num-rows, num-cols,
                        pitch, ball-diameter, Collapsible,
                        package-length, package-width,
@@ -2155,7 +2155,7 @@ public defn make-bga-landpattern (num-rows:Int,
                                   pad-type:BGAPadType,
                                   package-length:Toleranced,
                                   package-width:Toleranced,
-                                  modifier:BGAModifier|((Int, Int) -> True|False)):
+                                  modifier:BGAModifier):
   make-bga-landpattern(num-rows, num-cols,
                        pitch, ball-diameter, pad-type,
                        package-length, package-width,
