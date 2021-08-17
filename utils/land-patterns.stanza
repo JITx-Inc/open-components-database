@@ -1948,6 +1948,17 @@ defn bga-pad (typical-ball-diameter:Double, ; the typical/nominal size of the bg
           SOLDER-MASK-REGISTRATION,
           DENSITY-LEVEL)
 
+; A BGAModifier is an abstract type representing a class of BGA Components. It is used to 
+; control the way pads are depopulated and spaced on the land pattern. You can declare
+; a custom BGA modifier using the new type syntax:
+; 
+; defn MyBgaModifier ():
+;   new BGAModifier:
+;     defmethod locs (this, num-rows:Int, num-cols:Int) -> Seqable<Pose>:
+;       ...
+;     defmethod depopulated? (this, row-index:Int, column-index:Int) -> True|False:
+;       ...
+;
 public deftype BGAModifier
 public defmulti depopulated? (m:BGAModifier, r:Int, c:Int) -> True|False
 public defmulti locs (m:BGAModifier, nr:Int, nc:Int, pitch:Double) -> Seqable<Pose>
@@ -1956,18 +1967,34 @@ defmethod depopulated? (m:BGAModifier, r:Int, c:Int) -> True|False:
 defmethod locs (m:BGAModifier, nr:Int, nc:Int, pitch:Double):
   grid-locs(nr, nc, pitch, pitch)
 
+; A "FullMatrix" BGA is one where no pads are depopulated and the pad
+; columns and rows are all equidistant.
 public defstruct FullMatrix <: BGAModifier
-public defstruct EquilateralTriangleMatrix <: BGAModifier
-public defstruct StaggeredMatrix <: BGAModifier
-public defstruct PerimeterMatrix <: BGAModifier:
-  rows:Range,
-  cols:Range,
 
+; A "StageredMatrix" BGA is one where every other pad is depopulated,
+; alternating across rows. The distance between adjacent pads on subsequent
+; rows will be pitch / sqrt(2).
+public defstruct StaggeredMatrix <: BGAModifier
+
+; An "EquilaterTriangleMatrix" is like a staggered matrix, but where the 
+; pads are all equistance from eachother. This means for any three adjacent pads
+; with two in the same row or column, the centers of the pads form an equilateral 
+; triangle.
+public defstruct EquilateralTriangleMatrix <: BGAModifier
+
+; A "PerimeterMatrix" is like a full matrix, but with a region of pads in the
+; center depopulated.
+public defstruct PerimeterMatrix <: BGAModifier:
+  rows:Range, ; the range of rows to depopulate
+  cols:Range, ; the range of columns to depopulate
+
+; A "ThermallyEnhancedMatrix" is like a PerimeterMatrix, except with some
+; region in the center remaining populated.
 public defstruct ThermallyEnhancedMatrix <: BGAModifier:
-  perimeter-rows:Range,
-  perimeter-cols:Range,
-  interior-rows:Range,
-  interior-cols:Range,
+  perimeter-rows:Range, ; the range of rows to depopulate
+  perimeter-cols:Range, ; the range of columns to depopulate
+  interior-rows:Range, ; the range of rows in the center to remain populated
+  interior-cols:Range, ; the range of columns in the center to remain populated
 
 defmethod depopulated? (m:StaggeredMatrix, r:Int, c:Int): 
   ((r + 1) % 2) == (c % 2)
