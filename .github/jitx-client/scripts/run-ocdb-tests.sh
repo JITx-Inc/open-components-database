@@ -2,7 +2,7 @@
 set -e
 
 echo "Installation details"
-jstanza version
+jitx version
 cat /root/.jitx/user.params
 
 echo "Launching ocdb tests, they can depend on jitx-client..."
