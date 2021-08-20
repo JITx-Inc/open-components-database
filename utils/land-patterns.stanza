@@ -1492,8 +1492,13 @@ defn two-pin-th-polarity-marker (cmp-sz:Dims, pad-diameter:Double, lead-spacing:
     val line = Line(min-silk-width, [Point(min-silk-width * 0.5, 0.0),
                                      Point(3.5 * min-silk-width, 0.0)])
     val dist = SOLDER-MASK-REGISTRATION + SILK-SOLDER-MASK-CLEARANCE + min-silk-width * 0.5 + 0.01
-    val pol-x = -0.5 * max(x(cmp-sz), -0.5 * pad-diameter)
-    val pol-y =  0.5 * max(y(cmp-sz),  0.5 * (pad-diameter + lead-spacing)) + dist
+    val pad-x = -0.5 * pad-diameter
+    val pad-y =  0.5 * pad-diameter + 0.5 * lead-spacing
+    val cmp-x = -0.5 * x(cmp-sz)
+    val cmp-y =  0.5 * y(cmp-sz)
+    
+    val pol-x = min(pad-x, cmp-x)
+    val pol-y = max(pad-y, cmp-y) + dist
     layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y) * line
 
 ; Helper function for two-pin through hole components, controlling where they get placed
@@ -1553,7 +1558,7 @@ public defn make-two-pin-axial-landpattern (component-length:Toleranced,   ; The
     ;------------------------------------------------------------
     ; Compute the pad definition
     val [pad-diameter, hole-diameter] = pth-pad-sizes(lead-diameter, density-level)
-    val pad-def = pth-pad(hole-diameter, pad-diameter)
+    val pad-def = pth-pad(Circle(0.5 * pad-diameter), Circle(0.5 * hole-diameter))
     val lead-spacing = typ(component-length) + 2.0 * (weld + bend-length + bend-radius)
 
     ;------------------------------------------------------------
@@ -1562,16 +1567,25 @@ public defn make-two-pin-axial-landpattern (component-length:Toleranced,   ; The
 
     ;------------------------------------------------------------
     ; Compute the courtyard
-    val pad-diam = pad-diameter + 2.0 * SOLDER-MASK-REGISTRATION
     val courtyard-excess = 0.75
-    val cy-sz = Dims(max(max-value(component-diameter), pad-diam), pad-diam + lead-spacing) $> enlarge{_, courtyard-excess}
+    val max-x-dim = max(
+      max-value(component-diameter),
+      pad-diameter + 2.0 * SOLDER-MASK-REGISTRATION
+    )
+    val max-y-dim = max(
+      max-value(component-length)
+      pad-diameter + 2.0 * SOLDER-MASK-REGISTRATION + lead-spacing
+    )
+    val max-dims = Dims(max-x-dim, max-y-dim)
+    val cy-sz = enlarge(max-dims, courtyard-excess)
     layer(Courtyard(Top))    = Rectangle(cy-sz)
     layer(Courtyard(Bottom)) = Rectangle(cy-sz)
     ref-label(loc(0.5 * x(cy-sz) + MIN-SILKSCREEN-TEXT-HEIGHT, 0.0, 270.0))
 
     ; place the polarity label, if necessary
     if polarized?:
-      two-pin-th-polarity-marker(Dims(max-value(component-length), max-value(component-diameter)), 
+      println("polarity marker")
+      two-pin-th-polarity-marker(Dims(max-value(component-diameter), max-value(component-length)), 
                                  pad-diameter, lead-spacing)
 
 ; Create a two-pin radial through hole component with default density level
@@ -1595,18 +1609,29 @@ public defn make-two-pin-radial-landpattern (component-length:Toleranced,
                                   false,
                                   DENSITY-LEVEL)
 
+public defn make-two-pin-radial-landpattern (component-diameter:Toleranced,
+                                             lead-spacing:Double,
+                                             lead-diameter:Toleranced
+                                             polarized?:True|False) :
+  make-two-pin-radial-landpattern(component-diameter, component-diameter,
+                                  lead-spacing, lead-diameter,
+                                  polarized?,
+                                  DENSITY-LEVEL)
+
 ; Create a two-pin radial through hole component with default density level for a circular component
 public defn make-two-pin-radial-landpattern (component-diameter:Toleranced,
                                              lead-spacing:Double,
                                              lead-diameter:Toleranced) :
   make-two-pin-radial-landpattern(component-diameter, component-diameter,
                                   lead-spacing, lead-diameter,
-                                  false,
-                                  DENSITY-LEVEL)
+                                  false)
+
+
 
 ; Create a two-pin axial through hole component with default density level, bend-length, bend-radius, and weld
 public defn make-two-pin-axial-landpattern (length:Toleranced,
                                             diameter:Toleranced,
+                                            weld:Double,
                                             lead-diameter:Toleranced, 
                                             polarized?:True|False) :
   val bend-length = 1.0
@@ -1614,7 +1639,6 @@ public defn make-two-pin-axial-landpattern (length:Toleranced,
     if typ(lead-diameter) < 0.8: typ(lead-diameter)
     else if typ(lead-diameter) < 1.2: 1.5 * typ(lead-diameter)
     else: 2.0 * typ(lead-diameter)
-  val weld = 1.0  
   make-two-pin-axial-landpattern(length,
                                  diameter,
                                  weld,
@@ -1623,6 +1647,12 @@ public defn make-two-pin-axial-landpattern (length:Toleranced,
                                  bend-radius
                                  polarized?,
                                  DENSITY-LEVEL)
+
+public defn make-two-pin-axial-landpattern (length:Toleranced,
+                                            diameter:Toleranced,
+                                            lead-diameter:Toleranced, 
+                                            polarized?:True|False) :
+  make-two-pin-axial-landpattern(length, diameter, 1.0, lead-diameter, polarized?)
 
 ; Create a two-pin axial through hole component with default density level, bend-length, and bend-radius, and polarization
 public defn make-two-pin-axial-landpattern (length:Toleranced,
