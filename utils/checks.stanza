@@ -283,3 +283,30 @@ public defn check-oscillator (o:JITXObject, intf:CrystalOscillator, load-cap:JIT
     check oscillator-check-gain(o, intf, load-cap)
     check oscillator-check-drive(o, intf, load-cap)
     check oscillator-check-pullability(o, intf, load-cap)
+
+public pcb-check check-landpattern (lp:Landpattern):
+  defn min-cu (side:Side):
+
+  for side in [Top, Bottom] do:
+    val cu-layers = to-tuple $
+      for p in filter({/side(_0) == side or pad-type(_0) == TH}, pads(lp)) seq-cat:
+        pad-shape(lp)
+    val silkscre
+    ; first check min space and width for copper layers 
+    val min-cu-width = clearance(current-rules(), MinCopperWidth)
+    val min-cu-space = clearance(current-rules(), MinCopperCopperSpace)
+    #EXPECT(min-space(cu-layers) >= min-cu-space)
+    #EXPECT(min-wdith(cu-layers) >= min-cu-width)
+
+    ; next check the silkscreen layers
+    defn ss-filter (s:LayerSpecifier):
+      match(s:Silkscreen):
+        /side(s) == side
+    val silkscreen-layers = filter(
+      fn (s:LayerSpecifier): 
+        match(s:Silkscreen): 
+          /side(s) == side, 
+      layers(lp)
+    )
+    val min
+    #EXPECT()
