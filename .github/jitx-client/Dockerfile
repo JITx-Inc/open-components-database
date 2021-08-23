@@ -6,5 +6,6 @@ RUN apt install -y python3.8
 
 WORKDIR /app
 COPY ./scripts/ scripts/
+COPY ./license /root/.jitx/license
 
 CMD ["/bin/bash", "scripts/run-ocdb-tests.sh"]
