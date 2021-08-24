@@ -1489,8 +1489,9 @@ defn pth-pad-sizes (lead-diameter:Toleranced, density-level:DensityLevel):
 defn two-pin-th-polarity-marker (cmp-sz:Dims, pad-diameter:Double, lead-spacing:Double):
   inside pcb-landpattern:
     val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
-    val line = Line(min-silk-width, [Point(min-silk-width * 0.5, 0.0),
-                                     Point(3.5 * min-silk-width, 0.0)])
+    val line-length = 3.0 * min-silk-width
+    val line = Line(min-silk-width, [Point(0.0, 0.0),
+                                     Point(line-length, 0.0)])
     val dist = SOLDER-MASK-REGISTRATION + SILK-SOLDER-MASK-CLEARANCE + min-silk-width * 0.5 + 0.01
     val pad-x = -0.5 * pad-diameter
     val pad-y =  0.5 * pad-diameter + 0.5 * lead-spacing
@@ -1500,6 +1501,8 @@ defn two-pin-th-polarity-marker (cmp-sz:Dims, pad-diameter:Double, lead-spacing:
     val pol-x = min(pad-x, cmp-x)
     val pol-y = max(pad-y, cmp-y) + dist
     layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y) * line
+    val pol-x-2 = pol-x - line-length * 0.5 + 1.5 * min-silk-width
+    layer(Silkscreen("pol", Top)) = loc(pol-x-2, pol-y, -90.0) * line
 
 ; Helper function for two-pin through hole components, controlling where they get placed
 defn place-pth-pads (polarized?:True|False, lead-spacing:Double, pad-def:Pad):
