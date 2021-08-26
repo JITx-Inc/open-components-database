@@ -1,0 +1,29 @@
+#use-added-syntax(jitx)
+defpackage ocdb/land-patterns/utils:
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/land-patterns
+
+public defn copper (lp:LandPattern, side:Side) -> Seqable<Shape>:
+  []
+
+public pcb-check check-min-cu-space (copper:Seqable<Shape>) :
+  val constraint = clearance(current-rules(), MinCopperCopperSpace)
+  val actual = min-space(copper)
+  #CHECK(actual >= constraint)
+
+public defn check-landpattern (lp:LandPattern):
+  inside pcb-module:
+    for side in [Top, Bottom] do:
+      check check-min-cu-space(copper(lp, side))
+  
+public defn check-landpattern (component:JITXObject|JITXDef):
+  val definition = 
+    match(component):
+      (i:JITXObject): 
+        instance-definition(component)
+      (d:JITXDef): 
+        d
+  check-landpattern(landpattern(definition))
