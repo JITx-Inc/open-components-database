@@ -289,7 +289,7 @@ public defn check-oscillator (o:JITXObject, intf:CrystalOscillator, load-cap:JIT
 public defn copper (lp:LandPattern, side:Side) -> Seqable<Shape>:
   for pad in pads(lp) seq?: 
     if /side(pad) == side or pad-type(/pad(pad)) == TH:
-      One(pad-shape(/pad(pad)))
+      One(pose(pad) * pad-shape(/pad(pad)))
     else:
       None()
 
@@ -299,10 +299,13 @@ public defn pad-locs (lp:LandPattern) -> Seqable<Pose>:
 public defn min-pitch (lp:LandPattern) -> Double:
   min-space(seq(center, pad-locs(lp)))
 
-public pcb-check check-min-copper-copper-space (copper-layer:Seqable<Shape>) :
-  val s = to-seq(copper-layer)
+public pcb-check check-min-copper-copper-space (landpattern:LandPattern, side:Side) :
+  val s = to-seq(copper(landpattern, side))
   if not empty?(s):
     val min-copper-copper-space = clearance(current-rules(), MinCopperCopperSpace)
+    if min-copper-copper-space > min-space(copper(landpattern, side)): 
+      println("landpattern %_ violates minimum copper-copper space requirement on %_:" % [name(landpattern), side])
+      do(println{IndentedStream(STANDARD-OUTPUT-STREAM), _}, copper(landpattern, side))
     #CHECK(min-space(s) >= min-copper-copper-space)
 
 public pcb-check check-min-copper-width (copper-layer:Seqable<Shape>) :
@@ -329,13 +332,15 @@ public defn check-landpattern (component:JITXObject|JITXDef):
   val lp = 
     match(component):
       (l:LandPattern): l
-      (i:JITXObject):  landpattern(instance-definition(i))
+      (i:JITXObject):  
+        println("checking landpattern of %_" % [ref(i)])
+        landpattern(instance-definition(i))
       (d:JITXDef):     landpattern(d)
   
   ; perform the checks
   inside pcb-module:
     for side in [Top, Bottom] do:
-      check check-min-copper-copper-space(copper(lp, side))
+      check check-min-copper-copper-space(lp, side)
       check check-min-copper-width(copper(lp, side))
       check check-min-solder-mask-sliver(layer(lp, SolderMask(side)))
 
