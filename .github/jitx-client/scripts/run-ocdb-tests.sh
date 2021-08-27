@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
+echo "Installation details"
+jitx check-install
+cat /root/.jitx/user.params
+
 echo "Searching for pcb objects and generating tests..."
 python3.8 scripts/evaluate_pcb_objects.py
 cd test-evaluate/
@@ -9,7 +13,7 @@ jitx run-test test/evaluate/api
 
 echo "Launching ocdb tests, they can depend on jitx-client..."
 cd open-components-database
-jitx run-test tests/test-stm-pin-parsing.stanza
+jitx run-test tests/test-ocdb.stanza
 cd ..
 
 echo "Launching ocdb designs..."
