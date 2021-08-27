@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 set -e
 
+echo "Installation details"
+jitx version
+cat /root/.jitx/user.params
+
 echo "Launching ocdb tests, they can depend on jitx-client..."
 cd open-components-database
-jitx run-test tests/test-stm-pin-parsing.stanza
+jitx run-test tests/test-ocdb.stanza
 cd ..
 
 echo "Searching for pcb objects and generating tests..."

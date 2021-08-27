@@ -5,6 +5,7 @@ FROM 657302324634.dkr.ecr.us-west-2.amazonaws.com/jitx-client:latest
 RUN apt install -y python3.8
 
 WORKDIR /app
+COPY ./user.params /root/.jitx/user.params
 COPY ./scripts/ scripts/
 
 CMD ["/bin/bash", "scripts/run-ocdb-tests.sh"]
