@@ -286,78 +286,92 @@ public defn check-oscillator (o:JITXObject, intf:CrystalOscillator, load-cap:JIT
     check oscillator-check-drive(o, intf, load-cap)
     check oscillator-check-pullability(o, intf, load-cap)
 
-public defn copper (lp:LandPattern, side:Side) -> Seqable<Shape>:
+; Extract the copper layer on a given side of a landpattern
+; - note: geoms unsupported
+defn copper (lp:LandPattern, side:Side) -> Seqable<Shape> :
   for pad in pads(lp) seq?: 
     if /side(pad) == side or pad-type(/pad(pad)) == TH:
       One(pose(pad) * pad-shape(/pad(pad)))
     else:
       None()
 
-public defn pad-locs (lp:LandPattern) -> Seqable<Pose>:
+; Get the locations of all the pads in a land pattern
+defn pad-locs (lp:LandPattern) -> Seqable<Pose> :
   seq(pose, pads(lp))
 
-public defn min-pitch (lp:LandPattern) -> Double:
+; Get the minimum pitch of all the pads in a land pattern
+defn min-pitch (lp:LandPattern) -> Double :
   min-space(seq(center, pad-locs(lp)))
 
+; Checks that the copper layers on both sides of a landpattern are within the 
+; min-copper-copper-space rule.
 public pcb-check check-min-copper-copper-space (landpattern:LandPattern, side:Side) :
-  val s = to-seq(copper(landpattern, side))
-  if not empty?(s):
+  val copper = to-seq(copper(landpattern, side))
+  if not empty?(copper) :
     val min-copper-copper-space = clearance(current-rules(), MinCopperCopperSpace)
-    if min-copper-copper-space > min-space(copper(landpattern, side)): 
-      println("landpattern %_ violates minimum copper-copper space requirement on %_:" % [name(landpattern), side])
-      do(println{IndentedStream(STANDARD-OUTPUT-STREAM), _}, copper(landpattern, side))
-    #CHECK(min-space(s) >= min-copper-copper-space)
+    #CHECK(min-space(copper) >= min-copper-copper-space)
 
-public pcb-check check-min-copper-width (copper-layer:Seqable<Shape>) :
-  val s = to-seq(copper-layer)
-  if not empty?(s):
+; Checks that the copper layers on both sides of a ladnpattern dont' violate 
+; the minimum copper width rule
+public pcb-check check-min-copper-width (landpattern:LandPattern, side:Side) :
+  val copper = to-seq(copper(landpattern, side))
+  if not empty?(copper) :
     val min-copper-width = clearance(current-rules(), MinCopperCopperSpace)
-    #CHECK(min-width(s) >= min-copper-width)
+    #CHECK(min-width(copper) >= min-copper-width)
 
-public pcb-check check-bga-pitch (lp:LandPattern):
+; Checks that a BGA landpattern does not violate the min-pitch-bga design rule
+public pcb-check check-bga-pitch (lp:LandPattern) :
   val min-pitch-bga = clearance(current-rules(), MinPitchBGA)
   #CHECK(min-pitch(lp) >= min-pitch-bga)
 
-public pcb-check check-leaded-pitch (lp:LandPattern):
+; Checks that a leaded component does not violate the min-leaded-pitc  design rule
+public pcb-check check-leaded-pitch (lp:LandPattern) :
   val min-pitch-leaded = clearance(current-rules(), MinPitchLeaded)
   #CHECK(min-pitch(lp) >= min-pitch-leaded)
 
-public pcb-check check-min-solder-mask-sliver (shapes:Seqable<Shape>):
+; Checks that the solder mask layers of a land pattern do not violate the minimum
+; solder mask sliver
+public pcb-check check-min-solder-mask-sliver (shapes:Seqable<Shape>) :
   val s = to-seq(shapes)
   if not empty?(s):
     #CHECK(min-space(s) >= MIN-SOLDER-MASK-SLIVER)
 
-public defn check-landpattern (component:JITXObject|JITXDef):
+; Runs all the land pattern checks on either an instance or definition. 
+public defn check-landpattern (component:JITXObject|JITXDef) :
   ; extract the land pattern
   val lp = 
-    match(component):
-      (l:LandPattern): l
-      (i:JITXObject):  
-        println("checking landpattern of %_" % [ref(i)])
+    match(component) :
+      (landpattern:LandPattern) :
+        landpattern
+      (d:JITXDef) :
+        landpattern(d)
+      (i:JITXObject) : 
         landpattern(instance-definition(i))
-      (d:JITXDef):     landpattern(d)
-  
+
   ; perform the checks
-  inside pcb-module:
-    for side in [Top, Bottom] do:
+  inside pcb-module :
+    for side in [Top, Bottom] do :
       check check-min-copper-copper-space(lp, side)
-      check check-min-copper-width(copper(lp, side))
+      check check-min-copper-width(lp, side)
       check check-min-solder-mask-sliver(layer(lp, SolderMask(side)))
 
     if has-property?(component.bga) and property(component.bga):
       check check-bga-pitch(lp)
+
     if has-property?(component.leaded) and property(component.leaded):
       check check-leaded-pitch(lp)
-    
-public defn check-all-landpatterns (module:JITXObject): 
-  inside pcb-module:
-    val components    = to-tuple(component-instances(module))
-    val modules       = filter({not contains?(components, _)}, instances(module))
-    for component in components do:
+
+; Runs landpattern checks recursively on all the lands in a module
+public defn check-all-landpatterns (module:JITXObject) : 
+  inside pcb-module :
+    val components = to-tuple(component-instances(module))
+    val modules    = filter({not contains?(components, _)}, instances(module))
+    for component in components do :
       check-landpattern(component)
-    for module in modules do:
+    for module in modules do :
       check-all-landpatterns(module)
     
-public defn check-all-landpatterns (): 
+; Runs landpattern checks recursively starting from self.
+public defn check-all-landpatterns () : 
   inside pcb-module: 
     check-all-landpatterns(self)
