@@ -18,36 +18,27 @@ public pcb-component component :
   manufacturer = "Fremont Micro Devices"
   mpn = "FT25H04S"
   description = "4M-bit Serial Flash - SPI"
+  port spi : spi-peripheral()
 
   pin-properties :
     [pin:Ref      | pads:Int ...   | side:Dir   ]
-    [CS       | 1         | Left  ]
-    [SO       | 2         | Left  ]
+    [spi.cs   | 1         | Left  ]
+    [spi.sdo  | 2         | Left  ]
     [NC       | 3, 7      | Down  ]
     [VSS      | 4         | Left  ]
-    [SI       | 5         | Right ]
-    [SCLK     | 6         | Right ]
+    [spi.sdi  | 5         | Right ]
+    [spi.sck  | 6         | Right ]
     [VCC      | 8         | Right ]
 
   make-box-symbol()
   assign-landpattern(sop65-landpattern(8))
 
-  val spi = spi()  
-  supports spi :
-    spi.sdo  =>  self.SI
-    spi.sdi  =>  self.SO
-    spi.sck   =>  self.SCLK
-    spi.cs    =>  self.CS
-
 public pcb-module module :
   port pwr : power
-  port spi: spi()
+  port spi : spi-peripheral()
   inst flash : ocdb/fremont-micro-devices/FT25H04/component
   net (pwr.gnd, flash.VSS)
   net (pwr.vdd, flash.VCC)
-  net (spi.sdi, flash.SO)
-  net (spi.sdo, flash.SI)
-  net (spi.sck, flash.SCLK)
-  net (spi.cs, flash.CS)
+  net (flash.spi spi)
   cap-strap(flash.VCC, flash.VSS, 0.1e-6)
   res-strap(flash.CS, flash.VCC, 100.0e3)  

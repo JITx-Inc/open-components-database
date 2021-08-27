@@ -14,6 +14,12 @@ defpackage ocdb/connects :
   import ocdb/box-symbol
   import lang-utils
 
+; [TODO]: remove has-pin? from here and clean up connect-spi
+defn has-pin? (stm:JITXObject, pin-q:String) :
+  val t = to-tuple $ for p in pins(stm) filter :
+    substring?(to-string(ref(p)), pin-q)
+  not empty?(t)
+
 defn ensure-bundle-port! (port:JITXObject, bundle:Bundle):
   defn handle-failure ():
     fatal("The port %_ is not of bundle %_." % [ref(port), name(bundle)])
@@ -85,3 +91,23 @@ public defn connect-cp2105 (usb:JITXObject, uart:JITXObject) -> Instance  :
     net (uart.dtr, xcvr.e-uart.dtr)
     net (uart.rts, xcvr.e-uart.rts)
     xcvr
+
+; Connects a SPI controller to 1 or more peripherals, pulls gpio for peripherals[1..n] for cs
+public defn connect-spi (base:JITXObject, controller:JITXObject, peripherals:Tuple<JITXObject>) :
+  fatal("connect-spi(base,controller, peripherals) needs at least 1 peripheral to execute.")  when empty?(peripherals)
+  inside pcb-module :
+    for p in peripherals do :
+      net (controller.sck p.sck)
+      if has-pin?(p, "sdi") :
+        net (controller.copi p.sdi)
+      if has-pin?(p, "sdo") :
+        net (controller.cipo p.sdo)
+      if has-pin?(p, "copi") :
+        net (controller.copi p.copi)
+      if has-pin?(p, "cipo") :
+        net (controller.cipo p.cipo)
+    net (controller.cs peripherals[0].cs)
+    if length(peripherals) > 1 :
+      for i in peripherals[1 to length(peripherals)] do :
+        require cs:gpio from base 
+        net (cs.gpio i.cs)
