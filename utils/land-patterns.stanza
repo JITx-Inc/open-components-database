@@ -1951,13 +1951,13 @@ defn bga-pad (typical-ball-diameter:Double, ; the typical/nominal size of the bg
 
 ; BGAPadNames is a helper type to create a lookup table of precomputed
 ; pad names given BGA parameters
-deftype BGAPadNames
+public deftype BGAPadNames
 
 ; Lookup the pad name given row and column indices
-defmulti get (b:BGAPadNames, r:Int, c:Int) -> Ref
+public defmulti get (b:BGAPadNames, r:Int, c:Int) -> Ref
 
 ; Compute the pad names
-defn bga-pad-names (num-rows:Int, num-cols:Int, row-chars-omitted?:False|String):
+public defn bga-pad-names (num-rows:Int, num-cols:Int, row-chars-omitted?:False|String):
   ; pick the omitted characters if not supplied fallback to a default
   val row-chars-omitted = match(row-chars-omitted?):
     (s:String): s
@@ -1984,7 +1984,7 @@ defn bga-pad-names (num-rows:Int, num-cols:Int, row-chars-omitted?:False|String)
     Ref(to-string(buf))
   
   ; Construct a lookup table of pad names
-  val row-names = to-tuple $ 
+  val pad-names = to-tuple $ 
     for row in 0 to num-rows seq-cat: 
       for col in 0 to num-cols seq:
         row-name(row)[col + 1]
@@ -1992,7 +1992,7 @@ defn bga-pad-names (num-rows:Int, num-cols:Int, row-chars-omitted?:False|String)
   ; finally wrap the table in a helper to perform the lookup.
   new BGAPadNames:
     defmethod get (this, r:Int, c:Int):
-      row-names[r * num-rows + c]
+      pad-names[r * num-cols + c]
 
 ; A BGAModifier is an abstract type representing a class of BGA Components. It is used to 
 ; control the way pads are depopulated and spaced on the land pattern. You can declare
@@ -2088,7 +2088,7 @@ public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
     ;-------------------------------------------------------------
     ; Layout the pads
     ; Calculate pad indices
-    val pin-indices =
+    val pin-indices = to-tuple $
       for r in 0 to num-rows seq-cat:
         for c in 0 to num-cols seq:
           val c* = c when not mirrored? else (num-cols - c - 1)
