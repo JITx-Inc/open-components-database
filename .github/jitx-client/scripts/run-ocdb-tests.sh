@@ -2,7 +2,11 @@
 set -e
 
 echo "Installation details"
+
+jitx version
 jitx check-install
+
+echo "/root/.jitx/user.params:"
 cat /root/.jitx/user.params
 
 echo "Searching for pcb objects and generating tests..."

@@ -18,10 +18,6 @@ public pcb-component component :
   manufacturer = "Bosch"
   mpn = "BMX160"
   description = "Small, low-power, 9-axis IMU (accel, gyro, magnetometer)"
-  pin SDx
-  pin SCx
-  pin SDO
-  pin CSB
   pin-properties :
     [pin:Ref | pads:Int ... | side:Dir ]
     [SDO    | 1     | Right ]
@@ -41,14 +37,14 @@ public pcb-component component :
   assign-landpattern(BMX160-pkg)
 
   supports i2c :
-    i2c.scl => SCx
-    i2c.sda => SDx
+    i2c.scl => self.SCx
+    i2c.sda => self.SDx
 
-  supports spi() :
-    spi().sck => SCx
-    spi().cs => CSB
-    spi().sdi => SDx
-    spi().sdo => SDO
+  supports spi-peripheral() :
+    spi-peripheral().sck => self.SCx
+    spi-peripheral().cs => self.CSB
+    spi-peripheral().sdi => self.SDx
+    spi-peripheral().sdo => self.SDO
 
 pcb-landpattern BMX160-pkg :
   val dx = 0.675 / 2.0 + 0.925
@@ -80,14 +76,14 @@ pcb-landpattern BMX160-pkg :
 public pcb-module module :
   pin gnd
   pin vcc
-  port spi-node : spi()
+  port spi : spi-peripheral()
   pin int1
   pin int2
 
   inst imu : ocdb/bosch/BMX160/component
 
-  require some-spi-port : spi() from imu
-  net (spi-node, some-spi-port)
+  require some-spi-port : spi-peripheral() from imu
+  net (spi, some-spi-port)
 
   net (gnd, imu.GND)
   net (gnd, imu.GNDIO)
