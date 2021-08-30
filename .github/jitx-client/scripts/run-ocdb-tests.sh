@@ -3,6 +3,7 @@ set -e
 
 echo "Installation details"
 jitx version
+jitx check-install
 cat /root/.jitx/user.params
 
 echo "Launching ocdb tests, they can depend on jitx-client..."
