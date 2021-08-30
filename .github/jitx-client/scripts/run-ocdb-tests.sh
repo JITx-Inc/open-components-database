@@ -9,17 +9,33 @@ jitx check-install
 echo "/root/.jitx/user.params:"
 cat /root/.jitx/user.params
 
+# Tests need to take into account the root stanza.proj so that they find the source files from the ocdb repo and not a pkg from the jitx-client docker image
+export JITX_RUN="jitx run /app/open-components-database/stanza.proj"
+export JITX_RUN_TEST="jitx run-test /app/open-components-database/stanza.proj"
+
+#==============================================
+#==== public pcb-* macro evaluation tests =====
+#==============================================
+
 echo "Searching for pcb objects and generating tests..."
 python3.8 scripts/evaluate_pcb_objects.py
 cd test-evaluate/
 echo "Launching pcb object tests..."
-jitx run-test test/evaluate/api
+$JITX_RUN_TEST test/evaluate/api
 cd ..
+
+#==============================================
+#================= Unit-tests =================
+#==============================================
 
 echo "Launching ocdb tests, they can depend on jitx-client..."
 cd open-components-database
-jitx run-test tests/test-ocdb.stanza
+$JITX_RUN_TEST tests/test-ocdb.stanza
 cd ..
+
+#==============================================
+#============= Integration tests ==============
+#==============================================
 
 echo "Launching ocdb designs..."
 cd open-components-database/designs
@@ -33,7 +49,7 @@ designs=(ble-mote.stanza
 
 for filename in "${designs[@]}"; do
     echo "Running $filename..."
-    jitx run $filename
+    $JITX_RUN $filename
 done
 cd ../..
 
