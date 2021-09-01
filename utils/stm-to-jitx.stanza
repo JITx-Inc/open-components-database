@@ -1,0 +1,152 @@
+#use-added-syntax(jitx)
+defpackage ocdb/stm-to-jitx:
+  import core
+  import collections
+  import lang-utils
+  import json
+  import reader
+  import jitx
+
+;Convert a Stanza representation of an STM part to JITX.
+public defn to-jitx (stm:STM) -> False :
+  ;Collect all bundle names that are dynamically generated.
+  val bundle-names = map(name, bundles(stm))
+
+  ;Generate all bundles and store them in a table indexed by name.
+  val bundle-table = HashTable<String, Bundle>()
+  for bundle-name in bundle-names do :
+    pcb-bundle b :
+      name = bundle-name
+      pin p
+    bundle-table[bundle-name] = b
+
+  ;Generate the component that includes pin-properties and support statements.
+  pcb-component component :
+    ;Grab the pins defined for the pin properties.
+    val pin-properties = pin-propertes(stm)
+    val generic-props = generic-pin(pin-properties)
+    val power-props = power-pin(pin-properties)
+    
+    ;Are the pads Int or Ref?
+    val int-pads? = any?({pad-data(_) is Double}, rows(pin-properties))
+    val ref-pads? = any?({pad-data(_) is Ref}, rows(pin-properties))
+    
+    ;If the pads are neither or both, then we are using malformed data.
+    if int-pads? and ref-pads? :
+      fatal("Generated a micro-controller with both Int and Ref pads.") 
+    if not int-pads? and not ref-pads? :
+      fatal("Generated a micro-controller without pads.") 
+
+    ;Generate the pin-properties.
+    ;Cases are split between Int and Ref pads, and across generic and power properties usages.
+    pin-properties :
+      if int-pads? :
+        pin-properties :
+          [pin:Ref | pads:Int ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
+          for row in rows do :
+            match(has-generic-props?(pin-properties), has-power-props?(pin-properties)) :
+              (g:True, p:True)   : [(pin(row)) | pad(row) as Int | side(row) | generic-props | power-props]
+              (g:True, p:False)  : [(pin(row)) | pad(row) as Int | side(row) | generic-props |      -     ]
+              (g:False, p:True)  : [(pin(row)) | pad(row) as Int | side(row) |       -       | power-props]
+              (g:False, p:False) : [(pin(row)) | pad(row) as Int | side(row) |       -       |      -     ]
+      else :
+        pin-properties :
+          [pin:Ref | pads:Ref ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
+          for row in rows do :
+            match(has-generic-props?(pin-properties), has-power-props?(pin-properties)) :
+              (g:True, p:True)   : [(pin(row)) | (pad(row) as Ref) | side(row) | generic-props | power-props]
+              (g:True, p:False)  : [(pin(row)) | (pad(row) as Ref) | side(row) | generic-props |      -     ]
+              (g:False, p:True)  : [(pin(row)) | (pad(row) as Ref) | side(row) |       -       | power-props]
+              (g:False, p:False) : [(pin(row)) | (pad(row) as Ref) | side(row) |       -       |      -     ]
+    
+    val supports = supports(stm)
+    for support in supports do :
+      val supported-bundle = stm-bundle(support)
+      val bundle-name = name(supported-bundle)
+      match(get?(bundle-table, bundle-name)) :
+        (b:Bundle) :
+          supports b :
+            b.p => # ;TODO
+        (f:False) :
+          switch(bundle-name) :
+            "gpio" :
+              supports gpio :
+                gpio.gpio => #
+            "adc" :
+              supports adc :
+                adc.adc => #
+            "dac" :
+              supports dac :
+                dac.dac => #
+            "timer" :
+              supports timer :
+                timer.timer => #
+            "swd" :
+              supports swd :
+                swd.swdio => #
+                swd.swdclk => #
+            "low-freq-oscillator" :
+              supports low-freq-oscillator :
+                require p0: #
+                require p1: #
+                low-freq-oscillator.in => p0.#
+                low-freq-oscillator.out => p1.#
+            "high-freq-oscillator" :
+              supports high-freq-oscillator :
+                require p0: #
+                require p1: #
+                high-freq-oscillator.in => p0.#
+                high-freq-oscillator.out => p1.#
+            "can-interface" :
+              supports can-interface :
+                require p0: #
+                require p1: #
+                can-interface.rx => p0.#
+                can-interface.tx => p1.#
+            "i2c" :
+              supports i2c :
+                require p0: #
+                require p1: #
+                i2c.sda => p0.#
+                i2c.scl => p1.#
+            "jtag" :
+              val jtag-options =
+                for option in options(supported-bundle) map :
+                  switch(option) :
+                    "JTAG-TRSTN" : JTAG-TRSTN
+              val jtag-bundle = jtag(jtag-options)
+              supports jtag-bundle :
+                jtag-bundle.tck => #
+                jtag-bundle.tdi => #
+                jtag-bundle.tdo => #
+                jtag-bundle.tms => #
+                jtag-bundle.trstn => # ???
+            "i2s" :
+            "uart" :
+            "usart" :
+            "spi" :
+              val spi-bundle = spi
+              supports spi-bundle :
+                require p0: #
+                require p1: #
+                require p2: #
+                require p3: #
+                spi-bundle.cipo => p0.#
+                spi-bundle.copi => p1.#
+                spi-bundle.sck => p2.#
+                spi-bundle.cs => p3.#
+            ; "spi-controller" :
+            ;   val spi-bundle = spi-controller()
+            ;   supports spi-bundle :
+            ;     require p0: #
+            ;     require p1: #
+            ;     require p2: #
+            ;     require p3: #
+            ;     spi-bundle.cipo => p0.#
+            ;     spi-bundle.copi => p1.#
+            ;     spi-bundle.sck => p2.#
+            ;     spi-bundle.cs => p3.#
+              
+    for bundle-name
+      
+

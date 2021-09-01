@@ -6,46 +6,46 @@ defpackage ocdb/stm:
   import reader
   import jitx
 
-defstruct STMBundle :
+public defstruct STMBundle :
   name: String ;mybund
 
-defstruct STMSupportsBundle:
+public defstruct STMSupportsBundle:
   name: String ;mybund
   supports-options? : True|False,
   options: Tuple<String>
 
 ;[BOOT[0]   | 1 | Left | generic-props | - ]
-defstruct STMPinProperties-Row :
+public defstruct STMPinProperties-Row :
   pin-name: String ;BOOT[0]
   pad-data: Double|String ;1
   side: Dir ;Left
   has-generic-props?: True|False ;true
   has-power-props?: True|False ;false
 
-defstruct VoltageLimits:
+public defstruct VoltageLimits:
   min-val: Double
   max-val: Double
   nominal?: True|False ; false
 
-defstruct GenericPin :
+public defstruct GenericPin :
   pin-name: String ;"generic-props",
   max-voltage: VoltageLimits
   rated-esd: Double
 
-defstruct PowerPin :
+public defstruct PowerPin :
   pin-name: String ;"power-props",
   recommended-voltage: VoltageLimits
 
-defstruct STMPinProperties :
+public defstruct STMPinProperties :
   generic-pin: GenericPin
   power-pin: PowerPin
   rows: Tuple<STMPinProperties-Row>
 
-defstruct STMBundleKeyValue :
+public defstruct STMBundleKeyValue :
   key: String
   value: String
 
-defstruct STMSupports:
+public defstruct STMSupports:
   stm-bundle: STMSupportsBundle
   stm-requires: Tuple<STMBundleKeyValue>
   stm-options: Tuple<STMBundleKeyValue>
@@ -228,6 +228,18 @@ defn create-pin-properties (json1:JSON) -> STMPinProperties :
 val JSON-TEST-FILE-LIST = to-hashset<String> $ [
   "~/dev/jitx/mono_repo/jitx-client/generate-stm/stm-test.json"
 ]
+
+public defstruct STM :
+  bundles: Tuple<STMBundle>
+  supports: Tuple<STMSupports>
+  pin-properties: STMPinProperties
+
+defn create-mcu-struct (file:String) -> STM :
+  val input-json = parse $ slurp(file)
+  val bundles = create-bundles(input-json)
+  val supports = create-supports(input-json)
+  val pin-properties = create-pin-properties(input-json)
+  STM(bundles, supports, pin-properties)
 
 defn main ():
   for file in JSON-TEST-FILE-LIST do:
