@@ -7,16 +7,28 @@ defpackage ocdb/stm-to-jitx:
   import reader
   import jitx
   import jitx/commands
+
   import ocdb/stm
-  import ocdb/bundles
   import ocdb/scripts/cubemx-importer-utils
+
+  import ocdb/bundles
+  import ocdb/property-structs
 
 ;=========================================
 ;============== STM to JITX ==============
 ;=========================================
 
+defn stm-to-jitx (generic-pin:STMGenericPin) -> GenericPin :
+  GenericPin(stm-to-jitx(max-voltage(generic-pin)), rated-esd(generic-pin))
+
+defn stm-to-jitx (power-pin:STMPowerPin) -> PowerPin :
+  PowerPin(stm-to-jitx(recommended-voltage(power-pin)))
+
+defn stm-to-jitx (voltage-limits:STMVoltageLimits) -> Interval :
+  Interval(min-val(voltage-limits), max-val(voltage-limits), false)
+
 ;Convert a Stanza representation of an STM part to JITX.
-public defn to-jitx (stm:STM) -> False :
+public defn stm-to-jitx (stm:STM) -> Instantiable :
   ;__________________________________
   ;============ Bundles =============
   ;‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
@@ -35,8 +47,8 @@ public defn to-jitx (stm:STM) -> False :
     ;‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
     ;Grab the pins defined for the pin properties.
     val pin-properties = pin-properties(stm)
-    val generic-props = generic-pin(pin-properties)
-    val power-props = power-pin(pin-properties)
+    val generic-props = stm-to-jitx $ generic-pin(pin-properties)
+    val power-props = stm-to-jitx $ power-pin(pin-properties)
     
     ;Are the pads numeric (Double -> Int) or named (Ref -> String)?
     val numeric-pads? = any?({pad(_) is Double}, rows(pin-properties))
@@ -54,21 +66,31 @@ public defn to-jitx (stm:STM) -> False :
       pin-properties :
         [pin:Ref | pads:Int ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
         for row in rows(pin-properties) do :
+          val pin-ref = ref-ify(pin(row))
+          val pad-name = to-int(pad(row) as Double)
+          println("---")
+          println(pin-ref)
+          println(pad-name)
           match(generic-props?(row), power-props?(row)) :
-            (g:True, p:True)   : [(ref-ify(pin(row))) | to-int(pad(row) as Double) | side(row) | generic-props | power-props]
-            (g:True, p:False)  : [(ref-ify(pin(row))) | to-int(pad(row) as Double) | side(row) | generic-props |      -     ]
-            (g:False, p:True)  : [(ref-ify(pin(row))) | to-int(pad(row) as Double) | side(row) |       -       | power-props]
-            (g:False, p:False) : [(ref-ify(pin(row))) | to-int(pad(row) as Double) | side(row) |       -       |      -     ]
+            (g:True, p:True)   : [(pin-ref) | pad-name | side(row) | generic-props | power-props]
+            (g:True, p:False)  : [(pin-ref) | pad-name | side(row) | generic-props |      -     ]
+            (g:False, p:True)  : [(pin-ref) | pad-name | side(row) |       -       | power-props]
+            (g:False, p:False) : [(pin-ref) | pad-name | side(row) |       -       |      -     ]
     else :
       pin-properties :
         [pin:Ref | pads:Ref ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
         for row in rows(pin-properties) do :
+          val pin-ref = ref-ify(pin(row))
+          val pad-name = ref-ify(pad(row) as String)
+          println("---")
+          println(pin-ref)
+          println(pad-name)
           match(generic-props?(row), power-props?(row)) :
-            (g:True, p:True)   : [(ref-ify(pin(row))) | (ref-ify(pad(row) as String)) | side(row) | generic-props | power-props]
-            (g:True, p:False)  : [(ref-ify(pin(row))) | (ref-ify(pad(row) as String)) | side(row) | generic-props |      -     ]
-            (g:False, p:True)  : [(ref-ify(pin(row))) | (ref-ify(pad(row) as String)) | side(row) |       -       | power-props]
-            (g:False, p:False) : [(ref-ify(pin(row))) | (ref-ify(pad(row) as String)) | side(row) |       -       |      -     ]
-    ;__________________________________
+            (g:True, p:True)   : [(pin-ref) | pad-name | side(row) | generic-props | power-props]
+            (g:True, p:False)  : [(pin-ref) | pad-name | side(row) | generic-props |      -     ]
+            (g:False, p:True)  : [(pin-ref) | pad-name | side(row) |       -       | power-props]
+            (g:False, p:False) : [(pin-ref) | pad-name | side(row) |       -       |      -     ]
+   ;__________________________________
     ;============ Supports ============
     ;‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
     defn generate-mapped-ref (mapping:STMSupportMapping) -> JITXObject :
@@ -315,4 +337,8 @@ public defn to-jitx (stm:STM) -> False :
             ;     spi-controller-bundle.cs => cs-pin.#
             else :
               fatal("Bundle '%_' is not supported." % [bundle-name])
-  false
+  component
+
+val mcu = create-mcu-struct("stm-test.json")
+val component = stm-to-jitx(mcu)
+print-def(component)

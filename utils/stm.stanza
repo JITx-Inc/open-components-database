@@ -16,20 +16,20 @@ public defstruct STM :
   supports: Tuple<STMSupports>
 
 public defstruct STMPinProperties :
-  generic-pin: GenericPin
-  power-pin: PowerPin
+  generic-pin: STMGenericPin
+  power-pin: STMPowerPin
   rows: Tuple<STMPinProperties-Row>
 
-public defstruct GenericPin :
+public defstruct STMGenericPin :
   pin-name: String ;"generic-props",
-  max-voltage: VoltageLimits
+  max-voltage: STMVoltageLimits
   rated-esd: Double
 
-public defstruct PowerPin :
+public defstruct STMPowerPin :
   pin-name: String ;"power-props",
-  recommended-voltage: VoltageLimits
+  recommended-voltage: STMVoltageLimits
 
-public defstruct VoltageLimits:
+public defstruct STMVoltageLimits:
   min-val: Double
   max-val: Double
   nominal?: True|False ; false
@@ -86,19 +86,19 @@ defmethod print (o:OutputStream, s:STMPinProperties) :
   lnprint-fields(o2, s, [generic-pin, power-pin])
   lnprint-tuple-fields(o2, s, [rows])
 
-defmethod print (o:OutputStream, s:GenericPin) :
+defmethod print (o:OutputStream, s:STMGenericPin) :
   val o2 = IndentedStream(o)
-  print(o, "GenericPin:")
+  print(o, "STMGenericPin:")
   lnprint-fields(o2, s, [pin-name, max-voltage, rated-esd])
 
-defmethod print (o:OutputStream, s:PowerPin) :
+defmethod print (o:OutputStream, s:STMPowerPin) :
   val o2 = IndentedStream(o)
-  print(o, "PowerPin:")
+  print(o, "STMPowerPin:")
   lnprint-fields(o2, s, [pin-name, recommended-voltage])
 
-defmethod print (o:OutputStream, s:VoltageLimits) :
+defmethod print (o:OutputStream, s:STMVoltageLimits) :
   val o2 = IndentedStream(o)
-  print(o, "VoltageLimits:")
+  print(o, "STMVoltageLimits:")
   lnprint-fields(o2, s, [min-val, max-val, nominal?])
 
 defmethod print (o:OutputStream, s:STMPinProperties-Row) :
@@ -227,12 +227,12 @@ defn create-pin-properties (json1:JSON) -> STMPinProperties :
             (nominal) : fatal("Invalid nominal data")
 
           println("%_, %_, %_" % [min-volts, max-volts, nominal])
-          max-voltage-data = VoltageLimits(min-volts, max-volts, nominal)
+          max-voltage-data = STMVoltageLimits(min-volts, max-volts, nominal)
           println("%_, %_, %_" % [min-val(max-voltage-data), max-val(max-voltage-data), nominal?(max-voltage-data)])
         (max-volt-data) :
           fatal("Invalid JSON") 
 
-      stm-gen-pin = GenericPin(name, max-voltage-data, rated-esd)
+      stm-gen-pin = STMGenericPin(name, max-voltage-data, rated-esd)
       println("%_, %_, %_" % [pin-name(stm-gen-pin), max-val(max-voltage(stm-gen-pin)), /rated-esd(stm-gen-pin)])
 
 
@@ -260,12 +260,12 @@ defn create-pin-properties (json1:JSON) -> STMPinProperties :
             (nominal) : fatal("Invalid nominal data")
 
           println("%_, %_, %_" % [min-volts, max-volts, nominal])
-          recommended-voltage-data = VoltageLimits(min-volts, max-volts, nominal)
+          recommended-voltage-data = STMVoltageLimits(min-volts, max-volts, nominal)
           println("%_, %_, %_" % [min-val(recommended-voltage-data), max-val(recommended-voltage-data), nominal?(recommended-voltage-data)])
         (recommended-volt-data) :
           fatal("Invalid JSON") 
 
-      stm-pow-pin = PowerPin(name, recommended-voltage-data)
+      stm-pow-pin = STMPowerPin(name, recommended-voltage-data)
       println("%_, %_" % [pin-name(stm-pow-pin), max-val(recommended-voltage(stm-pow-pin))])
 
   val pin-properties = Vector<STMPinProperties-Row>()
@@ -317,15 +317,15 @@ val JSON-TEST-FILE-LIST = to-hashset<String> $ [
   "stm-test.json"
 ]
 
-defn create-mcu-struct (file:String) -> STM :
+public defn create-mcu-struct (file:String) -> STM :
   val input-json = parse $ slurp(file)
   val bundles = create-bundles(input-json)
   val supports = create-supports(input-json)
   val pin-properties = create-pin-properties(input-json)
   STM(pin-properties, bundles, supports)
 
-defn main ():
-  for file in JSON-TEST-FILE-LIST do :
-    val mcu = create-mcu-struct(file)
-    println(mcu)
-main()
+; defn main ():
+;   for file in JSON-TEST-FILE-LIST do :
+;     val mcu = create-mcu-struct(file)
+;     println(mcu)
+; main()
