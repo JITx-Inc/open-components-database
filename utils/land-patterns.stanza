@@ -914,22 +914,14 @@ public defn bga-row-name (idx:Int, omitted:String) -> Ref:
 public defn red-alph-letter (r:Int):
   to-string(bga-row-name(r, "IOQSXZ"))
 
-public defn bga-pin-name (row:Int, column:Int, omitted?:String|False) -> Ref:
-  val omitted = match(omitted?):
-    (_:False): "IOQSXZ"
-    (s:String): s
-  bga-row-name(row, omitted)[column + 1]
-
-public defn bga-pin-name (row:Int, column:Int) -> Ref:
-  bga-pin-name(row, column, false)
-
 public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>|False) :
   inside pcb-landpattern :
     val pin-pad = bga-pad(pad-diam)
+    val pad-names = bga-pad-names(n-pads[0], n-pads[1], false)
     defn make-pad (r:Int, c:Int) :
       val x = ((to-double(n-pads[0]) - 1.0) / -2.0 + to-double(c)) * pitch
       val y = ((to-double(n-pads[1]) - 1.0) / 2.0 - to-double(r)) * pitch
-      val name = bga-pin-name(r, c)
+      val name = pad-names[r, c]
 
       match(omit-pads:Tuple<Ref>):
         if not contains?(omit-pads, name) :
