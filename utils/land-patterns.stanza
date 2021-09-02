@@ -895,17 +895,20 @@ public pcb-landpattern dfn-landpattern ( n-pad:Int, pad-pitch:Double, pad-dims:[
 ; The modification is we abstract over the omitted characters to support non-
 ; standard naming conventions. 
 ;
+defn lookup-bga-row-name (idx:Int, table:Tuple<Char>):
+  val buffer = StringBuffer()
+  let loop (i:Int = idx) :
+    val rem = i / length(table)
+    val char-index = i % length(table)
+    loop(rem - 1) when rem > 0
+    print(buffer, table[char-index])
+  to-string(buffer)
+
 public defn bga-row-name (idx:Int, omitted:String) -> Ref:
   val table = to-tuple $
     for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" filter:
       not contains?(upper-case(omitted), ch)
-  val buf = StringBuffer()
-  let loop (row: Int = idx):
-    if row >= length(table):
-      print(buf, table[row / length(table) - 1])
-      loop(row / length(table))
-  print(buf, table[idx % length(table)])
-  Ref(to-string(buf))
+  Ref(lookup-bga-row-name(idx, table))
 
 ; for backwards compat
 public defn red-alph-letter (r:Int):
@@ -1962,32 +1965,12 @@ public defn bga-pad-names (num-rows:Int, num-cols:Int, row-chars-omitted?:False|
   val row-chars-omitted = match(row-chars-omitted?):
     (s:String): s
     (_:False): "IOQSXZ"
-    
-  ; A small table of characters, each corresponds to the base character for a row
-  ; at a given index
-  val row-chars = to-tuple $
-    for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" filter:
-      not contains?(upper-case(row-chars-omitted), ch)
-  
-  ; helper function to create pad names given indices, follows the convention
-  ; "A" "B" "C" ... "AA" "AB" "AC" ... "BA" "BB" "BC" ... etc
-  val buf = StringBuffer()
-  defn row-name (idx:Int):
-    clear(buf)
-    var count = to-seq(0 to false)
-    let loop (row: Int = idx):
-      fatal("exceeded recursion depth when precomputing bga pad names") when next(count) >= 100
-      if row >= length(row-chars):
-        print(buf, row-chars[row / length(row-chars) - 1])
-        loop(row / length(row-chars))
-    print(buf, row-chars[idx % length(row-chars)])
-    Ref(to-string(buf))
-  
+
   ; Construct a lookup table of pad names
   val pad-names = to-tuple $ 
     for row in 0 to num-rows seq-cat: 
       for col in 0 to num-cols seq:
-        row-name(row)[col + 1]
+        bga-row-name(row, row-chars-omitted)[col + 1]
 
   ; finally wrap the table in a helper to perform the lookup.
   new BGAPadNames:
