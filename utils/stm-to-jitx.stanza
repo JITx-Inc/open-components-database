@@ -6,6 +6,7 @@ defpackage ocdb/stm-to-jitx:
   import json
   import reader
   import jitx
+  import jitx/commands
   import ocdb/stm
   import ocdb/bundles
   import ocdb/scripts/cubemx-importer-utils
@@ -37,57 +38,79 @@ public defn to-jitx (stm:STM) -> False :
     val generic-props = generic-pin(pin-properties)
     val power-props = power-pin(pin-properties)
     
-    ;Are the pads Int or Ref?
-    val int-pads? = any?({pad-data(_) is Double}, rows(pin-properties))
-    val ref-pads? = any?({pad-data(_) is Ref}, rows(pin-properties))
+    ;Are the pads numeric (Double -> Int) or named (Ref -> String)?
+    val numeric-pads? = any?({pad(_) is Double}, rows(pin-properties))
+    val named-pads? = any?({pad(_) is String}, rows(pin-properties))
     
     ;If the pads are neither or both, then we are using malformed data.
-    if int-pads? and ref-pads? :
+    if numeric-pads? and named-pads? :
       fatal("Generated a micro-controller with both Int and Ref pads.") 
-    if not int-pads? and not ref-pads? :
+    if not numeric-pads? and not named-pads? :
       fatal("Generated a micro-controller without pads.") 
     
     ;Generate the pin-properties.
     ;Cases are split between Int and Ref pads, and across generic and power properties usages.
-    if int-pads? :
+    if numeric-pads? :
       pin-properties :
         [pin:Ref | pads:Int ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
-        for row in rows do :
-          match(generic-props?(pin-properties), power-props?(pin-properties)) :
-            (g:True, p:True)   : [(pin(row)) | pad(row) as Int | side(row) | generic-props | power-props]
-            (g:True, p:False)  : [(pin(row)) | pad(row) as Int | side(row) | generic-props |      -     ]
-            (g:False, p:True)  : [(pin(row)) | pad(row) as Int | side(row) |       -       | power-props]
-            (g:False, p:False) : [(pin(row)) | pad(row) as Int | side(row) |       -       |      -     ]
+        for row in rows(pin-properties) do :
+          match(generic-props?(row), power-props?(row)) :
+            (g:True, p:True)   : [(ref-ify(pin(row))) | to-int(pad(row) as Double) | side(row) | generic-props | power-props]
+            (g:True, p:False)  : [(ref-ify(pin(row))) | to-int(pad(row) as Double) | side(row) | generic-props |      -     ]
+            (g:False, p:True)  : [(ref-ify(pin(row))) | to-int(pad(row) as Double) | side(row) |       -       | power-props]
+            (g:False, p:False) : [(ref-ify(pin(row))) | to-int(pad(row) as Double) | side(row) |       -       |      -     ]
     else :
       pin-properties :
         [pin:Ref | pads:Ref ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
-        for row in rows do :
-          match(generic-props?(pin-properties), power-props?(pin-properties)) :
-            (g:True, p:True)   : [(pin(row)) | (pad(row) as Ref) | side(row) | generic-props | power-props]
-            (g:True, p:False)  : [(pin(row)) | (pad(row) as Ref) | side(row) | generic-props |      -     ]
-            (g:False, p:True)  : [(pin(row)) | (pad(row) as Ref) | side(row) |       -       | power-props]
-            (g:False, p:False) : [(pin(row)) | (pad(row) as Ref) | side(row) |       -       |      -     ]
+        for row in rows(pin-properties) do :
+          match(generic-props?(row), power-props?(row)) :
+            (g:True, p:True)   : [(ref-ify(pin(row))) | (ref-ify(pad(row) as String)) | side(row) | generic-props | power-props]
+            (g:True, p:False)  : [(ref-ify(pin(row))) | (ref-ify(pad(row) as String)) | side(row) | generic-props |      -     ]
+            (g:False, p:True)  : [(ref-ify(pin(row))) | (ref-ify(pad(row) as String)) | side(row) |       -       | power-props]
+            (g:False, p:False) : [(ref-ify(pin(row))) | (ref-ify(pad(row) as String)) | side(row) |       -       |      -     ]
     ;__________________________________
     ;============ Supports ============
     ;‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+    defn generate-mapped-ref (mapping:STMSupportMapping) -> JITXObject :
+      inside pcb-module :
+        require mygpio:gpio
+        match(require(mapping)) :
+          (req:String) :
+            val req-bundle = bundle-table[req]
+            require p0 : req-bundle
+            dot(p0, ref-ify(pin(mapping)))
+          (req:False) :
+            dot(self, ref-ify(pin(mapping)))
+    
+    defn generate-mappings (b:Bundle, mappings:Tuple<STMSupportMapping>) :
+      inside pcb-component :
+        for mapping in mappings do :
+          val key = dot(b, ref-ify(bundle-pin(mapping)))
+          val value = generate-mapped-ref(mapping)
+          key => value
+    
+    defn generate-support (b:Bundle, mappings:Tuple<STMSupportMapping>) :
+      inside pcb-component :
+        supports b :
+          generate-mappings(b, mappings)
+      
     for support in supports(stm) do :
       val supported-bundle = bundle(support)
       val bundle-name = name(supported-bundle)
+      val mappings = mappings(support)
       match(get?(bundle-table, bundle-name)) :
         (b:Bundle) :
-          supports b :
-            b.p => # ;TODO
+          generate-support(b, mappings)
         (f:False) :
           switch(bundle-name) :
             "gpio" :
-              supports gpio :
+              ; supports gpio :
                 ; gpio.gpio => #
-                for mapping in mappings do :
-                  val key = dot(gpio, ref-ify(bundle-pin(mapping)))
-                  val value = match(require(mapping)) :
-                    (require:String) : dot(ref-ify(require), ref-ify(pin(mapping)))
-                    (require:False) : dot(self, ref-ify(pin(mapping)))
-                  key => value
+              generate-support(gpio, mappings)
+                ; for mapping in mappings do :
+                ;   val key = dot(gpio, ref-ify(bundle-pin(mapping)))
+                ;   val value = generate-mapped-ref(mapping)
+                ;   key => value
                   
             ; "adc" :
             ;   supports adc :
