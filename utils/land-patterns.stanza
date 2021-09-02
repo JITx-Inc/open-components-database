@@ -881,43 +881,10 @@ public pcb-landpattern dfn-landpattern ( n-pad:Int, pad-pitch:Double, pad-dims:[
   make-dfn-landpattern(n-pad,pad-pitch,pad-dims,pad-x0,body-dims)
   pad p[n-pad + 1] : smd-pad(hs[0],hs[1]) at loc(0.0, 0.0)  
 
-; Returns the name of a row given its index and a list of omitted
-; characters.
-; 
-; The algorithm is a realization of this description from JEDEC JC-11:
-;
-; > When a package is viewed ... with the A1 corner in the upper left position, 
-; > terminal rows are lettered from top to bottom starting with A and 
-; > terminal columns are numbered from left to right starting with 1. 
-; > ... For packages with greater than 20 rows (i.e.,  following rows W and Y),  
-; > the 21st row is designated AA and subsequent rows are designated AB, AC, etc.
-;
-; The modification is we abstract over the omitted characters to support non-
-; standard naming conventions. 
-;
-defn lookup-bga-row-name (idx:Int, table:Tuple<Char>):
-  val buffer = StringBuffer()
-  let loop (i:Int = idx) :
-    val rem = i / length(table)
-    val char-index = i % length(table)
-    loop(rem - 1) when rem > 0
-    print(buffer, table[char-index])
-  to-string(buffer)
-
-public defn bga-row-name (idx:Int, omitted:String) -> Ref:
-  val table = to-tuple $
-    for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" filter:
-      not contains?(upper-case(omitted), ch)
-  Ref(lookup-bga-row-name(idx, table))
-
-; for backwards compat
-public defn red-alph-letter (r:Int):
-  to-string(bga-row-name(r, "IOQSXZ"))
-
 public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>|False) :
   inside pcb-landpattern :
     val pin-pad = bga-pad(pad-diam)
-    val pad-names = bga-pad-names(n-pads[0], n-pads[1], false)
+    val pad-names = BGAPadNames(n-pads[0], n-pads[1], false)
     defn make-pad (r:Int, c:Int) :
       val x = ((to-double(n-pads[0]) - 1.0) / -2.0 + to-double(c)) * pitch
       val y = ((to-double(n-pads[1]) - 1.0) / 2.0 - to-double(r)) * pitch
@@ -1943,31 +1910,6 @@ defn bga-pad (typical-ball-diameter:Double, ; the typical/nominal size of the bg
           clearance(current-rules(), SolderMaskRegistration),
           DENSITY-LEVEL)
 
-; BGAPadNames is a helper type to create a lookup table of precomputed
-; pad names given BGA parameters
-public deftype BGAPadNames
-
-; Lookup the pad name given row and column indices
-public defmulti get (b:BGAPadNames, r:Int, c:Int) -> Ref
-
-; Compute the pad names
-public defn bga-pad-names (num-rows:Int, num-cols:Int, row-chars-omitted?:False|String):
-  ; pick the omitted characters if not supplied fallback to a default
-  val row-chars-omitted = match(row-chars-omitted?):
-    (s:String): s
-    (_:False): "IOQSXZ"
-
-  ; Construct a lookup table of pad names
-  val pad-names = to-tuple $ 
-    for row in 0 to num-rows seq-cat: 
-      for col in 0 to num-cols seq:
-        bga-row-name(row, row-chars-omitted)[col + 1]
-
-  ; finally wrap the table in a helper to perform the lookup.
-  new BGAPadNames:
-    defmethod get (this, r:Int, c:Int):
-      pad-names[r * num-cols + c]
-
 ; A BGAModifier is an abstract type representing a class of BGA Components. It is used to 
 ; control the way pads are depopulated and spaced on the land pattern. You can declare
 ; a custom BGA modifier using the new type syntax:
@@ -2072,7 +2014,7 @@ public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
     val pad-locs  = locs(modifier, num-rows, num-cols, pitch)
 
     ; Calculate pad names
-    val pad-names = bga-pad-names(num-rows, num-cols, row-characters-omitted?)
+    val pad-names = BGAPadNames(num-rows, num-cols, row-characters-omitted?)
     
     ; Layout the pad given indices and locations
     for ([row, col] in pin-indices, loc in pad-locs) do:
@@ -2153,3 +2095,69 @@ public defn make-bga-landpattern (num-rows:Int,
                        pitch, ball-diameter, Collapsible,
                        package-length, package-width,
                        FullMatrix()) ; modifier
+
+;============================================================
+;================== Pad Name Algorithm ======================
+;============================================================
+
+; BGAPadNames is a helper type to create a lookup table of precomputed
+; pad names given BGA parameters
+public deftype BGAPadNames
+
+; Lookup the pad name given row and column indices
+public defmulti get (b:BGAPadNames, r:Int, c:Int) -> Ref
+
+; Precompute all of the pad names in a grid
+public defn BGAPadNames (num-rows:Int, num-cols:Int, row-chars-omitted?:False|String):
+  ; pick the omitted characters if not supplied fallback to a default
+  val row-chars-omitted = match(row-chars-omitted?):
+    (s:String): s
+    (_:False): "IOQSXZ"
+
+  ; Character table
+  val table = to-tuple $
+    for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" filter:
+      not contains?(upper-case(row-chars-omitted), ch)
+
+  ; Construct a lookup table of pad names
+  val pad-names = to-tuple $ 
+    for row in 0 to num-rows seq-cat:
+      val row-name = Ref(lookup-bga-row-name(row, table))
+      for col in 0 to num-cols seq:
+        row-name[col + 1]
+
+  ; finally wrap the table in a helper to perform the lookup.
+  new BGAPadNames:
+    defmethod get (this, r:Int, c:Int):
+      pad-names[r * num-cols + c]
+
+; Returns the name of a row given its index and a list of omitted
+; characters.
+; 
+; The algorithm is a realization of this description from JEDEC JC-11:
+;
+; > When a package is viewed ... with the A1 corner in the upper left position, 
+; > terminal rows are lettered from top to bottom starting with A and 
+; > terminal columns are numbered from left to right starting with 1. 
+; > ... For packages with greater than 20 rows (i.e.,  following rows W and Y),  
+; > the 21st row is designated AA and subsequent rows are designated AB, AC, etc.
+;
+; The modification is we abstract over the omitted characters to support non-
+; standard naming conventions. 
+;
+defn lookup-bga-row-name (idx:Int, table:Tuple<Char>):
+  val buffer = StringBuffer()
+  let loop (i:Int = idx) :
+    val rem = i / length(table)
+    val char-index = i % length(table)
+    loop(rem - 1) when rem > 0
+    print(buffer, table[char-index])
+  to-string(buffer)
+
+; for backwards compatibility.
+; [TODO] Remove this. 
+public defn red-alph-letter (r:Int) -> String:
+  val table = to-tuple $
+    for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" filter:
+      not contains?(upper-case("IOQSXZ"), ch)
+  lookup-bga-row-name(r, table)
