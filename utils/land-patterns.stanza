@@ -881,31 +881,14 @@ public pcb-landpattern dfn-landpattern ( n-pad:Int, pad-pitch:Double, pad-dims:[
   make-dfn-landpattern(n-pad,pad-pitch,pad-dims,pad-x0,body-dims)
   pad p[n-pad + 1] : smd-pad(hs[0],hs[1]) at loc(0.0, 0.0)  
 
-; returns the letter corresponding to a row in a bga package, for example:
-; A, B, C, D, E, E, F, G, H, J, K, L, M, N, P, R, T, U, V, W, Y
-; AA, AB, ... etc
-public defn red-alph-letter (idx:Int):
-  val table = "ABCDEFGHJKLMNPRTUVWY"
-  val buf = StringBuffer()
-  let loop (row: Int = idx):
-    if row >= length(table):
-      print(buf, table[row / length(table) - 1])
-      loop(row / length(table))
-  print(buf, table[idx % length(table)])
-  to-string(buf)
-
-public defn bga-pin-name (r:Int, c:Int) :
-  val letter = red-alph-letter(r)
-  Ref(string-join([letter, c + 1]))
-
 public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>|False) :
   inside pcb-landpattern :
     val pin-pad = bga-pad(pad-diam)
+    val pad-names = BGAPadNames(n-pads[0], n-pads[1], false)
     defn make-pad (r:Int, c:Int) :
       val x = ((to-double(n-pads[0]) - 1.0) / -2.0 + to-double(c)) * pitch
       val y = ((to-double(n-pads[1]) - 1.0) / 2.0 - to-double(r)) * pitch
-      val letter = red-alph-letter(r)
-      val name = Ref(letter)[c + 1]
+      val name = pad-names[r, c]
 
       match(omit-pads:Tuple<Ref>):
         if not contains?(omit-pads, name) :
@@ -1885,3 +1868,296 @@ public defn make-two-pin-axial-landpattern (length:Toleranced,
                                  diameter,
                                  lead-diameter,
                                  false)
+
+
+;==================================================================================================
+;====================================== BGA Land Patterns =========================================
+;==================================================================================================
+public pcb-enum ocdb/land-patterns/BGAPadType:
+  SolderMaskDefined,
+  NonSolderMaskDefined,
+  Collapsible,
+  
+pcb-pad bga-pad (typical-ball-diameter:Double,      ; the typical/nominal size of the bga balls
+                 pad-type:BGAPadType,               ; the bga pad type, (collapsible, solder mask defined, or non-soldermask defined)
+                 solder-mask-registration:Double,   ; the solder-mask registration of the design
+                 density-level:DensityLevel,        ; the density level of the design
+                 ):
+  name = "BGA Pad"
+  type = SMD
+  val solder-mask-defined? = pad-type is SolderMaskDefined
+  val collapsible? = pad-type is Collapsible
+
+  val adjustment = switch(density-level):
+    DensityLevelA: 0.75 when collapsible? else 1.15
+    DensityLevelB: 0.80 when collapsible? else 1.10
+    DensityLevelC: 0.85 when collapsible? else 1.05
+
+  val definition-diameter = typical-ball-diameter * adjustment
+  val referenced-diameter = definition-diameter + solder-mask-registration * 2.0
+
+  if solder-mask-defined?:
+    shape = Circle(0.5 * definition-diameter)
+    layer(SolderMask(Top)) = Circle(0.5 * referenced-diameter)
+  else:
+    shape = Circle(0.5 * referenced-diameter)
+    layer(SolderMask(Top)) = Circle(0.5 * definition-diameter)
+
+defn bga-pad (typical-ball-diameter:Double, ; the typical/nominal size of the bga balls
+              pad-type:BGAPadType):
+  bga-pad(typical-ball-diameter, 
+          pad-type,
+          clearance(current-rules(), SolderMaskRegistration),
+          DENSITY-LEVEL)
+
+; A BGAModifier is an abstract type representing a class of BGA Components. It is used to 
+; control the way pads are depopulated and spaced on the land pattern. You can declare
+; a custom BGA modifier using the new type syntax:
+; 
+; defn MyBgaModifier ():
+;   new BGAModifier:
+;     defmethod locs (this, num-rows:Int, num-cols:Int) -> Seqable<Pose>:
+;       ...
+;     defmethod depopulated? (this, row-index:Int, column-index:Int) -> True|False:
+;       ...
+;
+public deftype BGAModifier
+public defmulti depopulated? (m:BGAModifier, r:Int, c:Int) -> True|False
+public defmulti locs (m:BGAModifier, nr:Int, nc:Int, pitch:Double) -> Seqable<Pose>
+defmethod depopulated? (m:BGAModifier, r:Int, c:Int) -> True|False:
+  false
+defmethod locs (m:BGAModifier, nr:Int, nc:Int, pitch:Double):
+  grid-locs(nr, nc, pitch, pitch)
+
+; A "FullMatrix" BGA is one where no pads are depopulated and the pad
+; columns and rows are all equidistant.
+public defstruct FullMatrix <: BGAModifier
+
+; A "StageredMatrix" BGA is one where every other pad is depopulated,
+; alternating across rows. The distance between adjacent pads on subsequent
+; rows will be pitch / sqrt(2).
+public defstruct StaggeredMatrix <: BGAModifier
+
+; An "EquilaterTriangleMatrix" is like a staggered matrix, but where the 
+; pads are all equistance from eachother. This means for any three adjacent pads
+; with two in the same row or column, the centers of the pads form an equilateral 
+; triangle.
+public defstruct EquilateralTriangleMatrix <: BGAModifier
+
+; A "PerimeterMatrix" is like a full matrix, but with a region of pads in the
+; center depopulated.
+public defstruct PerimeterMatrix <: BGAModifier:
+  rows:Range, ; the range of rows to depopulate
+  cols:Range, ; the range of columns to depopulate
+
+; A "ThermallyEnhancedMatrix" is like a PerimeterMatrix, except with some
+; region in the center remaining populated.
+public defstruct ThermallyEnhancedMatrix <: BGAModifier:
+  perimeter-rows:Range, ; the range of rows to depopulate
+  perimeter-cols:Range, ; the range of columns to depopulate
+  interior-rows:Range, ; the range of rows in the center to remain populated
+  interior-cols:Range, ; the range of columns in the center to remain populated
+
+public defn CustomDepop (f:(Int, Int) -> True|False): 
+  new BGAModifier:
+    defmethod depopulated? (this, r:Int, c:Int):
+      f(r, c)
+
+defmethod depopulated? (m:StaggeredMatrix, r:Int, c:Int): 
+  ((r + 1) % 2) == (c % 2)
+
+defmethod depopulated? (m:EquilateralTriangleMatrix, r:Int, c:Int): 
+  ((r + 1) % 2) == (c % 2)
+
+defmethod depopulated? (m:PerimeterMatrix, r:Int, c:Int):
+  contains?(rows(m), r) and contains?(cols(m), c)
+
+defmethod depopulated? (m:ThermallyEnhancedMatrix, r:Int, c:Int):
+  (contains?(perimeter-rows(m), r) and contains?(perimeter-cols(m), c)) and not
+  (contains?(interior-rows(m), r) and contains?(interior-cols(m), c))
+
+defmethod locs (m:EquilateralTriangleMatrix, nr:Int, nc:Int, pitch:Double):
+  val vertical   = sqrt(3.0) * 0.5 * pitch
+  val horizontal = pitch * 0.5
+  grid-locs(nr, nc, horizontal, vertical)
+
+public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
+                                  num-cols:Int, ; the number of columns of the package
+                                  pitch:Double, ; the pitch of the solder bumps
+                                  ball-diameter:Double, ; the nominal/typical diameter of the solder balls
+                                  pad-type:BGAPadType,  ; whether the pads will be "solder mask defined" or not
+                                  package-length:Toleranced, ; the length of the package
+                                  package-width:Toleranced,  ; the width of the package
+                                  modifier:BGAModifier,      ; the modifier that controls which pads are depopulated
+                                  row-characters-omitted?:String|False, ; which characters are omitted from the row names
+                                  mirrored?:True|False, ; controls whether the pads are mirrored or not
+                                  density-level:DensityLevel): ; the density level of the design
+  fatal("make-bga-landpattern-failed(...), num-rows must be positive. Called with: %_." % [num-rows]) when num-rows <= 0
+  fatal("make-bga-landpattern-failed(...), num-cols must be positive. Called with: %_." % [num-cols]) when num-cols <= 0
+  fatal("make-bga-landpattern-failed(...), pitch must be positive. Called with: %_." % [pitch]) when pitch <= 0.0
+  fatal("make-bga-landpattern-failed(...), ball-diameter be positive. Called with: %_." % [ball-diameter]) when ball-diameter <= 0.0
+  inside pcb-landpattern:
+    ;-------------------------------------------------------------
+    ; Compute the pad definition
+    val pad-def = bga-pad(ball-diameter, pad-type)
+    
+    ;-------------------------------------------------------------
+    ; Layout the pads
+    ; Calculate pad indices
+    val pin-indices = to-tuple $
+      for r in 0 to num-rows seq-cat:
+        for c in 0 to num-cols seq:
+          val c* = c when not mirrored? else (num-cols - c - 1)
+          [r, c]
+    
+    ; Calculate pad locations
+    val pad-locs  = locs(modifier, num-rows, num-cols, pitch)
+
+    ; Calculate pad names
+    val pad-names = BGAPadNames(num-rows, num-cols, row-characters-omitted?)
+    
+    ; Layout the pad given indices and locations
+    for ([row, col] in pin-indices, loc in pad-locs) do:
+      if not depopulated?(modifier, row, col):
+        pad (pad-names[row, col]): pad-def at loc
+
+    ;-------------------------------------------------------------
+    ; Compute the courtyard
+    val courtyard-excess = bga-courtyard-excess(density-level)
+    val pkg-sz = Dims(max-value(package-length), max-value(package-width))
+    val cy-sz = enlarge(pkg-sz, 2.0 * courtyard-excess)
+    layer(Courtyard(Top)) = Rectangle(cy-sz)
+
+public defn make-bga-landpattern (num-rows:Int,
+                                  num-cols:Int,
+                                  pitch:Double,
+                                  ball-diameter:Double,
+                                  package-length:Toleranced,
+                                  package-width:Toleranced,
+                                  modifier:BGAModifier,
+                                  row-characters-omitted?:False|String,
+                                  mirrored?:True|False,):
+  make-bga-landpattern(num-rows, num-cols,
+                       pitch, ball-diameter, Collapsible,
+                       package-length, package-width,
+                       modifier, 
+                       row-characters-omitted?, 
+                       mirrored?,
+                       DENSITY-LEVEL)
+
+; Create a BGA land pattern default mirroring (false), default row naming (omitting the characters "IOQSXZ"), 
+; default pad type (Collapsible) and default density level. A depopulation modifier may be supplied to control
+; which pads are depopulated.
+public defn make-bga-landpattern (num-rows:Int,
+                                  num-cols:Int,
+                                  pitch:Double,
+                                  ball-diameter:Double,
+                                  package-length:Toleranced,
+                                  package-width:Toleranced,
+                                  modifier:BGAModifier):
+  make-bga-landpattern(num-rows, num-cols,
+                       pitch, ball-diameter, Collapsible,
+                       package-length, package-width,
+                       modifier, 
+                       false, ; row-characters-omitted >
+                       false, ; mirrored?
+                       DENSITY-LEVEL)
+
+; Create a BGA land pattern with default modifier (no pads depopulated), default mirroring (false), 
+; default row naming (omitting the characters "IOQSXZ"), and density level pulled from the design variables.
+; The pad type may be supplied (SolderMaskDefined, NonSolderMaskDefined, and Collapsible)
+public defn make-bga-landpattern (num-rows:Int,
+                                  num-cols:Int,
+                                  pitch:Double,
+                                  ball-diameter:Double,
+                                  pad-type:BGAPadType,
+                                  package-length:Toleranced,
+                                  package-width:Toleranced,
+                                  modifier:BGAModifier):
+  make-bga-landpattern(num-rows, num-cols,
+                       pitch, ball-diameter, pad-type,
+                       package-length, package-width,
+                       modifier, 
+                       false, ; row-characters-omitted
+                       false, ; mirrored?
+                       DENSITY-LEVEL)
+
+; Create a BGA land pattern with default modifier (no pads depopulated), default mirroring (false), 
+; default row naming (omitting the characters "IOQSXZ"), default pad type (Collapsible), and 
+; density level pulled from the design variables.
+public defn make-bga-landpattern (num-rows:Int,
+                                  num-cols:Int,
+                                  pitch:Double,
+                                  ball-diameter:Double,
+                                  package-length:Toleranced,
+                                  package-width:Toleranced):
+  make-bga-landpattern(num-rows, num-cols,
+                       pitch, ball-diameter, Collapsible,
+                       package-length, package-width,
+                       FullMatrix()) ; modifier
+
+;============================================================
+;================== Pad Name Algorithm ======================
+;============================================================
+
+; BGAPadNames is a helper type to create a lookup table of precomputed
+; pad names given BGA parameters
+public deftype BGAPadNames
+
+; Lookup the pad name given row and column indices
+public defmulti get (b:BGAPadNames, r:Int, c:Int) -> Ref
+
+; Precompute all of the pad names in a grid
+public defn BGAPadNames (num-rows:Int, num-cols:Int, row-chars-omitted?:False|String):
+  ; pick the omitted characters if not supplied fallback to a default
+  val row-chars-omitted = match(row-chars-omitted?):
+    (s:String): s
+    (_:False): "IOQSXZ"
+
+  ; Character table
+  val table = to-tuple $
+    for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" filter:
+      not contains?(upper-case(row-chars-omitted), ch)
+
+  ; Construct a lookup table of pad names
+  val pad-names = to-tuple $ 
+    for row in 0 to num-rows seq-cat:
+      val row-name = Ref(lookup-bga-row-name(row, table))
+      for col in 0 to num-cols seq:
+        row-name[col + 1]
+
+  ; finally wrap the table in a helper to perform the lookup.
+  new BGAPadNames:
+    defmethod get (this, r:Int, c:Int):
+      pad-names[r * num-cols + c]
+
+; Returns the name of a row given its index and a list of omitted
+; characters.
+; 
+; The algorithm is a realization of this description from JEDEC JC-11:
+;
+; > When a package is viewed ... with the A1 corner in the upper left position, 
+; > terminal rows are lettered from top to bottom starting with A and 
+; > terminal columns are numbered from left to right starting with 1. 
+; > ... For packages with greater than 20 rows (i.e.,  following rows W and Y),  
+; > the 21st row is designated AA and subsequent rows are designated AB, AC, etc.
+;
+; The modification is we abstract over the omitted characters to support non-
+; standard naming conventions. 
+;
+defn lookup-bga-row-name (idx:Int, table:Tuple<Char>):
+  val buffer = StringBuffer()
+  let loop (i:Int = idx) :
+    val rem = i / length(table)
+    val char-index = i % length(table)
+    loop(rem - 1) when rem > 0
+    print(buffer, table[char-index])
+  to-string(buffer)
+
+; for backwards compatibility.
+; [TODO] Remove this. 
+public defn red-alph-letter (r:Int) -> String:
+  val table = to-tuple $
+    for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" filter:
+      not contains?(upper-case("IOQSXZ"), ch)
+  lookup-bga-row-name(r, table)
