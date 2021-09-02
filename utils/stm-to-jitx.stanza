@@ -6,15 +6,22 @@ defpackage ocdb/stm-to-jitx:
   import json
   import reader
   import jitx
+  import ocdb/stm
+  import ocdb/bundles
+  import ocdb/scripts/cubemx-importer-utils
+
+;=========================================
+;============== STM to JITX ==============
+;=========================================
 
 ;Convert a Stanza representation of an STM part to JITX.
 public defn to-jitx (stm:STM) -> False :
-  ;Collect all bundle names that are dynamically generated.
-  val bundle-names = map(name, bundles(stm))
-
+  ;__________________________________
+  ;============ Bundles =============
+  ;‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
   ;Generate all bundles and store them in a table indexed by name.
   val bundle-table = HashTable<String, Bundle>()
-  for bundle-name in bundle-names do :
+  for bundle-name in map(name, bundles(stm)) do :
     pcb-bundle b :
       name = bundle-name
       pin p
@@ -22,8 +29,11 @@ public defn to-jitx (stm:STM) -> False :
 
   ;Generate the component that includes pin-properties and support statements.
   pcb-component component :
+    ;__________________________________
+    ;========= Pin Properties =========
+    ;‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
     ;Grab the pins defined for the pin properties.
-    val pin-properties = pin-propertes(stm)
+    val pin-properties = pin-properties(stm)
     val generic-props = generic-pin(pin-properties)
     val power-props = power-pin(pin-properties)
     
@@ -36,32 +46,32 @@ public defn to-jitx (stm:STM) -> False :
       fatal("Generated a micro-controller with both Int and Ref pads.") 
     if not int-pads? and not ref-pads? :
       fatal("Generated a micro-controller without pads.") 
-
+    
     ;Generate the pin-properties.
     ;Cases are split between Int and Ref pads, and across generic and power properties usages.
-    pin-properties :
-      if int-pads? :
-        pin-properties :
-          [pin:Ref | pads:Int ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
-          for row in rows do :
-            match(has-generic-props?(pin-properties), has-power-props?(pin-properties)) :
-              (g:True, p:True)   : [(pin(row)) | pad(row) as Int | side(row) | generic-props | power-props]
-              (g:True, p:False)  : [(pin(row)) | pad(row) as Int | side(row) | generic-props |      -     ]
-              (g:False, p:True)  : [(pin(row)) | pad(row) as Int | side(row) |       -       | power-props]
-              (g:False, p:False) : [(pin(row)) | pad(row) as Int | side(row) |       -       |      -     ]
-      else :
-        pin-properties :
-          [pin:Ref | pads:Ref ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
-          for row in rows do :
-            match(has-generic-props?(pin-properties), has-power-props?(pin-properties)) :
-              (g:True, p:True)   : [(pin(row)) | (pad(row) as Ref) | side(row) | generic-props | power-props]
-              (g:True, p:False)  : [(pin(row)) | (pad(row) as Ref) | side(row) | generic-props |      -     ]
-              (g:False, p:True)  : [(pin(row)) | (pad(row) as Ref) | side(row) |       -       | power-props]
-              (g:False, p:False) : [(pin(row)) | (pad(row) as Ref) | side(row) |       -       |      -     ]
-    
-    val supports = supports(stm)
-    for support in supports do :
-      val supported-bundle = stm-bundle(support)
+    if int-pads? :
+      pin-properties :
+        [pin:Ref | pads:Int ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
+        for row in rows do :
+          match(generic-props?(pin-properties), power-props?(pin-properties)) :
+            (g:True, p:True)   : [(pin(row)) | pad(row) as Int | side(row) | generic-props | power-props]
+            (g:True, p:False)  : [(pin(row)) | pad(row) as Int | side(row) | generic-props |      -     ]
+            (g:False, p:True)  : [(pin(row)) | pad(row) as Int | side(row) |       -       | power-props]
+            (g:False, p:False) : [(pin(row)) | pad(row) as Int | side(row) |       -       |      -     ]
+    else :
+      pin-properties :
+        [pin:Ref | pads:Ref ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
+        for row in rows do :
+          match(generic-props?(pin-properties), power-props?(pin-properties)) :
+            (g:True, p:True)   : [(pin(row)) | (pad(row) as Ref) | side(row) | generic-props | power-props]
+            (g:True, p:False)  : [(pin(row)) | (pad(row) as Ref) | side(row) | generic-props |      -     ]
+            (g:False, p:True)  : [(pin(row)) | (pad(row) as Ref) | side(row) |       -       | power-props]
+            (g:False, p:False) : [(pin(row)) | (pad(row) as Ref) | side(row) |       -       |      -     ]
+    ;__________________________________
+    ;============ Supports ============
+    ;‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+    for support in supports(stm) do :
+      val supported-bundle = bundle(support)
       val bundle-name = name(supported-bundle)
       match(get?(bundle-table, bundle-name)) :
         (b:Bundle) :
@@ -71,82 +81,215 @@ public defn to-jitx (stm:STM) -> False :
           switch(bundle-name) :
             "gpio" :
               supports gpio :
-                gpio.gpio => #
-            "adc" :
-              supports adc :
-                adc.adc => #
-            "dac" :
-              supports dac :
-                dac.dac => #
-            "timer" :
-              supports timer :
-                timer.timer => #
-            "swd" :
-              supports swd :
-                swd.swdio => #
-                swd.swdclk => #
-            "low-freq-oscillator" :
-              supports low-freq-oscillator :
-                require p0: #
-                require p1: #
-                low-freq-oscillator.in => p0.#
-                low-freq-oscillator.out => p1.#
-            "high-freq-oscillator" :
-              supports high-freq-oscillator :
-                require p0: #
-                require p1: #
-                high-freq-oscillator.in => p0.#
-                high-freq-oscillator.out => p1.#
-            "can-interface" :
-              supports can-interface :
-                require p0: #
-                require p1: #
-                can-interface.rx => p0.#
-                can-interface.tx => p1.#
-            "i2c" :
-              supports i2c :
-                require p0: #
-                require p1: #
-                i2c.sda => p0.#
-                i2c.scl => p1.#
-            "jtag" :
-              val jtag-options =
-                for option in options(supported-bundle) map :
-                  switch(option) :
-                    "JTAG-TRSTN" : JTAG-TRSTN
-              val jtag-bundle = jtag(jtag-options)
-              supports jtag-bundle :
-                jtag-bundle.tck => #
-                jtag-bundle.tdi => #
-                jtag-bundle.tdo => #
-                jtag-bundle.tms => #
-                jtag-bundle.trstn => # ???
-            "i2s" :
-            "uart" :
-            "usart" :
-            "spi" :
-              val spi-bundle = spi
-              supports spi-bundle :
-                require p0: #
-                require p1: #
-                require p2: #
-                require p3: #
-                spi-bundle.cipo => p0.#
-                spi-bundle.copi => p1.#
-                spi-bundle.sck => p2.#
-                spi-bundle.cs => p3.#
-            ; "spi-controller" :
-            ;   val spi-bundle = spi-controller()
+                ; gpio.gpio => #
+                for mapping in mappings do :
+                  val key = dot(gpio, ref-ify(bundle-pin(mapping)))
+                  val value = match(require(mapping)) :
+                    (require:String) : dot(ref-ify(require), ref-ify(pin(mapping)))
+                    (require:False) : dot(self, ref-ify(pin(mapping)))
+                  key => value
+                  
+            ; "adc" :
+            ;   supports adc :
+            ;     adc.adc => #
+            ; "dac" :
+            ;   supports dac :
+            ;     dac.dac => #
+            ; "timer" :
+            ;   supports timer :
+            ;     timer.timer => #
+            ; "swd" :
+            ;   supports swd :
+            ;     swd.swdio => #
+            ;     swd.swdclk => #
+            ; "low-freq-oscillator" :
+            ;   supports low-freq-oscillator :
+            ;     require in-pin: #
+            ;     require out-pin: #
+            ;     low-freq-oscillator.in => in-pin.#
+            ;     low-freq-oscillator.out => out-pin.#
+            ; "high-freq-oscillator" :
+            ;   supports high-freq-oscillator :
+            ;     require in-pin: #
+            ;     require out-pin: #
+            ;     high-freq-oscillator.in => in-pin.#
+            ;     high-freq-oscillator.out => out-pin.#
+            ; "can-interface" :
+            ;   supports can-interface :
+            ;     require rx-pin: #
+            ;     require tx-pin: #
+            ;     can-interface.rx => rx-pin.#
+            ;     can-interface.tx => tx-pin.#
+            ; "i2c" :
+            ;   supports i2c :
+            ;     require sda-pin: #
+            ;     require scl-pin: #
+            ;     i2c.sda => sda-pin.#
+            ;     i2c.scl => scl-pin.#
+            ; "jtag" :
+            ;   val jtag-options =
+            ;     for option in options(supported-bundle) map :
+            ;       switch(option) :
+            ;         "JTAG-TRSTN" : JTAG-TRSTN
+            ;   val jtag-bundle = jtag(jtag-options)
+            ;   supports jtag-bundle :
+            ;     jtag-bundle.tck => #
+            ;     jtag-bundle.tdi => #
+            ;     jtag-bundle.tdo => #
+            ;     jtag-bundle.tms => #
+            ;     if contains?(usart-options, UART-TRSTN) :
+            ;       jtag-bundle.trstn => #
+            ; "i2s" :
+            ;   val i2s-options =
+            ;     for options in options(supported-bundle) map :
+            ;       switch(option) :
+            ;         "I2S-MCK" : I2S-MCK
+            ;         "I2S-SDMI" : I2S-SDMI
+            ;   val i2s-bundle = i2s(i2s-options)
+            ;   supports i2s-bundle :
+            ;     require ws-pin: #
+            ;     require ck-pin: #
+            ;     require sdmo-pin: #
+            ;     i2s-bundle.ws => ws-pin.p
+            ;     i2s-bundle.ck => ck-pin.p
+            ;     i2s-bundle.sdmo => sdmo-pin.p
+            ;     if contains?(i2s-options, I2S-MCK) :
+            ;       require mck-pin: #
+            ;       i2s-bundle.mck => mck-pin.p
+            ;     if contains?(i2s-options, I2S-SDMI) :
+            ;       require sdmi-pin: #
+            ;       i2s-bundle.sdmi => sdmi-pin.p
+            ; "uart" :
+            ;   val uart-options =
+            ;     for option in options(supported-bundle) map :
+            ;       switch(option) :
+            ;         "UART-DTR" : UART-DTR
+            ;         "UART-CTS" : UART-CTS
+            ;         "UART-DCD" : UART-DCD
+            ;         "UART-RI" : UART-RI
+            ;         "UART-DST" : UART-DST
+            ;         "UART-RTS" : UART-RTS
+            ;         "UART-CK" : UART-CK
+            ;         "UART-DE" : UART-DE
+            ;         "UART-CS" : UART-CS
+            ;   val uart-bundle = uart(uart-options)
+            ;   supports uart-bundle :
+            ;     require tx-pin: #
+            ;     require rx-pin: #
+            ;     if contains?(uart-options, UART-DTR) :
+            ;       require dtr-pin: #
+            ;       uart-bundle.dtr => dtr-pin.p
+            ;     if contains?(uart-options, UART-CTS) :
+            ;       require cts-pin: #
+            ;       uart-bundle.cts => cts-pin.p
+            ;     if contains?(uart-options, UART-DCD) :
+            ;       require dcd-pin: #
+            ;       uart-bundle.dcd => dcd-pin.p
+            ;     if contains?(uart-options, UART-RI) :
+            ;       require ri-pin: #
+            ;       uart-bundle.ri => ri-pin.p
+            ;     if contains?(uart-options, UART-DST) :
+            ;       require dst-pin: #
+            ;       uart-bundle.dst => dst-pin.p
+            ;     if contains?(uart-options, UART-RTS) :
+            ;       require rts-pin: #
+            ;       uart-bundle.rts => rts-pin.p
+            ;     if contains?(uart-options, UART-CK) :
+            ;       require ck-pin: #
+            ;       uart-bundle.ck => ck-pin.p
+            ;     if contains?(uart-options, UART-DE) :
+            ;       require de-pin: #
+            ;       uart-bundle.de => de-pin.p
+            ;     if contains?(uart-options, UART-NSS) :
+            ;       require cs-pin: #
+            ;       uart-bundle.cs => cs-pin.p
+            ; "usart" :
+            ;   val usart-options =
+            ;     for option in options(supported-bundle) map :
+            ;       switch(option) :
+            ;         "UART-DTR" : UART-DTR
+            ;         "UART-CTS" : UART-CTS
+            ;         "UART-DCD" : UART-DCD
+            ;         "UART-RI" : UART-RI
+            ;         "UART-DST" : UART-DST
+            ;         "UART-RTS" : UART-RTS
+            ;         "UART-CK" : UART-CK
+            ;         "UART-DE" : UART-DE
+            ;         "UART-CS" : UART-CS
+            ;   val usart-bundle = usart(usart-options)
+            ;   supports usart-bundle :
+            ;     require tx-pin: #
+            ;     require rx-pin: #
+            ;     if contains?(usart-options, UART-DTR) :
+            ;       require dtr-pin: #
+            ;       usart-bundle.dtr => dtr-pin.p
+            ;     if contains?(usart-options, UART-CTS) :
+            ;       require cts-pin: #
+            ;       usart-bundle.cts => cts-pin.p
+            ;     if contains?(usart-options, UART-DCD) :
+            ;       require dcd-pin: #
+            ;       usart-bundle.dcd => dcd-pin.p
+            ;     if contains?(usart-options, UART-RI) :
+            ;       require ri-pin: #
+            ;       usart-bundle.ri => ri-pin.p
+            ;     if contains?(usart-options, UART-DST) :
+            ;       require dst-pin: #
+            ;       usart-bundle.dst => dst-pin.p
+            ;     if contains?(usart-options, UART-RTS) :
+            ;       require rts-pin: #
+            ;       usart-bundle.rts => rts-pin.p
+            ;     if contains?(usart-options, UART-CK) :
+            ;       require ck-pin: #
+            ;       usart-bundle.ck => ck-pin.p
+            ;     if contains?(usart-options, UART-DE) :
+            ;       require de-pin: #
+            ;       usart-bundle.de => de-pin.p
+            ;     if contains?(usart-options, UART-NSS) :
+            ;       require cs-pin: #
+            ;       usart-bundle.cs => cs-pin.p
+            ; "spi" :
+            ;   val spi-options =
+            ;     for option in options(supported-bundle) map :
+            ;       switch(option) :
+            ;         "SPI-SDO" : SPI-SDO
+            ;         "SPI-SDI" : SPI-SDI
+            ;         "SPI-CS" : SPI-CS
+            ;         "SPI-CIPO" : SPI-CIPO
+            ;         "SPI-COPI" : SPI-COPI
+            ;         "SPI-SDIO" : SPI-SDIO
+            ;   val spi-bundle = spi
             ;   supports spi-bundle :
-            ;     require p0: #
-            ;     require p1: #
-            ;     require p2: #
-            ;     require p3: #
-            ;     spi-bundle.cipo => p0.#
-            ;     spi-bundle.copi => p1.#
-            ;     spi-bundle.sck => p2.#
-            ;     spi-bundle.cs => p3.#
-              
-    for bundle-name
-      
-
+            ;     require sck-pin: #
+            ;     spi-bundle.sck => sck-pin.p
+            ;     if contains?(spi-options, SPI-SDO) :
+            ;       require sdo-pin: #
+            ;       spi-bundle.sdo => sdo-pin.p
+            ;     if contains?(spi-options, SPI-SDI) :
+            ;       require sdi-pin: #
+            ;       spi-bundle.sdi => sdi-pin.p
+            ;     if contains?(spi-options, SPI-CS) :
+            ;       require cs-pin: #
+            ;       spi-bundle.cs => cs-pin.p
+            ;     if contains?(spi-options, SPI-CIPO) :
+            ;       require cipo-pin: #
+            ;       spi-bundle.cipo => cipo-pin.p
+            ;     if contains?(spi-options, SPI-COPI) :
+            ;       require copi-pin: #
+            ;       spi-bundle.copi => copi-pin.p
+            ;     if contains?(spi-options, SPI-SDIO) :
+            ;       require sdio-pin: #
+            ;       spi-bundle.sdio => sdio-pin.p
+            ; "spi-controller" :
+            ;   val spi-controller-bundle = spi-controller()
+            ;   supports spi-controller-bundle :
+            ;     require sdo-pin: #
+            ;     require sdi-pin: #
+            ;     require sck-pin: #
+            ;     require cs-pin: #
+            ;     spi-controller-bundle.cipo => sdo-pin.#
+            ;     spi-controller-bundle.copi => sdi-pin.#
+            ;     spi-controller-bundle.sck => sck-pin.#
+            ;     spi-controller-bundle.cs => cs-pin.#
+            else :
+              fatal("Bundle '%_' is not supported." % [bundle-name])
+  false
