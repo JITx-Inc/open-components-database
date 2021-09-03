@@ -68,9 +68,6 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
         for row in rows(pin-properties) do :
           val pin-ref = ref-ify(pin(row))
           val pad-name = to-int(pad(row) as Double)
-          println("---")
-          println(pin-ref)
-          println(pad-name)
           match(generic-props?(row), power-props?(row)) :
             (g:True, p:True)   : [(pin-ref) | pad-name | side(row) | generic-props | power-props]
             (g:True, p:False)  : [(pin-ref) | pad-name | side(row) | generic-props |      -     ]
@@ -82,9 +79,6 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
         for row in rows(pin-properties) do :
           val pin-ref = ref-ify(pin(row))
           val pad-name = ref-ify(pad(row) as String)
-          println("---")
-          println(pin-ref)
-          println(pad-name)
           match(generic-props?(row), power-props?(row)) :
             (g:True, p:True)   : [(pin-ref) | pad-name | side(row) | generic-props | power-props]
             (g:True, p:False)  : [(pin-ref) | pad-name | side(row) | generic-props |      -     ]
@@ -110,7 +104,6 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
           for mapping in mappings do :
             val key = dot(b, ref-ify(bundle-pin(mapping)))
             val value = generate-mapped-ref(mapping)
-            println("%_ => %_" % [ref(key) ref(value)])
             key => value
       
     for support in supports(stm) do :
@@ -123,17 +116,9 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
         (f:False) :
           switch(bundle-name) :
             "gpio" :
-              ; supports gpio :
-                ; gpio.gpio => #
               generate-support(gpio, mappings)
-                ; for mapping in mappings do :
-                ;   val key = dot(gpio, ref-ify(bundle-pin(mapping)))
-                ;   val value = generate-mapped-ref(mapping)
-                ;   key => value
-                  
-            ; "adc" :
-            ;   supports adc :
-            ;     adc.adc => #
+            "adc" :
+              generate-support(adc, mappings)
             ; "dac" :
             ;   supports dac :
             ;     dac.dac => #
@@ -367,7 +352,8 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
   component
 
 ; val mcu = create-mcu-struct("stm-spi.json")
-val mcu = create-mcu-struct("stm-test-gpio.json")
+; val mcu = create-mcu-struct("stm-test-gpio.json")
+val mcu = create-mcu-struct("stm-test-adc.json")
 val component = stm-to-jitx(mcu)
 print-def(component)
 
