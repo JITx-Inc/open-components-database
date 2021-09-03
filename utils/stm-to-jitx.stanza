@@ -90,7 +90,7 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
             (g:True, p:False)  : [(pin-ref) | pad-name | side(row) | generic-props |      -     ]
             (g:False, p:True)  : [(pin-ref) | pad-name | side(row) |       -       | power-props]
             (g:False, p:False) : [(pin-ref) | pad-name | side(row) |       -       |      -     ]
-   ;__________________________________
+    ;__________________________________
     ;============ Supports ============
     ;‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
     defn generate-mapped-ref (mapping:STMSupportMapping) -> JITXObject :
@@ -292,38 +292,68 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
             ;     if contains?(usart-options, UART-NSS) :
             ;       require cs-pin: #
             ;       usart-bundle.cs => cs-pin.p
-            ; "spi" :
-            ;   val spi-options =
-            ;     for option in options(supported-bundle) map :
-            ;       switch(option) :
-            ;         "SPI-SDO" : SPI-SDO
-            ;         "SPI-SDI" : SPI-SDI
-            ;         "SPI-CS" : SPI-CS
-            ;         "SPI-CIPO" : SPI-CIPO
-            ;         "SPI-COPI" : SPI-COPI
-            ;         "SPI-SDIO" : SPI-SDIO
-            ;   val spi-bundle = spi
-            ;   supports spi-bundle :
-            ;     require sck-pin: #
-            ;     spi-bundle.sck => sck-pin.p
-            ;     if contains?(spi-options, SPI-SDO) :
-            ;       require sdo-pin: #
-            ;       spi-bundle.sdo => sdo-pin.p
-            ;     if contains?(spi-options, SPI-SDI) :
-            ;       require sdi-pin: #
-            ;       spi-bundle.sdi => sdi-pin.p
-            ;     if contains?(spi-options, SPI-CS) :
-            ;       require cs-pin: #
-            ;       spi-bundle.cs => cs-pin.p
-            ;     if contains?(spi-options, SPI-CIPO) :
-            ;       require cipo-pin: #
-            ;       spi-bundle.cipo => cipo-pin.p
-            ;     if contains?(spi-options, SPI-COPI) :
-            ;       require copi-pin: #
-            ;       spi-bundle.copi => copi-pin.p
-            ;     if contains?(spi-options, SPI-SDIO) :
-            ;       require sdio-pin: #
-            ;       spi-bundle.sdio => sdio-pin.p
+            "spi" :
+              val spi-options =
+                for option in options(supported-bundle) map :
+                  switch(option) :
+                    "SPI-SDO" : SPI-SDO
+                    "SPI-SDI" : SPI-SDI
+                    "SPI-CS" : SPI-CS
+                    "SPI-CIPO" : SPI-CIPO
+                    "SPI-COPI" : SPI-COPI
+                    "SPI-SDIO" : SPI-SDIO
+              val spi-bundle = spi
+              
+    defn generate-mapped-ref (mapping:STMSupportMapping) -> JITXObject :
+      inside pcb-module :
+        require mygpio:gpio
+        match(require(mapping)) :
+          (req:String) :
+            val req-bundle = bundle-table[req]
+            require p0 : req-bundle
+            dot(p0, ref-ify(pin(mapping)))
+          (req:False) :
+            dot(self, ref-ify(pin(mapping)))
+    
+    defn generate-mappings (b:Bundle, mappings:Tuple<STMSupportMapping>) :
+      inside pcb-component :
+        for mapping in mappings do :
+          val key = dot(b, ref-ify(bundle-pin(mapping)))
+          val value = generate-mapped-ref(mapping)
+          key => value
+    
+    defn generate-support (b:Bundle, mappings:Tuple<STMSupportMapping>) :
+      inside pcb-component :
+        supports b :
+          generate-mappings(b, mappings)
+
+
+              supports spi-bundle :
+                for mapping in mappings do :
+                  switch(bundle-pin(mapping)) :
+                    "sck" :
+                      val req-bundle = bundle-table[req]
+                      require sck-pin: req-bundle
+                      dot(sck-pin, ref-ify(pin(mapping)))
+                      spi-bundle.sck => sck-pin.p
+                if contains?(spi-options, SPI-SDO) :
+                  require sdo-pin: #
+                  spi-bundle.sdo => sdo-pin.p
+                if contains?(spi-options, SPI-SDI) :
+                  require sdi-pin: #
+                  spi-bundle.sdi => sdi-pin.p
+                if contains?(spi-options, SPI-CS) :
+                  require cs-pin: #
+                  spi-bundle.cs => cs-pin.p
+                if contains?(spi-options, SPI-CIPO) :
+                  require cipo-pin: #
+                  spi-bundle.cipo => cipo-pin.p
+                if contains?(spi-options, SPI-COPI) :
+                  require copi-pin: #
+                  spi-bundle.copi => copi-pin.p
+                if contains?(spi-options, SPI-SDIO) :
+                  require sdio-pin: #
+                  spi-bundle.sdio => sdio-pin.p
             ; "spi-controller" :
             ;   val spi-controller-bundle = spi-controller()
             ;   supports spi-controller-bundle :
@@ -342,3 +372,18 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
 val mcu = create-mcu-struct("stm-test.json")
 val component = stm-to-jitx(mcu)
 print-def(component)
+
+
+
+;<close>
+our design:
+
+main module (representation of all components on our board)
+ capacitors, resistors, an STM part
+ for the SMT part: the user will request a part by specifications.
+
+ inst stm : get-stm-part([size > 0.5, tmp > 60.0])
+
+ stm.mcu.PB[0]
+ stm.mcu.PB[1]
+<close>
