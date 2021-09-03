@@ -93,6 +93,7 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
         match(require(mapping)) :
           (req:String) :
             val req-bundle = bundle-table[req]
+            println("  require p0 : %_" % [name(req-bundle)])
             require p0 : req-bundle
             dot(p0, to-ref(pin(mapping)))
           (req:False) :
@@ -107,7 +108,11 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
             val key = dot(b, to-ref(bundle-pin(mapping)))
             val value = generate-mapped-object(mapping)
             key => value
-            println("  %_ => %_" % [ref(key) ref(value)])
+            println("  %_.%_ => %_%_" % [
+              name(b)
+              ref(key)
+              "self." when require(mapping) is False else ""
+              ref(value)])
     
     for support in supports(stm) do :
       val supported-bundle = bundle(support)
@@ -209,8 +214,8 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
 ; val mcu = create-mcu-struct("stm-test-adc.json")
 ; val mcu = create-mcu-struct("stm-test-dac-timer.json")
 ; val mcu = create-mcu-struct("stm-test-swd.json")
-val mcu = create-mcu-struct("stm-test-quad-spi.json")
-; val mcu = create-mcu-struct("stm-supports.json")
+; val mcu = create-mcu-struct("stm-test-quad-spi.json")
+val mcu = create-mcu-struct("stm-supports.json")
 val component = stm-to-jitx(mcu)
 ; print-def(component)
 ; println("\n\n~~~\n\n")
