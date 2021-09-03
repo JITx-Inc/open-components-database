@@ -89,7 +89,6 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
     ;‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
     defn generate-mapped-ref (mapping:STMSupportMapping) -> JITXObject :
       inside pcb-module :
-        require mygpio:gpio
         match(require(mapping)) :
           (req:String) :
             val req-bundle = bundle-table[req]
@@ -119,12 +118,10 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
               generate-support(gpio, mappings)
             "adc" :
               generate-support(adc, mappings)
-            ; "dac" :
-            ;   supports dac :
-            ;     dac.dac => #
-            ; "timer" :
-            ;   supports timer :
-            ;     timer.timer => #
+            "dac" :
+              generate-support(dac, mappings)
+            "timer" :
+              generate-support(timer, mappings)
             ; "swd" :
             ;   supports swd :
             ;     swd.swdio => #
@@ -353,21 +350,7 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
 
 ; val mcu = create-mcu-struct("stm-spi.json")
 ; val mcu = create-mcu-struct("stm-test-gpio.json")
-val mcu = create-mcu-struct("stm-test-adc.json")
+; val mcu = create-mcu-struct("stm-test-adc.json")
+val mcu = create-mcu-struct("stm-test-dac-timer.json")
 val component = stm-to-jitx(mcu)
 print-def(component)
-
-
-
-;<close>
-our design:
-
-main module (representation of all components on our board)
- capacitors, resistors, an STM part
- for the SMT part: the user will request a part by specifications.
-
- inst stm : get-stm-part([size > 0.5, tmp > 60.0])
-
- stm.mcu.PB[0]
- stm.mcu.PB[1]
-<close>
