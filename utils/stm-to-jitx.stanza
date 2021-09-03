@@ -87,7 +87,8 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
     ;__________________________________
     ;============ Supports ============
     ;‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-    defn generate-mapped-ref (mapping:STMSupportMapping) -> JITXObject :
+    ;Generate the right hand side of a mapping
+    defn generate-mapped-object (mapping:STMSupportMapping) -> JITXObject :
       inside pcb-module :
         match(require(mapping)) :
           (req:String) :
@@ -97,12 +98,13 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
           (req:False) :
             dot(self, ref-ify(pin(mapping)))
     
+    ;Generate a supports statements for a bundle with the given mappings
     defn generate-support (b:Bundle, mappings:Tuple<STMSupportMapping>) :
       inside pcb-component :
         supports b :
           for mapping in mappings do :
             val key = dot(b, ref-ify(bundle-pin(mapping)))
-            val value = generate-mapped-ref(mapping)
+            val value = generate-mapped-object(mapping)
             key => value
       
     for support in supports(stm) do :
@@ -114,6 +116,7 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
           generate-support(b, mappings)
         (f:False) :
           switch(bundle-name) :
+            ;============= Single Pin Bundles ===============
             "gpio" :
               generate-support(gpio, mappings)
             "adc" :
@@ -122,6 +125,8 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
               generate-support(dac, mappings)
             "timer" :
               generate-support(timer, mappings)
+            
+            ;=============== Two Pin Bundles ================
             "swd" :
               generate-support(swd, mappings)
             "low-freq-oscillator" :
@@ -132,6 +137,9 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
               generate-support(can-interface, mappings)
             "i2c" :
               generate-support(i2c, mappings)
+            
+            ;========== Optionally Pinned Bundles ==========
+            ;Collect the optional pins and pass them as Bundle arguments
             "jtag" :
               val jtag-options =
                 for option in options(supported-bundle) map :
