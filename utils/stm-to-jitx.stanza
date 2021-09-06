@@ -93,7 +93,7 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
         match(require(mapping)) :
           (req:String) :
             val req-bundle = bundle-table[req]
-            println("  require p0 : %_" % [name(req-bundle)])
+            ; println("  require p0 : %_" % [name(req-bundle)])
             require p0 : req-bundle
             dot(p0, to-ref(pin(mapping)))
           (req:False) :
@@ -103,16 +103,16 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
     defn generate-support (b:Bundle, mappings:Tuple<STMSupportMapping>) :
       inside pcb-component :
         supports b :
-          println("\nsupports %_ :" % [name(b)])
+          ; println("\nsupports %_ :" % [name(b)])
           for mapping in mappings do :
             val key = dot(b, to-ref(bundle-pin(mapping)))
             val value = generate-mapped-object(mapping)
             key => value
-            println("  %_.%_ => %_%_" % [
-              name(b)
-              ref(key)
-              "self." when require(mapping) is False else ""
-              ref(value)])
+            ; println("  %_.%_ => %_%_" % [
+            ;   name(b)
+            ;   ref(key)
+            ;   "self." when require(mapping) is False else ""
+            ;   ref(value)])
     
     for support in supports(stm) do :
       val supported-bundle = bundle(support)
@@ -209,19 +209,27 @@ public defn stm-to-jitx (stm:STM) -> Instantiable :
               fatal("Bundle '%_' is not supported." % [bundle-name])
   component
 
-; val mcu = create-mcu-struct("stm-spi.json")
-; val mcu = create-mcu-struct("stm-test-gpio.json")
-; val mcu = create-mcu-struct("stm-test-adc.json")
-; val mcu = create-mcu-struct("stm-test-dac-timer.json")
-; val mcu = create-mcu-struct("stm-test-swd.json")
-; val mcu = create-mcu-struct("stm-test-quad-spi.json")
-val mcu = create-mcu-struct("stm-supports.json")
-val component = stm-to-jitx(mcu)
+val files = [
+  ; "stm-test-spi.json"
+  ; "stm-test-gpio.json"
+  ; "stm-test-adc.json"
+  ; "stm-test-dac-timer.json"
+  ; "stm-test-swd.json"
+  ; "stm-test-quad-spi.json"
+  "stm-supports.json"
+  "stm-supports2.json"
+  "stm-supports3.json"
+  "stm-supports4.json"
+]
 
-println("\nAll supports and pins in generated component:")
-for pin in pins(component) do :
-  println("%_ %_" % [ref(pin) object-type(ref(pin))])
+for file in files do :
+  println("\n\nGenerating JITX from '%_'" % [file])
+  val mcu = create-mcu-struct(file)
+  val component = stm-to-jitx(mcu)
+  name(component)
 
+  ; println("\nAll supports and pins in generated component:")
+  ; do(println{ref(_)}, pins(component))
 
 ;=========================================
 ;=============== Utilities ===============
