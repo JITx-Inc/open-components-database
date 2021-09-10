@@ -16,14 +16,18 @@ defpackage ocdb/micro-controllers :
   import ocdb/box-symbol
   import ocdb/db-parts
 
+  import ocdb/stm
+  import ocdb/stm-to-jitx
+
 
 ;============================================================
 ;======================== Accessor ==========================
 ;============================================================
 
-public defn micro-controller (params:Tuple<KeyValue>) :
+public defn micro-controller (params:Tuple<KeyValue>) -> (Tuple<KeyValue<Symbol,?>> -> Instantiable) :
   val mcu = MicroController(params)
-  find-stm32-module(mpn(mcu))
+  val component = to-jitx(mcu)
+  mcu-module(component)
 
 ;============================================================
 ;===================== Micro Controller =====================
@@ -53,6 +57,9 @@ public defstruct MicroController <: Component :
   supply-voltage: MinMaxRange
   price: Double|False
   sellers: Tuple<Tuple<KeyValue<String, ?>>>|False
+  pin-properties: STMPinProperties
+  bundles: Tuple<STMBundle>
+  supports: Tuple<STMSupports>
 
 defn int (json: JSON) -> Int:
   to-int(json as Double)
@@ -80,71 +87,10 @@ public defn MicroController (json: JObject) -> MicroController :
                   json["series"] as String
                   parse-supply-voltage(json),
                   optional-double(json, "resolved_price"),
-                  parse-sellers(json))
-
-defmethod to-jitx (mcu: MicroController) -> Instantiable :
-  pcb-component my-microcontroller :
-    manufacturer = manufacturer(mcu)
-    mpn = mpn(mcu)
-    val generic-props = GenericPin(Interval(-0.3, 4.0, false), 2000.0)
-    val supply-voltage = supply-voltage(mcu)
-    val power-props = PowerPin(Interval(min(supply-voltage), max(supply-voltage), false))
-
-    ; println(json)
-
-    val x = x(mcu)
-    val landpattern =
-      switch(mfg-package(mcu)) :
-      "LQFP64" :
-        qfp-landpattern(0.5, x, 64, 0.3, 1.2)
-      "LQFP48" :
-        qfp-landpattern(0.5, x, 48, 0.3, 1.2)
-      "VFQFPN36" :
-        qfn-landpattern(0.5, x, 36, 0.23, 0.55, [4.8 4.8])
-      "UFQFPN28" :
-        qfn-landpattern(0.5, x, 28, 0.25, 0.4)
-      "TFBGA64" :
-        bga-pkg(0.5, 0.28, [8, 8], [x y(mcu)], [])
-      "LFBGA100" :
-        bga-pkg(0.8, 0.5, [10, 10], [x y(mcu)], [])
-      "TSSOP20" :
-        sop65-landpattern(20, x)
-    assign-landpattern(landpattern)
-    make-box-symbol()
-
-  my-microcontroller
-
-public defn find-stm32-module (mpn: String) -> (Tuple<KeyValue> -> Instantiable) :
-  switch(mpn) :
-    "STM32F102R4T6A" :
-      ocdb/st-microelectronics/STM32F102R4T6A/module
-    "STM32F102R6T6A" :
-      ocdb/st-microelectronics/STM32F102R6T6A/module
-    "STM32F102C4T6A" :
-      ocdb/st-microelectronics/STM32F102C4T6A/module
-    "STM32F102C6T6A" :
-      ocdb/st-microelectronics/STM32F102C6T6A/module
-    "STM32F103T4U6A" :
-      ocdb/st-microelectronics/STM32F103T4U6A/module
-    "STM32F103T6U6A" :
-      ocdb/st-microelectronics/STM32F103T6U6A/module
-    "STM32F103RBH6" :
-      ocdb/st-microelectronics/STM32F103RBH6/module
-    "STM32F105V8H6" :
-      ocdb/st-microelectronics/STM32F105V8H6/module
-    "STM32F105VBH6" :
-      ocdb/st-microelectronics/STM32F105VBH6/module
-    "STM32F107VCH6" :
-      ocdb/st-microelectronics/STM32F107VCH6/module
-    "STM32F031F4P6" :
-      ocdb/st-microelectronics/STM32F031F4P6/module
-    "STM32F031F6P6" :
-      ocdb/st-microelectronics/STM32F031F6P6/module
-    "STM32L031F6P6" :
-      ocdb/st-microelectronics/STM32L031F6P6/module
-    "STM32F038G6U6" :
-      ocdb/st-microelectronics/STM32F038G6U6/module
-; inst stm : Micocontroller("family" => "STM32F0" "flash.min" => 1000.0e3])([`bypass-package => 4.7e-6])
+                  parse-sellers(json),
+                  create-pin-properties(json),
+                  create-bundles(json),
+                  create-supports(json))
 
 public defn MicroController (properties:Tuple<KeyValue>) -> MicroController :
   MicroController(properties, [])
@@ -184,6 +130,44 @@ public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>, so
     MicroController(jsons[0])
 
 ;============================================================
+;======================= MCU to JITX ========================
+;============================================================
+
+defmethod to-jitx (mcu: MicroController) -> Instantiable :
+  pcb-component my-microcontroller :
+    manufacturer = manufacturer(mcu)
+    mpn = mpn(mcu)
+
+    to-jitx-pin-properties(pin-properties(mcu))
+    val bundle-table = to-jitx-bundles(bundles(mcu))
+    to-jitx-supports(supports(mcu), bundle-table)
+
+    val x = x(mcu)
+    val landpattern =
+      switch(mfg-package(mcu)) :
+        "LQFP64" :
+          qfp-landpattern(0.5, x, 64, 0.3, 1.2)
+        "LQFP48" :
+          qfp-landpattern(0.5, x, 48, 0.3, 1.2)
+        "VFQFPN36" :
+          qfn-landpattern(0.5, x, 36, 0.23, 0.55, [4.8 4.8])
+        "UFQFPN28" :
+          qfn-landpattern(0.5, x, 28, 0.25, 0.4)
+        "TFBGA64" :
+          bga-pkg(0.5, 0.28, [8, 8], [x y(mcu)], [])
+        "LFBGA100" :
+          bga-pkg(0.8, 0.5, [10, 10], [x y(mcu)], [])
+        "TSSOP20" :
+          sop65-landpattern(20, x)
+        else :
+          fatal("mfg-package %_ not supported." % [mfg-package(mcu)])
+    assign-landpattern(landpattern)
+    make-box-symbol()
+
+  my-microcontroller
+
+
+;============================================================
 ;====================== Printer =============================
 ;============================================================
 
@@ -206,7 +190,10 @@ defmethod print (o:OutputStream, r:MicroController) :
     "series = %_" % [series(r)]
     "supply-voltage = %_" % [supply-voltage(r)]
     "price = %_" % [price(r)]
-    "sellers = %_" % [sellers(r)]]
+    "sellers = %_" % [sellers(r)]
+    "pin-properties = %_" % [pin-properties(r)]
+    "bundles = %_" % [bundles(r)]
+    "supports = %_" % [supports(r)]]
   print(o, "MicroController(%_)" % [indented-list(items)])
 
 ;============================================================
