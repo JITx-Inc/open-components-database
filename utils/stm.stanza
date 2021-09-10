@@ -10,11 +10,6 @@ defpackage ocdb/stm:
 ;========== STM JSON -> Stanza Structs ===========
 ;=================================================
 
-public defstruct STM :
-  pin-properties: STMPinProperties
-  bundles: Tuple<STMBundle>
-  supports: Tuple<STMSupports>
-
 public defstruct STMPinProperties :
   generic-pin: STMGenericPin
   power-pin: STMPowerPin
@@ -74,12 +69,6 @@ defn lnprint-tuple-fields<?S> (o:OutputStream, s:?S, tuple-fields:Tuple<(S -> Tu
   for item in map({_(s)}, tuple-fields) do :
     do(lnprint{o, _}, item)
 
-defmethod print (o:OutputStream, s:STM) :
-  val o2 = IndentedStream(o)
-  print(o, "STM:")
-  lnprint-fields(o2, s, [pin-properties])
-  lnprint-tuple-fields(o2, s, [bundles, supports])
-
 defmethod print (o:OutputStream, s:STMPinProperties) :
   val o2 = IndentedStream(o)
   print(o, "STMPinProperties:")
@@ -133,7 +122,7 @@ defmethod print (o:OutputStream, s:STMSupportMapping) :
 ;=================================================
 
 ;This function creates STMSupports from the "supports" section in the JSON.
-defn create-supports (json:JSON) -> Tuple<STMSupports> :
+public defn create-supports (json:JSON) -> Tuple<STMSupports> :
   match((json as JObject)["supports"]) :
     (supports:Tuple<JObject>) :
       for support in supports map :
@@ -172,17 +161,7 @@ defn create-supports (json:JSON) -> Tuple<STMSupports> :
         STMSupports(supported-bundle, mappings)
     (supports) : fatal("Invalid Supports")
 
-; This function creates a Tuple of STMBundle from the bundles field in the JSON
-; JSON object can match many types. For example,
-; match(json) :
-;   (json:True) :
-;   (json:False) :
-;   ...
-;   (json:Tuple<JSON>) :
-;   (json:String) : ..
-;   (json) : fatal("Invalid JSON")
-
-defn create-bundles (json1:JSON) -> Tuple<STMBundle> :
+public defn create-bundles (json1:JSON) -> Tuple<STMBundle> :
   val bundles = Vector<STMBundle>()
   val json = json1 as JObject
 
@@ -198,7 +177,7 @@ defn create-bundles (json1:JSON) -> Tuple<STMBundle> :
   to-tuple(bundles)
 
 ;This function creates a Tuple of PinProperties from the bundles field in the JSON
-defn create-pin-properties (json1:JSON) -> STMPinProperties :
+public defn create-pin-properties (json1:JSON) -> STMPinProperties :
   val json = json1 as JObject
   val pin-prop = json["pin-properties"] as JObject
 
@@ -225,16 +204,10 @@ defn create-pin-properties (json1:JSON) -> STMPinProperties :
             (nominal:True) : nominal
             (nominal:False) : nominal
             (nominal) : fatal("Invalid nominal data")
-
-          ; println("%_, %_, %_" % [min-volts, max-volts, nominal])
           max-voltage-data = STMVoltageLimits(min-volts, max-volts, nominal)
-          ; println("%_, %_, %_" % [min-val(max-voltage-data), max-val(max-voltage-data), nominal?(max-voltage-data)])
         (max-volt-data) :
           fatal("Invalid JSON") 
-
       stm-gen-pin = STMGenericPin(name, max-voltage-data, rated-esd)
-      ; println("%_, %_, %_" % [pin-name(stm-gen-pin), max-val(max-voltage(stm-gen-pin)), /rated-esd(stm-gen-pin)])
-
 
   val power-pin1 = pin-prop["power-pin"]
   var stm-pow-pin
@@ -258,23 +231,17 @@ defn create-pin-properties (json1:JSON) -> STMPinProperties :
             (nominal:True) : nominal
             (nominal:False) : nominal
             (nominal) : fatal("Invalid nominal data")
-
-          ; println("%_, %_, %_" % [min-volts, max-volts, nominal])
           recommended-voltage-data = STMVoltageLimits(min-volts, max-volts, nominal)
-          ; println("%_, %_, %_" % [min-val(recommended-voltage-data), max-val(recommended-voltage-data), nominal?(recommended-voltage-data)])
         (recommended-volt-data) :
           fatal("Invalid JSON") 
 
       stm-pow-pin = STMPowerPin(name, recommended-voltage-data)
-      ; println("%_, %_" % [pin-name(stm-pow-pin), max-val(recommended-voltage(stm-pow-pin))])
 
   val pin-properties = Vector<STMPinProperties-Row>()
   val pins = pin-prop["pins"]
-  ;print(pins)
   match(pins) :
     (pins:Tuple<JObject>) :
       for pin-item in pins do :
-        ;println(pin["pin"])
         val pin-name = match(pin-item["pin"]) :
           (pin-name:String) : pin-name
           (pin-name) : fatal("Invalid Pin Name")
@@ -299,33 +266,28 @@ defn create-pin-properties (json1:JSON) -> STMPinProperties :
           (generic-val:False) : generic-val
           (generic-val) : fatal("Invalid Generic Value")
 
-        ;println(pin-name, pad-name, side, generic-props?, power-props?)
         add(pin-properties, STMPinProperties-Row(pin-name, pad-name, side, generic-props?, power-props?))
     (pins) :
       fatal("Invalid JSON")
  
-  ;to-tuple(pin-properties)
   val stm-properties = STMPinProperties(stm-gen-pin, stm-pow-pin, to-tuple(pin-properties))
-  ; println("%_, %_, %_" % [ pin-name(generic-pin(stm-properties)), pin-name(power-pin(stm-properties)), pin(rows(stm-properties)[0])])
   stm-properties
 
 ;=================================================
 ;==================== Testing ====================
 ;=================================================
 
-val JSON-TEST-FILE-LIST = to-hashset<String> $ [
-  "stm-test.json"
-]
-
-public defn create-mcu-struct (file:String) -> STM :
-  val input-json = parse $ slurp(file)
-  val bundles = create-bundles(input-json)
-  val supports = create-supports(input-json)
-  val pin-properties = create-pin-properties(input-json)
-  STM(pin-properties, bundles, supports)
+; val JSON-TEST-FILE-LIST = to-hashset<String> $ [
+;   "stm-test.json"
+; ]
 
 ; defn main ():
 ;   for file in JSON-TEST-FILE-LIST do :
-;     val mcu = create-mcu-struct(file)
-;     println(mcu)
+;     val input-json = parse $ slurp(file)
+;     val pin-properties = create-pin-properties(input-json)
+;     val bundles = create-bundles(input-json)
+;     val supports = create-supports(input-json)
+;     println(pin-properties)
+;     println(bundles)
+;     println(supports)
 ; main()
