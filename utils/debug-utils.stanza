@@ -452,7 +452,7 @@ public defn db-ftdi-two-comms (pwr:JITXObject, cmp:JITXObject) :
   inside pcb-module :
     eval-when true :
       if property(self.debug) :
-        require uart: uart() from cmp
+        require uart: uart([UART-RX, UART-TX]) from cmp
         db-ftdi(pwr, uart)
 
 ; Adds a FTDI connector with RTS and CTS to a component
@@ -466,7 +466,7 @@ public defn db-ftdi-four-comms (pwr:JITXObject, cmp:JITXObject) :
   inside pcb-module :
     eval-when true :
       if property(self.debug) :
-        require ftdi: uart([UART-RTS, UART-CTS]) from cmp
+        require ftdi: uart([UART-RTS, UART-CTS, UART-RX, UART-TX]) from cmp
         db-ftdi(pwr, ftdi)
 
 ; ====================
@@ -612,10 +612,10 @@ public defn db-ftdi (pwr:JITXObject, uart:JITXObject) :
         net (pwr.vdd, ftdi-conn.p[3])
         match(port-type(uart)) :
           (pa:Bundle) :
-            if pa == /uart() :
+            if pa == /uart([UART-RX, UART-TX]) :
               net (uart.rx, ftdi-conn.p[4]) 
               net (uart.tx, ftdi-conn.p[5])
-            else if pa == /uart([UART-RTS, UART-CTS]) :
+            else if pa == /uart([UART-RTS, UART-CTS, UART-RX, UART-TX]) :
               net (uart.cts, ftdi-conn.p[2])
               net (uart.txd, ftdi-conn.p[4])
               net (uart.rxd, ftdi-conn.p[5])
