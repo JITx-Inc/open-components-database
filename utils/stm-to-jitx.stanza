@@ -97,11 +97,41 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
               (req:False) :
                 dot(self, ref-string-to-ref(pin(mapping)))
           key => value
+
+  ;Generate a supports statement for a bundle b with the given mappings.
+  ;There are two options, the first option acts as normal while the second option requires b2.
+  defn generate-support (b1:Bundle, b2:Bundle, mappings:Tuple<STMSupportMapping>) :
+    inside pcb-component :
+      supports b1 :
+        option :
+          for mapping in mappings do :
+            ;Left hand side of the mapping is the bundle pin.
+            val key = dot(b1, ref-string-to-ref(bundle-pin(mapping)))
+            ;Right hand side of the mapping is a local or required pin.
+            val value =
+              match(require(mapping)) :
+                (req:String) :
+                  val req-bundle = bundle-table[req]
+                  require p0 : req-bundle
+                  dot(p0, ref-string-to-ref(pin(mapping)))
+                (req:False) :
+                  dot(self, ref-string-to-ref(pin(mapping)))
+            key => value
+        option :
+          require myb2 : b2
+          for mapping in mappings do :
+            val bundle-pin-name = ref-string-to-ref(bundle-pin(mapping))
+            ;Left hand side of the mapping is the bundle pin.
+            val key = dot(b1, bundle-pin-name)
+            ;Right hand side of the mapping is a required pin from the alternate bundle.
+            val value = dot(myb2, bundle-pin-name)
+            key => value
   
   for support in supports do :
     val supported-bundle = bundle(support)
+    val options = qsort(options(supported-bundle))
     val bundle-name = name(supported-bundle)
-    generate-support{_, mappings(support)} $
+    val bundle:Bundle|[Bundle, Bundle] =
       match(get?(bundle-table, bundle-name)) :
         (b:Bundle) :
           b
@@ -126,44 +156,51 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
             ;========== Optionally Pinned Bundles ===========
             ;Collect the optional pins and pass them as Bundle arguments.
             "jtag" : jtag $
-              for option in options(supported-bundle) map :
+              for option in options map :
                 switch(option) :
                   "JTAG-TRSTN" : JTAG-TRSTN
             "i2s" : i2s $
-              for option in options(supported-bundle) map :
+              for option in options map :
                 switch(option) :
                   "I2S-MCK" : I2S-MCK
                   "I2S-SDMI" : I2S-SDMI
-            "uart" : uart $
-              for option in options(supported-bundle) map :
-                switch(option) :
-                  "UART-DTR" : UART-DTR
-                  "UART-CTS" : UART-CTS
-                  "UART-DCD" : UART-DCD
-                  "UART-RI" : UART-RI
-                  "UART-DST" : UART-DST
-                  "UART-RTS" : UART-RTS
-                  "UART-CK" : UART-CK
-                  "UART-DE" : UART-DE
-                  "UART-CS" : UART-CS
-                  "UART-RX" : UART-RX
-                  "UART-TX" : UART-TX
-            "usart" : usart $
-              for option in options(supported-bundle) map :
-                switch(option) :
-                  "UART-DTR" : UART-DTR
-                  "UART-CTS" : UART-CTS
-                  "UART-DCD" : UART-DCD
-                  "UART-RI" : UART-RI
-                  "UART-DST" : UART-DST
-                  "UART-RTS" : UART-RTS
-                  "UART-CK" : UART-CK
-                  "UART-DE" : UART-DE
-                  "UART-CS" : UART-CS
-                  "UART-RX" : UART-RX
-                  "UART-TX" : UART-TX
+            "uart" :
+              val options =
+                for option in options map :
+                  switch(option) :
+                    "UART-DTR" : UART-DTR
+                    "UART-CTS" : UART-CTS
+                    "UART-DCD" : UART-DCD
+                    "UART-RI" : UART-RI
+                    "UART-DST" : UART-DST
+                    "UART-RTS" : UART-RTS
+                    "UART-CK" : UART-CK
+                    "UART-DE" : UART-DE
+                    "UART-CS" : UART-CS
+                    "UART-RX" : UART-RX
+                    "UART-TX" : UART-TX
+              println("\nuart ")
+              println(options)
+              [uart(options) usart(options)]
+            "usart" :
+              println("")
+              usart $
+                for option in options map :
+                  print("%_ " % [option])
+                  switch(option) :
+                    "UART-DTR" : UART-DTR
+                    "UART-CTS" : UART-CTS
+                    "UART-DCD" : UART-DCD
+                    "UART-RI" : UART-RI
+                    "UART-DST" : UART-DST
+                    "UART-RTS" : UART-RTS
+                    "UART-CK" : UART-CK
+                    "UART-DE" : UART-DE
+                    "UART-CS" : UART-CS
+                    "UART-RX" : UART-RX
+                    "UART-TX" : UART-TX
             "spi" : spi $
-              for option in options(supported-bundle) map :
+              for option in options map :
                 switch(option) :
                   "SPI-SDO" : SPI-SDO
                   "SPI-SDI" : SPI-SDI
@@ -175,6 +212,9 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
               spi-controller()
             else :
               fatal("Bundle '%_' is not supported." % [bundle-name])
+    match(bundle) :
+      (b:Bundle) : generate-support(b, mappings(support))
+      ([b1, b2]:[Bundle, Bundle]) : generate-support(b1, b2, mappings(support))
 
 ;Generate a module that accepts user options and instantiates the given component.
 public defn mcu-module (component:Instantiable) -> (Tuple<KeyValue<Symbol,?>> -> Instantiable) :
