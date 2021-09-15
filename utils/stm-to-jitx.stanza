@@ -2,9 +2,7 @@
 defpackage ocdb/stm-to-jitx:
   import core
   import collections
-  import lang-utils
   import json
-  import reader
   import jitx
   import jitx/commands
 
@@ -50,7 +48,7 @@ public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> False :
       pin-properties :
         [pin:Ref | pads:Int ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
         for row in rows(pin-properties) do :
-          val pin-ref = to-ref(pin(row))
+          val pin-ref = ref-string-to-ref(pin(row))
           val pad-name = to-int(pad(row) as Double)
           match(generic-props?(row), power-props?(row)) :
             (g:True, p:True)   : [(pin-ref) | pad-name | side(row) | generic-props | power-props]
@@ -61,13 +59,13 @@ public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> False :
       pin-properties :
         [pin:Ref | pads:Ref ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
         for row in rows(pin-properties) do :
-          val pin-ref = to-ref(pin(row))
-          val pad-name = to-ref(pad(row) as String)
+          val pin-ref = ref-string-to-ref(pin(row))
+          val pad-name = raw-string-to-ref(pad(row) as String)
           match(generic-props?(row), power-props?(row)) :
-            (g:True, p:True)   : [(pin-ref) | pad-name | side(row) | generic-props | power-props]
-            (g:True, p:False)  : [(pin-ref) | pad-name | side(row) | generic-props |      -     ]
-            (g:False, p:True)  : [(pin-ref) | pad-name | side(row) |       -       | power-props]
-            (g:False, p:False) : [(pin-ref) | pad-name | side(row) |       -       |      -     ]
+            (g:True, p:True)   : [(pin-ref) | (pad-name) | side(row) | generic-props | power-props]
+            (g:True, p:False)  : [(pin-ref) | (pad-name) | side(row) | generic-props |      -     ]
+            (g:False, p:True)  : [(pin-ref) | (pad-name) | side(row) |       -       | power-props]
+            (g:False, p:False) : [(pin-ref) | (pad-name) | side(row) |       -       |      -     ]
 
 ;Generate all bundles and store them in a table indexed by name.
 public defn to-jitx-bundles (bundles:Tuple<STMBundle>) -> HashTable<String, Bundle> :
@@ -88,70 +86,55 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
       supports b :
         for mapping in mappings do :
           ;Left hand side of the mapping is the bundle pin.
-          val key = dot(b, to-ref(bundle-pin(mapping)))
+          val key = dot(b, ref-string-to-ref(bundle-pin(mapping)))
           ;Right hand side of the mapping is a local or required pin.
           val value =
             match(require(mapping)) :
               (req:String) :
                 val req-bundle = bundle-table[req]
                 require p0 : req-bundle
-                dot(p0, to-ref(pin(mapping)))
+                dot(p0, ref-string-to-ref(pin(mapping)))
               (req:False) :
-                dot(self, to-ref(pin(mapping)))
+                dot(self, ref-string-to-ref(pin(mapping)))
           key => value
   
   for support in supports do :
     val supported-bundle = bundle(support)
     val bundle-name = name(supported-bundle)
-    val mappings = mappings(support)
-    match(get?(bundle-table, bundle-name)) :
-      (b:Bundle) :
-        generate-support(b, mappings)
-      (f:False) :
-        switch(bundle-name) :
-          ;============= Single Pin Bundles ===============
-          "gpio" :
-            generate-support(gpio, mappings)
-          "adc" :
-            generate-support(adc, mappings)
-          "dac" :
-            generate-support(dac, mappings)
-          "timer" :
-            generate-support(timer, mappings)
-          
-          ;=============== Two Pin Bundles ================
-          "swd" :
-            generate-support(swd, mappings)
-          "low-freq-oscillator" :
-            generate-support(low-freq-oscillator, mappings)
-          "high-freq-oscillator" :
-            generate-support(high-freq-oscillator, mappings)
-          "can-interface" :
-            generate-support(can-interface, mappings)
-          "i2c" :
-            generate-support(i2c, mappings)
-          
-          ;=============== 3+ Pin Bundles =================
-          "quad-spi" :
-            generate-support(quad-spi, mappings)
-          
-          ;========== Optionally Pinned Bundles ===========
-          ;Collect the optional pins and pass them as Bundle arguments.
-          "jtag" :
-            val jtag-options =
+    generate-support{_, mappings(support)} $
+      match(get?(bundle-table, bundle-name)) :
+        (b:Bundle) :
+          b
+        (f:False) :
+          switch(bundle-name) :
+            ;============= Single Pin Bundles ===============
+            "gpio"  : gpio
+            "adc"   : adc
+            "dac"   : dac
+            "timer" : timer
+            
+            ;=============== Two Pin Bundles ================
+            "swd"                  : swd
+            "low-freq-oscillator"  : low-freq-oscillator
+            "high-freq-oscillator" : high-freq-oscillator
+            "can-interface"        : can-interface
+            "i2c"                  : i2c
+            
+            ;=============== 3+ Pin Bundles =================
+            "quad-spi" : quad-spi
+            
+            ;========== Optionally Pinned Bundles ===========
+            ;Collect the optional pins and pass them as Bundle arguments.
+            "jtag" : jtag $
               for option in options(supported-bundle) map :
                 switch(option) :
                   "JTAG-TRSTN" : JTAG-TRSTN
-            generate-support(jtag(jtag-options), mappings)
-          "i2s" :
-            val i2s-options =
+            "i2s" : i2s $
               for option in options(supported-bundle) map :
                 switch(option) :
                   "I2S-MCK" : I2S-MCK
                   "I2S-SDMI" : I2S-SDMI
-            generate-support(i2s(i2s-options), mappings)
-          "uart" :
-            val uart-options =
+            "uart" : uart $
               for option in options(supported-bundle) map :
                 switch(option) :
                   "UART-DTR" : UART-DTR
@@ -165,9 +148,7 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
                   "UART-CS" : UART-CS
                   "UART-RX" : UART-RX
                   "UART-TX" : UART-TX
-            generate-support(uart(uart-options), mappings)
-          "usart" :
-            val usart-options =
+            "usart" : usart $
               for option in options(supported-bundle) map :
                 switch(option) :
                   "UART-DTR" : UART-DTR
@@ -181,9 +162,7 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
                   "UART-CS" : UART-CS
                   "UART-RX" : UART-RX
                   "UART-TX" : UART-TX
-            generate-support(usart(usart-options), mappings)
-          "spi" :
-            val spi-options =
+            "spi" : spi $
               for option in options(supported-bundle) map :
                 switch(option) :
                   "SPI-SDO" : SPI-SDO
@@ -192,11 +171,10 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
                   "SPI-CIPO" : SPI-CIPO
                   "SPI-COPI" : SPI-COPI
                   "SPI-SDIO" : SPI-SDIO
-            generate-support(spi(spi-options), mappings)
-          "spi-controller" :
-            generate-support(spi-controller(), mappings)
-          else :
-            fatal("Bundle '%_' is not supported." % [bundle-name])
+            "spi-controller" :
+              spi-controller()
+            else :
+              fatal("Bundle '%_' is not supported." % [bundle-name])
 
 ;Generate a module that accepts user options and instantiates the given component.
 public defn mcu-module (component:Instantiable) -> (Tuple<KeyValue<Symbol,?>> -> Instantiable) :
@@ -247,16 +225,34 @@ for f in dir-files("../../generate-stm/mystanzajson/") do :
 ;=============== Utilities ===============
 ;=========================================
 
-;Convert a String to a Ref.
-defn to-ref (text:String) -> Ref :
+;Convert a String that may have brackets to a Ref.
+defn ref-string-to-ref (text:String) -> Ref :
   ;regex-match implementation incomplete so we can't do exact matches with "^mypattern$"
   ;val match-result = regex-match("^(\\w+).([\\w\.])+$", text)
   if text[length(text) - 1] == ']' :
     val idx = last-index-of-char(text, '[') as Int
-    IndexRef(to-ref(text[0 to idx]), to-int!(text[(idx + 1) to (length(text) - 1)]))
+    IndexRef(ref-string-to-ref(text[0 to idx]), to-int!(text[(idx + 1) to (length(text) - 1)]))
   else :
     val idx = last-index-of-char(text, '.')
     match(idx: Int) :
-      FieldRef(to-ref(text[0 to idx]), Ref(text[(idx + 1) to length(text)]))
+      FieldRef(ref-string-to-ref(text[0 to idx]), Ref(text[(idx + 1) to length(text)]))
     else :
       Ref(text)
+
+;Convert a String without brackets to a Ref.
+defn raw-string-to-ref (text:String) -> Ref :
+  val last-digit-index = label<Int> break :
+    for i in (length(text) - 1) through 0 by -1 do :
+      if not digit?(text[i]) :
+        break(i + 1)
+    0
+  if last-digit-index == 0 :
+    val ref = Ref("p")
+    val index = to-int!(text)
+    IndexRef(ref, index)
+  else if last-digit-index == length(text) :
+    Ref(text)
+  else :
+    val ref = Ref(text[0 to last-digit-index])
+    val index = to-int!(text[last-digit-index to false])
+    IndexRef(ref, index)
