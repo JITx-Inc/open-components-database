@@ -5,6 +5,7 @@ defpackage ocdb/defaults :
   import jitx
   import jitx/commands
   import ocdb/generator-utils
+  import ocdb/box-symbol
 
 ;============================================================
 ;=================== Default Materials ======================
@@ -94,3 +95,30 @@ public defn make-single-module-design (module:Instantiable, board:Board) :
 public defn make-single-module-design (module:Instantiable) :
   ; TODO: determine the bounds of the module for the board outline, if possible.
   make-single-module-design(module, default-board(4, Rectangle(10.0, 10.0)))
+
+;============================================================
+;==================== Default Component =====================
+;============================================================
+; Create a component given its land pattern
+public pcb-component default-component (lp:LandPattern) : 
+  val pads = to-tuple(pads(lp))
+  fatal("Missing pads") when empty?(pads)
+  if length(pads) == 1:
+    val r = ref(pads[0])
+    pin-properties: 
+      [pin: Ref | pads: Ref ... | side: Dir]
+      [(r) | (r) | Down ]
+  else:
+    val n = length(pads) / 2
+    val [left, right] = [
+      pads[0 to n],
+      pads[n to false]
+    ]
+    pin-properties: 
+      [pin: Ref | pads: Ref ... | side: Dir]
+      for p in left do: 
+        [(ref(p)) | (ref(p)) | Left]
+      for p in right do: 
+        [(ref(p)) | (ref(p)) | Right]
+    assign-landpattern(lp)
+  make-box-symbol()
