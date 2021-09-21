@@ -1,5 +1,5 @@
 #use-added-syntax(jitx)
-defpackage ocdb/tag-connect/TC2050-IDC-NL :
+defpackage ocdb/tag-connect/TC2050-IDC :
   import core
   import collections
   import math
@@ -13,9 +13,9 @@ defpackage ocdb/tag-connect/TC2050-IDC-NL :
   import ocdb/generator-utils
   import ocdb/generic-components
   import ocdb/box-symbol
-
+  
 ; NOTE UNUSUAL PINOUT
-; Datasheet showing pinout: https://www.tag-connect.com/wp-content/uploads/bsk-pdf-manager/TC2050-IDC-NL_Datasheet_8.pdf
+; Datasheet showing pinout: https://www.tag-connect.com/wp-content/uploads/bsk-pdf-manager/TC2050-IDC_Datasheet_7.pdf
 
 pcb-landpattern footprint :
   for (l in grid-locs(2, 5, 1.27, 1.27), i in [1 2 3 4 5 10 9 8 7 6]) do :
@@ -23,11 +23,17 @@ pcb-landpattern footprint :
   layer(Cutout()) = Circle((- 3.81), 0.0, 0.5)
   layer(Cutout()) = Circle(3.81, 1.015, 0.5)
   layer(Cutout()) = Circle(3.81, (- 1.015), 0.5)
-  layer(Courtyard(Top)) = Rectangle(8.62, 3.03)
+
+; Leg Latch Holes  
+  layer(Cutout()) = Circle((- 3.81), 2.54, 1.1875)
+  layer(Cutout()) = Circle((- 3.81), -2.54, 1.1875)
+  layer(Cutout()) = Circle(1.905, ( 2.54), 1.1875)
+  layer(Cutout()) = Circle(1.905, (- 2.54), 1.1875)
+  layer(Courtyard(Top)) = Rectangle(10.16, 7.62)
   ref-label()
 
 public pcb-component component :
-  description = "Insertion point for TC-2050-NL connector"
+  description = "Insertion point for TC-2050 connector"
   port p: pin[1 through 10]
   pin-properties :
     [pin:Ref     | pads:Int ... | side:Dir]
@@ -61,33 +67,3 @@ public pcb-component component :
   supports power:
     power.vdd => self.p[1]
     power.gnd => self.p[3]
-    ; power.gnd => self.p[5]
-    ; power.gnd => self.p[7]
-    ; power.gnd => self.p[9]
-    ; net (power.gnd self.p[5])
-  
-public pcb-module module :
-  port j : jtag()
-  port swd : swd()
-  port pwr : power
-  public inst jtag : ocdb/tag-connect/TC2050-IDC-NL/component
-  net (j.trstn, jtag.p[10])
-  net (j.tdi, jtag.p[8])
-  net (j.tdo, jtag.p[6])
-  net (j.tck, swd.swdclk, jtag.p[4])
-  net (j.tms, swd.swdio, jtag.p[2])
-  net (pwr.vdd, jtag.p[1])
-  net (pwr.gnd, jtag.p[9], jtag.p[5], jtag.p[3])
-
-  val jtag-bundle = /jtag()
-  val con = jtag
-  supports jtag-bundle:
-    jtag-bundle.trstn => con.p[10]
-    jtag-bundle.tdi => con.p[8]
-    jtag-bundle.tdo => con.p[6]
-    jtag-bundle.tck => con.p[4]
-    jtag-bundle.tms => con.p[2]
-
-  supports /swd():
-    /swd().swdclk => con.p[4]
-    /swd().swdio  => con.p[2]
