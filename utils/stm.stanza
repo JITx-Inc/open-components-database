@@ -190,9 +190,9 @@ public defn create-pin-properties (json1:JSON) -> STMPinProperties :
   val json = json1 as JObject
   val pin-prop = json["pin-properties"] as JObject
 
-  val generic-pin1 = pin-prop["generic-pin"]
+  val generic-pin = pin-prop["generic-pin"]
   var stm-gen-pin
-  match(generic-pin1) :
+  match(generic-pin) :
     (gen-pin: JObject) :
       val name = match(gen-pin["name"]) :
         (name : String) : name
@@ -215,12 +215,12 @@ public defn create-pin-properties (json1:JSON) -> STMPinProperties :
             (nominal) : fatal("Invalid nominal data")
           max-voltage-data = STMVoltageLimits(min-volts, max-volts, nominal)
         (max-volt-data) :
-          fatal("Invalid JSON") 
+          fatal("Invalid JSON")
       stm-gen-pin = STMGenericPin(name, max-voltage-data, rated-esd)
 
-  val power-pin1 = pin-prop["power-pin"]
+  val power-pin = pin-prop["power-pin"]
   var stm-pow-pin
-  match(power-pin1) :
+  match(power-pin) :
     (pow-pin: JObject) :
       val name = match(pow-pin["name"]) :
         (name : String) : name
@@ -281,22 +281,3 @@ public defn create-pin-properties (json1:JSON) -> STMPinProperties :
  
   val stm-properties = STMPinProperties(stm-gen-pin, stm-pow-pin, to-tuple(pin-properties))
   stm-properties
-
-;=================================================
-;==================== Testing ====================
-;=================================================
-
-; val JSON-TEST-FILE-LIST = to-hashset<String> $ [
-;   "stm-test.json"
-; ]
-
-; defn main ():
-;   for file in JSON-TEST-FILE-LIST do :
-;     val input-json = parse $ slurp(file)
-;     val pin-properties = create-pin-properties(input-json)
-;     val bundles = create-bundles(input-json)
-;     val supports = create-supports(input-json)
-;     println(pin-properties)
-;     println(bundles)
-;     println(supports)
-; main()
