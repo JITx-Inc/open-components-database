@@ -9,7 +9,6 @@ defpackage ocdb/micro-controllers :
   import jitx/params
   import jitx/param-manager
   import jitx/errors
-
   import ocdb/land-patterns
   import ocdb/design-vars
   import ocdb/property-structs
@@ -62,6 +61,7 @@ public defstruct MicroController <: Component :
   bundles: Tuple<STMBundle>
   supports: Tuple<STMSupports>
 
+
 public defn MicroController (json: JObject) -> MicroController :
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
 
@@ -100,25 +100,19 @@ public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>) ->
 public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, temperature-properties:Tuple<KeyValue>) -> MicroController :
   val params = jitx-params()
   val vendors = bom-vendors(params)
-  val vendor-properties =
-    match(vendors: Tuple<String>) :
-      ["_sellers" => vendors]
-    else :
-      []
+
   var query-properties = []
   if DESIGN-QUANTITY == 0:
     query-properties = to-tuple $ cat-all([["category" => "microcontroller",
                                                 "_sort" => sort,
                                                 "_exist" => exist],
-                                              vendor-properties
                                               temperature-properties,
                                               properties])
   else :
     query-properties = to-tuple $ cat-all([["category" => "microcontroller",
                                             "_sort" => sort,
                                             "_exist" => exist,
-                                            "_stock" => DESIGN-QUANTITY],
-                                          vendor-properties
+                                            ],
                                           temperature-properties,
                                           properties])
   val jsons = dbquery-all(query-properties) as Tuple<JObject>
@@ -130,68 +124,19 @@ public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>, so
 ;============================================================
 ;======================= MCU to JITX ========================
 ;============================================================
+pcb-component mcu-component (manufacturer:String, mpn:String, pp:STMPinProperties, supports:Tuple<STMSupports>, bundles:Tuple<STMBundle>, pkg:String) :
+  manufacturer = manufacturer
+  mpn = mpn
+  val mappings = to-jitx-pin-properties(pp)
+  val bundle-table = to-jitx-bundles(bundles)
+  to-jitx-supports(supports, bundle-table, mappings)
+  val lp = find({name(_) == pkg}, STM32-LAND-PATTERNS)
+  throw(Exception("%_ is not a supported package." % [pkg])) when lp is False
+  assign-landpattern(lp as LandPattern)
+  make-box-symbol()
 
-defmethod to-jitx (mcu: MicroController) -> Instantiable :
-  pcb-component my-microcontroller :
-    manufacturer = manufacturer(mcu)
-    mpn = mpn(mcu)
-
-    to-jitx-pin-properties(pin-properties(mcu))
-    val bundle-table = to-jitx-bundles(bundles(mcu))
-    to-jitx-supports(supports(mcu), bundle-table)
-
-    assign-landpattern $
-      switch(mfg-package(mcu)) :
-        "LQFP100" : LQFP100
-        "LQFP128" : LQFP128
-        "LQFP144" : LQFP144
-        "LQFP176" : LQFP176
-        "LQFP208" : LQFP208
-        "LQFP48" : LQFP48
-        "UFQFPN28" : UFQFPN28
-        "UFQFPN32" : UFQFPN32
-        "UFQFPN48" : UFQFPN48
-        "LFBGA100" : LFBGA100
-        "LFBGA144" : LFBGA144
-        "LFBGA354" : LFBGA354
-        "TFBGA100" : TFBGA100
-        "TFBGA216" : TFBGA216
-        "TFBGA225" : TFBGA225
-        "TFBGA64" : TFBGA64
-        "UFBGA100" : UFBGA100
-        "UFBGA121" : UFBGA121
-        "UFBGA129" : UFBGA129
-        "UFBGA132" : UFBGA132
-        "UFBGA144" : UFBGA144
-        "UFBGA169" : UFBGA169
-        "UFBGA64" : UFBGA64
-        "UFBGA73" : UFBGA73
-        "WLCSP100" : WLCSP100
-        "WLCSP104" : WLCSP104
-        "WLCSP115" : WLCSP115
-        "WLCSP132" : WLCSP132
-        "WLCSP143" : WLCSP143
-        "WLCSP144" : WLCSP144
-        "WLCSP156" : WLCSP156
-        "WLCSP168" : WLCSP168
-        "WLCSP18" : WLCSP18
-        "WLCSP180" : WLCSP180
-        "WLCSP20" : WLCSP20
-        "WLCSP25" : WLCSP25
-        "WLCSP36" : WLCSP36
-        "WLCSP49" : WLCSP49
-        "WLCSP52" : WLCSP52
-        "WLCSP63" : WLCSP63
-        "WLCSP64" : WLCSP64
-        "WLCSP66" : WLCSP66
-        "WLCSP72" : WLCSP72
-        "WLCSP81" : WLCSP81
-        "WLCSP90" : WLCSP90
-        else :
-          fatal("MCU package %_ is not supported." % [mfg-package(mcu)])
-    make-box-symbol()
-  my-microcontroller
-
+public defmethod to-jitx (m:MicroController) : 
+  mcu-component(manufacturer(m), mpn(m), pin-properties(m), supports(m), bundles(m), mfg-package(m))
 
 ;============================================================
 ;====================== Printer =============================
