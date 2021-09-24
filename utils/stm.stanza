@@ -7,8 +7,8 @@ defpackage ocdb/stm:
   import reader
   import jitx
 
-defstruct StmError <: Exception : 
-  message:?
+public defstruct StmError <: Exception : 
+  message:String|Printable
 
 defmethod print (o:OutputStream, e:StmError) : 
   print(o, "Could not extract STM component. %_." % [message(e)])
@@ -23,12 +23,12 @@ public pcb-struct ocdb/stm/STMPinProperties :
   power-pin: STMPowerPin
   rows: Tuple<STMPinPropertiesRow>
 
-public pcb-struct  ocdb/stm/STMGenericPin :
+public pcb-struct ocdb/stm/STMGenericPin :
   pin-name: String
   max-voltage: STMVoltageLimits
   rated-esd: Double
 
-public pcb-struct  ocdb/stm/STMPowerPin :
+public pcb-struct ocdb/stm/STMPowerPin :
   pin-name: String
   recommended-voltage: STMVoltageLimits
 
@@ -136,7 +136,7 @@ defmethod print (o:OutputStream, s:STMSupportMapping) :
 ;=================================================
 ;================= Build Structs =================
 ;=================================================
-defn stm-error (x) : 
+defn stm-exception! (x) : 
   throw(StmError(x))
 
 ;This function creates STMSupports from the "supports" section in the JSON.
@@ -150,11 +150,11 @@ public defn create-supports (json:JSON) -> Tuple<STMSupports> :
             ;Read the bundle's name.
             val bundle-name = match(supported-bundle["name"]) :
               (bundle-name:String) : bundle-name
-              (bundle-name) : stm-error("Invalid Supported Bundle Name")
+              (bundle-name) : stm-exception!("Invalid Supported Bundle Name")
             ;Read the bundle's pin options.
             val bundle-options = match(supported-bundle["options"]) :
               (bundle-options:Tuple<String>) : bundle-options
-              (bundle-options) : stm-error("Invalid Supported Bundle Options")
+              (bundle-options) : stm-exception!("Invalid Supported Bundle Options")
             STMSupportsBundle(bundle-name, bundle-options)
         ;Build the collection of STMSupportMappings.
         val mappings = match(support["mappings"]) :
@@ -164,20 +164,20 @@ public defn create-supports (json:JSON) -> Tuple<STMSupports> :
               ;Read the name of the bundle pin (ex. "p")
               val bundle-pin = match(mapping["bundle-pin"]) :
                 (bundle-pin:String) : bundle-pin
-                (bundle-pin) : stm-error("Invalid Mapping Bundle Pin")
+                (bundle-pin) : stm-exception!("Invalid Mapping Bundle Pin")
               ;Read the name of the required pin (ex. "required-pin")
               val require = match(mapping["require"]) :
                 (require:String|False) : require
-                (require) : stm-error("Invalid Mapping Require")
+                (require) : stm-exception!("Invalid Mapping Require")
               ;Read the name of the mapped pin (ex. "q")
               val pin = match(mapping["pin"]) :
                 (pin:String) : pin
-                (pin) : stm-error("Invalid Mapping Pin")
+                (pin) : stm-exception!("Invalid Mapping Pin")
               STMSupportMapping(bundle-pin, require, pin)
-          (mappings) : stm-error("Invalid Support Mappings")
+          (mappings) : stm-exception!("Invalid Support Mappings")
         ;Bring the bundle and mappings together to create one STMSupports
         STMSupports(supported-bundle, mappings)
-    (supports) : stm-error("Invalid Supports")
+    (supports) : stm-exception!("Invalid Supports")
 
 public defn create-bundles (json1:JSON) -> Tuple<STMBundle> :
   val bundles = Vector<STMBundle>()
@@ -188,9 +188,9 @@ public defn create-bundles (json1:JSON) -> Tuple<STMBundle> :
       ;Each name should be a String bundle name
       for name in json do :
         match(name:String) : add(bundles, STMBundle(name))
-        else : stm-error("Invalid JSON")
+        else : stm-exception!("Invalid JSON")
     (json) :
-      stm-error("Invalid JSON")
+      stm-exception!("Invalid JSON")
   
   to-tuple(bundles)
 
@@ -205,26 +205,26 @@ public defn create-pin-properties (json1:JSON) -> STMPinProperties :
     (gen-pin: JObject) :
       val name = match(gen-pin["name"]) :
         (name : String) : name
-        (name) : stm-error("Invalid Generic Pin Name")
+        (name) : stm-exception!("Invalid Generic Pin Name")
       val rated-esd = match(gen-pin["rated-esd"]) :
         (rated-esd: Double) : rated-esd
-        (rated-esd) : stm-error("Invalid rated-esd")
+        (rated-esd) : stm-exception!("Invalid rated-esd")
       var max-voltage-data
       match(gen-pin["max-voltage"]) :
         (max-volt-data: JObject) :
           val min-volts = match(max-volt-data["min"]) :
             (min-volts-double:Double) : min-volts-double
-            (min-volts) : stm-error("Invalid max-voltage data")
+            (min-volts) : stm-exception!("Invalid max-voltage data")
           val max-volts = match(max-volt-data["max"]) :
             (max-volts-double:Double) : max-volts-double
-            (max-volts) : stm-error("Invalid max-voltage data")
+            (max-volts) : stm-exception!("Invalid max-voltage data")
           val nominal = match(max-volt-data["nominal"]) :
             (nominal:True) : nominal
             (nominal:False) : nominal
-            (nominal) : stm-error("Invalid nominal data")
+            (nominal) : stm-exception!("Invalid nominal data")
           max-voltage-data = STMVoltageLimits(min-volts, max-volts, nominal)
         (max-volt-data) :
-          stm-error("Invalid JSON")
+          stm-exception!("Invalid JSON")
       stm-gen-pin = STMGenericPin(name, max-voltage-data, rated-esd)
 
   val power-pin = pin-prop["power-pin"]
@@ -233,7 +233,7 @@ public defn create-pin-properties (json1:JSON) -> STMPinProperties :
     (pow-pin: JObject) :
       val name = match(pow-pin["name"]) :
         (name : String) : name
-        (name) : stm-error("Invalid Power Pin Name")
+        (name) : stm-exception!("Invalid Power Pin Name")
       val recommended-volt-data = pow-pin["recommended-voltage"]
       var recommended-voltage-data
 
@@ -241,17 +241,17 @@ public defn create-pin-properties (json1:JSON) -> STMPinProperties :
         (recommended-volt-data: JObject) :
           val min-volts = match(recommended-volt-data["min"]) :
             (min-volts-double:Double) : min-volts-double
-            (min-volts) : stm-error("Invalid recommended-voltage min data")
+            (min-volts) : stm-exception!("Invalid recommended-voltage min data")
           val max-volts = match(recommended-volt-data["max"]) :
             (max-volts-double:Double) : max-volts-double
-            (max-volts) : stm-error("Invalid recommended-voltage max data")
+            (max-volts) : stm-exception!("Invalid recommended-voltage max data")
           val nominal = match(recommended-volt-data["nominal"]) :
             (nominal:True) : nominal
             (nominal:False) : nominal
-            (nominal) : stm-error("Invalid nominal data")
+            (nominal) : stm-exception!("Invalid nominal data")
           recommended-voltage-data = STMVoltageLimits(min-volts, max-volts, nominal)
         (recommended-volt-data) :
-          stm-error("Invalid JSON") 
+          stm-exception!("Invalid JSON") 
 
       stm-pow-pin = STMPowerPin(name, recommended-voltage-data)
 
@@ -262,11 +262,11 @@ public defn create-pin-properties (json1:JSON) -> STMPinProperties :
       for pin-item in pins do :
         val pin-name = match(pin-item["pin"]) :
           (pin-name:String) : pin-name
-          (pin-name) : stm-error("Invalid Pin Name: %_" % [pin-name])
+          (pin-name) : stm-exception!("Invalid Pin Name: %_" % [pin-name])
         val pad-name = match(pin-item["pad"]) :
           (pad-double:Double) : to-int(pad-double)
           (pad-str:String) : pad-str
-          (pad-data) : stm-error("Invalid Pad Value:%_" % [pad-data])
+          (pad-data) : stm-exception!("Invalid Pad Value:%_" % [pad-data])
         val side = match(pin-item["side"]) :
           (side-val:String) : 
             switch(side-val) :
@@ -274,21 +274,21 @@ public defn create-pin-properties (json1:JSON) -> STMPinProperties :
               "Down" : Down,
               "Left" : Left,
               "Right" : Right
-          (side-val) : stm-error("Invalid Pin Name")
+          (side-val) : stm-exception!("Invalid Pin Name")
         
         val power-props? = match(pin-item["power-pin?"]) :
           (power-val:True) : power-val
           (power-val:False) : power-val
-          (power-val) : stm-error("Invalid Power Value")
+          (power-val) : stm-exception!("Invalid Power Value")
 
         val generic-props? = match(pin-item["generic-pin?"]) :
           (generic-val:True) : generic-val
           (generic-val:False) : generic-val
-          (generic-val) : stm-error("Invalid Generic Value")
+          (generic-val) : stm-exception!("Invalid Generic Value")
 
         add(pin-properties, STMPinPropertiesRow(pin-name, pad-name, side, generic-props?, power-props?))
     (j) :
-      stm-error("Invalid JSON")
+      stm-exception!("Invalid JSON")
 
   val stm-properties = STMPinProperties(stm-gen-pin, stm-pow-pin, to-tuple(pin-properties))
   stm-properties
