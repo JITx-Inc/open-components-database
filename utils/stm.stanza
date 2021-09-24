@@ -13,14 +13,6 @@ defstruct StmError <: Exception :
 defmethod print (o:OutputStream, e:StmError) : 
   print(o, "Could not extract STM component. %_." % [message(e)])
 
-defstruct MultiplePinsMappedToSamePad <: Exception : 
-  multi-pins: Tuple<KeyValue<String|Int, Seqable<String|Int>>>
-
-defmethod print (o:OutputStream, e:MultiplePinsMappedToSamePad) :
-  print(o, "Multiple pins are mapped to the same pad:")
-  for mp in multi-pins(e) do : 
-    lnprint(IndentedStream(o), "pad %_: %," % [key(mp), value(mp)])
-
 ;=================================================
 ;========== STM JSON -> Stanza Structs ===========
 ;=================================================
@@ -29,7 +21,7 @@ defmethod print (o:OutputStream, e:MultiplePinsMappedToSamePad) :
 public pcb-struct ocdb/stm/STMPinProperties :
   generic-pin: STMGenericPin
   power-pin: STMPowerPin
-  rows: Tuple<STMPinProperties-Row>
+  rows: Tuple<STMPinPropertiesRow>
 
 public pcb-struct  ocdb/stm/STMGenericPin :
   pin-name: String
@@ -46,7 +38,7 @@ public pcb-struct ocdb/stm/STMVoltageLimits:
   nominal?: True|False
 
 ;[{pin} | {pad} | {side} | {generic-props?} | {power-props?}]
-public pcb-struct ocdb/stm/STMPinProperties-Row :
+public pcb-struct ocdb/stm/STMPinPropertiesRow :
   pin: String
   pad: Int|String
   side: Dir
@@ -114,9 +106,9 @@ defmethod print (o:OutputStream, s:STMVoltageLimits) :
   print(o, "STMVoltageLimits:")
   lnprint-fields(o2, s, [min-val, max-val, nominal?])
 
-defmethod print (o:OutputStream, s:STMPinProperties-Row) :
+defmethod print (o:OutputStream, s:STMPinPropertiesRow) :
   val o2 = IndentedStream(o)
-  print(o, "STMPinProperties-Row:")
+  print(o, "STMPinPropertiesRow:")
   lnprint-fields-row(o2, s, [pin, pad, side, generic-props?, power-props?])
 
 defmethod print (o:OutputStream, s:STMBundle) :
@@ -263,8 +255,7 @@ public defn create-pin-properties (json1:JSON) -> STMPinProperties :
 
       stm-pow-pin = STMPowerPin(name, recommended-voltage-data)
 
-  val pads-in-use = HashTable<String|Int, Vector<String|Int>>()
-  val pin-properties = Vector<STMPinProperties-Row>()
+  val pin-properties = Vector<STMPinPropertiesRow>()
   val pins = pin-prop["pins"]
   match(pins) :
     (pins:Tuple<JObject>) :
@@ -295,16 +286,9 @@ public defn create-pin-properties (json1:JSON) -> STMPinProperties :
           (generic-val:False) : generic-val
           (generic-val) : stm-error("Invalid Generic Value")
 
-        match(get?(pads-in-use, pad-name)):
-          (f:False): 
-            pads-in-use[pad-name] = to-vector<String|Int>([pin-name])
-            add(pin-properties, STMPinProperties-Row(pin-name, pad-name, side, generic-props?, power-props?))
-          (mapped-pins:Vector):
-            add(mapped-pins, pin-name)
-    (pins) :
+        add(pin-properties, STMPinPropertiesRow(pin-name, pad-name, side, generic-props?, power-props?))
+    (j) :
       stm-error("Invalid JSON")
-  val multi-pins = to-tuple $ for p in pads-in-use filter : 
-    length(value(p)) > 1
-  throw(MultiplePinsMappedToSamePad(multi-pins)) when not empty?(multi-pins)
+
   val stm-properties = STMPinProperties(stm-gen-pin, stm-pow-pin, to-tuple(pin-properties))
   stm-properties
