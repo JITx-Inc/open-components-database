@@ -33,7 +33,7 @@ public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> False :
     val power-props = stm-to-jitx $ power-pin(pin-properties)
     
     ;Determine if the pads numeric (Double -> Int) or named (Ref -> String).
-    val numeric-pads? = any?({pad(_) is Double}, rows(pin-properties))
+    val numeric-pads? = any?({pad(_) is Int}, rows(pin-properties))
     val named-pads? = any?({pad(_) is String}, rows(pin-properties))
     
     ;If the pads are neither or both, then we are using malformed data.
@@ -49,7 +49,7 @@ public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> False :
         [pin:Ref | pads:Int ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
         for row in rows(pin-properties) do :
           val pin-ref = ref-string-to-ref(pin(row))
-          val pad-index = to-int(pad(row) as Double)
+          val pad-index = pad(row) as Int
           match(generic-props?(row), power-props?(row)) :
             (g:True, p:True)   : [(pin-ref) | pad-index | side(row) | generic-props | power-props]
             (g:True, p:False)  : [(pin-ref) | pad-index | side(row) | generic-props |      -     ]
