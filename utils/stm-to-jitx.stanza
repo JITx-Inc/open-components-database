@@ -44,8 +44,10 @@ public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> HashTabl
       fatal("Generated a micro-controller without pads.") 
     
     ; We need to compile a list of reused pad to pin mappings.
-    val pad-mappings = HashTable<String|Int, Vector<String>>(Vector<String>)
-    defn check-pad (pad:String|Int, pin:String) : 
+    val pad-mappings = HashTable<String|Int, Vector<String>>()
+    defn check-pad (pad:String|Int, pin:String):
+      if get?(pad-mappings, pad) is False : 
+        pad-mappings[pad] = Vector<String>()
       add(pad-mappings[pad], pin)
       length(pad-mappings[pad]) == 1
 
@@ -115,6 +117,7 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
       supports b1 :
         option :
           for mapping in mappings do :
+            println("mapping:%_" % [mapping])
             ;Left hand side of the mapping is the bundle pin.
             val key = dot(b1, ref-string-to-ref(bundle-pin(mapping)))
             ;Right hand side of the mapping is a local or required pin.
