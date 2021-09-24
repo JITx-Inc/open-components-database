@@ -44,21 +44,22 @@ public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> HashTabl
       fatal("Generated a micro-controller without pads.") 
     
     ; We need to compile a list of reused pad to pin mappings.
-    val pad-mappings = HashTable<String|Int, Vector<String>>()
-    defn check-pad (pad:String|Int, pin:String):
-      if get?(pad-mappings, pad) is False : 
-        pad-mappings[pad] = Vector<String>()
+    val pad-mappings = HashTable<String|Int, Vector<String>>(Vector<String>)
+    defn check-pad (pad:String|Int, pin:String) : 
       add(pad-mappings[pad], pin)
       length(pad-mappings[pad]) == 1
 
     ;Generate the pin-properties.
     ;Cases are split between Int and Ref pads, and across generic and power properties usages.
     pin-properties : 
-      [pin:Ref | pads : (String|Int) ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
+      [pin:Ref | pads : (Ref|Int) ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
       for row in rows(pin-properties) do : 
         val pin-ref = ref-string-to-ref(pin(row))
-        val pad-ref = pad(row)
-        if check-pad(pad-ref, pin(row)) : 
+        val pad-ref = match(pad(row)):
+          (i:Int): i
+          (s:String): raw-string-to-ref(s)
+
+        if check-pad(pad(row), pin(row)) : 
           match(generic-props?(row), power-props?(row)) :
             (g:True, p:True)   : [(pin-ref) | (pad-ref) | side(row) | generic-props | power-props]
             (g:True, p:False)  : [(pin-ref) | (pad-ref) | side(row) | generic-props |      -     ]
@@ -71,7 +72,8 @@ public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> HashTabl
         for pin in shared seq : 
           if root is False:
             root = pin
-          pin => (root as String) 
+          pin => (root as String)
+
 ;Generate all bundles and store them in a table indexed by name.
 public defn to-jitx-bundles (bundles:Tuple<STMBundle>) -> HashTable<String, Bundle> :
   val bundle-table = HashTable<String, Bundle>()
@@ -113,7 +115,6 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
       supports b1 :
         option :
           for mapping in mappings do :
-            println("mapping:%_" % [mapping])
             ;Left hand side of the mapping is the bundle pin.
             val key = dot(b1, ref-string-to-ref(bundle-pin(mapping)))
             ;Right hand side of the mapping is a local or required pin.

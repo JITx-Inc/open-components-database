@@ -9,7 +9,6 @@ defpackage ocdb/micro-controllers :
   import jitx/params
   import jitx/param-manager
   import jitx/errors
-
   import ocdb/land-patterns
   import ocdb/design-vars
   import ocdb/property-structs
@@ -101,25 +100,19 @@ public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>) ->
 public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, temperature-properties:Tuple<KeyValue>) -> MicroController :
   val params = jitx-params()
   val vendors = bom-vendors(params)
-  val vendor-properties =
-    match(vendors: Tuple<String>) :
-      ["_sellers" => vendors]
-    else :
-      []
+
   var query-properties = []
   if DESIGN-QUANTITY == 0:
     query-properties = to-tuple $ cat-all([["category" => "microcontroller",
                                                 "_sort" => sort,
                                                 "_exist" => exist],
-                                              vendor-properties
                                               temperature-properties,
                                               properties])
   else :
     query-properties = to-tuple $ cat-all([["category" => "microcontroller",
                                             "_sort" => sort,
                                             "_exist" => exist,
-                                            "_stock" => DESIGN-QUANTITY],
-                                          vendor-properties
+                                            ],
                                           temperature-properties,
                                           properties])
   val jsons = dbquery-all(query-properties) as Tuple<JObject>
