@@ -3,6 +3,8 @@ defpackage ocdb/micro-controllers :
   import core
   import collections
   import json
+  import lang-utils
+
   import jitx
   import jitx/commands
   import jitx/param-sets
@@ -90,36 +92,42 @@ public defn MicroController (json: JObject) -> MicroController :
                   create-bundles(json),
                   create-supports(json))
 
-public defn MicroController (properties:Tuple<KeyValue>) -> MicroController :
-  MicroController(properties, [])
+public defn MicroController (user-properties:Tuple<KeyValue>) -> MicroController :
+  MicroController(user-properties, [])
 
-public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>) -> MicroController :
-  MicroController(properties, exist, OPTIMIZE-FOR, ["max-rated-temperature.min" => OPERATING-TEMPERATURE[0],
-                                                    "min-rated-temperature.max" => OPERATING-TEMPERATURE[1]])
+public defn MicroController (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> MicroController :
+  MicroController(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
 
-public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, temperature-properties:Tuple<KeyValue>) -> MicroController :
+public defn MicroController (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> MicroController :
   val params = jitx-params()
   val vendors = bom-vendors(params)
 
-  var query-properties = []
-  if DESIGN-QUANTITY == 0:
-    query-properties = to-tuple $ cat-all([["category" => "microcontroller",
-                                                "_sort" => sort,
-                                                "_exist" => exist],
-                                              temperature-properties,
-                                              properties])
-  else :
-    query-properties = to-tuple $ cat-all([["category" => "microcontroller",
-                                            "_sort" => sort,
-                                            "_exist" => exist,
-                                            ],
-                                          temperature-properties,
-                                          properties])
-  val jsons = dbquery-all(query-properties) as Tuple<JObject>
-  if length(jsons) == 0 :
-    throw(NoComponentMeetingRequirements(query-properties))
-  else :
-    MicroController(jsons[0])
+  val optional-properties =
+    generate<KeyValue<String, ?>> :
+      ; Octopart parameters: if they exist, octopart will be queried
+      [FIXME]: uncomment when octopart quota issue is resolved
+      ;yield("_stock" => DESIGN-QUANTITY) when DESIGN-QUANTITY > 0
+      ;yield("_sellers" => vendors) when call?<Tuple>({not empty?(_)}, vendors)
+      ; Other design parameters
+      yield("_sort" => sort) when not empty?(sort)
+      yield("_exist" => exist) when not empty?(exist)
+      match(operating-temperature:[Double, Double]):
+        yield("max-rated-temperature.min" => operating-temperature[0])
+        yield("min-rated-temperature.max" => operating-temperature[1])
+
+  ; `user-properties` override default properties
+  val query-properties = to-tuple $ hashtable-union<String, ?> $ [["category" => "microcontroller"],
+                                                                  optional-properties,
+                                                                  user-properties]
+
+  val jobjects = dbquery-all(query-properties) as Tuple<JObject>
+  throw(NoComponentMeetingRequirements(query-properties)) when empty?(jobjects)
+  MicroController(jobjects[0])
+
+; FIXME: add to collections.stanza with hashset-union used in query.stanza ?
+; Behaviour: to-tuple $ hashtable-union $ [["category" => "microcontroller"], ["c" => 2], ["category" => "qwerty"]] -> ["c" => 2 "category" => "qwerty"]
+public defn hashtable-union<K, V> (hs:Seqable<Seqable<KeyValue<K&Equalable&Hashable, V>>>) -> HashTable<K, V> :
+  to-hashtable<K, V>(cat-all(hs))
 
 ;============================================================
 ;======================= MCU to JITX ========================
