@@ -27,13 +27,14 @@ defn stm-to-jitx (voltage-limits:STMVoltageLimits) -> Interval :
   Interval(min-val(voltage-limits), max-val(voltage-limits), false)
 
 ;Generate pin-properties inside of a component.
-public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> False :
+public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> HashTable<String, String> :
+  val pin-pad-remapping = HashTable<String, String|Int>()
   inside pcb-component :
     val generic-props = stm-to-jitx $ generic-pin(pin-properties)
     val power-props = stm-to-jitx $ power-pin(pin-properties)
     
     ;Determine if the pads numeric (Double -> Int) or named (Ref -> String).
-    val numeric-pads? = any?({pad(_) is Double}, rows(pin-properties))
+    val numeric-pads? = any?({pad(_) is Int}, rows(pin-properties))
     val named-pads? = any?({pad(_) is String}, rows(pin-properties))
     
     ;If the pads are neither or both, then we are using malformed data.
@@ -42,30 +43,38 @@ public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> False :
     if not numeric-pads? and not named-pads? :
       fatal("Generated a micro-controller without pads.") 
     
+    ; We need to compile a list of reused pad to pin mappings.
+    val pad-mappings = HashTable<String|Int, Vector<String>>()
+    defn check-pad (pad:String|Int, pin:String):
+      if get?(pad-mappings, pad) is False : 
+        pad-mappings[pad] = Vector<String>()
+      add(pad-mappings[pad], pin)
+      length(pad-mappings[pad]) == 1
+
     ;Generate the pin-properties.
     ;Cases are split between Int and Ref pads, and across generic and power properties usages.
-    if numeric-pads? :
-      pin-properties :
-        [pin:Ref | pads:Int ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
-        for row in rows(pin-properties) do :
-          val pin-ref = ref-string-to-ref(pin(row))
-          val pad-index = to-int(pad(row) as Double)
+    pin-properties : 
+      [pin:Ref | pads : (Ref|Int) ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
+      for row in rows(pin-properties) do : 
+        val pin-ref = ref-string-to-ref(pin(row))
+        val pad-ref = match(pad(row)):
+          (i:Int): i
+          (s:String): raw-string-to-ref(s)
+
+        if check-pad(pad(row), pin(row)) : 
           match(generic-props?(row), power-props?(row)) :
-            (g:True, p:True)   : [(pin-ref) | pad-index | side(row) | generic-props | power-props]
-            (g:True, p:False)  : [(pin-ref) | pad-index | side(row) | generic-props |      -     ]
-            (g:False, p:True)  : [(pin-ref) | pad-index | side(row) |       -       | power-props]
-            (g:False, p:False) : [(pin-ref) | pad-index | side(row) |       -       |      -     ]
-    else :
-      pin-properties :
-        [pin:Ref | pads:Ref ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
-        for row in rows(pin-properties) do :
-          val pin-ref = ref-string-to-ref(pin(row))
-          val pad-name = raw-string-to-ref(pad(row) as String)
-          match(generic-props?(row), power-props?(row)) :
-            (g:True, p:True)   : [(pin-ref) | (pad-name) | side(row) | generic-props | power-props]
-            (g:True, p:False)  : [(pin-ref) | (pad-name) | side(row) | generic-props |      -     ]
-            (g:False, p:True)  : [(pin-ref) | (pad-name) | side(row) |       -       | power-props]
-            (g:False, p:False) : [(pin-ref) | (pad-name) | side(row) |       -       |      -     ]
+            (g:True, p:True)   : [(pin-ref) | (pad-ref) | side(row) | generic-props | power-props]
+            (g:True, p:False)  : [(pin-ref) | (pad-ref) | side(row) | generic-props |      -     ]
+            (g:False, p:True)  : [(pin-ref) | (pad-ref) | side(row) |       -       | power-props]
+            (g:False, p:False) : [(pin-ref) | (pad-ref) | side(row) |       -       |      -     ]
+    
+    to-hashtable<String, String> $ 
+      for shared in values(pad-mappings) seq-cat : 
+        var root: String|False = false
+        for pin in shared seq : 
+          if root is False:
+            root = pin
+          pin => (root as String)
 
 ;Generate all bundles and store them in a table indexed by name.
 public defn to-jitx-bundles (bundles:Tuple<STMBundle>) -> HashTable<String, Bundle> :
@@ -79,7 +88,13 @@ public defn to-jitx-bundles (bundles:Tuple<STMBundle>) -> HashTable<String, Bund
   bundle-table
 
 ;Generate all support statements inside of a component which will include bundles from bundle-table.
-public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTable<String, Bundle>) -> False :
+public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTable<String, Bundle>, pin-name-table:HashTable<String, String>) -> False :
+  defn lookup-pin (pin-name:String) : 
+    ref-string-to-ref $ 
+      match(get?(pin-name-table, pin-name)) : 
+        (s:String): s
+        (f:False): pin-name
+  
   ;Generate a supports statement for a bundle with the given mappings.
   defn generate-support (b:Bundle, mappings:Tuple<STMSupportMapping>) :
     inside pcb-component :
@@ -88,14 +103,11 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
           ;Left hand side of the mapping is the bundle pin.
           val key = dot(b, ref-string-to-ref(bundle-pin(mapping)))
           ;Right hand side of the mapping is a local or required pin.
-          val value =
-            match(require(mapping)) :
-              (req:String) :
-                val req-bundle = bundle-table[req]
-                require p0 : req-bundle
-                dot(p0, ref-string-to-ref(pin(mapping)))
-              (req:False) :
-                dot(self, ref-string-to-ref(pin(mapping)))
+          val value = match(require(mapping)): 
+            (req:False): dot(self, lookup-pin(pin(mapping)))
+            (req:String):
+              require p0: bundle-table[req]
+              dot(p0, lookup-pin(pin(mapping)))
           key => value
 
   ;Generate a supports statement for a bundle b with the given mappings.
@@ -108,23 +120,21 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
             ;Left hand side of the mapping is the bundle pin.
             val key = dot(b1, ref-string-to-ref(bundle-pin(mapping)))
             ;Right hand side of the mapping is a local or required pin.
-            val value =
-              match(require(mapping)) :
-                (req:String) :
-                  val req-bundle = bundle-table[req]
-                  require p0 : req-bundle
-                  dot(p0, ref-string-to-ref(pin(mapping)))
-                (req:False) :
-                  dot(self, ref-string-to-ref(pin(mapping)))
+            val value = match(require(mapping)): 
+              (req:False): 
+                dot(self, lookup-pin(pin(mapping)))
+              (req:String): 
+                require p0: bundle-table[req]
+                dot(p0, lookup-pin(pin(mapping)))
             key => value
         option :
-          require myb2 : b2
+          require p : b2
           for mapping in mappings do :
             val bundle-pin-name = ref-string-to-ref(bundle-pin(mapping))
             ;Left hand side of the mapping is the bundle pin.
             val key = dot(b1, bundle-pin-name)
             ;Right hand side of the mapping is a required pin from the alternate bundle.
-            val value = dot(myb2, bundle-pin-name)
+            val value = dot(p, bundle-pin-name)
             key => value
   
   for support in supports do :
@@ -233,32 +243,6 @@ public defn mcu-module (component:Instantiable) -> (Tuple<KeyValue<Symbol,?>> ->
     connect-debug(mcu, settings[`debug-interface], settings[`debug-connector])
     setup-clocks(mcu, settings[`HSE-freq], settings[`HSE-ppm], settings[`HSE-source], settings[`LSE-freq], settings[`LSE-ppm], settings[`LSE-source])
   module
-    
-
-; val files = [
-;   ; "stm-test-spi.json"
-;   ; "stm-test-gpio.json"
-;   ; "stm-test-adc.json"
-;   ; "stm-test-dac-timer.json"
-;   ; "stm-test-swd.json"
-;   ; "stm-test-quad-spi.json"
-;   "stm-supports.json"
-;   "stm-supports2.json"
-;   "stm-supports3.json"
-;   "stm-supports4.json"
-; ]
-
-for f in dir-files("../../generate-stm/mystanzajson/") do :
-  val file = append("../../generate-stm/mystanzajson/", f)
-  try :
-    val mcu = create-mcu-struct(file)
-    val component = stm-to-jitx(mcu)
-    name(component)
-  catch (e:Exception) :
-    println("bad %_: %_" % [f e])
-
-  ; println("\nAll supports and pins in generated component:")
-  ; do(println{ref(_)}, pins(component))
 
 ;=========================================
 ;=============== Utilities ===============
