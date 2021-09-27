@@ -2001,7 +2001,7 @@ public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
           [r, c]
     
     ; Calculate pad locations
-    val pad-locs  = locs(modifier, num-rows, num-cols, pitch)
+    val pad-locs = to-tuple(locs(modifier, num-rows, num-cols, pitch))
 
     ; Calculate pad names
     val pad-names = BGAPadNames(num-rows, num-cols, row-characters-omitted?)
@@ -2018,6 +2018,22 @@ public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
     val cy-sz = enlarge(pkg-sz, 2.0 * courtyard-excess)
     layer(Courtyard(Top)) = Rectangle(cy-sz)
 
+    ;-------------------------------------------------------------
+    ; Compute the orientation marker
+    val silk-solder-mask-clearance = clearance(current-rules(), MinSilkSolderMaskSpace)
+    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
+    val line-width = clearance(current-rules(), MinSilkscreenWidth)
+    val pad-loc = center(pad-locs[0])
+    val pol-x = x(pad-loc) - ball-diameter * 0.5 - solder-mask-registration
+    val pol-y = y(pad-loc) + ball-diameter * 0.5 + solder-mask-registration
+    val line-length = 3.0 * line-width
+    val dist  = solder-mask-registration + silk-solder-mask-clearance + line-width * 0.5 + 0.01
+    layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * Line(line-width, [Point(0.0, 0.0), Point(line-length, 0.0)])
+    
+    ;-------------------------------------------------------------
+    ; Add the reference label 
+    ref-label(0.0, 0.5 * (y(cy-sz) - clearance(current-rules(), MinSilkscreenTextHeight)))
+    
 public defn make-bga-landpattern (num-rows:Int,
                                   num-cols:Int,
                                   pitch:Double,
