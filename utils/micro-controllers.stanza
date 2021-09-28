@@ -102,25 +102,17 @@ public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>, so
   val vendors = bom-vendors(params)
   val vendor-properties =
     match(vendors: Tuple<String>) :
-      ["_sellers" => vendors]
+      []
     else :
       []
   var query-properties = []
-  if DESIGN-QUANTITY == 0:
-    query-properties = to-tuple $ cat-all([["category" => "microcontroller",
-                                                "_sort" => sort,
-                                                "_exist" => exist],
-                                              vendor-properties
-                                              temperature-properties,
-                                              properties])
-  else :
-    query-properties = to-tuple $ cat-all([["category" => "microcontroller",
-                                            "_sort" => sort,
-                                            "_exist" => exist,
-                                            "_stock" => DESIGN-QUANTITY],
-                                          vendor-properties
-                                          temperature-properties,
-                                          properties])
+  query-properties = to-tuple $ cat-all([["category" => "microcontroller",
+                                              "_sort" => sort,
+                                              "_exist" => exist],
+                                            vendor-properties
+                                            temperature-properties,
+                                            properties])
+
   val jsons = dbquery-all(query-properties) as Tuple<JObject>
   if length(jsons) == 0 :
     throw(NoComponentMeetingRequirements(query-properties))
