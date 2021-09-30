@@ -44,6 +44,7 @@ public pcb-struct ocdb/stm/STMPinPropertiesRow :
   side: Dir
   generic-props?: True|False
   power-props?: True|False
+  types: Tuple<String>
 
 ;Bundle definition to be created in JITX
 ;pcb-bundle {name} :
@@ -109,7 +110,7 @@ defmethod print (o:OutputStream, s:STMVoltageLimits) :
 defmethod print (o:OutputStream, s:STMPinPropertiesRow) :
   val o2 = IndentedStream(o)
   print(o, "STMPinPropertiesRow:")
-  lnprint-fields-row(o2, s, [pin, pad, side, generic-props?, power-props?])
+  lnprint-fields-row(o2, s, [pin, pad, side, generic-props?, power-props?, types])
 
 defmethod print (o:OutputStream, s:STMBundle) :
   val o2 = IndentedStream(o)
@@ -285,8 +286,12 @@ public defn create-pin-properties (json1:JSON) -> STMPinProperties :
           (generic-val:True) : generic-val
           (generic-val:False) : generic-val
           (generic-val) : stm-exception!("Invalid Generic Value")
+        
+        val types = match(pin-item["types"]) :
+          (types:Tuple<String>) : types
+          (types) : stm-exception!("Invalid Pin Types")
 
-        add(pin-properties, STMPinPropertiesRow(pin-name, pad-name, side, generic-props?, power-props?))
+        add(pin-properties, STMPinPropertiesRow(pin-name, pad-name, side, generic-props?, power-props?, types))
     (j) :
       stm-exception!("Invalid JSON")
 

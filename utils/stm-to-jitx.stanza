@@ -54,7 +54,7 @@ public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> HashTabl
     ;Generate the pin-properties.
     ;Cases are split between Int and Ref pads, and across generic and power properties usages.
     pin-properties : 
-      [pin:Ref | pads : (Ref|Int) ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
+      [pin:Ref | pads : (Ref|Int) ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin | types:String ... ]
       for row in rows(pin-properties) do : 
         val pin-ref = ref-string-to-ref(pin(row))
         val pad-ref = match(pad(row)):
@@ -63,10 +63,10 @@ public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> HashTabl
 
         if check-pad(pad(row), pin(row)) : 
           match(generic-props?(row), power-props?(row)) :
-            (g:True, p:True)   : [(pin-ref) | (pad-ref) | side(row) | generic-props | power-props]
-            (g:True, p:False)  : [(pin-ref) | (pad-ref) | side(row) | generic-props |      -     ]
-            (g:False, p:True)  : [(pin-ref) | (pad-ref) | side(row) |       -       | power-props]
-            (g:False, p:False) : [(pin-ref) | (pad-ref) | side(row) |       -       |      -     ]
+            (g:True, p:True)   : [(pin-ref) | (pad-ref) | side(row) | generic-props | power-props | types(row)]
+            (g:True, p:False)  : [(pin-ref) | (pad-ref) | side(row) | generic-props |      -      | types(row)]
+            (g:False, p:True)  : [(pin-ref) | (pad-ref) | side(row) |       -       | power-props | types(row)]
+            (g:False, p:False) : [(pin-ref) | (pad-ref) | side(row) |       -       |      -      | types(row)]
     
     to-hashtable<String, String> $ 
       for shared in values(pad-mappings) seq-cat : 
@@ -137,10 +137,12 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
             val value = dot(p, bundle-pin-name)
             key => value
   
+  val bundle-counts = HashTable<String, Int>(0)
   for support in supports do :
     val supported-bundle = bundle(support)
     val options = qsort(options(supported-bundle))
     val bundle-name = name(supported-bundle)
+    bundle-counts[bundle-name] = bundle-counts[bundle-name] + 1
     val bundle:Bundle|[Bundle, Bundle] =
       match(get?(bundle-table, bundle-name)) :
         (b:Bundle) :
@@ -225,6 +227,9 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
     match(bundle) :
       (b:Bundle) : generate-support(b, mappings(support))
       ([b1, b2]:[Bundle, Bundle]) : generate-support(b1, b2, mappings(support))
+  ; println("")
+  ; do(println, qsort(value, bundle-counts))
+  ; println("")
 
 ;Generate a module that accepts user options and instantiates the given component.
 public defn mcu-module (component:Instantiable) -> (Tuple<KeyValue<Symbol,?>> -> Instantiable) :
