@@ -39,8 +39,10 @@ cd ..
 
 echo "Launching ocdb designs..."
 cd open-components-database/designs
-# Explicitly exclude tutorial.stanza and mcu.stanza because they query octopart more
-designs=(ble-mote.stanza
+# tutorial.stanza and mcu.stanza use part sourcing more
+designs=(tutorial.stanza
+         ble-mote.stanza
+         mcu.stanza
          class-a.stanza
          ethernet-fmc.stanza
          smd-landpatterns.stanza
