@@ -1,0 +1,60 @@
+#use-added-syntax(jitx)
+defpackage ocdb/tag-connect/common : 
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/bundles
+
+public defn make-10-pin-connector-module (component:Instantiable) : 
+  inside pcb-module : 
+    ; the connecting component
+    inst conn: component
+
+    ; the bundles we support out of the module
+    val power-bundle  = power
+    val reset-bundle  = reset
+    val swd-bundle    = swd([SWD-SWO, SWD-TRACESWO]) 
+    val jtag-bundle = jtag()
+
+    port jtag  : jtag-bundle
+    port swd   : swd-bundle
+    port power : power-bundle
+    port reset : reset-bundle
+
+    ; hook up power
+    net (power.vdd, conn.p[1])
+    net (power.gnd, conn.p[3], conn.p[5], conn.p[7], conn.p[9])s
+    supports power-bundle : 
+      power-bundle.vdd => power.vdd
+      power-bundle.gnd => power.gnd
+    
+    ; hook up jtag
+    net (jtag.tms, conn.p[2])
+    net (jtag.tck, conn.p[4])
+    net (jtag.tdo, conn.p[6])
+    net (jtag.tdi, conn.p[8])
+    net (jtag.trstn conn.p[10])
+    
+    supports jtag-bundle : 
+      jtag-bundle.tms => jtag.tms
+      jtag-bundle.tck => jtag.tck
+      jtag-bundle.tdo => jtag.tdo
+      jtag-bundle.tdi => jtag.tdi
+      jtag-bundle.trstn => jtag.trstn
+        
+    ; Note: this will not be used if JTAG is used with trstn
+    net (reset.reset, conn.p[10])
+    supports reset-bundle : 
+      reset.reset => reset-bundle.reset
+    
+    net (swd.swdio   , conn.p[2])
+    net (swd.swdclk  , conn.p[4])
+    net (swd.swo     , conn.p[6])
+    net (swd.traceswo, conn.p[8])
+
+    supports swd-bundle : 
+      swd-bundle.swdio    => swd.swdio
+      swd-bundle.swdclk   => swd.swdclk
+      swd-bundle.swo      => swd.swo
+      swd-bundle.traceswo => swd.traceswo
