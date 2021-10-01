@@ -105,9 +105,8 @@ public defn MicroController (user-properties:Tuple<KeyValue>, exist:Tuple<String
   val optional-properties =
     generate<KeyValue<String, ?>> :
       ; Octopart parameters: if they exist, octopart will be queried
-      ;[FIXME]: uncomment when octopart quota issue is resolved
-      ;yield("_stock" => DESIGN-QUANTITY) when DESIGN-QUANTITY > 0
-      ;yield("_sellers" => vendors) when call?<Tuple>({not empty?(_)}, vendors)
+      yield("_stock" => DESIGN-QUANTITY) when DESIGN-QUANTITY > 0
+      yield("_sellers" => vendors) when call?<Tuple>({not empty?(_)}, vendors)
       ; Other design parameters
       yield("_sort" => sort) when not empty?(sort)
       yield("_exist" => exist) when not empty?(exist)
@@ -119,8 +118,10 @@ public defn MicroController (user-properties:Tuple<KeyValue>, exist:Tuple<String
   val query-properties = to-tuple $ hashtable-union<String, ?> $ [["category" => "microcontroller"],
                                                                   optional-properties,
                                                                   user-properties]
-
-  val jobjects = dbquery-all(query-properties) as Tuple<JObject>
+  ; We use 1000 so that all mcus are queried from the mongo database, then we query the sourcing data for each,
+  ; filter on stock / sellers constraints and finally we sort again if OPTIMIZE_FOR[0] is "price" or "cost".
+  val jobjects = dbquery(query-properties, 1000) as Tuple<JObject>
+  ; We only keep the first mcu amongst the list returned by the jitx server.
   throw(NoComponentMeetingRequirements(query-properties)) when empty?(jobjects)
   MicroController(jobjects[0])
 
