@@ -17,14 +17,6 @@ defpackage ocdb/st-microelectronics/stm-api :
   import ocdb/property-structs
   import ocdb/checks
 
-; Helper function to determine if something has a pin from a bundle.
-defn has-bundle-pin? (name:Ref, x) -> True|False :
-  val found = 
-    for p in pins(x) find : 
-      val r = ref(p)
-      tail(r, ref-length(r) - 1) == name
-  found is-not False
-
 ; public pcb-struct ocdb/st-microelectronics/stm-api/STmicroConfigs :
 
 public deftype Settings
@@ -161,21 +153,18 @@ defn supports? (module:InstantiableType, bundle:PortType) -> True|False :
 public defn connect-debug (stm:JITXObject, debug-interface:PortType, connector:Instantiable) :
   inside pcb-module:
     if supports?(instantiable-type(stm), debug-interface) and supports?(connector, debug-interface):
-      public inst debug-con : connector
+      inst debug-con : connector
       require debug-m:debug-interface from stm
       require debug-c:debug-interface from debug-con
-
-      if not has-bundle-pin?(Ref(`trstn), debug-con) : 
-        require reset-c : reset from debug-con
-        require reset-m : reset from stm
-        net RESET (reset-c, reset-m)
-      
+      net DEBUG (debug-m debug-c)
       schematic-group(debug-con) = debug
       if has-port?(debug-con, "power") :
         net (debug-con.power.vdd, power-pins(stm)[0])
         net (debug-con.power.gnd, gnd-pins(stm)[0])
     else :
       println("Unsupported debug-interface on %_" % [ref(stm)])
+
+; defn select-crystal (freq:Double, ppm:double):
 
 public defn setup-clocks (stm:JITXObject, HSE-freq:Double, HSE-ppm:Double, HSE-source:String, LSE-freq:Double, LSE-ppm:Double, LSE-source:String) :
   inside pcb-module:
