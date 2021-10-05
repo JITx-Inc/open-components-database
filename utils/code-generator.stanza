@@ -1,0 +1,143 @@
+defpackage ocdb/code-generator :
+  import core
+  import collections
+
+;========================================================
+;==================== Code Generator ====================
+;========================================================
+
+;Enums with specialized to-string methods.
+public defenum PartType :
+  STM
+
+public defenum Syntax :
+  JITX
+  TESTS
+
+defmethod to-string (s:JITX) : "jitx"
+defmethod to-string (s:TESTS) : "tests"
+
+;CodeGenerator and its abstract methods.
+public deftype CodeGenerator
+public defmulti write-added-syntaxes (c:CodeGenerator, syntaxes:Tuple<Syntax>) -> False
+public defmulti write-package (c:CodeGenerator, package:String) -> False
+public defmulti write-package-imports (c:CodeGenerator, type:PartType) -> False
+public defmulti write-component (c:CodeGenerator, name:String) -> False
+public defmulti write-manufacturer (c:CodeGenerator, manufacturer:String) -> False
+public defmulti write-mpn (c:CodeGenerator, mpn:String) -> False
+public defmulti write-variable (c:CodeGenerator, name:String, value:String, indented?:True|False) -> False
+public defmulti write-pin-properties-header (c:CodeGenerator, header:String) -> False
+public defmulti write-pin-properties-rows (c:CodeGenerator, rows:Tuple<Tuple<Maybe<String>>>) -> False
+public defmulti write-bundle (c:CodeGenerator, name:String, pins:Tuple<String>) -> False
+public defmulti write-support (c:CodeGenerator, bundle:String) -> False
+public defmulti write-option (c:CodeGenerator, name?:Maybe<String>) -> False
+public defmulti write-require (c:CodeGenerator, pin:String, bundle:String, indented?:True|False) -> False
+public defmulti write-support-mapping (c:CodeGenerator, left:String, right:String, indented?:True|False) -> False
+public defmulti write-assign-landpattern (c:CodeGenerator, lp:String) -> False
+public defmulti write-make-box-symbol (c:CodeGenerator) -> False
+public defmulti write-string (c:CodeGenerator, str:String) -> False
+public defmulti generated-code (c:CodeGenerator) -> String
+
+;Alternate functions aptly named to avoid passing in an `indented?` value.
+public defn write-global-variable (cg:CodeGenerator, name:String, value:String) -> False :
+  write-variable(cg, name, value, false)
+public defn write-local-variable (cg:CodeGenerator, name:String, value:String) -> False :
+  write-variable(cg, name, value, true)
+
+public defn write-require (cg:CodeGenerator, pin:String, bundle:String) -> False :
+  write-require(cg, pin, bundle, false)
+public defn write-indented-require (cg:CodeGenerator, pin:String, bundle:String) -> False :
+  write-require(cg, pin, bundle, true)
+
+public defn write-support-mapping (cg:CodeGenerator, left:String, right:String) -> False :
+  write-support-mapping(cg, left, right, false)
+public defn write-indented-support-mapping (cg:CodeGenerator, left:String, right:String) -> False :
+  write-support-mapping(cg, left, right, true)
+
+;CodeGenerator definition.
+public defn CodeGenerator () :
+  ;0, 2, 4 and 6-indent streams.
+  val buf0 = StringBuffer()
+  val buf2 = IndentedStream(buf0)
+  val buf4 = IndentedStream(buf2)
+  val buf6 = IndentedStream(buf4)
+
+  ;Write to an indent-specific stream.
+  ;Always ends with a new line.
+  defn write0 (s) : println(buf0, s)
+  defn write2 (s) : println(buf2, s)
+  defn write4 (s) : println(buf4, s)
+  defn write6 (s) : println(buf6, s)
+
+  defn lnprintln (o:OutputStream, s) :
+    println(o, "")
+    println(o, s)
+  
+  ;Begin with a new line.
+  defn lnwrite0 (s) : lnprintln(buf0, s)
+  defn lnwrite2 (s) : lnprintln(buf2, s)
+  defn lnwrite4 (s) : lnprintln(buf4, s)
+  defn lnwrite6 (s) : lnprintln(buf6, s)
+
+  new CodeGenerator :
+    defmethod write-added-syntaxes (this, syntaxes:Tuple<Syntax>) :
+      write0("#use-added-syntax(%,)" % [seq(to-string, syntaxes)])
+    defmethod write-package (this, package:String) :
+      write0("defpackage %_ :" % [package])
+    defmethod write-package-imports (this, type:PartType) :
+      match(type) :
+        (t:STM) :
+          val packages = ["core" "collections" "jitx" "jitx/commands"
+                          "ocdb/box-symbol" "ocdb/st-microelectronics/landpatterns"
+                          "ocdb/bundles" "ocdb/property-structs"
+                          "ocdb/st-microelectronics/stm-api"]
+          do(write2{"import %_" % [_]}, packages)
+    defmethod write-component (this, name:String) :
+      lnwrite0("pcb-component %_ :" % [name])
+    defmethod write-variable (this, name:String, value:String, indented?:True|False) :
+      val write-fn = write2 when indented? else write0
+      write-fn("val %_ = %_" % [name value])
+    defmethod write-manufacturer (this, manufacturer:String) :
+      write2("manufacturer = %~" % [manufacturer])
+    defmethod write-mpn (this, mpn:String) :
+      write2("mpn = %~" % [mpn])
+    defmethod write-pin-properties-header (this, header:String) :
+      lnwrite2("pin-properties :")
+      write4(header)
+    defmethod write-pin-properties-rows (this, rows:Tuple<Tuple<Maybe<String>>>) :
+      for row in rows do :
+        val buf = StringBuffer()
+        add(buf, '[')
+        for (item in row, i in 1 to false) do :
+          match(value?(item)) :
+            (str:String) : add-all(buf, str)
+            (f:False) : add(buf, '-')
+          if i < length(row) :
+            add-all(buf, " | ")
+        add(buf, ']')
+        write4(to-string(buf))
+    defmethod write-bundle (this, name:String, pins:Tuple<String>) :
+      lnwrite2("pcb-bundle %_ :" % [name])
+      do(write4{"pin %_" % [_]}, pins)
+    defmethod write-support (this, bundle:String) :
+      lnwrite2("supports %_ :" % [bundle])
+    defmethod write-option (this, name?:Maybe<String>) :
+      val name-str =
+        match(value?(name?)) :
+          (name:String) : "(%_) " % [name]
+          (f:False) : ""
+      write4("option %_:" % [name-str])
+    defmethod write-require (this, pin:String, bundle:String, indented?:True|False) :
+      val write-fn = write6 when indented? else write4
+      write-fn("require %_ : %_" % [pin bundle])
+    defmethod write-support-mapping (this, left:String, right:String, indented?:True|False) :
+      val write-fn = write6 when indented? else write4
+      write-fn("%_ => %_" % [left right])
+    defmethod write-assign-landpattern (this, lp:String) :
+      lnwrite2("assign-landpattern(%_)" % [lp])
+    defmethod write-make-box-symbol (this) :
+      write2("make-box-symbol()")
+    defmethod write-string (this, str:String) :
+      write0(str)
+    defmethod generated-code (this) :
+      to-string(buf0)
