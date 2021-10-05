@@ -1,0 +1,65 @@
+#use-added-syntax(jitx)
+defpackage ex:
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/land-patterns
+  import ocdb/defaults
+  import ocdb/tolerance
+  import ocdb/box-symbol
+set-rules(default-rules)
+public pcb-component radial (r:String, p?:True|False):
+  reference-prefix = r
+  pcb-landpattern lp:
+    make-two-pin-radial-landpattern(
+      tol(5.0, 0.5),
+      2.0,
+      tol(0.5, 0.0)
+      p?
+    )
+  if p?:
+    pin a
+    pin c
+    landpattern = lp(a => lp.a, c => lp.c)
+  else:
+    port p: pin[[1 2]]
+    landpattern = lp(p[1] => lp.p[1], p[2] => lp.p[2])
+  make-box-symbol()
+
+public pcb-component axial (r:String, p?:True|False):
+  reference-prefix = r
+  port p: pin[[1 2]]
+  pcb-landpattern lp:
+    make-two-pin-axial-landpattern(
+      tol(6.5, 0.0),
+      tol(2.5, 0.0),
+      0.5,
+      tol(0.58, 0.05),
+      p?
+    )
+  if p?:
+    landpattern = lp(
+      p[1] => lp.a
+      p[2] => lp.c
+    )
+  else:
+    landpattern = lp(
+      p[1] => lp.p[1]
+      p[2] => lp.p[2]
+    )
+  make-box-symbol()
+
+public pcb-module th-landpatterns:
+  inst r: axial("R", false)
+  inst d: axial("D", true)
+  inst c: radial("C", true)
+  inst u: radial("U", false)
+
+  place(c) at loc(-6.0, 5.0) on Top
+  place(u) at loc(-6.0, -5.0) on Top
+  place(r) at loc(0.0, 0.0) on Top
+  place(d) at loc(5.0, 0.0) on Top
+
+make-default-board(th-landpatterns, 4, Rectangle(20.0, 20.0))
+view-board()

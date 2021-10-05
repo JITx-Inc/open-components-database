@@ -19,16 +19,19 @@ defpackage ocdb/generic-components:
 ; ========================================================
 ; ====== Standard packages for the passive solver ========
 ; ========================================================
-val PKGS = ["01005", "0201", "02016", "0202", "0303", "0402", "0404", "0503", "0505", "0603", "0612", "0805", "1206",
-            "1210", "1218", "1812", "2010", "2512", "2525", "2615", "2616", "3920", "4122", "4823", "5329", "6030"]
+val PKGS = ["009005", "01005", "0201", "02016", "0202", "0302", "0303", "0402", "0404", "0503", "0505", "0603", "0612",
+            "0805", "1206", "1210", "1218", "1812", "2010", "2512", "2525", "2615", "2616", "3920", "4122", "4823",
+            "5329", "6030"]
 
 public defn get-valid-pkg-list () :
-  val min-pkg-idx = find({PKGS[_] == MIN-PKG}, 0 to length(PKGS))
+  get-valid-pkg-list(MIN-PKG)
+
+public defn get-valid-pkg-list (min-pkg: String) :
+  val min-pkg-idx = find({PKGS[_] == min-pkg}, 0 to length(PKGS))
   match(min-pkg-idx: Int) :
     PKGS[min-pkg-idx to false]
   else :
-    throw(Exception("Invalid MIN-PKG."))
-
+    throw(Exception("Invalid min-pkg."))
 ; ========================================================
 ; ==== EIA Standard Tolerances and Logarithmic Values ====
 ; ========================================================
@@ -132,7 +135,7 @@ public defn ceramic-cap (params:Tuple<KeyValue>) :
                         "minimum_quantity" => 1
                         "min-rated-voltage" => MIN-CAP-VOLTAGE
                         "min-stock" => 5 * DESIGN-QUANTITY]
-  to-esir(Capacitor(to-tuple $ to-hashtable<String, ?> $ cat(default-params params)))
+  to-jitx(Capacitor(to-tuple $ to-hashtable<String, ?> $ cat(default-params params)))
 
 public defn ceramic-cap (cap:Double) :
   ceramic-cap(["capacitance" => cap])
@@ -143,7 +146,7 @@ public defn chip-resistor (params:Tuple<KeyValue>) :
                         "case" => get-valid-pkg-list()
                         "minimum_quantity" => 1
                         "min-stock" => 5 * DESIGN-QUANTITY]
-  to-esir(Resistor(to-tuple $ to-hashtable<String, ?> $ cat(default-params params)))
+  to-jitx(Resistor(to-tuple $ to-hashtable<String, ?> $ cat(default-params params)))
 
 public defn chip-resistor (resistance:Double, tolerance:Double) :
   chip-resistor(["resistance" => resistance "tolerance" => tolerance])
@@ -157,7 +160,7 @@ public defn smd-inductor (params:Tuple<KeyValue>) :
                         "case" => get-valid-pkg-list()
                         "minimum_quantity" => 1
                         "min-stock" => 5 * DESIGN-QUANTITY]
-  to-esir(Inductor(to-tuple $ to-hashtable<String, ?> $ cat(default-params params)))
+  to-jitx(Inductor(to-tuple $ to-hashtable<String, ?> $ cat(default-params params)))
 
 public defn smd-inductor (ind:Double) :
   smd-inductor(["inductance" => ind])
@@ -468,10 +471,10 @@ public defn attach-programming-connector (proc:JITXObject, vio:JITXObject, intf:
     public inst tag : ocdb/tag-connect/TC2050-IDC-NL/module
     net (vio, tag.pwr)
     if intf == "swd" :
-      require swd:swd from proc
+      require swd:swd() from proc
       net (swd tag.swd)
     else if intf == "jtag" :
-      require jtag:jtag([JTAG-TRSTN]) from proc
+      require jtag:jtag() from proc
       net (jtag tag.jtag)
 
 ; ========================================================

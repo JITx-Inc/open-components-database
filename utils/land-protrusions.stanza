@@ -1,0 +1,211 @@
+#use-added-syntax(jitx)
+;==============================================================================
+;========================== Land Protrusion Tables ============================
+;==============================================================================
+defpackage ocdb/land-protrusions:
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/design-vars
+
+;TODO:
+;  - BGA (table 3-17)
+;  - PSON/PQFN/DFN (table 3-18)
+;  - OSCCC (table 3-19)
+;  - CGA/LGA (table 3-21)
+
+; LandProtrusionType is a helper enum for various kinds of leads and terminations on 
+; components. It is used to configure their generated land patterns.
+public pcb-enum ocdb/land-patterns/leads/LandProtrusionType:
+  SmallFlatRibbonLLeads,  ; Flat ribbon L leads for pitch less than 0.0625mm
+  SmallGullWingLeads,     ; Gull wwing leads with pitch less than 0.0625mm
+  BigFlatRibbonLLeads,    ; Flat ribbon L leads for pitch greater than 0.0625mm
+  BigGullWingLeads,       ; GullWing leads for pitch greater than 0.0625mm
+  JLeads,                 ; J Leads
+  SmallRectangularLeads,  ; Leads for rectangular components (chip capacitors, resistors, inductors) smaller than 0601
+  BigRectangularLeads,    ; Leads for rectangular components (chip capacitors, resistors, inductors) 0601 or larger
+  CylindricalLeads,       ; Cylindrical end cap leads
+  LeadlessChipCarrierLeads, ; Lead less chip carrier leads
+  ConcaveChipArrayLeads,    ; Concave chip array leads
+  ConvexChipArrayLeads,     ; Convex chip array leads
+  FlatChipArrayLeads,       ; Flat chip array leads
+  ButtJointLeads,           ; Butt joint leads
+  InwardFlatRibbonLLeads,   ; Inward flat ribbons L leads
+  FlatLugLeads,             ; flat lug leads
+  QuadFlatNoLeads,          ; quad flat components without leads
+  SmallOutlineNoLeads,      ; small outline packages without leads
+  SmallOutlineFlatLeads,    ; small outline flat leads
+  ShortTwoPinCrystalLeads,  ; two pin crystal components shorter than 10mm
+  ShortAluminumElectrolyticLeads, ; electrolytic capacitor shorter than 10mm
+  TallTwoPinCrystalLeads,         ; two pin crystal components 10mm or taller
+  TallAluminumElectrolyticLeads,  ; electrolytic capacitor 10mm or taller
+
+; LeadFillets are extra spacing along the sides of a lead when generating a land for 
+; a component's leads.
+public pcb-struct ocdb/land-patterns/packages/LeadFillets:
+  toe:Double  ; space away from the component towards the board
+  heel:Double ; space towards the component
+  side:Double ; space on the edges of the lead
+  courtyard-excess:Double ; additional area to add to the courtyard 
+
+defmethod print (o:OutputStream, l:LeadFillets):
+  print(o, "LeadFillets(toe:%_, heel:%_, side:%_, courtyard-excess:%_" % [toe(l), heel(l), side(l), courtyard-excess(l)])
+
+public defn to-tuple (l:LeadFillets) -> [Double, Double, Double, Double]:
+  [toe(l), heel(l), side(l), courtyard-excess(l)]
+
+; Compute the LeadFillets of a lead type
+public defn lead-fillets (lead-type:LandProtrusionType) -> LeadFillets:
+  lead-fillets(lead-type, DensityLevelA)
+
+; Compute the LeadFillets of a lead type, given a design producability level.
+public defn lead-fillets (lead-type:LandProtrusionType, p:DensityLevel) -> LeadFillets:
+  match(lead-type):
+    (_:SmallFlatRibbonLLeads): flat-ribbon-L(p, 0.0)
+    (_:SmallGullWingLeads): gull-wing-leads(p, 0.0)
+    (_:BigFlatRibbonLLeads): flat-ribbon-L(p, 1.0)
+    (_:BigGullWingLeads): gull-wing-leads(p, 1.0)
+    (_:JLeads): j-leads(p)
+    (_:BigRectangularLeads): big-rectangular(p)
+    (_:SmallRectangularLeads): small-rectangular(p)
+    (_:CylindricalLeads): cylindrical(p)
+    (_:LeadlessChipCarrierLeads): leadless-chip-carrier(p)
+    (_:ConcaveChipArrayLeads): concave-chip-array(p)
+    (_:ConvexChipArrayLeads): convex-chip-array(p)
+    (_:FlatChipArrayLeads): flat-chip-array(p)
+    (_:ButtJointLeads): butt-joints(p)
+    (_:InwardFlatRibbonLLeads): inward-flat-ribbon-l-leads(p)
+    (_:FlatLugLeads): flat-lug-leads(p)
+    (_:QuadFlatNoLeads): quad-flat-no-lead(p)
+    (_:SmallOutlineNoLeads): small-outline-no-lead(p)
+    (_:SmallOutlineFlatLeads): small-outline-flat-lead(p)
+    (_:ShortTwoPinCrystalLeads): two-pin-crystal(p, 0.0)
+    (_:ShortAluminumElectrolyticLeads): aluminum-electrolytic(p, 0.0)
+    (_:TallTwoPinCrystalLeads): two-pin-crystal(p, 11.0)
+    (_:TallAluminumElectrolyticLeads): two-pin-crystal(p, 11.0)
+
+;==============================================================================
+;============================ LeadFillet tables ===============================
+;==============================================================================
+protected defn flat-ribbon-L (p:DensityLevel, pitch:Double):
+  if pitch > 0.0625:
+    switch(p):
+      DensityLevelA: LeadFillets(0.55, 0.45, 0.05, 0.5)
+      DensityLevelB: LeadFillets(0.35, 0.35, 0.03, 0.25)
+      DensityLevelC: LeadFillets(0.15, 0.25, 0.01, 0.1)
+  else:
+    switch(p):
+      DensityLevelA: LeadFillets(0.55, 0.45, 0.01  0.5)
+      DensityLevelB: LeadFillets(0.35, 0.35, -0.02 0.25)
+      DensityLevelC: LeadFillets(0.15, 0.25, -0.04 0.1)
+
+protected defn gull-wing-leads (p:DensityLevel, pitch:Double):
+  flat-ribbon-L(p, pitch)
+
+protected defn j-leads (p:DensityLevel):
+  switch(p):
+    DensityLevelA: LeadFillets(0.55, 0.10, 0.05 ,0.5)
+    DensityLevelB: LeadFillets(0.35, 0.00, 0.03 ,0.25)
+    DensityLevelC: LeadFillets(0.15, -0.10, 0.01,0.1)
+
+; components bigger than 0601
+protected defn big-rectangular (p:DensityLevel): 
+  switch(p):
+    DensityLevelA: LeadFillets(0.55, 0.00, 0.05 ,0.5)
+    DensityLevelB: LeadFillets(0.35, 0.00, 0.00 ,0.25)
+    DensityLevelC: LeadFillets(0.15, 0.00, -0.05, 0.1)
+
+; rectangular components smaller than 0601
+protected defn small-rectangular (p:DensityLevel):
+  switch(p):
+    DensityLevelA: LeadFillets(0.30, 0.00, 0.05 ,0.5)
+    DensityLevelB: LeadFillets(0.20, 0.00, 0.00 ,0.25)
+    DensityLevelC: LeadFillets(0.10, 0.00, -0.05, 0.1)
+
+protected defn cylindrical (p:DensityLevel):
+  switch(p):
+    DensityLevelA: LeadFillets(0.60, 0.20, 0.10, 0.5)
+    DensityLevelB: LeadFillets(0.40, 0.10, 0.05, 0.25)
+    DensityLevelC: LeadFillets(0.20, 0.02, 0.01, 0.1)
+
+protected defn leadless-chip-carrier (p:DensityLevel):
+  switch(p):
+    DensityLevelA: LeadFillets(0.65, 0.25, 0.05, 0.5)
+    DensityLevelB: LeadFillets(0.55, 0.15, -0.05, 0.25)
+    DensityLevelC: LeadFillets(0.45, 0.05, -0.15, 0.1)
+
+protected defn concave-chip-array (p:DensityLevel):
+  switch(p):
+    DensityLevelA: LeadFillets(0.55, -0.05, -0.05, 0.5)
+    DensityLevelB: LeadFillets(0.45, -0.07, -0.07, 0.25)
+    DensityLevelC: LeadFillets(0.35, -0.20, -0.10, 0.1)
+
+protected defn convex-chip-array (p:DensityLevel):
+  switch(p):
+    DensityLevelA: LeadFillets(0.55, -0.05, -0.05, 0.5)
+    DensityLevelB: LeadFillets(0.45, -0.07, -0.07, 0.25)
+    DensityLevelC: LeadFillets(0.35, -0.20, -0.10, 0.1)
+
+protected defn flat-chip-array (p:DensityLevel):
+  switch(p):
+    DensityLevelA: LeadFillets(0.55, -0.05, -0.05, 0.5)
+    DensityLevelB: LeadFillets(0.45, -0.07, -0.07, 0.25)
+    DensityLevelC: LeadFillets(0.35, -0.20, -0.10, 0.1)
+
+protected defn butt-joints (p:DensityLevel):
+  switch(p):
+    DensityLevelA: LeadFillets(1.0, 1.0, 0.3, 1.5)
+    DensityLevelB: LeadFillets(0.8, 0.8, 0.2, 0.8)
+    DensityLevelC: LeadFillets(0.6, 0.6, 0.1, 0.2)
+
+protected defn inward-flat-ribbon-l-leads (p:DensityLevel):
+  switch(p):
+    DensityLevelA: LeadFillets(0.25, 0.8, 0.01, 0.5)
+    DensityLevelB: LeadFillets(0.15, 0.5, -0.05, 0.25)
+    DensityLevelC: LeadFillets(0.07, 0.2, -0.10, 0.1)
+
+protected defn flat-lug-leads (p:DensityLevel):
+  switch(p):
+    DensityLevelA: LeadFillets(0.55, 0.45, 0.05, 0.5)
+    DensityLevelB: LeadFillets(0.35, 0.35, 0.03, 0.25)
+    DensityLevelC: LeadFillets(0.15, 0.25, 0.01, 0.1)
+
+protected defn quad-flat-no-lead (p:DensityLevel):
+  switch(p):
+    DensityLevelA: LeadFillets(0.4, 0.00, -0.04, 0.5)
+    DensityLevelB: LeadFillets(0.3, 0.00, -0.04, 0.25)
+    DensityLevelC: LeadFillets(0.2, 0.00, -0.04, 0.1)
+
+protected defn small-outline-no-lead (p:DensityLevel):
+  switch(p):
+    DensityLevelA: LeadFillets(0.4, 0.00, -0.04, 0.5)
+    DensityLevelB: LeadFillets(0.3, 0.00, -0.04, 0.25)
+    DensityLevelC: LeadFillets(0.2, 0.00, -0.04, 0.1)
+
+protected defn small-outline-flat-lead (p:DensityLevel):
+  switch(p):
+    DensityLevelA: LeadFillets(0.3, 0.00,  0.05, 0.2)
+    DensityLevelB: LeadFillets(0.2, 0.00,  0.00, 0.15)
+    DensityLevelC: LeadFillets(0.1, 0.00, -0.05, 0.1)
+
+protected defn two-pin-crystal (p:DensityLevel, height:Double):
+  if height < 10.0:
+    switch(p):
+      DensityLevelA: LeadFillets(0.7,  0.00, 0.5, 1.0)
+      DensityLevelB: LeadFillets(0.5, -0.10, 0.4, 0.5)
+      DensityLevelC: LeadFillets(0.3, -0.20, 0.3, 0.25)
+  else:
+    switch(p):
+      DensityLevelA: LeadFillets(1.0,  0.00, 0.6, 1.0)
+      DensityLevelB: LeadFillets(0.7, -0.05, 0.5, 0.5)
+      DensityLevelC: LeadFillets(0.4, -0.10, 0.4, 0.25)
+
+protected defn aluminum-electrolytic (p:DensityLevel, height:Double):
+  two-pin-crystal(p, height)
+
+public defn bga-courtyard-excess (density-level:DensityLevel):
+  switch(density-level):
+    DensityLevelA: 2.0
+    DensityLevelB: 1.0
+    DensityLevelC: 0.5

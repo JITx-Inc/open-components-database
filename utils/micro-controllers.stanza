@@ -3,27 +3,48 @@ defpackage ocdb/micro-controllers :
   import core
   import collections
   import json
+  import lang-utils
+
   import jitx
   import jitx/commands
   import jitx/param-sets
   import jitx/params
   import jitx/param-manager
   import jitx/errors
-
   import ocdb/land-patterns
   import ocdb/design-vars
   import ocdb/property-structs
   import ocdb/box-symbol
   import ocdb/db-parts
 
+  import ocdb/stm
+  import ocdb/stm-to-jitx
+  import ocdb/st-microelectronics/landpatterns
+
 
 ;============================================================
 ;======================== Accessor ==========================
 ;============================================================
 
-public defn micro-controller (params:Tuple<KeyValue>) :
+public defn micro-controller (params:Tuple<KeyValue>) -> (Tuple<KeyValue<Symbol,?>> -> Instantiable) :
   val mcu = MicroController(params)
-  find-stm32-module(mpn(mcu))
+  val component = to-jitx(mcu)
+  mcu-module(component)
+
+public defn look-up-micro-controllers (attribute: String) -> Tuple :
+  look-up-micro-controllers(attribute, [])
+
+public defn look-up-micro-controllers (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
+  look-up-micro-controllers(attribute, filter-properties, [])
+
+public defn look-up-micro-controllers (attribute: String, filter-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple :
+  look-up-micro-controllers(attribute, filter-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
+
+public defn look-up-micro-controllers (attribute: String, filter-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> Tuple :
+  val user-properties = to-tuple $ cat(filter-properties, ["_distinct" => attribute])
+  val query-properties = micro-controller-query-properties(user-properties, exist, sort, operating-temperature)
+
+  dbquery-all(query-properties) as Tuple
 
 ;============================================================
 ;===================== Micro Controller =====================
@@ -53,9 +74,10 @@ public defstruct MicroController <: Component :
   supply-voltage: MinMaxRange
   price: Double|False
   sellers: Tuple<Tuple<KeyValue<String, ?>>>|False
+  pin-properties: STMPinProperties
+  bundles: Tuple<STMBundle>
+  supports: Tuple<STMSupports>
 
-defn int (json: JSON) -> Int:
-  to-int(json as Double)
 
 public defn MicroController (json: JObject) -> MicroController :
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
@@ -70,121 +92,81 @@ public defn MicroController (json: JObject) -> MicroController :
                   parse-rated-temperature(json),
                   json["core"] as String,
                   json["core-architecture"] as String,
-                  int(json["data-width"]),
+                  to-int(json["data-width"] as Double),
                   json["flash"] as Double,
                   json["frequency"] as Double,
-                  int(json["io"]),
+                  to-int(json["io"] as Double),
                   json["line"] as String,
                   json["mfg-package"] as String,
                   json["ram"] as Double,
                   json["series"] as String
                   parse-supply-voltage(json),
                   optional-double(json, "resolved_price"),
-                  parse-sellers(json))
+                  parse-sellers(json),
+                  create-pin-properties(json),
+                  create-bundles(json),
+                  create-supports(json))
 
-defmethod to-esir (mcu: MicroController) -> Instantiable :
-  pcb-component my-microcontroller :
-    manufacturer = manufacturer(mcu)
-    mpn = mpn(mcu)
-    val generic-props = GenericPin(Interval(-0.3, 4.0, false), 2000.0)
-    val supply-voltage = supply-voltage(mcu)
-    val power-props = PowerPin(Interval(min(supply-voltage), max(supply-voltage), false))
-    ;pin-properties :
-    ;  [pin:Ref | pads:Int ... | side:Dir| generic-pin:GenericPin | power-pin:PowerPin ]
-    ;  What is the paatern of pins?
+public defn MicroController (user-properties:Tuple<KeyValue>) -> MicroController :
+  MicroController(user-properties, [])
 
-    val x = x(mcu)
-    val landpattern =
-      switch(mfg-package(mcu)) :
-      "LQFP64" :
-        qfp-landpattern(0.5, x, 64, 0.3, 1.2)
-      "LQFP48" :
-        qfp-landpattern(0.5, x, 48, 0.3, 1.2)
-      "VFQFPN36" :
-        qfn-landpattern(0.5, x, 36, 0.23, 0.55, [4.8 4.8])
-      "UFQFPN28" :
-        qfn-landpattern(0.5, x, 28, 0.25, 0.4)
-      "TFBGA64" :
-        bga-pkg(0.5, 0.28, [8, 8], [x y(mcu)], [])
-      "LFBGA100" :
-        bga-pkg(0.8, 0.5, [10, 10], [x y(mcu)], [])
-      "TSSOP20" :
-        sop65-landpattern(20, x)
-    assign-landpattern(landpattern)
-    make-box-symbol()
+public defn MicroController (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> MicroController :
+  MicroController(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
 
-    ;ocdb/components/STM32F031F_4-6_Px/supports/make-supports()  ; Wrong, put a switch with correct one
+public defn MicroController (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> MicroController :
+  val query-properties = micro-controller-query-properties(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
+  ; - If _stock or _sellers key exist, all STM mcus are queried from the mongo database in the limit of maximum 1000,
+  ; then we query the sourcing data for each, filter on stock / sellers constraints and
+  ; finally we sort again if OPTIMIZE_FOR[0] is "price" or "cost".
+  ; - If we don't need to filter on sourcing data (includes sorting on price), we can just query 1 mcu from the mongo database and return it
+  val jobject = dbquery-first(query-properties) as JObject
+  MicroController(jobject)
 
-  my-microcontroller
-
-public defn find-stm32-module (mpn: String) -> (Tuple<KeyValue> -> Instantiable) :
-  switch(mpn) :
-    "STM32F102R4T6A" :
-      ocdb/st-microelectronics/STM32F102R4T6A/module
-    "STM32F102R6T6A" :
-      ocdb/st-microelectronics/STM32F102R6T6A/module
-    "STM32F102C4T6A" :
-      ocdb/st-microelectronics/STM32F102C4T6A/module
-    "STM32F102C6T6A" :
-      ocdb/st-microelectronics/STM32F102C6T6A/module
-    "STM32F103T4U6A" :
-      ocdb/st-microelectronics/STM32F103T4U6A/module
-    "STM32F103T6U6A" :
-      ocdb/st-microelectronics/STM32F103T6U6A/module
-    "STM32F103RBH6" :
-      ocdb/st-microelectronics/STM32F103RBH6/module
-    "STM32F105V8H6" :
-      ocdb/st-microelectronics/STM32F105V8H6/module
-    "STM32F105VBH6" :
-      ocdb/st-microelectronics/STM32F105VBH6/module
-    "STM32F107VCH6" :
-      ocdb/st-microelectronics/STM32F107VCH6/module
-    "STM32F031F4P6" :
-      ocdb/st-microelectronics/STM32F031F4P6/module
-    "STM32F031F6P6" :
-      ocdb/st-microelectronics/STM32F031F6P6/module
-    "STM32L031F6P6" :
-      ocdb/st-microelectronics/STM32L031F6P6/module
-    "STM32F038G6U6" :
-      ocdb/st-microelectronics/STM32F038G6U6/module
-; inst stm : Micocontroller("family" => "STM32F0" "flash.min" => 1000.0e3])([`bypass-package => 4.7e-6])
-
-public defn MicroController (properties:Tuple<KeyValue>) -> MicroController :
-  MicroController(properties, [])
-
-public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>) -> MicroController :
-  MicroController(properties, exist, OPTIMIZE-FOR, ["max-rated-temperature.min" => OPERATING-TEMPERATURE[0],
-                                                    "min-rated-temperature.max" => OPERATING-TEMPERATURE[1]])
-
-public defn MicroController (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, temperature-properties:Tuple<KeyValue>) -> MicroController :
+defn micro-controller-query-properties (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> Tuple<KeyValue> :
   val params = jitx-params()
   val vendors = bom-vendors(params)
-  val vendor-properties =
-    match(vendors: Tuple<String>) :
-      ["_sellers" => vendors]
-    else :
-      []
-  var query-properties = []
-  if DESIGN-QUANTITY == 0:
-    query-properties = to-tuple $ cat-all([["category" => "microcontroller",
-                                                "_sort" => sort,
-                                                "_exist" => exist],
-                                              vendor-properties
-                                              temperature-properties,
-                                              properties])
-  else :
-    query-properties = to-tuple $ cat-all([["category" => "microcontroller",
-                                            "_sort" => sort,
-                                            "_exist" => exist,
-                                            "_stock" => DESIGN-QUANTITY],
-                                          vendor-properties
-                                          temperature-properties,
-                                          properties])
-  val jsons = dbquery-all(query-properties) as Tuple<JObject>
-  if length(jsons) == 0 :
-    throw(NoComponentMeetingRequirements(query-properties))
-  else :
-    MicroController(jsons[0])
+
+  ; If we want to optimize on cost, we have to put either _stock or _sellers in the query so that the sourcing data is used in the server
+  val sort-on-price = length(sort) >= 1 and contains?(["price", "cost", "-price", "-cost"], sort[0])
+
+  val optional-properties =
+    generate<KeyValue<String, ?>> :
+      ; Part sourcing parameters: if they exist, sourcing data will be used
+      yield("_stock" => DESIGN-QUANTITY) when DESIGN-QUANTITY > 0 or sort-on-price
+      yield("_sellers" => vendors) when call?<Tuple>({not empty?(_)}, vendors)
+      ; Other design parameters
+      yield("_sort" => sort) when not empty?(sort)
+      yield("_exist" => exist) when not empty?(exist)
+      match(operating-temperature:[Double, Double]):
+        yield("max-rated-temperature.min" => operating-temperature[0])
+        yield("min-rated-temperature.max" => operating-temperature[1])
+
+  ; `user-properties` override default properties
+  to-tuple $ hashtable-union<String, ?> $ [["category" => "microcontroller"],
+                                           optional-properties,
+                                           user-properties]
+
+; FIXME: add to collections.stanza with hashset-union used in query.stanza ?
+; Behaviour: to-tuple $ hashtable-union $ [["category" => "microcontroller"], ["c" => 2], ["category" => "qwerty"]] -> ["c" => 2 "category" => "qwerty"]
+public defn hashtable-union<K, V> (hs:Seqable<Seqable<KeyValue<K&Equalable&Hashable, V>>>) -> HashTable<K, V> :
+  to-hashtable<K, V>(cat-all(hs))
+
+;============================================================
+;======================= MCU to JITX ========================
+;============================================================
+pcb-component mcu-component (manufacturer:String, mpn:String, pp:STMPinProperties, supports:Tuple<STMSupports>, bundles:Tuple<STMBundle>, pkg:String) :
+  manufacturer = manufacturer
+  mpn = mpn
+  val mappings = to-jitx-pin-properties(pp)
+  val bundle-table = to-jitx-bundles(bundles)
+  to-jitx-supports(supports, bundle-table, mappings)
+  val lp = find({name(_) == pkg}, STM32-LAND-PATTERNS)
+  throw(Exception("%_ is not a supported package." % [pkg])) when lp is False
+  assign-landpattern(lp as LandPattern)
+  make-box-symbol()
+
+public defmethod to-jitx (m:MicroController) : 
+  mcu-component(manufacturer(m), mpn(m), pin-properties(m), supports(m), bundles(m), mfg-package(m))
 
 ;============================================================
 ;====================== Printer =============================
@@ -209,7 +191,10 @@ defmethod print (o:OutputStream, r:MicroController) :
     "series = %_" % [series(r)]
     "supply-voltage = %_" % [supply-voltage(r)]
     "price = %_" % [price(r)]
-    "sellers = %_" % [sellers(r)]]
+    "sellers = %_" % [sellers(r)]
+    "pin-properties = %_" % [pin-properties(r)]
+    "bundles = %_" % [bundles(r)]
+    "supports = %_" % [supports(r)]]
   print(o, "MicroController(%_)" % [indented-list(items)])
 
 ;============================================================

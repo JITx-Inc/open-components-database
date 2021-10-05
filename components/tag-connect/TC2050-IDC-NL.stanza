@@ -12,29 +12,63 @@ defpackage ocdb/tag-connect/TC2050-IDC-NL :
   import ocdb/bundles
   import ocdb/generator-utils
   import ocdb/generic-components
+  import ocdb/box-symbol
+
+; NOTE UNUSUAL PINOUT
+; Datasheet showing pinout: https://www.tag-connect.com/wp-content/uploads/bsk-pdf-manager/TC2050-IDC-NL_Datasheet_8.pdf
 
 pcb-landpattern footprint :
-  for (l in grid-locs(2, 5, 1.27, 1.27), i in [1 3 5 7 9 2 4 6 8 10]) do :
+  for (l in grid-locs(2, 5, 1.27, 1.27), i in [10 9 8 7 6 1 2 3 4 5]) do :
     pad p[i] : testpoint-pad(0.787) at l
-  
   layer(Cutout()) = Circle((- 3.81), 0.0, 0.5)
   layer(Cutout()) = Circle(3.81, 1.015, 0.5)
   layer(Cutout()) = Circle(3.81, (- 1.015), 0.5)
   layer(Courtyard(Top)) = Rectangle(8.62, 3.03)
-  layer(Silkscreen("f-silk", Top)) = LineRectangle(8.62, 3.03)
   ref-label()
 
 public pcb-component component :
-  description = "Insertion point for TC-2050 connector"
+  description = "Insertion point for TC-2050-NL connector"
   port p: pin[1 through 10]
-  val sym = header-symbol(10,2)
-  symbol = sym(for i in 1 through 10 do : p[i] => sym.p[i])
+  pin-properties :
+    [pin:Ref     | pads:Int ... | side:Dir]
+    [p[1]          | 1             | Left     ]
+    [p[2]          | 2             | Left     ]
+    [p[3]          | 3             | Left     ]
+    [p[4]          | 4             | Left     ]
+    [p[5]          | 5             | Left     ]
+    [p[10]         | 10            | Right    ]
+    [p[9]          | 9             | Right    ]
+    [p[8]          | 8             | Right    ]
+    [p[7]          | 7             | Right    ]
+    [p[6]          | 6             | Right    ]
   landpattern = footprint(for i in 1 through 10 do : p[i] => footprint.p[i])
   reference-prefix = "J"
+  make-box-symbol()
 
+  supports jtag() :
+    jtag().tms => self.p[2]
+    jtag().tck => self.p[4]
+    jtag().tdo => self.p[6]
+    jtag().tdi => self.p[8]
+    jtag().trstn => self.p[10]
+
+  supports swd([SWD-SWO, SWD-TRACESWO]) :
+    swd([SWD-SWO, SWD-TRACESWO]).swdio  => self.p[2]
+    swd([SWD-SWO, SWD-TRACESWO]).swdclk => self.p[4]
+    swd([SWD-SWO, SWD-TRACESWO]).swo => self.p[6]
+    swd([SWD-SWO, SWD-TRACESWO]).traceswo => self.p[8]
+
+  supports power:
+    power.vdd => self.p[1]
+    power.gnd => self.p[3]
+    ; power.gnd => self.p[5]
+    ; power.gnd => self.p[7]
+    ; power.gnd => self.p[9]
+    ; net (power.gnd self.p[5])
+  
 public pcb-module module :
-  port j : jtag([JTAG-TRSTN])
-  port swd : swd
+  port j : jtag()
+  port swd : swd()
   port pwr : power
   public inst jtag : ocdb/tag-connect/TC2050-IDC-NL/component
   net (j.trstn, jtag.p[10])
@@ -45,7 +79,7 @@ public pcb-module module :
   net (pwr.vdd, jtag.p[1])
   net (pwr.gnd, jtag.p[9], jtag.p[5], jtag.p[3])
 
-  val jtag-bundle = /jtag([JTAG-TRSTN])
+  val jtag-bundle = /jtag()
   val con = jtag
   supports jtag-bundle:
     jtag-bundle.trstn => con.p[10]
@@ -54,8 +88,6 @@ public pcb-module module :
     jtag-bundle.tck => con.p[4]
     jtag-bundle.tms => con.p[2]
 
-  supports /swd:
-    ;ocdb/bundles/swd.swdclk => con.p[4]
-    ;ocdb/bundles/swd.swdio => con.p[2]
-    /swd.swdclk => con.p[4]
-    /swd.swdio  => con.p[2]
+  supports /swd():
+    /swd().swdclk => con.p[4]
+    /swd().swdio  => con.p[2]

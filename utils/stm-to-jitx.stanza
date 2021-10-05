@@ -1,0 +1,281 @@
+#use-added-syntax(jitx)
+defpackage ocdb/stm-to-jitx:
+  import core
+  import collections
+  import json
+  import jitx
+  import jitx/commands
+
+  import ocdb/bundles
+  import ocdb/property-structs
+
+  import ocdb/stm
+  import ocdb/scripts/cubemx-importer-utils
+  import ocdb/st-microelectronics/stm-api
+
+;=========================================
+;============== STM to JITX ==============
+;=========================================
+
+defn stm-to-jitx (generic-pin:STMGenericPin) -> GenericPin :
+  GenericPin(stm-to-jitx(max-voltage(generic-pin)), rated-esd(generic-pin))
+
+defn stm-to-jitx (power-pin:STMPowerPin) -> PowerPin :
+  PowerPin(stm-to-jitx(recommended-voltage(power-pin)))
+
+defn stm-to-jitx (voltage-limits:STMVoltageLimits) -> Interval :
+  Interval(min-val(voltage-limits), max-val(voltage-limits), false)
+
+;Generate pin-properties inside of a component.
+public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> HashTable<String, String> :
+  val pin-pad-remapping = HashTable<String, String|Int>()
+  inside pcb-component :
+    val generic-props = stm-to-jitx $ generic-pin(pin-properties)
+    val power-props = stm-to-jitx $ power-pin(pin-properties)
+    
+    ;Determine if the pads numeric (Double -> Int) or named (Ref -> String).
+    val numeric-pads? = any?({pad(_) is Int}, rows(pin-properties))
+    val named-pads? = any?({pad(_) is String}, rows(pin-properties))
+    
+    ;If the pads are neither or both, then we are using malformed data.
+    if numeric-pads? and named-pads? :
+      fatal("Generated a micro-controller with both Int and Ref pads.") 
+    if not numeric-pads? and not named-pads? :
+      fatal("Generated a micro-controller without pads.") 
+    
+    ; We need to compile a list of reused pad to pin mappings.
+    val pad-mappings = HashTable<String|Int, Vector<String>>()
+    defn check-pad (pad:String|Int, pin:String):
+      if get?(pad-mappings, pad) is False : 
+        pad-mappings[pad] = Vector<String>()
+      add(pad-mappings[pad], pin)
+      length(pad-mappings[pad]) == 1
+
+    ;Generate the pin-properties.
+    ;Cases are split between Int and Ref pads, and across generic and power properties usages.
+    pin-properties : 
+      [pin:Ref | pads : (Ref|Int) ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
+      for row in rows(pin-properties) do : 
+        val pin-ref = ref-string-to-ref(pin(row))
+        val pad-ref = match(pad(row)):
+          (i:Int): i
+          (s:String): raw-string-to-ref(s)
+
+        if check-pad(pad(row), pin(row)) : 
+          match(generic-props?(row), power-props?(row)) :
+            (g:True, p:True)   : [(pin-ref) | (pad-ref) | side(row) | generic-props | power-props]
+            (g:True, p:False)  : [(pin-ref) | (pad-ref) | side(row) | generic-props |      -     ]
+            (g:False, p:True)  : [(pin-ref) | (pad-ref) | side(row) |       -       | power-props]
+            (g:False, p:False) : [(pin-ref) | (pad-ref) | side(row) |       -       |      -     ]
+    
+    to-hashtable<String, String> $ 
+      for shared in values(pad-mappings) seq-cat : 
+        var root: String|False = false
+        for pin in shared seq : 
+          if root is False:
+            root = pin
+          pin => (root as String)
+
+;Generate all bundles and store them in a table indexed by name.
+public defn to-jitx-bundles (bundles:Tuple<STMBundle>) -> HashTable<String, Bundle> :
+  val bundle-table = HashTable<String, Bundle>()
+  inside pcb-component :
+    for bundle-name in map(name, bundles) do :
+      pcb-bundle b :
+        name = bundle-name
+        pin p
+      bundle-table[bundle-name] = b
+  bundle-table
+
+;Generate all support statements inside of a component which will include bundles from bundle-table.
+public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTable<String, Bundle>, pin-name-table:HashTable<String, String>) -> False :
+  defn lookup-pin (pin-name:String) : 
+    ref-string-to-ref $ 
+      match(get?(pin-name-table, pin-name)) : 
+        (s:String): s
+        (f:False): pin-name
+  
+  ;Generate a supports statement for a bundle with the given mappings.
+  defn generate-support (b:Bundle, mappings:Tuple<STMSupportMapping>) :
+    inside pcb-component :
+      supports b :
+        for mapping in mappings do :
+          ;Left hand side of the mapping is the bundle pin.
+          val key = dot(b, ref-string-to-ref(bundle-pin(mapping)))
+          ;Right hand side of the mapping is a local or required pin.
+          val value = match(require(mapping)): 
+            (req:False): dot(self, lookup-pin(pin(mapping)))
+            (req:String):
+              require p0: bundle-table[req]
+              dot(p0, lookup-pin(pin(mapping)))
+          key => value
+
+  ;Generate a supports statement for a bundle b with the given mappings.
+  ;There are two options, the first option acts as normal while the second option requires b2.
+  defn generate-support (b1:Bundle, b2:Bundle, mappings:Tuple<STMSupportMapping>) :
+    inside pcb-component :
+      supports b1 :
+        option :
+          for mapping in mappings do :
+            ;Left hand side of the mapping is the bundle pin.
+            val key = dot(b1, ref-string-to-ref(bundle-pin(mapping)))
+            ;Right hand side of the mapping is a local or required pin.
+            val value = match(require(mapping)): 
+              (req:False): 
+                dot(self, lookup-pin(pin(mapping)))
+              (req:String): 
+                require p0: bundle-table[req]
+                dot(p0, lookup-pin(pin(mapping)))
+            key => value
+        option :
+          require p : b2
+          for mapping in mappings do :
+            val bundle-pin-name = ref-string-to-ref(bundle-pin(mapping))
+            ;Left hand side of the mapping is the bundle pin.
+            val key = dot(b1, bundle-pin-name)
+            ;Right hand side of the mapping is a required pin from the alternate bundle.
+            val value = dot(p, bundle-pin-name)
+            key => value
+  
+  for support in supports do :
+    val supported-bundle = bundle(support)
+    val options = qsort(options(supported-bundle))
+    val bundle-name = name(supported-bundle)
+    val bundle:Bundle|[Bundle, Bundle] =
+      match(get?(bundle-table, bundle-name)) :
+        (b:Bundle) :
+          b
+        (f:False) :
+          switch(bundle-name) :
+            ;============= Single Pin Bundles ===============
+            "gpio"  : gpio
+            "adc"   : adc
+            "dac"   : dac
+            "timer" : timer
+            
+            ;=============== Two Pin Bundles ================
+            "low-freq-oscillator"  : low-freq-oscillator
+            "high-freq-oscillator" : high-freq-oscillator
+            "can-interface"        : can-interface
+            "i2c"                  : i2c
+            
+            ;=============== 3+ Pin Bundles =================
+            "quad-spi" : quad-spi
+            
+            ;========== Optionally Pinned Bundles ===========
+            ;Collect the optional pins and pass them as Bundle arguments.
+            "swd" : swd $
+              for option in options map :
+                switch(option) :
+                  "SWD-SWO" : SWD-SWO
+                  "SWD-TRACESWO" : SWD-TRACESWO
+            "jtag" : jtag $
+              for option in options map :
+                switch(option) :
+                  "JTAG-TRSTN" : JTAG-TRSTN
+            "i2s" : i2s $
+              for option in options map :
+                switch(option) :
+                  "I2S-MCK" : I2S-MCK
+                  "I2S-SDMI" : I2S-SDMI
+            "uart" :
+              val options =
+                for option in options map :
+                  switch(option) :
+                    "UART-DTR" : UART-DTR
+                    "UART-CTS" : UART-CTS
+                    "UART-DCD" : UART-DCD
+                    "UART-RI" : UART-RI
+                    "UART-DST" : UART-DST
+                    "UART-RTS" : UART-RTS
+                    "UART-CK" : UART-CK
+                    "UART-DE" : UART-DE
+                    "UART-CS" : UART-CS
+                    "UART-RX" : UART-RX
+                    "UART-TX" : UART-TX
+              [uart(options) usart(options)]
+            "usart" :
+              usart $
+                for option in options map :
+                  switch(option) :
+                    "UART-DTR" : UART-DTR
+                    "UART-CTS" : UART-CTS
+                    "UART-DCD" : UART-DCD
+                    "UART-RI" : UART-RI
+                    "UART-DST" : UART-DST
+                    "UART-RTS" : UART-RTS
+                    "UART-CK" : UART-CK
+                    "UART-DE" : UART-DE
+                    "UART-CS" : UART-CS
+                    "UART-RX" : UART-RX
+                    "UART-TX" : UART-TX
+            "spi" : spi $
+              for option in options map :
+                switch(option) :
+                  "SPI-SDO" : SPI-SDO
+                  "SPI-SDI" : SPI-SDI
+                  "SPI-CS" : SPI-CS
+                  "SPI-CIPO" : SPI-CIPO
+                  "SPI-COPI" : SPI-COPI
+                  "SPI-SDIO" : SPI-SDIO
+            "spi-controller" :
+              spi-controller()
+            else :
+              fatal("Bundle '%_' is not supported." % [bundle-name])
+    match(bundle) :
+      (b:Bundle) : generate-support(b, mappings(support))
+      ([b1, b2]:[Bundle, Bundle]) : generate-support(b1, b2, mappings(support))
+
+;Generate a module that accepts user options and instantiates the given component.
+public defn mcu-module (component:Instantiable) -> (Tuple<KeyValue<Symbol,?>> -> Instantiable) :
+  pcb-module module (options:Tuple<KeyValue<Symbol,?>>) :
+    schematic-group(self) = stm
+    val settings = Settings(DEFAULT-SETTINGS)
+    for entry in options do :
+      settings[key(entry)] = value(entry)
+      
+    public inst mcu : component
+
+    connect-reset(mcu)
+    connect-power(mcu)
+    generate-bypass(mcu, settings[`bypass-package], settings[`bypass-pin])
+    set-boot(mcu, settings[`boot-from])
+    connect-debug(mcu, settings[`debug-interface], settings[`debug-connector])
+    setup-clocks(mcu, settings[`HSE-freq], settings[`HSE-ppm], settings[`HSE-source], settings[`LSE-freq], settings[`LSE-ppm], settings[`LSE-source])
+  module
+
+;=========================================
+;=============== Utilities ===============
+;=========================================
+
+;Convert a String that may have brackets to a Ref.
+defn ref-string-to-ref (text:String) -> Ref :
+  ;regex-match implementation incomplete so we can't do exact matches with "^mypattern$"
+  ;val match-result = regex-match("^(\\w+).([\\w\.])+$", text)
+  if text[length(text) - 1] == ']' :
+    val idx = last-index-of-char(text, '[') as Int
+    IndexRef(ref-string-to-ref(text[0 to idx]), to-int!(text[(idx + 1) to (length(text) - 1)]))
+  else :
+    val idx = last-index-of-char(text, '.')
+    match(idx: Int) :
+      FieldRef(ref-string-to-ref(text[0 to idx]), Ref(text[(idx + 1) to length(text)]))
+    else :
+      Ref(text)
+
+;Convert a String without brackets to a Ref.
+defn raw-string-to-ref (text:String) -> Ref :
+  val last-digit-index = label<Int> break :
+    for i in (length(text) - 1) through 0 by -1 do :
+      if not digit?(text[i]) :
+        break(i + 1)
+    0
+  if last-digit-index == 0 :
+    val ref = Ref("p")
+    val index = to-int!(text)
+    IndexRef(ref, index)
+  else if last-digit-index == length(text) :
+    Ref(text)
+  else :
+    val ref = Ref(text[0 to last-digit-index])
+    val index = to-int!(text[last-digit-index to false])
+    IndexRef(ref, index)
