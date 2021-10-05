@@ -1,0 +1,251 @@
+#use-added-syntax(jitx)
+defpackage ocdb/stm-to-jitx-code:
+  import core
+  import collections
+  import json
+  import jitx
+  import jitx/commands
+
+  import ocdb/bundles
+  import ocdb/property-structs
+
+  import ocdb/stm
+  import ocdb/scripts/cubemx-importer-utils
+  import ocdb/st-microelectronics/stm-api
+
+  import ocdb/stm-to-jitx
+  import ocdb/code-generator
+
+;==============================================
+;============== STM to JITX Code ==============
+;==============================================
+
+defstruct BundleInfo :
+  b1: String
+  b2: Maybe<String>
+  options: Maybe<Tuple<String>>
+  called-without-arguments?: True|False
+
+;Generate pin-properties inside of a component.
+public defn to-jitx-pin-properties (pin-properties:STMPinProperties, cg:CodeGenerator) -> HashTable<String, String> :
+  inside pcb-component :
+    ;Generic and Power Pin properties.
+    val generic-props = ocdb/stm-to-jitx/stm-to-jitx(generic-pin(pin-properties))
+    val power-props = ocdb/stm-to-jitx/stm-to-jitx(power-pin(pin-properties))
+
+    ;The properties are written to the code generator.
+    val max-voltage = max-voltage(generic-props)
+    val max-voltage-str = to-string $
+      "Interval(%_, %_, %_)" % [min(max-voltage) max(max-voltage) nominal(max-voltage)]
+    val generic-pin-str = to-string $
+      "GenericPin(%_, %_)" % [max-voltage-str rated-esd(generic-props)]
+    write-local-variable(cg, "generic-props", generic-pin-str)
+
+    val recommended-voltage = recommended-voltage(power-props)
+    val recommended-voltage-str = to-string $
+      "Interval(%_, %_, %_)" % [min(recommended-voltage)
+                                max(recommended-voltage)
+                                nominal(recommended-voltage)]
+    val power-pin-str = to-string $
+      "PowerPin(%_)" % [recommended-voltage-str]
+    write-local-variable(cg, "power-props", power-pin-str)
+    
+    ; We need to compile a list of reused pad to pin mappings.
+    val pad-mappings = HashTable<String|Int, Vector<String>>()
+    defn check-pad (pad:String|Int, pin:String):
+      if get?(pad-mappings, pad) is False : 
+        pad-mappings[pad] = Vector<String>()
+      add(pad-mappings[pad], pin)
+      length(pad-mappings[pad]) == 1
+
+    ;Generate the pin-properties.
+    ;The written rows are aggregated to then be added all at once to the code generator.
+    val pin-properties-rows = to-tuple $
+      for row in rows(pin-properties) seq? :
+        if check-pad(pad(row), pin(row)) :
+          val pin-str = pin(row)
+          val pad-str = to-string $
+            match(pad(row)):
+              (i:Int): i
+              (s:String): raw-string-to-ref(s)
+            val side-str = to-string(side(row))
+          
+          One $ to-tuple $ cons{One(pin-str), One(pad-str), One(side-str), _} $
+            match(generic-props?(row), power-props?(row)) :
+              (g:True, p:True)   : List(One("generic-props"), One("power-props"))
+              (g:True, p:False)  : List(One("generic-props"), None())
+              (g:False, p:True)  : List(None(), One("power-props"))
+              (g:False, p:False) : List(None(), None())
+        else :
+          None()
+    
+    ;Determine if the pads numeric (Double -> Int) or named (Ref -> String).
+    val numeric-pads? = any?({pad(_) is Int}, rows(pin-properties))
+    val named-pads? = any?({pad(_) is String}, rows(pin-properties))
+    
+    ;If the pads are neither or both, then we are using malformed data.
+    if numeric-pads? and named-pads? :
+      fatal("Generated a micro-controller with both Int and Ref pads.") 
+    if not numeric-pads? and not named-pads? :
+      fatal("Generated a micro-controller without pads.") 
+    
+    ;Write the pin properties table.
+    val header = ["pin:Ref",
+                  to-string $ "pads:%_ ..." % ["Int" when numeric-pads? else "Ref"],
+                  "side:Dir"
+                  "generic-pin:GenericPin",
+                  "power-pin:PowerPin"]
+    write-pin-properties(cg, header, pin-properties-rows)
+
+    to-hashtable<String, String> $ 
+      for shared in values(pad-mappings) seq-cat : 
+        var root: String|False = false
+        for pin in shared seq : 
+          if root is False:
+            root = pin
+          pin => (root as String)
+
+;Generate all bundles and store them in a table indexed by name.
+public defn to-jitx-bundles (bundles:Tuple<STMBundle>, cg:CodeGenerator) -> HashSet<String> :
+  val bundle-names = HashSet<String>()
+  for bundle-name in map(name, bundles) do :
+    add(bundle-names, bundle-name)
+    write-bundle(cg, bundle-name, ["p"])
+  bundle-names
+
+;Generate all support statements inside of a component.
+public defn to-jitx-supports (supports:Tuple<STMSupports>,
+                              bundle-names:HashSet<String>,
+                              pin-name-table:HashTable<String, String>,
+                              cg:CodeGenerator) -> False :
+  defn lookup-pin (pin-name:String) -> Ref : 
+    ref-string-to-ref $ 
+      match(get?(pin-name-table, pin-name)) : 
+        (s:String): s
+        (f:False): pin-name
+  
+  ;Reconstruct a bundle's name as a String, parameterized by the bundle's options.
+  ;If the bundle is called-without-arguments?, then the options are ignored.
+  ;   ex: "spi-controller()"
+  ;Otherwise, if there are options, each option is written too.
+  ;   ex: "uart(UART-RX, UART-TX)"
+  ;Lastly, when there are neither arguments nor options, the bundle name is returned.
+  ;   ex: "gpio"
+  defn parameterized-bundle-name (bundle-name:String,
+                                  called-without-arguments?:True|False,
+                                  options:Maybe<Tuple<String>>) -> String :
+    if called-without-arguments? :
+      to-string("%_()" % [bundle-name])
+    else :
+      match(value?(options)) :
+        (options:Tuple<String>) : to-string("%_([%,])" % [bundle-name, options])
+        (f:False) : bundle-name
+
+  ;Write the one-option support statement to the code generator and continue with its option.
+  defn generate-support (b:String, mappings:Tuple<STMSupportMapping>) :
+    write-support(cg, b)
+    generate-option(b, mappings, false)
+  
+  ;Write the support option to the code generator along with all requires and mappings.
+  defn generate-option (b:String, mappings:Tuple<STMSupportMapping>, indented?:True|False) :
+    val write-require = write-indented-require when indented? else write-require
+    val write-support-mapping = write-indented-support-mapping when indented? else write-support-mapping
+    var num-requires = 0
+    for mapping in mappings do :
+      val key = to-string $ "%_.%_" % [b bundle-pin(mapping)]
+      val pin-name = lookup-pin(pin(mapping))
+      val value = to-string $ match(require(mapping)): 
+        (req:False):
+          "self.%_" % [pin-name]
+        (req:String):
+          val require-name = to-string $ "p%_" % [num-requires]
+          num-requires = num-requires + 1
+          write-require(cg, require-name, req)
+          "%_.%_" % [require-name pin-name]
+      write-support-mapping(cg, key, value)
+  
+  ;Write the two-option support statement to the code generator and continue with both options.
+  defn generate-support (b1:String, b2:String, mappings:Tuple<STMSupportMapping>) :
+    write-support(cg, b1)
+    write-option(cg, None())
+    generate-option(b1, mappings, true)
+    write-option(cg, None())
+    write-indented-require(cg, "p0", b2)
+    for mapping in mappings do :
+      val bundle-pin-name = bundle-pin(mapping)
+      val key = to-string $ "%_.%_" % [b1 bundle-pin-name]
+      val value = to-string $ "p0.%_" % [bundle-pin-name]
+      write-indented-support-mapping(cg, key, value)
+  
+  for support in supports do :
+    val supported-bundle = bundle(support)
+    val options = qsort(options(supported-bundle))
+    val bundle-name = name(supported-bundle)
+    val bundle-info =
+      if bundle-names[bundle-name] :
+        BundleInfo(bundle-name, None(), None(), false)
+      else :
+        switch {contains?(_, bundle-name)} :
+          ;============= Bundles without Optional Pins =============
+          ["gpio" "adc" "dac" "timer"
+          "low-freq-oscillator"
+          "high-freq-oscillator"
+          "can-interface" "i2c" "quad-spi"] :
+            BundleInfo(bundle-name, None(), None(), false)
+        
+          ;==== Optionally Pinned Bundles with 1 Support Option ====
+          ["swd" "jtag" "i2s" "usart" "spi"] :
+            BundleInfo(bundle-name, None(), One(options), false)
+
+          ;=== Optionally Pinned Bundles with 2 Support Options ====
+          ["uart"] :
+            BundleInfo(bundle-name, One("usart"), One(options), false)
+
+          ;===== Bundles that must be Called without Arguments =====
+          ["spi-controller"] :
+            BundleInfo(bundle-name, None(), None(), true)
+          
+          ;Fatal on unknown bundles.
+          else :
+            fatal("Bundle '%_' is not supported." % [bundle-name])
+    
+    val mappings = mappings(support)
+    match(b1(bundle-info), value?(b2(bundle-info))) :
+      (b1:String, b2:String) :
+        val b1* = parameterized-bundle-name(b1, called-without-arguments?(bundle-info), /options(bundle-info))
+        val b2* = parameterized-bundle-name(b2, called-without-arguments?(bundle-info), /options(bundle-info))
+        generate-support(b1*, b2*, mappings)
+      (b1:String, f:False) :
+        val b1* = parameterized-bundle-name(b1, called-without-arguments?(bundle-info), /options(bundle-info))
+        generate-support(b1*, mappings)
+
+
+;===============================================
+;=============== Generate Module ===============
+;===============================================
+
+val module-string = \<S>
+pcb-module module (options:Tuple<KeyValue<Symbol,?>>) :
+  schematic-group(self) = stm
+  val settings = Settings(DEFAULT-SETTINGS)
+  for entry in options do :
+    settings[key(entry)] = value(entry)
+    
+  public inst mcu : component
+
+  connect-reset(mcu)
+  connect-power(mcu)
+  generate-bypass(mcu, settings[`bypass-package], settings[`bypass-pin])
+  set-boot(mcu, settings[`boot-from])
+  connect-debug(mcu, settings[`debug-interface], settings[`debug-connector])
+  setup-clocks(mcu, settings[`HSE-freq], settings[`HSE-ppm], settings[`HSE-source], settings[`LSE-freq], settings[`LSE-ppm], settings[`LSE-source])<S>
+
+public defn write-mcu-module (cg:CodeGenerator) -> False :
+  write-string(cg, module-string)
+
+;==============================================
+;======== Package-Qualified Utilities =========
+;==============================================
+val stm-to-jitx = ocdb/stm-to-jitx/stm-to-jitx
+val ref-string-to-ref = ocdb/stm-to-jitx/ref-string-to-ref
+val raw-string-to-ref = ocdb/stm-to-jitx/raw-string-to-ref

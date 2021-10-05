@@ -26,8 +26,7 @@ public defmulti write-component (c:CodeGenerator, name:String) -> False
 public defmulti write-manufacturer (c:CodeGenerator, manufacturer:String) -> False
 public defmulti write-mpn (c:CodeGenerator, mpn:String) -> False
 public defmulti write-variable (c:CodeGenerator, name:String, value:String, indented?:True|False) -> False
-public defmulti write-pin-properties-header (c:CodeGenerator, header:String) -> False
-public defmulti write-pin-properties-rows (c:CodeGenerator, rows:Tuple<Tuple<Maybe<String>>>) -> False
+public defmulti write-pin-properties (c:CodeGenerator, header:Tuple<String>, rows:Tuple<Tuple<Maybe<String>>>) -> False
 public defmulti write-bundle (c:CodeGenerator, name:String, pins:Tuple<String>) -> False
 public defmulti write-support (c:CodeGenerator, bundle:String) -> False
 public defmulti write-option (c:CodeGenerator, name?:Maybe<String>) -> False
@@ -101,18 +100,68 @@ public defn CodeGenerator () :
       write2("manufacturer = %~" % [manufacturer])
     defmethod write-mpn (this, mpn:String) :
       write2("mpn = %~" % [mpn])
-    defmethod write-pin-properties-header (this, header:String) :
+    defmethod write-pin-properties (this, header:Tuple<String>, rows:Tuple<Tuple<Maybe<String>>>) :
+      ;Pad a String to the given length by adding spaces to its right side.
+      defn right-padded (str:String, len:Int) -> String :
+        fatal("The given string is longer than the desired length.") when length(str) > len
+        val pad-len = len - length(str)
+        val padding = append-all(repeat(" ", pad-len))
+        to-string $ "%_%_" % [str padding]
+      
+      ;Pad a String to the given length by adding spaces to both its left and right sides.
+      ;If the padding must be uneven, then the right side will have the extra space.
+      ; (This function is unused at the moment.)
+      defn left-right-padded (str:String, len:Int) -> String :
+        fatal("The given string is longer than the desired length.") when length(str) > len
+        val pad-len = len - length(str)
+        val padding = append-all(repeat(" ", pad-len / 2))
+        val extra-space? = " " when pad-len % 2 == 1 else ""
+        to-string $ "%_%_%_%_" % [padding str padding extra-space?]
+      
+      ;Precondition checks.
+      fatal("No generated pin-properties rows.") when empty?(rows)
+      val row-length = length(rows[0])
+      fatal("Empty pin pin-properties row.") when row-length == 0
+      for row in rows do :
+        fatal("Unequal pin-properties row length.") when length(row) != row-length
+      fatal("Unequal pin-properties header and row length.") when length(header) != row-length
+
+      ;Track the longest String per column.
+      val max-lengths = to-tuple $
+        for i in 0 to row-length seq :
+          val max-row-len = maximum $
+            for row in rows seq :
+              match(value?(row[i])) :
+                (str:String) : length(str)
+                (f:False) : 1
+          max(max-row-len, length(header[i]))
+
+      ;Begin writing the pin-properties.
       lnwrite2("pin-properties :")
-      write4(header)
-    defmethod write-pin-properties-rows (this, rows:Tuple<Tuple<Maybe<String>>>) :
+
+      ;Add the header.
+      let :
+        val buf = StringBuffer()
+        add(buf, '[')
+        for (str in header, i in 0 to row-length) do :
+          add-all(buf, right-padded(str, max-lengths[i]))
+          if i < row-length - 1 :
+            add-all(buf, " | ")
+        add(buf, ']')
+        write4(to-string(buf))
+
+      ;Add each row.
       for row in rows do :
         val buf = StringBuffer()
         add(buf, '[')
-        for (item in row, i in 1 to false) do :
+        for (item in row, i in 0 to row-length) do :
+          val max-len = max-lengths[i]
           match(value?(item)) :
-            (str:String) : add-all(buf, str)
-            (f:False) : add(buf, '-')
-          if i < length(row) :
+            (str:String) :
+              add-all(buf, right-padded(str, max-len))
+            (f:False) :
+              add-all(buf, right-padded("-", max-len))
+          if i < row-length - 1 :
             add-all(buf, " | ")
         add(buf, ']')
         write4(to-string(buf))

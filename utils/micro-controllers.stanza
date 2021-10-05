@@ -19,6 +19,7 @@ defpackage ocdb/micro-controllers :
 
   import ocdb/stm
   import ocdb/stm-to-jitx
+  import ocdb/stm-to-jitx-code
   import ocdb/st-microelectronics/landpatterns
 
   import ocdb/code-generator
@@ -32,16 +33,17 @@ public defn micro-controller (params:Tuple<KeyValue>) -> (Tuple<KeyValue<Symbol,
   ;Build the microcontroller struct from query parameters.
   val mcu = MicroController(params)
 
-  ;Use a CodeGenerator to write the part's JITX representation.
-  val cg = CodeGenerator()
-
   ;Generate the microcontroller component and evaluate.
-  val component = to-jitx(mcu, cg)
-  evaluate(component)
+  val component = to-jitx(mcu)
 
   ;Enclose the component in a module to connect various pins such as
   ; reset, power, and boot.
-  val module = mcu-module(component, cg)
+  val module = mcu-module(component)
+
+  ;Use a CodeGenerator to write the part's JITX representation.
+  val cg = CodeGenerator()
+  to-jitx-code(mcu, cg)
+  write-mcu-module(cg)
 
   ;Save the generated part to the design directory.
   val part-file = to-string("%_.stanza" % [mpn?(component)])
@@ -156,26 +158,15 @@ pcb-component mcu-component (manufacturer:String,
                              pp:STMPinProperties,
                              supports:Tuple<STMSupports>,
                              bundles:Tuple<STMBundle>,
-                             pkg:String,
-                             cg:CodeGenerator) :
-
-  ;Generate code for the generated microcontroller.
-  write-added-syntaxes(cg, [JITX])
-  write-package(cg, string-join([manufacturer mpn], "/"))
-  write-package-imports(cg, STM)
-  write-component(cg, "component")
-
+                             pkg:String) :
   ;Manufacturer and MPN statements.
   manufacturer = manufacturer
   mpn = mpn
-  write-manufacturer(cg, manufacturer)
-  write-mpn(cg, mpn)
 
   ;Pin properties, bundles, and support statements.
-  ;Generates code inside of these calls.
-  val mappings = to-jitx-pin-properties(pp, cg)
-  val bundle-table = to-jitx-bundles(bundles, cg)
-  to-jitx-supports(supports, bundle-table, mappings, cg)
+  val mappings = to-jitx-pin-properties(pp)
+  val bundle-table = to-jitx-bundles(bundles)
+  to-jitx-supports(supports, bundle-table, mappings)
 
   ;Find STM Land Pattern with the given name.
   val lp = find({name(_) == pkg}, STM32-LAND-PATTERNS)
@@ -184,11 +175,36 @@ pcb-component mcu-component (manufacturer:String,
   ;Connect a Land Pattern and Symbol to this MCU component.
   assign-landpattern(lp as LandPattern)
   make-box-symbol()
+
+public defmethod to-jitx (m:MicroController) : 
+  mcu-component(manufacturer(m), mpn(m), pin-properties(m), supports(m), bundles(m), mfg-package(m))
+
+;============================================================
+;===================== MCU to JITX Code =====================
+;============================================================
+
+defn mcu-component-code (manufacturer:String,
+                         mpn:String,
+                         pp:STMPinProperties,
+                         supports:Tuple<STMSupports>,
+                         bundles:Tuple<STMBundle>,
+                         pkg:String,
+                         cg:CodeGenerator) :
+  ;Generate code for the generated microcontroller.
+  write-added-syntaxes(cg, [JITX])
+  write-package(cg, string-join([manufacturer mpn], "/"))
+  write-package-imports(cg, STM)
+  write-component(cg, "component")
+  write-manufacturer(cg, manufacturer)
+  write-mpn(cg, mpn)
+  val mappings = to-jitx-pin-properties(pp, cg)
+  val bundle-table = to-jitx-bundles(bundles, cg)
+  to-jitx-supports(supports, bundle-table, mappings, cg)
   write-assign-landpattern(cg, pkg)
   write-make-box-symbol(cg)
 
-public defmethod to-jitx (m:MicroController, cg:CodeGenerator) : 
-  mcu-component(manufacturer(m), mpn(m), pin-properties(m), supports(m), bundles(m), mfg-package(m), cg)
+public defn to-jitx-code (m:MicroController, cg:CodeGenerator) :
+  mcu-component-code(manufacturer(m), mpn(m), pin-properties(m), supports(m), bundles(m), mfg-package(m), cg)
 
 ;============================================================
 ;====================== Printer =============================
