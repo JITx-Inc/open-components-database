@@ -13,8 +13,6 @@ defpackage ocdb/stm-to-jitx:
   import ocdb/scripts/cubemx-importer-utils
   import ocdb/st-microelectronics/stm-api
 
-  import ocdb/code-generator
-
 ;=========================================
 ;============== STM to JITX ==============
 ;=========================================
@@ -52,9 +50,6 @@ public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> HashTabl
         pad-mappings[pad] = Vector<String>()
       add(pad-mappings[pad], pin)
       length(pad-mappings[pad]) == 1
-
-    ;The written rows are aggregated to then be added all at once to the code generator.
-    val pin-properties-rows-to-write = Vector<Tuple<Maybe<String>>>()
 
     ;Generate the pin-properties.
     ;Cases are split between Int and Ref pads, and across generic and power properties usages.
@@ -94,9 +89,7 @@ public defn to-jitx-bundles (bundles:Tuple<STMBundle>) -> HashTable<String, Bund
   bundle-table
 
 ;Generate all support statements inside of a component which will include bundles from bundle-table.
-public defn to-jitx-supports (supports:Tuple<STMSupports>,
-                              bundle-table:HashTable<String, Bundle>,
-                              pin-name-table:HashTable<String, String>) -> False :
+public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTable<String, Bundle>, pin-name-table:HashTable<String, String>) -> False :
   defn lookup-pin (pin-name:String) -> Ref : 
     ref-string-to-ref $ 
       match(get?(pin-name-table, pin-name)) : 
@@ -151,7 +144,8 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>,
     val bundle-name = name(supported-bundle)
     val bundle:Bundle|[Bundle, Bundle] =
       match(get?(bundle-table, bundle-name)) :
-        (b:Bundle) : b
+        (b:Bundle) :
+          b
         (f:False) :
           switch(bundle-name) :
             ;============= Single Pin Bundles ===============
@@ -229,10 +223,8 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>,
     
     val mappings = mappings(support)
     match(bundle) :
-      ([b1, b2]:[Bundle, Bundle]) :
-        generate-support(b1, b2, mappings)
-      (b1:Bundle) :
-        generate-support(b1, mappings)
+      (b1:Bundle) : generate-support(b1, mappings)
+      ([b1, b2]:[Bundle, Bundle]) : generate-support(b1, b2, mappings)
 
 ;Generate a module that accepts user options and instantiates the given component.
 public defn mcu-module (component:Instantiable) -> (Tuple<KeyValue<Symbol,?>> -> Instantiable) :
