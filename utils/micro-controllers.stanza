@@ -31,6 +31,21 @@ public defn micro-controller (params:Tuple<KeyValue>) -> (Tuple<KeyValue<Symbol,
   val component = to-jitx(mcu)
   mcu-module(component)
 
+public defn look-up-micro-controllers (attribute: String) -> Tuple :
+  look-up-micro-controllers(attribute, [])
+
+public defn look-up-micro-controllers (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
+  look-up-micro-controllers(attribute, filter-properties, [])
+
+public defn look-up-micro-controllers (attribute: String, filter-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple :
+  look-up-micro-controllers(attribute, filter-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
+
+public defn look-up-micro-controllers (attribute: String, filter-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> Tuple :
+  val user-properties = to-tuple $ cat(filter-properties, ["_distinct" => attribute])
+  val query-properties = micro-controller-query-properties(user-properties, exist, sort, operating-temperature)
+
+  dbquery-all(query-properties) as Tuple
+
 ;============================================================
 ;===================== Micro Controller =====================
 ;============================================================
@@ -99,15 +114,26 @@ public defn MicroController (user-properties:Tuple<KeyValue>, exist:Tuple<String
   MicroController(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
 
 public defn MicroController (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> MicroController :
+  val query-properties = micro-controller-query-properties(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
+  ; - If _stock or _sellers key exist, all STM mcus are queried from the mongo database in the limit of maximum 1000,
+  ; then we query the sourcing data for each, filter on stock / sellers constraints and
+  ; finally we sort again if OPTIMIZE_FOR[0] is "price" or "cost".
+  ; - If we don't need to filter on sourcing data (includes sorting on price), we can just query 1 mcu from the mongo database and return it
+  val jobject = dbquery-first(query-properties) as JObject
+  MicroController(jobject)
+
+defn micro-controller-query-properties (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> Tuple<KeyValue> :
   val params = jitx-params()
   val vendors = bom-vendors(params)
 
+  ; If we want to optimize on cost, we have to put either _stock or _sellers in the query so that the sourcing data is used in the server
+  val sort-on-price = length(sort) >= 1 and contains?(["price", "cost", "-price", "-cost"], sort[0])
+
   val optional-properties =
     generate<KeyValue<String, ?>> :
-      ; Octopart parameters: if they exist, octopart will be queried
-      ;[FIXME]: uncomment when octopart quota issue is resolved
-      ;yield("_stock" => DESIGN-QUANTITY) when DESIGN-QUANTITY > 0
-      ;yield("_sellers" => vendors) when call?<Tuple>({not empty?(_)}, vendors)
+      ; Part sourcing parameters: if they exist, sourcing data will be used
+      yield("_stock" => DESIGN-QUANTITY) when DESIGN-QUANTITY > 0 or sort-on-price
+      yield("_sellers" => vendors) when call?<Tuple>({not empty?(_)}, vendors)
       ; Other design parameters
       yield("_sort" => sort) when not empty?(sort)
       yield("_exist" => exist) when not empty?(exist)
@@ -116,13 +142,9 @@ public defn MicroController (user-properties:Tuple<KeyValue>, exist:Tuple<String
         yield("min-rated-temperature.max" => operating-temperature[1])
 
   ; `user-properties` override default properties
-  val query-properties = to-tuple $ hashtable-union<String, ?> $ [["category" => "microcontroller"],
-                                                                  optional-properties,
-                                                                  user-properties]
-
-  val jobjects = dbquery-all(query-properties) as Tuple<JObject>
-  throw(NoComponentMeetingRequirements(query-properties)) when empty?(jobjects)
-  MicroController(jobjects[0])
+  to-tuple $ hashtable-union<String, ?> $ [["category" => "microcontroller"],
+                                           optional-properties,
+                                           user-properties]
 
 ; FIXME: add to collections.stanza with hashset-union used in query.stanza ?
 ; Behaviour: to-tuple $ hashtable-union $ [["category" => "microcontroller"], ["c" => 2], ["category" => "qwerty"]] -> ["c" => 2 "category" => "qwerty"]
