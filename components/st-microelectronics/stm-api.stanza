@@ -92,11 +92,12 @@ public defn connect-reset (stm:JITXObject) :
   inside pcb-module :
     pin reset
     net (stm.NRST reset)
+    
     val power-pin = power-pins(stm)[0]
     val gnd-pin = gnd-pins(stm)[0]
     res-strap(power-pin, stm.NRST, 10.0e3)
     cap-strap(power-pin, stm.NRST, 10.0e-9)
-
+        
     ; Look for power-on reset pins
     if has-pin?(stm, "NPOR") :
       val v-range = recommended-voltage(property(power-pin.power-pin))
@@ -142,7 +143,7 @@ public defn set-boot (stm:JITXObject, boot-from:String) :
     if has-pin?(stm, "BOOT[1]") : 
       check connected(stm.BOOT[1])
 
-defn supports? (module:InstantiableType, bundle:PortType) -> True|False :
+defn supports? (module:InstantiableType, bundle:Bundle) -> True|False :
   pcb-module temp :
     inst i : module
     require r:bundle from i
@@ -150,17 +151,26 @@ defn supports? (module:InstantiableType, bundle:PortType) -> True|False :
   val result = assign-pins?()
   result is-not False
 
-public defn connect-debug (stm:JITXObject, debug-interface:PortType, connector:Instantiable) :
+public defn connect-debug (stm:JITXObject, debug-interface:Bundle, connector:Instantiable) :
   inside pcb-module:
     if supports?(instantiable-type(stm), debug-interface) and supports?(connector, debug-interface):
-      inst debug-con : connector
+      public inst debug-con : connector
       require debug-m:debug-interface from stm
       require debug-c:debug-interface from debug-con
+      
       net DEBUG (debug-m debug-c)
       schematic-group(debug-con) = debug
+
       if has-port?(debug-con, "power") :
-        net (debug-con.power.vdd, power-pins(stm)[0])
-        net (debug-con.power.gnd, gnd-pins(stm)[0])
+        require debug-p: power from debug-con
+        net (debug-p.vdd, power-pins(stm)[0])
+        net (debug-p.gnd, gnd-pins(stm)[0])
+
+      ; only connect reset to NRST if using the SWD bundle      
+      if name(debug-interface) == name(swd()) : 
+        require debug-reset: reset from self.debug-con
+        net (debug-reset.reset, stm.NRST)
+
     else :
       println("Unsupported debug-interface on %_" % [ref(stm)])
 
@@ -220,8 +230,3 @@ public defn setup-clocks (stm:JITXObject, HSE-freq:Double, HSE-ppm:Double, HSE-s
           println("Unsupported sourece for LSE. Try a 'crystal' source.")
     else if LSE-ppm < 0.03:
       println("%_ does not support an external LSE source." % [ref(stm)])
-
-
-
-
-
