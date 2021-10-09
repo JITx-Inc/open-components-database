@@ -4,14 +4,7 @@ defpackage ocdb/stm:
   import collections
   import lang-utils
   import json
-  import reader
   import jitx
-
-public defstruct StmError <: Exception : 
-  message:String|Printable
-
-defmethod print (o:OutputStream, e:StmError) : 
-  print(o, "Could not extract STM component. %_." % [message(e)])
 
 ;=================================================
 ;========== STM JSON -> Stanza Structs ===========
@@ -291,4 +284,65 @@ public defn create-pin-properties (json1:JSON) -> STMPinProperties :
       stm-exception!("Invalid JSON")
 
   val stm-properties = STMPinProperties(stm-gen-pin, stm-pow-pin, to-tuple(pin-properties))
-  stm-properties
+  
+  run-passes(stm-properties)
+
+
+;=================================================
+;===================== Passes ====================
+;=================================================
+
+;Rename pins with duplicate names by extend their Refs to be an IndexRef.
+;This ensures that no two pins share a name.
+;This function returns a Tuple with two elements:
+;  1. STMPinProperties with updated pin names.
+;  2. HashTable<String, String> that maps original pin names to updated pin names.
+;---
+;Example: Two pins are named VDD
+;The first pin VDD is renamed VDD[0]
+;The second pin VDD is renamed VDD[1]
+defn rename-duplicate-pins (pp:STMPinProperties) -> STMPinProperties :
+  ;Map pin name to rows whose pin is that name.
+  val pinname-table = ListTable<String, STMPinPropertiesRow>()
+  for row in rows(pp) do :
+    add(pinname-table, pin(row), row)
+
+  ;Track used pin names.
+  val seen-pins = HashSet<String>()
+
+  ;Construct a new pin properties with updated rows.
+  STMPinProperties{generic-pin(pp), power-pin(pp), _} $
+    for row in rows(pp) map :
+      val pinname = pin(row)
+      val pin-list = pinname-table[pinname]
+      ;Construct a new pin properties row with updated pin names.
+      ;If the pin name is duplicated, rename it to the first unused pin name.
+      ;Otherwise the existing pin name will be used.
+      STMPinPropertiesRow{_, pad(row), side(row), generic-props?(row), power-props?(row)} $
+        if length(pin-list) > 1 :
+          for i in 0 to false first! :
+            val new-pinname = append(pinname, to-string("[%_]" % [i]))
+            if add(seen-pins, new-pinname) :
+              One(new-pinname)
+            else :
+              None()
+        else :
+          pinname
+
+;Entrypoint for running all STMPinProperties passes.
+defn run-passes (pp:STMPinProperties) -> STMPinProperties :
+  pp $> rename-duplicate-pins
+
+
+;=================================================
+;=================== Utilities ===================
+;=================================================
+
+defn ListTable<K,V> () : HashTable<K,List<V>>(List())
+defn add<?K,?V> (table:Table<?K,List<?V>>, k:K, v:V) : update(table, cons{v, _}, k)
+
+public defstruct StmError <: Exception : 
+  message:String|Printable
+
+defmethod print (o:OutputStream, e:StmError) : 
+  print(o, "Could not extract STM component. %_." % [message(e)])
