@@ -4,14 +4,7 @@ defpackage ocdb/stm:
   import collections
   import lang-utils
   import json
-  import reader
   import jitx
-
-public defstruct StmError <: Exception : 
-  message:String|Printable
-
-defmethod print (o:OutputStream, e:StmError) : 
-  print(o, "Could not extract STM component. %_." % [message(e)])
 
 ;=================================================
 ;========== STM JSON -> Stanza Structs ===========
@@ -291,4 +284,78 @@ public defn create-pin-properties (json1:JSON) -> STMPinProperties :
       stm-exception!("Invalid JSON")
 
   val stm-properties = STMPinProperties(stm-gen-pin, stm-pow-pin, to-tuple(pin-properties))
-  stm-properties
+  
+  run-passes(stm-properties)
+
+
+;=================================================
+;===================== Passes ====================
+;=================================================
+
+;Rename pins with duplicate names by extend their Refs to be an IndexRef.
+;This ensures that no two pins share a name.
+;This function returns STMPinProperties with updated pin names.
+;---
+;Example: Two pins are named VDD
+;The first pin VDD is renamed VDD[0]
+;The second pin VDD is renamed VDD[1]
+defn rename-duplicate-pins (pp:STMPinProperties) -> STMPinProperties :
+  ;Map pin name to rows whose pin is that name.
+  val pinname-table = group-by(pin, rows(pp))
+
+  ;Track used pin names.
+  val seen-pins = HashSet<String>()
+
+  ;Store updated rows.
+  ;A row's index in this array corresponds to its original index.
+  val updated-rows = Array<STMPinPropertiesRow>(length(rows(pp)))
+
+  ;Store all pin properties rows whose existing pin name has no conflicts.
+  for (row in rows(pp), i in 0 to false) do :
+    if length(pinname-table[pin(row)]) == 1 :
+      add(seen-pins, pin(row))
+      updated-rows[i] = row
+  
+  ;Construct and store a new pin properties row for those with duplicate pin names.
+  ;The pin name is renamed to the first unused pin name.
+  for (row in rows(pp), i in 0 to false) do :
+    val pinname = pin(row)
+    val pin-list = pinname-table[pinname]
+    if length(pin-list) > 1 :
+      updated-rows[i] = STMPinPropertiesRow{_, pad(row), side(row), generic-props?(row), power-props?(row)} $
+        for i in 0 to false first! :
+          val new-pinname = to-string("%_[%_]" % [pinname i])
+          if add(seen-pins, new-pinname) :
+            One(new-pinname)
+          else :
+            None()
+
+  ;Construct a new pin properties with updated rows.
+  STMPinProperties(generic-pin(pp), power-pin(pp), to-tuple(updated-rows))
+
+;Sort pins in alphabetical order.
+;This function returns STMPinProperties with the same rows reordered.
+public defn alphabetize-pins (pp:STMPinProperties) -> STMPinProperties :
+  val pin-to-row = to-hashtable(pin, rows(pp))
+  val sorted-pins = qsort(map(pin, rows(pp)))
+
+  ;Construct a new pin properties with reordered rows.
+  STMPinProperties{generic-pin(pp), power-pin(pp), _} $
+    for pin in sorted-pins map :
+      pin-to-row[pin]
+
+;Entrypoint for running all STMPinProperties passes.
+defn run-passes (pp:STMPinProperties) -> STMPinProperties :
+  pp $> rename-duplicate-pins
+     $> alphabetize-pins
+
+
+;=================================================
+;==================== Errors =====================
+;=================================================
+
+public defstruct StmError <: Exception : 
+  message:String|Printable
+
+defmethod print (o:OutputStream, e:StmError) : 
+  print(o, "Could not extract STM component. %_." % [message(e)])
