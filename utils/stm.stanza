@@ -353,8 +353,8 @@ defn run-passes (pp:STMPinProperties) -> STMPinProperties :
 ;==================== Sorting ====================
 ;=================================================
 
-defn parse (p: String) -> List<Char|Int> :
-  parse(p, "")
+defn parse (p: String) -> Tuple<Char|Int> :
+  to-tuple $ parse(p, "")
 
 defn parse (p: String, number-buffer: String) -> List<Char|Int> :
   if p == "" :
@@ -367,11 +367,11 @@ defn parse (p: String, number-buffer: String) -> List<Char|Int> :
       parse(p[1 to false], append(number-buffer, p[0 to 1]))
     else :
       if number-buffer == "":
-        cons(p[0], parse(p[1 to false]))
+        cons(p[0], parse(p[1 to false], ""))
       else :
-        cons(to-int!(number-buffer), p[0], parse(p[1 to false]))
+        cons(to-int!(number-buffer), p[0], parse(p[1 to false], ""))
 
-defn unparse (l: Seqable<Char|Int>) -> String :
+defn unparse (l: Tuple<Char|Int>) -> String :
   append-all $ seq(to-string, l)
 
 ; We need to create a wrapper struct to define an order on Int|Char
@@ -392,7 +392,7 @@ public defn alphabetical-sort (elements: Seqable<String>) -> Seqable<String> :
            $> alphabetical-sort
            $> seq{unparse, _}
 
-public defn alphabetical-sort (elements: Seqable<Seqable<Int|Char>>) -> Tuple<Tuple<Int|Char>> :
+public defn alphabetical-sort (elements: Seqable<Tuple<Int|Char>>) -> Seqable<Tuple<Int|Char>> :
   elements $> seq{to-tuple{seq(ComparableIntChar, _)}, _}
            $> qsort
            $> seq{map{element, _}, _}
