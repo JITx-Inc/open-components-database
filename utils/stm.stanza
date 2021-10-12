@@ -32,8 +32,8 @@ public pcb-struct ocdb/stm/STMVoltageLimits:
 
 ;[{pin} | {pad} | {side} | {generic-props?} | {power-props?}]
 public pcb-struct ocdb/stm/STMPinPropertiesRow :
-  pin: String
-  pad: Int|String
+  pin: Ref
+  pad: Ref|Int
   side: Dir
   generic-props?: True|False
   power-props?: True|False
@@ -58,9 +58,9 @@ public pcb-struct ocdb/stm/STMSupportsBundle:
 ;  require p0:{require}
 ;{bundle-pin} => self/p0.{pin}
 public pcb-struct ocdb/stm/STMSupportMapping :
-  bundle-pin: String
+  bundle-pin: Ref
   require: String|False
-  pin: String
+  pin: Ref
 
 ;=================================================
 ;=================== Printers ====================
@@ -156,7 +156,7 @@ public defn create-supports (json:JSON) -> Tuple<STMSupports> :
               ;Example map: bund.p => required-pin.q
               ;Read the name of the bundle pin (ex. "p")
               val bundle-pin = match(mapping["bundle-pin"]) :
-                (bundle-pin:String) : bundle-pin
+                (bundle-pin:String) : ref-string-to-ref(bundle-pin)
                 (bundle-pin) : stm-exception!("Invalid Mapping Bundle Pin")
               ;Read the name of the required pin (ex. "required-pin")
               val require = match(mapping["require"]) :
@@ -164,7 +164,7 @@ public defn create-supports (json:JSON) -> Tuple<STMSupports> :
                 (require) : stm-exception!("Invalid Mapping Require")
               ;Read the name of the mapped pin (ex. "q")
               val pin = match(mapping["pin"]) :
-                (pin:String) : pin
+                (pin:String) : ref-string-to-ref(pin)
                 (pin) : stm-exception!("Invalid Mapping Pin")
               STMSupportMapping(bundle-pin, require, pin)
           (mappings) : stm-exception!("Invalid Support Mappings")
@@ -254,11 +254,11 @@ public defn create-pin-properties (json1:JSON) -> STMPinProperties :
     (pins:Tuple<JObject>) :
       for pin-item in pins do :
         val pin-name = match(pin-item["pin"]) :
-          (pin-name:String) : pin-name
+          (pin-name:String) : ref-string-to-ref(pin-name)
           (pin-name) : stm-exception!("Invalid Pin Name: %_" % [pin-name])
         val pad-name = match(pin-item["pad"]) :
           (pad-double:Double) : to-int(pad-double)
-          (pad-str:String) : pad-str
+          (pad-str:String) : raw-string-to-ref(pad-str)
           (pad-data) : stm-exception!("Invalid Pad Value:%_" % [pad-data])
         val side = match(pin-item["side"]) :
           (side-val:String) : 
@@ -304,7 +304,7 @@ defn rename-duplicate-pins (pp:STMPinProperties) -> STMPinProperties :
   val pinname-table = group-by(pin, rows(pp))
 
   ;Track used pin names.
-  val seen-pins = HashSet<String>()
+  val seen-pins = HashSet<Ref>()
 
   ;Store updated rows.
   ;A row's index in this array corresponds to its original index.
@@ -324,7 +324,7 @@ defn rename-duplicate-pins (pp:STMPinProperties) -> STMPinProperties :
     if length(pin-list) > 1 :
       updated-rows[i] = STMPinPropertiesRow{_, pad(row), side(row), generic-props?(row), power-props?(row)} $
         for i in 0 to false first! :
-          val new-pinname = to-string("%_[%_]" % [pinname i])
+          val new-pinname = IndexRef(pinname, i)
           if add(seen-pins, new-pinname) :
             One(new-pinname)
           else :
@@ -359,3 +359,40 @@ public defstruct StmError <: Exception :
 
 defmethod print (o:OutputStream, e:StmError) : 
   print(o, "Could not extract STM component. %_." % [message(e)])
+
+
+;=========================================
+;=============== Utilities ===============
+;=========================================
+
+;Convert a String that may have brackets to a Ref.
+defn ref-string-to-ref (text:String) -> Ref :
+  ;regex-match implementation incomplete so we can't do exact matches with "^mypattern$"
+  ;val match-result = regex-match("^(\\w+).([\\w\.])+$", text)
+  if text[length(text) - 1] == ']' :
+    val idx = last-index-of-char(text, '[') as Int
+    IndexRef(ref-string-to-ref(text[0 to idx]), to-int!(text[(idx + 1) to (length(text) - 1)]))
+  else :
+    val idx = last-index-of-char(text, '.')
+    match(idx: Int) :
+      FieldRef(ref-string-to-ref(text[0 to idx]), Ref(text[(idx + 1) to length(text)]))
+    else :
+      Ref(text)
+
+;Convert a String without brackets to a Ref.
+defn raw-string-to-ref (text:String) -> Ref :
+  val last-digit-index = label<Int> break :
+    for i in (length(text) - 1) through 0 by -1 do :
+      if not digit?(text[i]) :
+        break(i + 1)
+    0
+  if last-digit-index == 0 :
+    val ref = Ref("p")
+    val index = to-int!(text)
+    IndexRef(ref, index)
+  else if last-digit-index == length(text) :
+    Ref(text)
+  else :
+    val ref = Ref(text[0 to last-digit-index])
+    val index = to-int!(text[last-digit-index to false])
+    IndexRef(ref, index)
