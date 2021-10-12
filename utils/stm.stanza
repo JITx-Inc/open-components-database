@@ -337,7 +337,7 @@ defn rename-duplicate-pins (pp:STMPinProperties) -> STMPinProperties :
 ;This function returns STMPinProperties with the same rows reordered.
 public defn alphabetize-pins (pp:STMPinProperties) -> STMPinProperties :
   val pin-to-row = to-hashtable(pin, rows(pp))
-  val sorted-pins = alphabetical-sort(map(pin, rows(pp)))
+  val sorted-pins = to-tuple $ alphanumeric-sort(map(pin, rows(pp)))
 
   ;Construct a new pin properties with reordered rows.
   STMPinProperties{generic-pin(pp), power-pin(pp), _} $
@@ -353,10 +353,10 @@ defn run-passes (pp:STMPinProperties) -> STMPinProperties :
 ;==================== Sorting ====================
 ;=================================================
 
-defn parse (p: String) -> Tuple<Char|Int> :
-  to-tuple $ parse(p, "")
+defn flatten (p: String) -> Tuple<Char|Int> :
+  to-tuple $ flatten(p, "")
 
-defn parse (p: String, number-buffer: String) -> List<Char|Int> :
+defn flatten (p: String, number-buffer: String) -> List<Char|Int> :
   if p == "" :
     if number-buffer == "" :
       List()
@@ -364,14 +364,14 @@ defn parse (p: String, number-buffer: String) -> List<Char|Int> :
       List(to-int!(number-buffer))
   else :
     if contains?("0123456789", p[0]) :
-      parse(p[1 to false], append(number-buffer, p[0 to 1]))
+      flatten(p[1 to false], append(number-buffer, p[0 to 1]))
     else :
       if number-buffer == "":
-        cons(p[0], parse(p[1 to false], ""))
+        cons(p[0], flatten(p[1 to false], ""))
       else :
-        cons(to-int!(number-buffer), p[0], parse(p[1 to false], ""))
+        cons(to-int!(number-buffer), p[0], flatten(p[1 to false], ""))
 
-defn unparse (l: Tuple<Char|Int>) -> String :
+defn unflatten (l: Tuple<Char|Int>) -> String :
   append-all $ seq(to-string, l)
 
 ; We need to create a wrapper struct to define an order on Int|Char
@@ -387,12 +387,12 @@ defmethod compare (a: ComparableIntChar, b: ComparableIntChar) -> Int :
     (e1: Int, e2: Int): compare(e1, e2)
     (e1: Char, e2: Char): compare(e1, e2)
 
-public defn alphabetical-sort (elements: Seqable<String>) -> Seqable<String> :
-  elements $> seq{parse, _}
-           $> alphabetical-sort
-           $> seq{unparse, _}
+public defn alphanumeric-sort (elements: Seqable<String>) -> Seqable<String> :
+  elements $> seq{flatten, _}
+           $> low-level-alphanumeric-sort
+           $> seq{unflatten, _}
 
-public defn alphabetical-sort (elements: Seqable<Tuple<Int|Char>>) -> Seqable<Tuple<Int|Char>> :
+public defn low-level-alphanumeric-sort (elements: Seqable<Tuple<Int|Char>>) -> Seqable<Tuple<Int|Char>> :
   elements $> seq{to-tuple{seq(ComparableIntChar, _)}, _}
            $> qsort
            $> seq{map{element, _}, _}
