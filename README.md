@@ -14,7 +14,7 @@ Components are modeled with the standardized open-source Embedded Systems Interm
 | `derating/space-derating.stanza`      | Derating parameters for spaceflight applications. |
 | `designs/`      | Collection of example designs. |
 | `doc/`      | Documentation. |
-| `manufacturers/`    | Contains ? |
+| `manufacturers/`    | Contains DFM rules and stackups for board manufacturers |
 | `modules/`      | Contains generators for subcircuits. (e.g. passive-circuits.stanza contains generators for circuits like passive filters and voltage dividers) |
 | `scripts/`    | Import/export scripts. |
 | `style-guide/` | Style guide for entities in this library. |
@@ -24,13 +24,12 @@ Components are modeled with the standardized open-source Embedded Systems Interm
 | `utils/bundles.stanza`      | Definitions for commonly used bundles (e.g. `SPI`) |
 | `utils/checks.stanza`      | Checks to run on designs (e.g. `check resistor()`|
 | `utils/connects.stanza`      | Connection statements for creating io-translation/conditioning circuitry. (e.g. `isolate()`|
-| `utils/db-parts.stanza`      | Definitions of RLC components |
+| `utils/db-parts.stanza`      | Generators for generic parts (e.g. RLC) using information that comes from our hosted component database |
 | `utils/debug-utils.stanza`      | Definitions of test points, jumpers, industry standard debug ports |
 | `utils/defaults.stanza`      | Generic setup of PCB characteristics |
-| `utils/design-vars.stanza`      | Generic setup of project characteristics |
+| `utils/design-vars.stanza`      | Global design variables (e.g. operating temperature, smallest allowable package, ..) |
 | `utils/generator-utils.stanza`      | General purpose utilities for modeling components and creating circuit generators. |
 | `utils/generic-components.stanza`      | Collection of generic components (e.g. generic resistors, or banana-plugs)|
-| `utils/interface.stanza`      | Empty file? |
 | `utils/land-patterns.stanza`      | Generators for land-pattern geometry (e.g. `make-qfn-landpattern()`)|
 | `utils/land-protrusions.stanza`      | Generator for land-pattern fillets  |
 | `utils/micro-controllers.stanza`      | Generator for generic microcontroller  |
