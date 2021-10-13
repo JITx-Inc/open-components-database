@@ -126,13 +126,26 @@ pcb-module sensor-mote :
   schematic-group(hum) = hum
   schematic-group(particle-counter) = particle-counter
 
+  net VBUS (usb.usb-2.vbus.vdd)
+  net USB-N (usb.usb-2.data.N)
+  net USB-P (usb.usb-2.data.P)
+  ; Set up netclasses
+  val power-net-class = NetClass(`Power, [`min-trace => 0.50])
+  for n in [P5V0 P3V3 VBUS] do :
+    property(n.net-class) = power-net-class
+  ; Rules for JLC2313 Stackup, 45-Ohm characteristic impedance
+  val usb-net-class = NetClass(`USB, [`min-trace => 0.224 `min-space => 0.3])
+  for n in [USB-N USB-P] do :
+    property(n.net-class) = usb-net-class
+
   check-design(self)
 
 ; === Setup visualizations and exports ===
 ; Set the active design directory for CAD
-set-design("ble-mote")
+set-design("hardware/ble-mote")
 
 val final-design = run-final-passes(sensor-mote)
+
 ; Configure design to have a default 4-layer stackup and design rules.
 make-default-board(final-design, 4, board-shape)
 
