@@ -3,13 +3,9 @@ defpackage ocdb/micro-controllers :
   import core
   import collections
   import json
-  import lang-utils
 
   import jitx
   import jitx/commands
-  import jitx/param-sets
-  import jitx/params
-  import jitx/param-manager
   import jitx/errors
   import ocdb/land-patterns
   import ocdb/design-vars
@@ -122,34 +118,18 @@ public defn MicroController (user-properties:Tuple<KeyValue>, exist:Tuple<String
   val jobject = dbquery-first(query-properties) as JObject
   MicroController(jobject)
 
-defn micro-controller-query-properties (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> Tuple<KeyValue> :
-  val params = jitx-params()
-  val vendors = bom-vendors(params)
+defn micro-controller-query-properties (user-properties:Tuple<KeyValue>,
+                                        exist:Tuple<String>,
+                                        sort:Tuple<String>,
+                                        operating-temperature:[Double, Double]|False) -> Tuple<KeyValue> :
+  query-properties(user-properties,
+                   exist,
+                   sort,
+                   operating-temperature,
+                   "microcontroller",
+                   true)
 
-  ; If we want to optimize on cost, we have to put either _stock or _sellers in the query so that the sourcing data is used in the server
-  val sort-on-price = length(sort) >= 1 and contains?(["price", "cost", "-price", "-cost"], sort[0])
 
-  val optional-properties =
-    generate<KeyValue<String, ?>> :
-      ; Part sourcing parameters: if they exist, sourcing data will be used
-      yield("_stock" => DESIGN-QUANTITY) when DESIGN-QUANTITY > 0 or sort-on-price
-      yield("_sellers" => vendors) when call?<Tuple>({not empty?(_)}, vendors)
-      ; Other design parameters
-      yield("_sort" => sort) when not empty?(sort)
-      yield("_exist" => exist) when not empty?(exist)
-      match(operating-temperature:[Double, Double]):
-        yield("max-rated-temperature.min" => operating-temperature[0])
-        yield("min-rated-temperature.max" => operating-temperature[1])
-
-  ; `user-properties` override default properties
-  to-tuple $ hashtable-union<String, ?> $ [["category" => "microcontroller"],
-                                           optional-properties,
-                                           user-properties]
-
-; FIXME: add to collections.stanza with hashset-union used in query.stanza ?
-; Behaviour: to-tuple $ hashtable-union $ [["category" => "microcontroller"], ["c" => 2], ["category" => "qwerty"]] -> ["c" => 2 "category" => "qwerty"]
-public defn hashtable-union<K, V> (hs:Seqable<Seqable<KeyValue<K&Equalable&Hashable, V>>>) -> HashTable<K, V> :
-  to-hashtable<K, V>(cat-all(hs))
 
 ;============================================================
 ;======================= MCU to JITX ========================

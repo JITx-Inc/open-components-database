@@ -4,11 +4,16 @@ defpackage ocdb/db-parts :
   import collections
   import json
   import math
+  import lang-utils
+
   import jitx with :
     prefix(Resistor) => EModel-
     prefix(Capacitor) => EModel-
     prefix(Inductor) => EModel-
   import jitx/commands
+  import jitx/param-sets
+  import jitx/params
+  import jitx/param-manager
 
   import ocdb/defaults
   import ocdb/land-patterns
@@ -160,54 +165,67 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
 
   my-resistor
 
-public defn Resistor (properties:Tuple<KeyValue>) -> Resistor :
-  Resistor(properties, [])
+public defn Resistor (user-properties:Tuple<KeyValue>) -> Resistor :
+  Resistor(user-properties, [])
 
-public defn Resistor (properties:Tuple<KeyValue>, exist:Tuple<String>) -> Resistor :
-  Resistor(properties, exist, OPTIMIZE-FOR, ["max-rated-temperature.min" => OPERATING-TEMPERATURE[0],
-                                             "min-rated-temperature.max" => OPERATING-TEMPERATURE[1]])
+public defn Resistor (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Resistor :
+  Resistor(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
 
-public defn Resistor (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, temperature-properties:Tuple<KeyValue>) -> Resistor :
+public defn Resistor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> Resistor :
+  val query-properties = resistor-query-properties(user-properties, exist, sort, operating-temperature)
   ;Query the database with the given properties
-  val query-properties = to-tuple $ cat-all([["category" => "resistor",
-                                              "_sort" => sort,
-                                              "_exist" => exist],
-                                             temperature-properties,
-                                             properties])
-
-  val json = dbquery-first(query-properties) as JObject
-  Resistor(json)
+  Resistor $ dbquery-first(query-properties) as JObject
   ; Resistor("manufacturer", "mpn", "trust", 0.0, 0.0, 0.0, "mounting", false, false, Sourcing(false, 0, 0), [], "type", false, 0.0, false, false, false)
 
-public defn Resistors (properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Resistor> :
-  val sort = OPTIMIZE-FOR
-  val temperature-properties = ["max-rated-temperature.min" => OPERATING-TEMPERATURE[0],
-                                "min-rated-temperature.max" => OPERATING-TEMPERATURE[1]]
+public defn Resistors (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Resistor> :
+  val query-properties = resistor-query-properties(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
+  ;Query the database with the given properties
+  map{Resistor, _} $ dbquery-all(query-properties) as Tuple<JObject>
 
-  val query-properties = to-tuple $ cat-all([["category" => "resistor",
-                                              "_sort" => sort,
-                                              "_exist" => exist],
-                                             temperature-properties,
-                                             properties])
+defn resistor-query-properties (user-properties:Tuple<KeyValue>,
+                                exist:Tuple<String>,
+                                sort:Tuple<String>,
+                                operating-temperature:[Double, Double]|False) -> Tuple<KeyValue> :
+  query-properties(user-properties,
+                   exist,
+                   sort,
+                   operating-temperature,
+                   "resistor",
+                   false)
 
-  val jsons = dbquery-all(query-properties) as Tuple<JObject>
-  map(Resistor, jsons)
-  ; map(Resistor, [] as Tuple<JObject>)
+;============================================================
+;======================== Look-ups ==========================
+;============================================================
 
-public defn query-available-resistance-values (properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Double> :
-  val sort = OPTIMIZE-FOR
-  val temperature-properties = ["max-rated-temperature.min" => OPERATING-TEMPERATURE[0],
-                                "min-rated-temperature.max" => OPERATING-TEMPERATURE[1]]
+public defn look-up-resistors (attribute: String) -> Tuple :
+  look-up-resistors(attribute, [])
 
-  val query-properties = to-tuple $ cat-all([["category" => "resistor",
-                                              "_sort" => sort,
-                                              "_exist" => exist,
-                                              "_distinct" => "resistance"],
-                                             temperature-properties,
-                                             properties])
+public defn look-up-resistors (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
+  look-up-resistors(attribute, filter-properties, [])
 
-  dbquery-all(query-properties) as Tuple<Double>
-  ; []
+public defn look-up-resistors (attribute: String, filter-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple :
+  look-up-resistors(attribute, filter-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
+
+public defn look-up-resistors (attribute: String,
+                               filter-properties:Tuple<KeyValue>,
+                               exist:Tuple<String>,
+                               sort:Tuple<String>,
+                               operating-temperature:[Double, Double]|False) -> Tuple :
+  val user-properties = to-tuple $ cat(filter-properties, ["_distinct" => attribute])
+  val query-properties = resistor-query-properties(user-properties, exist, sort, operating-temperature)
+
+  ; 1000 is the maximum number of values that the JITX server is allowed to return at once
+  val values = dbquery(query-properties, 1000) as Tuple
+
+  if length(values) == 1000 :
+    print("[WARNING] `look-up-resistors` returned the maximum allowed of 1000 values. ")
+    println("The result does not contain all available values for:")
+    println(query-properties)
+
+  values
+
+public defn query-available-resistance-values (filter-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Double> :
+  look-up-resistors("resistance", filter-properties, exist) as Tuple<Double>
 
 ;============================================================
 ;===================== Capacitor ============================
@@ -384,24 +402,66 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
 
   my-capacitor
 
-public defn Capacitor (properties:Tuple<KeyValue>) -> Capacitor :
-  Capacitor(properties, [])
+public defn Capacitor (user-properties:Tuple<KeyValue>) -> Capacitor :
+  Capacitor(user-properties, [])
 
-public defn Capacitor (properties:Tuple<KeyValue>, exist:Tuple<String>) -> Capacitor :
-  Capacitor(properties, exist, OPTIMIZE-FOR, ["max-rated-temperature.min" => OPERATING-TEMPERATURE[0],
-                                              "min-rated-temperature.max" => OPERATING-TEMPERATURE[1]])
+public defn Capacitor (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Capacitor :
+  Capacitor(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
 
-public defn Capacitor (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, temperature-properties:Tuple<KeyValue>) -> Capacitor :
+public defn Capacitor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> Capacitor :
+  val query-properties = capacitor-query-properties(user-properties, exist, sort, operating-temperature)
   ;Query the database with the given properties
-  val query-properties = to-tuple $ cat-all([["category" => "capacitor",
-                                              "_sort" => sort,
-                                              "_exist" => exist],
-                                             temperature-properties,
-                                             properties])
+  Capacitor $ dbquery-first(query-properties) as JObject
 
-  val json = dbquery-first(query-properties) as JObject
-  Capacitor(json)
-  ; Capacitor("manufacturer", "mpn", "trust", 0.0, 0.0, 0.0, "mounting", false, false, Sourcing(false, 0, 0), [], "ceramic", false, 0.0, false, false, false, false, false, false, false)
+public defn Capacitors (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Resistor> :
+  val query-properties = capacitor-query-properties(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
+  ;Query the database with the given properties
+  map{Resistor, _} $ dbquery-all(query-properties) as Tuple<JObject>
+
+defn capacitor-query-properties (user-properties:Tuple<KeyValue>,
+                                exist:Tuple<String>,
+                                sort:Tuple<String>,
+                                operating-temperature:[Double, Double]|False) -> Tuple<KeyValue> :
+  query-properties(user-properties,
+                   exist,
+                   sort,
+                   operating-temperature,
+                   "capacitor",
+                   false)
+
+;============================================================
+;======================== Look-ups ==========================
+;============================================================
+
+public defn look-up-capacitors (attribute: String) -> Tuple :
+  look-up-capacitors(attribute, [])
+
+public defn look-up-capacitors (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
+  look-up-capacitors(attribute, filter-properties, [])
+
+public defn look-up-capacitors (attribute: String, filter-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple :
+  look-up-capacitors(attribute, filter-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
+
+public defn look-up-capacitors (attribute: String,
+                                filter-properties:Tuple<KeyValue>,
+                                exist:Tuple<String>,
+                                sort:Tuple<String>,
+                                operating-temperature:[Double, Double]|False) -> Tuple :
+  val user-properties = to-tuple $ cat(filter-properties, ["_distinct" => attribute])
+  val query-properties = capacitor-query-properties(user-properties, exist, sort, operating-temperature)
+
+  ; 1000 is the maximum number of values that the JITX server is allowed to return at once
+  val values = dbquery(query-properties, 1000) as Tuple
+
+  if length(values) == 1000 :
+    print("[WARNING] `look-up-capacitors` returned the maximum allowed of 1000 values. ")
+    println("The result does not contain all available values for:")
+    println(query-properties)
+
+  values
+
+public defn query-available-capacitance-values (filter-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Double> :
+  look-up-resistors("capacitance", filter-properties, exist) as Tuple<Double>
 
 ;============================================================
 ;====================== Inductor ============================
@@ -516,24 +576,66 @@ defmethod to-jitx (inductor: Inductor) -> Instantiable :
 
   my-inductor
 
-public defn Inductor (properties:Tuple<KeyValue>) -> Inductor :
-  Inductor(properties, [])
+public defn Inductor (user-properties:Tuple<KeyValue>) -> Inductor :
+  Inductor(user-properties, [])
 
-public defn Inductor (properties:Tuple<KeyValue>, exist:Tuple<String>) -> Inductor :
-  Inductor(properties, exist, OPTIMIZE-FOR, ["max-rated-temperature.min" => OPERATING-TEMPERATURE[0],
-                                             "min-rated-temperature.max" => OPERATING-TEMPERATURE[1]])
+public defn Inductor (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Inductor :
+  Inductor(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
 
-public defn Inductor (properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, temperature-properties:Tuple<KeyValue>) -> Inductor :
-  val query-properties = to-tuple $ cat-all([["category" => "inductor",
-                                              "_sort" => sort,
-                                              "_exist" => exist],
-                                             temperature-properties,
-                                             properties])
+public defn Inductor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> Inductor :
+  val query-properties = inductor-query-properties(user-properties, exist, sort, operating-temperature)
+  ;Query the database with the given properties
+  Inductor $ dbquery-first(query-properties) as JObject
 
-  val json = dbquery-first(query-properties) as JObject
-  Inductor(json)
-  ; Inductor("manufacturer", "mpn", "trust", 0.0, 0.0, 0.0, "mounting", false, false, Sourcing(false, 0, 0), [], "type", false, 0.0, false, false, false, false, false, false, false)
+public defn Inductors (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Inductor> :
+  val query-properties = inductor-query-properties(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
+  ;Query the database with the given properties
+  map{Inductor, _} $ dbquery-all(query-properties) as Tuple<JObject>
 
+defn inductor-query-properties (user-properties:Tuple<KeyValue>,
+                                exist:Tuple<String>,
+                                sort:Tuple<String>,
+                                operating-temperature:[Double, Double]|False) -> Tuple<KeyValue> :
+  query-properties(user-properties,
+                   exist,
+                   sort,
+                   operating-temperature,
+                   "inductor",
+                   false)
+
+;============================================================
+;======================== Look-ups ==========================
+;============================================================
+
+public defn look-up-inductors (attribute: String) -> Tuple :
+  look-up-inductors(attribute, [])
+
+public defn look-up-inductors (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
+  look-up-inductors(attribute, filter-properties, [])
+
+public defn look-up-inductors (attribute: String, filter-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple :
+  look-up-inductors(attribute, filter-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
+
+public defn look-up-inductors (attribute: String,
+                               filter-properties:Tuple<KeyValue>,
+                               exist:Tuple<String>,
+                               sort:Tuple<String>,
+                               operating-temperature:[Double, Double]|False) -> Tuple :
+  val user-properties = to-tuple $ cat(filter-properties, ["_distinct" => attribute])
+  val query-properties = inductor-query-properties(user-properties, exist, sort, operating-temperature)
+
+  ; 1000 is the maximum number of values that the JITX server is allowed to return at once
+  val values = dbquery(query-properties, 1000) as Tuple
+
+  if length(values) == 1000 :
+    print("[WARNING] `look-up-inductors` returned the maximum allowed of 1000 values. ")
+    println("The result does not contain all available values for:")
+    println(query-properties)
+
+  values
+
+public defn query-available-inductance-values (filter-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Double> :
+  look-up-resistors("inductance", filter-properties, exist) as Tuple<Double>
 
 ;============================================================
 ;====================== Printer =============================
@@ -676,3 +778,41 @@ defn string-or-unknown (value: String|False) :
     value
   else:
     UNKNOWN
+
+;============================================================
+;===================== Other utils ==========================
+;============================================================
+
+; FIXME: add to collections.stanza with hashset-union used in query.stanza ?
+; Behaviour: to-tuple $ hashtable-union $ [["category" => "microcontroller"], ["c" => 2], ["category" => "qwerty"]] -> ["c" => 2 "category" => "qwerty"]
+defn hashtable-union<K, V> (hs:Seqable<Seqable<KeyValue<K&Equalable&Hashable, V>>>) -> HashTable<K, V> :
+  to-hashtable<K, V>(cat-all(hs))
+
+public defn query-properties (user-properties:Tuple<KeyValue>,
+                              exist:Tuple<String>,
+                              sort:Tuple<String>,
+                              operating-temperature:[Double, Double]|False,
+                              category: String,
+                              sourcing?: True|False) -> Tuple<KeyValue> :
+  val optional-properties =
+    generate<KeyValue<String, ?>> :
+      ; Part sourcing parameters: if they exist, sourcing data will be used
+      if sourcing? :
+        val vendors = bom-vendors $ jitx-params()
+        ; If we want to optimize on cost, we have to put either _stock or _sellers in the query so that the sourcing data is used in the server
+        val sort-on-price = length(sort) >= 1 and contains?(["price", "cost", "-price", "-cost"], sort[0])
+
+        yield("_stock" => DESIGN-QUANTITY) when DESIGN-QUANTITY > 0 or sort-on-price
+        yield("_sellers" => vendors) when call?<Tuple>({not empty?(_)}, vendors)
+
+      ; Other design parameters
+      yield("_sort" => sort) when not empty?(sort)
+      yield("_exist" => exist) when not empty?(exist)
+      match(operating-temperature:[Double, Double]):
+        yield("max-rated-temperature.min" => operating-temperature[0])
+        yield("min-rated-temperature.max" => operating-temperature[1])
+
+  ; `user-properties` override default properties
+  to-tuple $ hashtable-union<String, ?> $ [["category" => category],
+                                           optional-properties,
+                                           user-properties]
