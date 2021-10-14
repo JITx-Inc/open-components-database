@@ -26,15 +26,36 @@ public deftype Component
 public defmulti x (component: Component) -> Double
 public defmulti y (component: Component) -> Double
 public defmulti area (component: Component) -> Double
+public defmulti sellers (component: Component) -> Tuple<Seller>|False
+public defmulti resolved-price (component: Component) -> Double|False
 public defmulti to-jitx (component: Component) -> Instantiable
 
 defmethod area (component: Component) -> Double :
   x(component) * y(component)
 
-defstruct Sourcing :
+public defstruct Sourcing :
   price: Double|False
   minimum-quantity: Int
   stock: Int
+
+;============================================================
+;================= External data souring ====================
+;============================================================
+
+public defstruct Seller :
+  company-name: String
+  resolved-price: Double
+  offers: Tuple<SellerOffer>
+
+public defstruct SellerOffer :
+  inventory-level: Int
+  prices: Tuple<SellerOfferPrice>
+
+public defstruct SellerOfferPrice :
+  quantity: Int
+  converted-price: Double
+with :
+  printer => true
 
 ;============================================================
 ;====================== Resistor ============================
@@ -60,6 +81,8 @@ public defstruct Resistor <: Component :
   composition: String|False ; Composition of resistor
   rated-power: Double|False ; Power dissipation limit as rated by manufacturer. One value, or PWL function (W | [degC, W])
   TCR: TCR|False ; Temperature coefficient of resistance (ohms/ohm*degC)
+  sellers: Tuple<Seller>|False with: (as-method => true)
+  resolved-price: Double|False with: (as-method => true)
 
 public defn delta-resistance (resistor: Resistor, temperature: Double) -> Double :
   val tcr = TCR(resistor) as TCR
@@ -93,7 +116,9 @@ public defn Resistor (raw-json: JObject) -> Resistor :
            json["resistance"] as Double,
            optional-string(json, "composition"),
            optional-double(json, "rated-power"),
-           resistance-tcr(json))
+           resistance-tcr(json),
+           parse-sellers(json),
+           optional-double(json, "resolved_price"))
 
 defn resistance-tcr (json: JObject) -> TCR|False :
   val tcr-json = get?(json, "tcr")
@@ -214,15 +239,7 @@ public defn look-up-resistors (attribute: String,
   val user-properties = to-tuple $ cat(filter-properties, ["_distinct" => attribute])
   val query-properties = resistor-query-properties(user-properties, exist, sort, operating-temperature)
 
-  ; 1000 is the maximum number of values that the JITX server is allowed to return at once
-  val values = dbquery(query-properties, 1000) as Tuple
-
-  if length(values) == 1000 :
-    print("[WARNING] `look-up-resistors` returned the maximum allowed of 1000 values. ")
-    println("The result does not contain all available values for:")
-    println(query-properties)
-
-  values
+  query-distinct(query-properties, "look-up-resistors")
 
 public defn query-available-resistance-values (filter-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Double> :
   look-up-resistors("resistance", filter-properties, exist) as Tuple<Double>
@@ -256,6 +273,8 @@ defstruct Capacitor <: Component :
   rated-voltage-ac: Double|False
   rated-current-pk: Double|False ; Maximum peak current rating from manufacturer (Amperes)
   rated-current-rms: Double|False ; Maximum rms current rating from manufacturer (Amperes)
+  sellers: Tuple<Seller>|False with: (as-method => true)
+  resolved-price: Double|False with: (as-method => true)
 
 defstruct ESR :
   value: Double
@@ -287,7 +306,9 @@ public defn Capacitor (raw-json: JObject) -> Capacitor :
             optional-double(json, "rated-voltage"),
             optional-double(json, "rated-voltage-ac"),
             optional-double(json, "rated-current-pk"),
-            optional-double(json, "rated-current-rms"))
+            optional-double(json, "rated-current-rms"),
+            parse-sellers(json),
+            optional-double(json, "resolved_price"))
 
 defn parse-esr (json: JObject) -> ESR|False :
   val esr-json = get?(json, "esr")
@@ -450,18 +471,10 @@ public defn look-up-capacitors (attribute: String,
   val user-properties = to-tuple $ cat(filter-properties, ["_distinct" => attribute])
   val query-properties = capacitor-query-properties(user-properties, exist, sort, operating-temperature)
 
-  ; 1000 is the maximum number of values that the JITX server is allowed to return at once
-  val values = dbquery(query-properties, 1000) as Tuple
-
-  if length(values) == 1000 :
-    print("[WARNING] `look-up-capacitors` returned the maximum allowed of 1000 values. ")
-    println("The result does not contain all available values for:")
-    println(query-properties)
-
-  values
+  query-distinct(query-properties, "look-up-capacitors")
 
 public defn query-available-capacitance-values (filter-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Double> :
-  look-up-resistors("capacitance", filter-properties, exist) as Tuple<Double>
+  look-up-capacitors("capacitance", filter-properties, exist) as Tuple<Double>
 
 ;============================================================
 ;====================== Inductor ============================
@@ -491,6 +504,8 @@ defstruct Inductor <: Component :
   dc-resistance: Double|False ; Nominal resistance (Ohm)
   quality-factor: Double|False ; Loss factor inverse - ratio between inductors resistance and inductance (ratio@freq)
   self-resonant-frequency: Double|False ; Frequency at which inductor impedance becomes very high / open circuit (freq in Hz)
+  sellers: Tuple<Seller>|False with: (as-method => true)
+  resolved-price: Double|False with: (as-method => true)
 
 public defn Inductor (raw-json: JObject) -> Inductor :
   val json = filter-json(raw-json)
@@ -517,7 +532,9 @@ public defn Inductor (raw-json: JObject) -> Inductor :
            optional-double(json, "saturation-current"),
            optional-double(json, "dc-resistance"),
            optional-double(json, "quality-factor"),
-           optional-double(json, "self-resonant-frequency"))
+           optional-double(json, "self-resonant-frequency"),
+           parse-sellers(json),
+           optional-double(json, "resolved_price"))
 
 defmethod to-jitx (inductor: Inductor) -> Instantiable :
   pcb-component my-inductor :
@@ -624,25 +641,17 @@ public defn look-up-inductors (attribute: String,
   val user-properties = to-tuple $ cat(filter-properties, ["_distinct" => attribute])
   val query-properties = inductor-query-properties(user-properties, exist, sort, operating-temperature)
 
-  ; 1000 is the maximum number of values that the JITX server is allowed to return at once
-  val values = dbquery(query-properties, 1000) as Tuple
-
-  if length(values) == 1000 :
-    print("[WARNING] `look-up-inductors` returned the maximum allowed of 1000 values. ")
-    println("The result does not contain all available values for:")
-    println(query-properties)
-
-  values
+  query-distinct(query-properties, "look-up-inductors")
 
 public defn query-available-inductance-values (filter-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Double> :
-  look-up-resistors("inductance", filter-properties, exist) as Tuple<Double>
+  look-up-inductors("inductance", filter-properties, exist) as Tuple<Double>
 
 ;============================================================
 ;====================== Printer =============================
 ;============================================================
 
 defmethod print (o:OutputStream, r:Resistor) :
-  val items = [
+  var items = [
     "mpn = %_" % [mpn(r)]
     "trust = %_" % [trust(r)]
     "(x, y, z) = (%,)" % [[x(r), y(r), z(r)]]
@@ -657,10 +666,17 @@ defmethod print (o:OutputStream, r:Resistor) :
     "TCR = %_" % [TCR(r)]
     "sourcing = %_" % [sourcing(r)]
     "metadata = %_" % [indented-list(metadata(r))]]
+
+  match(sellers(r), resolved-price(r)) :
+    (s: Tuple<Seller>, p: Double) :
+      items = cat(items, ["sellers = %_" % [indented-list(s)]
+                          "resolved-price = %_" % [p]])
+    (s: False, p: False): false
+
   print(o, "Resistor(%_)" % [indented-list(items)])
 
 defmethod print (o:OutputStream, r:Capacitor) :
-  val items = [
+  var items = [
     "mpn = %_" % [mpn(r)]
     "trust = %_" % [trust(r)]
     "(x, y, z) = (%,)" % [[x(r), y(r), z(r)]]
@@ -680,10 +696,17 @@ defmethod print (o:OutputStream, r:Capacitor) :
     "rated-current-rms = %_" % [rated-current-rms(r)]
     "sourcing = %_" % [sourcing(r)]
     "metadata = %_" % [indented-list(metadata(r))]]
+
+  match(sellers(r), resolved-price(r)) :
+    (s: Tuple<Seller>, p: Double) :
+      items = cat(items, ["sellers = %_" % [indented-list(s)]
+                          "resolved-price = %_" % [p]])
+    (s: False, p: False): false
+
   print(o, "Capacitor(%_)" % [indented-list(items)])
 
 defmethod print (o:OutputStream, r:Inductor) :
-  val items = [
+  var items = [
     "mpn = %_" % [mpn(r)]
     "trust = %_" % [trust(r)]
     "(x, y, z) = (%,)" % [[x(r), y(r), z(r)]]
@@ -702,6 +725,13 @@ defmethod print (o:OutputStream, r:Inductor) :
     "self-resonant-frequency = %_" % [self-resonant-frequency(r)]
     "sourcing = %_" % [sourcing(r)]
     "metadata = %_" % [indented-list(metadata(r))]]
+
+  match(sellers(r), resolved-price(r)) :
+    (s: Tuple<Seller>, p: Double) :
+      items = cat(items, ["sellers = %_" % [indented-list(s)]
+                          "resolved-price = %_" % [p]])
+    (s: False, p: False): false
+
   print(o, "Inductor(%_)" % [indented-list(items)])
 
 defmethod print (o:OutputStream, r:MinMaxRange) :
@@ -715,6 +745,19 @@ defmethod print (o:OutputStream, esr:ESR) :
 
 defmethod print (o:OutputStream, s:Sourcing) :
   print(o, "ESR(price=%_, minimum-quantity=%_, stock=%_)" % [price(s), minimum-quantity(s), stock(s)])
+
+defmethod print (o:OutputStream, s:Seller) :
+  val items = [
+    "company-name = %_" % [company-name(s)]
+    "resolved-price = %_" % [resolved-price(s)]
+    "offers = (%_)" % [indented-list(offers(s))]]
+  print(o, "Seller(%_)" % [indented-list(items)])
+
+defmethod print (o:OutputStream, s:SellerOffer) :
+  val items = [
+    "inventory-level = %_" % [inventory-level(s)]
+    "prices = (%_)" % [indented-list(prices(s))]]
+  print(o, "SellerOffer(%_)" % [indented-list(items)])
 
 public defn indented-list (items:Seqable) :
   new Printable :
@@ -779,6 +822,20 @@ defn string-or-unknown (value: String|False) :
   else:
     UNKNOWN
 
+public defn parse-sellers (json: JObject) -> Tuple<Seller>|False:
+  defn int (j: JSON):
+    to-int(j as Double)
+
+  val json-sellers = get?(json, "sellers")
+
+  if json-sellers is-not False :
+    for json-seller in json-sellers as Tuple<JObject> map :
+      Seller{json-seller["company_name"] as String, json-seller["resolved_price"] as Double, _} $
+        for json-offer in json-seller["offers"] as Tuple<JObject> map :
+          SellerOffer{int(json-offer["inventory_level"]), _} $
+            for json-price in json-offer["prices"] as Tuple<JObject> map :
+              SellerOfferPrice(int(json-price["quantity"]), json-price["converted_price"] as Double)
+
 ;============================================================
 ;===================== Other utils ==========================
 ;============================================================
@@ -816,3 +873,14 @@ public defn query-properties (user-properties:Tuple<KeyValue>,
   to-tuple $ hashtable-union<String, ?> $ [["category" => category],
                                            optional-properties,
                                            user-properties]
+
+defn query-distinct (query-properties: Tuple<KeyValue<String, ?>>, callee: String) -> Tuple :
+  ; 1000 is the maximum number of values that the JITX server is allowed to return at once
+  val values = dbquery(query-properties, 1000) as Tuple
+
+  if length(values) == 1000 :
+    print("[WARNING] `%_` returned the maximum allowed of 1000 values. " % [callee])
+    println("The result does not contain all available values for:")
+    do(println{IndentedStream(current-output-stream()), _}, query-properties)
+
+  values

@@ -135,10 +135,7 @@ defn smd-query-properties () -> Tuple<KeyValue<String, ?>> :
    "min-stock" => 5 * DESIGN-QUANTITY]
 
 defn remove-duplicate-keys (hs:Seqable<Seqable<KeyValue<String, ?>>>) -> Tuple<KeyValue<String, ?>> :
-  defn hashtable-union<K, V> (hs:Seqable<Seqable<KeyValue<K&Equalable&Hashable, V>>>) -> HashTable<K, V> :
-    to-hashtable<K, V>(cat-all(hs))
-
-  to-tuple $ hashtable-union<String, ?>(hs)
+  to-tuple $ to-hashtable<String, ?>(cat-all(hs))
 
 ; Generic ceramic capacitor from database (of 600k options)
 public defn ceramic-cap (user-params:Tuple<KeyValue>) :
@@ -153,10 +150,10 @@ public defn ceramic-cap (cap:Double) :
 public defn ceramic-cap (cap:Double, tolerance:Double) :
   ceramic-cap(["capacitance" => cap "tolerance" => tolerance])
 
-public defn look-up-ceramic-capacitors (attribute: String) -> Tuple :
-  look-up-ceramic-capacitors(attribute, [])
+public defn look-up-ceramic-caps (attribute: String) -> Tuple :
+  look-up-ceramic-caps(attribute, [])
 
-public defn look-up-ceramic-capacitors (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
+public defn look-up-ceramic-caps (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
   val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         filter-properties]
@@ -356,11 +353,11 @@ public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple
     net (second-pin, rid.p[2])
     rid
 
-public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, res:Double, tol:Double) :
-  res-strap(first-pin, second-pin, ["resistance" => res "tolerance" => tol])
+public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, resistance:Double, tol:Double) :
+  res-strap(first-pin, second-pin, ["resistance" => resistance "tolerance" => tol])
 
-public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, res:Double) :
-  res-strap(first-pin, second-pin, ["resistance" => res])
+public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, resistance:Double) :
+  res-strap(first-pin, second-pin, ["resistance" => resistance])
 
 public defn cap-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple<KeyValue>) :
   inside pcb-module:
@@ -370,23 +367,23 @@ public defn cap-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple
     cap
 
 public defn cap-strap (first-pin:JITXObject, second-pin:JITXObject, capacitance:Double, tol:Double) :
-  cap-strap( first-pin, second-pin, ["capacitance" => capacitance "tolerance" => tol])
+  cap-strap(first-pin, second-pin, ["capacitance" => capacitance "tolerance" => tol])
 
 public defn cap-strap (first-pin:JITXObject, second-pin:JITXObject, capacitance:Double) :
-  cap-strap( first-pin, second-pin, ["capacitance" => capacitance])
+  cap-strap(first-pin, second-pin, ["capacitance" => capacitance])
 
 public defn ind-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple<KeyValue>) :
   inside pcb-module:
-    inst rid : smd-inductor(params)
-    net (first-pin, rid.p[1])
-    net (second-pin, rid.p[2])
-    rid
+    inst ind : smd-inductor(params)
+    net (first-pin, ind.p[1])
+    net (second-pin, ind.p[2])
+    ind
 
-public defn ind-strap (first-pin:JITXObject, second-pin:JITXObject, ind:Double, tol:Double) :
-  ind-strap(first-pin, second-pin, ["inductance" => ind "tolerance" => tol])
+public defn ind-strap (first-pin:JITXObject, second-pin:JITXObject, inductance:Double, tol:Double) :
+  ind-strap(first-pin, second-pin, ["inductance" => inductance "tolerance" => tol])
 
-public defn ind-strap (first-pin:JITXObject, second-pin:JITXObject, ind:Double) :
-  ind-strap(first-pin, second-pin, ["inductance" => ind])
+public defn ind-strap (first-pin:JITXObject, second-pin:JITXObject, inductance:Double) :
+  ind-strap(first-pin, second-pin, ["inductance" => inductance])
 
 public defn default-bypass (cmp:JITXObject) :
   inside pcb-module:

@@ -40,7 +40,15 @@ public defn look-up-micro-controllers (attribute: String, filter-properties:Tupl
   val user-properties = to-tuple $ cat(filter-properties, ["_distinct" => attribute])
   val query-properties = micro-controller-query-properties(user-properties, exist, sort, operating-temperature)
 
-  dbquery-all(query-properties) as Tuple
+  ; 1000 is the maximum number of values that the JITX server is allowed to return at once
+  val values = dbquery(query-properties, 1000) as Tuple
+
+  if length(values) == 1000 :
+    print("[WARNING] `look-up-micro-controllers` returned the maximum allowed of 1000 values. ")
+    println("The result does not contain all available values for:")
+    println(query-properties)
+
+  values
 
 ;============================================================
 ;===================== Micro Controller =====================
@@ -68,12 +76,11 @@ public defstruct MicroController <: Component :
   ram: Double
   series: String
   supply-voltage: MinMaxRange
-  price: Double|False
-  sellers: Tuple<Tuple<KeyValue<String, ?>>>|False
+  sellers: Tuple<Seller>|False with: (as-method => true)
+  resolved-price: Double|False with: (as-method => true)
   pin-properties: STMPinProperties
   bundles: Tuple<STMBundle>
   supports: Tuple<STMSupports>
-
 
 public defn MicroController (json: JObject) -> MicroController :
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
@@ -97,8 +104,8 @@ public defn MicroController (json: JObject) -> MicroController :
                   json["ram"] as Double,
                   json["series"] as String
                   parse-supply-voltage(json),
-                  optional-double(json, "resolved_price"),
                   parse-sellers(json),
+                  optional-double(json, "resolved_price"),
                   create-pin-properties(json),
                   create-bundles(json),
                   create-supports(json))
@@ -134,7 +141,13 @@ defn micro-controller-query-properties (user-properties:Tuple<KeyValue>,
 ;============================================================
 ;======================= MCU to JITX ========================
 ;============================================================
-pcb-component mcu-component (manufacturer:String, mpn:String, pp:STMPinProperties, supports:Tuple<STMSupports>, bundles:Tuple<STMBundle>, pkg:String) :
+
+pcb-component mcu-component (manufacturer:String,
+                             mpn:String,
+                             pp:STMPinProperties,
+                             supports:Tuple<STMSupports>,
+                             bundles:Tuple<STMBundle>,
+                             pkg:String) :
   manufacturer = manufacturer
   mpn = mpn
   val mappings = to-jitx-pin-properties(pp)
@@ -152,30 +165,40 @@ public defmethod to-jitx (m:MicroController) :
 ;====================== Printer =============================
 ;============================================================
 
-defmethod print (o:OutputStream, r:MicroController) :
+defmethod print (o:OutputStream, m:MicroController) :
+    print(o, "MicroController(%_)" % [indented-list $ short-print-items(m)])
+
+defn print-full (m:MicroController) :
+  val items = cat(short-print-items(m),
+                  ["pin-properties = %_" % [pin-properties(m)]
+                   "bundles = %_" % [bundles(m)]
+                   "supports = %_" % [supports(m)]])
+  print("MicroController(%_)" % [indented-list(items)])
+
+defn short-print-items (m: MicroController) -> Tuple<Printable> :
   val items = [
-    "mpn = %_" % [mpn(r)]
-    "trust = %_" % [trust(r)]
-    "(x, y, z) = (%,)" % [[x(r), y(r), z(r)]]
-    "mounting = %_" % [mounting(r)]
-    "rated-temperature = %_" % [rated-temperature(r)]
-    "core = %_" % [core(r)]
-    "core-architecture = %_" % [core-architecture(r)]
-    "data-width = %_" % [data-width(r)]
-    "flash = %_" % [flash(r)]
-    "frequency = %_" % [frequency(r)]
-    "io = %_" % [io(r)]
-    "line = %_" % [line(r)]
-    "mfg-package = %_" % [mfg-package(r)]
-    "ram = %_" % [ram(r)]
-    "series = %_" % [series(r)]
-    "supply-voltage = %_" % [supply-voltage(r)]
-    "price = %_" % [price(r)]
-    "sellers = %_" % [sellers(r)]
-    "pin-properties = %_" % [pin-properties(r)]
-    "bundles = %_" % [bundles(r)]
-    "supports = %_" % [supports(r)]]
-  print(o, "MicroController(%_)" % [indented-list(items)])
+    "mpn = %_" % [mpn(m)]
+    "trust = %_" % [trust(m)]
+    "(x, y, z) = (%,)" % [[x(m), y(m), z(m)]]
+    "mounting = %_" % [mounting(m)]
+    "rated-temperature = %_" % [rated-temperature(m)]
+    "core = %_" % [core(m)]
+    "core-architecture = %_" % [core-architecture(m)]
+    "data-width = %_" % [data-width(m)]
+    "flash = %_" % [flash(m)]
+    "frequency = %_" % [frequency(m)]
+    "io = %_" % [io(m)]
+    "line = %_" % [line(m)]
+    "mfg-package = %_" % [mfg-package(m)]
+    "ram = %_" % [ram(m)]
+    "series = %_" % [series(m)]
+    "supply-voltage = %_" % [supply-voltage(m)]]
+
+  match(sellers(m), resolved-price(m)) :
+    (s: Tuple<Seller>, p: Double) :
+      to-tuple $ cat(items, ["sellers = %_" % [indented-list(s)]
+                             "resolved-price = %_" % [p]])
+    (s: False, p: False): items
 
 ;============================================================
 ;=================== Parsing utils ==========================
@@ -184,9 +207,3 @@ defmethod print (o:OutputStream, r:MicroController) :
 defn parse-supply-voltage (json: JObject) -> MinMaxRange :
   val supply-voltage-json = json["rated-temperature"] as JObject
   MinMaxRange(supply-voltage-json["min"] as Double, supply-voltage-json["max"] as Double)
-
-defn parse-sellers (json: JObject) -> Tuple<Tuple<KeyValue<String, ?>>>|False:
-  val sellers = get?(json, "sellers")
-  if not sellers is False :
-    val cast-sellers = sellers as Tuple<JObject>
-    map(entries, cast-sellers)
