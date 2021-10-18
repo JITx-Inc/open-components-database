@@ -11,9 +11,6 @@ defpackage ocdb/db-parts :
     prefix(Capacitor) => EModel-
     prefix(Inductor) => EModel-
   import jitx/commands
-  import jitx/param-sets
-  import jitx/params
-  import jitx/param-manager
 
   import ocdb/defaults
   import ocdb/land-patterns
@@ -434,10 +431,10 @@ public defn Capacitor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sor
   ;Query the database with the given properties
   Capacitor $ dbquery-first(query-properties) as JObject
 
-public defn Capacitors (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Resistor> :
+public defn Capacitors (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Capacitor> :
   val query-properties = capacitor-query-properties(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
   ;Query the database with the given properties
-  map{Resistor, _} $ dbquery-all(query-properties) as Tuple<JObject>
+  map{Capacitor, _} $ dbquery-all(query-properties) as Tuple<JObject>
 
 defn capacitor-query-properties (user-properties:Tuple<KeyValue>,
                                 exist:Tuple<String>,
@@ -771,9 +768,16 @@ public defn indented-list (items:Seqable) :
 ;============================================================
 
 defn filter-json (json: JObject) :
-  ; qty and factory-stock seem to be deprecated attributes
-  JObject(to-tuple $ filter({not contains?(["qty", "factory-stock"], key(_))}, entries(json)))
-
+  ; we remove metadata.qty and metadata.factory-stock as they seem to be deprecated attributes (always 0)
+  JObject $
+    for kv in entries(json) map :
+      if key(kv) == "metadata":
+        val metadata-json = value(kv) as JObject
+        key(kv) => JObject $ to-tuple $
+          for metadata-kv in entries(metadata-json) filter :
+            not contains?(["qty", "factory-stock"], key(metadata-kv))
+      else :
+        kv
 
 public defn parse-dimensions (dimensions: JObject) -> [Double, Double, Double|False] :
   [dimensions["x"] as Double, dimensions["y"] as Double, optional-double(dimensions, "z")]
@@ -855,7 +859,7 @@ public defn query-properties (user-properties:Tuple<KeyValue>,
     generate<KeyValue<String, ?>> :
       ; Part sourcing parameters: if they exist, sourcing data will be used
       if sourcing? :
-        val vendors = bom-vendors $ jitx-params()
+        val vendors = bom-vendors()
         ; If we want to optimize on cost, we have to put either _stock or _sellers in the query so that the sourcing data is used in the server
         val sort-on-price = length(sort) >= 1 and contains?(["price", "cost", "-price", "-cost"], sort[0])
 
@@ -874,7 +878,7 @@ public defn query-properties (user-properties:Tuple<KeyValue>,
                                            optional-properties,
                                            user-properties]
 
-defn query-distinct (query-properties: Tuple<KeyValue<String, ?>>, callee: String) -> Tuple :
+public defn query-distinct (query-properties: Tuple<KeyValue<String, ?>>, callee: String) -> Tuple :
   ; 1000 is the maximum number of values that the JITX server is allowed to return at once
   val values = dbquery(query-properties, 1000) as Tuple
 

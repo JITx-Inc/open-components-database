@@ -40,15 +40,7 @@ public defn look-up-micro-controllers (attribute: String, filter-properties:Tupl
   val user-properties = to-tuple $ cat(filter-properties, ["_distinct" => attribute])
   val query-properties = micro-controller-query-properties(user-properties, exist, sort, operating-temperature)
 
-  ; 1000 is the maximum number of values that the JITX server is allowed to return at once
-  val values = dbquery(query-properties, 1000) as Tuple
-
-  if length(values) == 1000 :
-    print("[WARNING] `look-up-micro-controllers` returned the maximum allowed of 1000 values. ")
-    println("The result does not contain all available values for:")
-    println(query-properties)
-
-  values
+  query-distinct(query-properties, "look-up-micro-controllers")
 
 ;============================================================
 ;===================== Micro Controller =====================
@@ -74,8 +66,10 @@ public defstruct MicroController <: Component :
   line: String
   mfg-package: String
   ram: Double
+  eeprom: Double
   series: String
   supply-voltage: MinMaxRange
+  rated-esd: Double|False
   sellers: Tuple<Seller>|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
   pin-properties: STMPinProperties
@@ -102,8 +96,10 @@ public defn MicroController (json: JObject) -> MicroController :
                   json["line"] as String,
                   json["mfg-package"] as String,
                   json["ram"] as Double,
+                  json["eeprom"] as Double,
                   json["series"] as String
                   parse-supply-voltage(json),
+                  optional-double(json, "rated-esd"),
                   parse-sellers(json),
                   optional-double(json, "resolved_price"),
                   create-pin-properties(json),
@@ -125,6 +121,11 @@ public defn MicroController (user-properties:Tuple<KeyValue>, exist:Tuple<String
   val jobject = dbquery-first(query-properties) as JObject
   MicroController(jobject)
 
+public defn MicroControllers (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<MicroController> :
+  val query-properties = micro-controller-query-properties(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
+  ;Query the database with the given properties
+  map{MicroController, _} $ dbquery-all(query-properties) as Tuple<JObject>
+
 defn micro-controller-query-properties (user-properties:Tuple<KeyValue>,
                                         exist:Tuple<String>,
                                         sort:Tuple<String>,
@@ -135,8 +136,6 @@ defn micro-controller-query-properties (user-properties:Tuple<KeyValue>,
                    operating-temperature,
                    "microcontroller",
                    true)
-
-
 
 ;============================================================
 ;======================= MCU to JITX ========================
@@ -191,8 +190,10 @@ defn short-print-items (m: MicroController) -> Tuple<Printable> :
     "line = %_" % [line(m)]
     "mfg-package = %_" % [mfg-package(m)]
     "ram = %_" % [ram(m)]
+    "eeprom = %_" % [eeprom(m)]
     "series = %_" % [series(m)]
-    "supply-voltage = %_" % [supply-voltage(m)]]
+    "supply-voltage = %_" % [supply-voltage(m)]
+    "rated-esd = %_" % [rated-esd(m)]]
 
   match(sellers(m), resolved-price(m)) :
     (s: Tuple<Seller>, p: Double) :
