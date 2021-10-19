@@ -966,10 +966,13 @@ public pcb-module micro-usb-connector :
   ; RC filter connection for chassis gnd
   res-strap(con.SHIELD, con.GND, 100.0e3)
   cap-strap(con.SHIELD, con.GND, 0.1e-6)
+  net SHIELD (con.SHIELD)
   net D+ (usb-2.data.P con.D+)
   net D- (usb-2.data.N con.D-)
   net ID (usb-2.id con.ID)
   property(con.VCC.power-supply-pin) = PowerSupplyPin(5.0, 0.5)
+
+  schematic-group(self) = micro-usb
 
 ; USB2 device connection via USBC connector
 public pcb-module usb2-on-a-usb-c-connector :
@@ -1184,6 +1187,8 @@ public pcb-module inverted-f-antenna :
   place(c0) at loc(-0.05, -1.45, 90.0) on Top
   place(l) at loc(-0.5, -2.6) on Top
 
+  schematic-group(self) = inverted-f-antenna
+
 ; ========================================================
 ; =================== Indicators =========================
 ; ========================================================
@@ -1194,15 +1199,22 @@ public pcb-module inverted-f-antenna :
 ; Adds an RGB led to a processor using PWM pins
 public defn add-rgb-indicator (brightness:Double, proc:JITXObject, vin:JITXObject):
   inside pcb-module:
-    val vio = 3.3 ; TODO: get this from the vin pin property
-    ; Calculate resistance to get appropriate brightness
-    defn calc-r (l:JITXObject, brightness:Double, vio:Double):
-      val i = PWL(property(l.mcd-current))[brightness]
-      closest-std-val((vio - property(l.forward-voltage)) / i, 1.0)
-    
-    public inst led : ocdb/foshan-optoelectronics/FM-B2020RGBA-HG/component ; TODO: make generic
+    pcb-module rgb-indicator :
+      port pwm : timer[3]
+      val vio = 3.3 ; TODO: get this from the vin pin property
+      ; Calculate resistance to get appropriate brightness
+      defn calc-r (l:JITXObject, brightness:Double, vio:Double):
+        val i = PWL(property(l.mcd-current))[brightness]
+        closest-std-val((vio - property(l.forward-voltage)) / i, 1.0)
+      public inst led : ocdb/foshan-optoelectronics/FM-B2020RGBA-HG/component ; TODO: make generic
+      
+      res-strap(pwm[0].timer, led.l.r, calc-r(led.l.r, brightness, vio))
+      res-strap(pwm[1].timer, led.l.g, calc-r(led.l.g, brightness, vio))
+      res-strap(pwm[2].timer, led.l.b, calc-r(led.l.b, brightness, vio))
+
+    inst rgb:rgb-indicator
     require pwm:timer[3] from proc
-    res-strap(pwm[0].timer, led.l.r, calc-r(led.l.r, brightness, vio))
-    res-strap(pwm[1].timer, led.l.g, calc-r(led.l.g, brightness, vio))
-    res-strap(pwm[2].timer, led.l.b, calc-r(led.l.b, brightness, vio))
-    net (vin, led.l.a)
+    net (vin, rgb.led.l.a)
+    net (pwm rgb.pwm)
+    rgb
+

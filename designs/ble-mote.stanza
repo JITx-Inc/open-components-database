@@ -14,6 +14,7 @@ defpackage ocdb/designs/ble-mote :
   import ocdb/generic-components
   import ocdb/property-structs
   import ocdb/checks
+  import ocdb/rules
 
 
 OPERATING-TEMPERATURE = [-20.0 50.0]
@@ -134,6 +135,7 @@ pcb-module sensor-mote :
   net VBUS (usb.usb-2.vbus.vdd)
   net USB-N (usb.usb-2.data.N)
   net USB-P (usb.usb-2.data.P)
+
   ; Set up netclasses
   val power-net-class = NetClass(`Power, [`min-trace => 0.50])
   for n in [P5V0 P3V3 VBUS] do :
@@ -145,19 +147,22 @@ pcb-module sensor-mote :
 
   check-design(self)
 
+val final-design = run-final-passes(sensor-mote)
+
 ; === Setup visualizations and exports ===
 ; Set the active design directory for CAD
 set-design("hardware/ble-mote")
-
-val final-design = run-final-passes(sensor-mote)
-
 ; Configure design to have a default 4-layer stackup and design rules.
-make-default-board(final-design, 4, board-shape)
+set-main-module(final-design)
+set-board(default-board(4, board-shape))
+set-rules(jlcpcb-rules)
+run-checks("checks.txt")
 
-; set-export-board?(false)
+; set-config-sets([`groups])
+set-paper(ANSI-A4)
 
-set-config-sets([`groups])
 ; Export CAD
+; set-export-board?(false)
 export-cad()
 
 ; Solve and export Bill of Materials
