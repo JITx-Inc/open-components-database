@@ -1,0 +1,82 @@
+#use-added-syntax(jitx, tests)
+defpackage ocdb/test/test-terminations :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+
+  import ocdb/defaults
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/land-patterns
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import ocdb/terminations
+
+pcb-landpattern lp (n:Int) :
+  for i in 0 to 2 * n + 2 do :
+    val d = to-double(i) * 2.0
+    pad p[i] : smd-pad(1.0 1.0) at loc(d, 0.0)
+  ref-label()
+
+pcb-symbol sym (n:Int) :
+  for i in 0 to 2 * n + 2 do :
+    val d = to-double(i) * 1.00
+    pin p[i] at Point(d, 0.0)
+
+pcb-component lvds-test-component (n:Int) :
+  name = "LVDS dummy component"
+  manufacturer = "JITx"
+  description = "Dummy component for LVDS testing"
+  mpn = "lvdstest"
+  reference-prefix = "U"
+  
+  pin gnd
+  pin vdd
+  port p : lvds[n]
+  ;pin-properties :
+  ;  [pin:Ref | pads:Ref ... ]
+  ;  []
+
+  val sym = sym(n)
+  val lp = lp(n)
+
+  symbol = sym(gnd => sym.p[n * 2] 
+               vdd => sym.p[n * 2 + 1]
+                for i in 0 to n do : 
+                p[i].P => sym.p[2 * i]
+                p[i].N => sym.p[2 * i + 1])
+  landpattern = lp(gnd => lp.p[n * 2] 
+                  vdd => lp.p[n * 2 + 1]
+                  for i in 0 to n do : 
+                     p[i].P => lp.p[2 * i]
+                     p[i].N => lp.p[2 * i + 1])  
+
+deftest test-all-lvds-methods : 
+  pcb-module test-lvds-term :
+    val methods = [   
+      LVDS-TERMINATION-DC-STD
+      LVDS-TERMINATION-DC-SPLIT-CAP
+      LVDS-TERMINATION-AC-SIMPLE
+      LVDS-TERMINATION-AC-DUAL-RESISTOR
+      LVDS-TERMINATION-AC-INTEGRATED-TERM-DUAL-RESISTOR
+      LVDS-TERMINATION-AC-DUAL-RESISTOR-SPLIT-CAP
+      LVDS-TERMINATION-AC-DUAL-RESISTOR-SPLIT-REDUCED ]
+
+    val num-lvds-intf = length(methods)
+    inst d : lvds-test-component(num-lvds-intf)[2]
+
+    net gnd (d[0].gnd d[1].gnd)
+    net vdd (d[0].vdd d[1].vdd)
+    for (m in methods, i in 0 to false) do :
+      net (ocdb/terminations/terminate-lvds(d[0].p[i], gnd, vdd, m), d[1].p[i])
+
+  set-export-backend(`kicad)
+  make-default-board(test-lvds-term, 4, Rectangle(10.0, 10.0))  
+  view-board()
+  view-schematic()
+    ;export-cad()
+  #EXPECT(true)  ; all EXPECT statements are evaluated, even if any fail
+  #ASSERT(true)  ; if any ASSERT is false, test fails immediately

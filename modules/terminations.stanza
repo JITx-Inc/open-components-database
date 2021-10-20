@@ -11,19 +11,35 @@ defpackage ocdb/terminations:
   import ocdb/checks
   import ocdb/design-vars
   import ocdb/bundles
+  import ocdb/property-structs
+
+public pcb-enum ocdb/terminations/CAN-Termination-Method :
+  CAN-TERMINATION-PARALLEL
+  CAN-TERMINATION-PARALLEL+COMMON-MODE-FILTER
+  CAN-TERMINATION-SWITCHABLE
+  CAN-TERMINATION-ISOLATED-SWITCHABLE
+
+public pcb-enum ocdb/terminations/LVDS-Termination-Method :
+  LVDS-TERMINATION-DC-STD
+  LVDS-TERMINATION-DC-SPLIT-CAP
+  LVDS-TERMINATION-AC-SIMPLE
+  LVDS-TERMINATION-AC-DUAL-RESISTOR
+  LVDS-TERMINATION-AC-INTEGRATED-TERM-DUAL-RESISTOR
+  LVDS-TERMINATION-AC-DUAL-RESISTOR-SPLIT-CAP
+  LVDS-TERMINATION-AC-DUAL-RESISTOR-SPLIT-REDUCED
 
 ; Adds termination circuitry for a can bus based on method
-public defn terminate-can (bus:JITXObject, gnd:JITXObject, method:String, ctrl:JITXObject|False) :
+public defn terminate-can (bus:JITXObject, gnd:JITXObject, method:CAN-Termination-Method, ctrl:JITXObject|False) :
   inside pcb-module:
     switch(method) :
-      "parallel":
+      CAN-TERMINATION-PARALLEL:
         res-strap(bus.canh, bus.canl, ["resistance" => 120.0 "min-rated-power" => 1.0])
-      "parallel+common-mode-filter":
+      CAN-TERMINATION-PARALLEL+COMMON-MODE-FILTER:
         inst c : ceramic-cap(4.7e-9)
         res-strap(bus.canh, c.p[1], 60.0)
         res-strap(bus.canl, c.p[1], 60.0)
         net (c.p[2], gnd)
-      "switchable":
+      CAN-TERMINATION-SWITCHABLE:
         ; Controllable termination using two p-channel mosfets. Termination disabled by pulling ctrl pin high.
         val ctrl-pin = ctrl as JITXObject
         inst q : ocdb/on-semiconductor/FDN352AP/component[2]
@@ -38,7 +54,7 @@ public defn terminate-can (bus:JITXObject, gnd:JITXObject, method:String, ctrl:J
         res-strap(q[0].g, gnd,  33.0e3)
         cap-strap(q[0].d, gnd, 4.7e-9)
         res-strap(q[0].d, gnd, 100.0e3)
-      "isolated-switchable":
+      CAN-TERMINATION-ISOLATED-SWITCHABLE:
         ; Controllable termination using an opto-isolated relay. Termination enabled by pulling ctrl pin high
         val ctrl-pin = ctrl as JITXObject
         inst ssr : ocdb/toshiba/TLP175A/component
@@ -52,7 +68,7 @@ public defn terminate-can (bus:JITXObject, gnd:JITXObject, method:String, ctrl:J
         res-strap(bus.canh, ssr.drain[2], 120.0 - property(ssr.rds-on))
         net (bus.canl ssr.drain[1])
 
-public defn terminate-can (bus:JITXObject, gnd:JITXObject, method:String) :
+public defn terminate-can (bus:JITXObject, gnd:JITXObject, method:CAN-Termination-Method) :
   terminate-can(bus, gnd, method, false)
 
 ; Adds 22ohm termination resistors, returns terminated bus
@@ -65,3 +81,114 @@ public defn terminate-usb-2 (bus:JITXObject) :
     res-strap(terminated-usb-2.data.P, bus.data.P, 22.0)
     ; Return the terminated bus
     terminated-usb-2
+
+; Adds termination circuitry for a lvds bus based on method
+; a helpful reference is https://www.ti.com/lit/an/slaa840/slaa840.pdf
+public defn terminate-lvds (bus:JITXObject, gnd:JITXObject, vdd:JITXObject, method:LVDS-Termination-Method) :
+  inside pcb-module:
+    port terminated-lvds : lvds
+    switch(method) :
+      LVDS-TERMINATION-DC-STD:
+        ; most straight forward termination with a single R between plus/minus
+        res-strap(bus.P, bus.N, ["resistance" => 100.0 "min-rated-power" => 0.01])
+        net (terminated-lvds.P, bus.P)
+        net (terminated-lvds.N, bus.N)
+      LVDS-TERMINATION-DC-SPLIT-CAP:
+        ; The capacitor filters common-mode noise and helps with transmission line
+        ; skew (which could be due to differential lines mismatch or driver output skew).
+        inst c : ceramic-cap(0.1e-6)
+        res-strap(bus.P, c.p[1], ["resistance" => 50.0 "min-rated-power" => 0.01])
+        res-strap(bus.N, c.p[1], ["resistance" => 50.0 "min-rated-power" => 0.01])
+        net (c.p[2], gnd)
+        net (terminated-lvds.P, bus.P)
+        net (terminated-lvds.N, bus.N)
+      LVDS-TERMINATION-AC-SIMPLE:
+        ; the bus source has 0.1uF cap in series on P, N
+        inst cp : ceramic-cap(0.1e-6)
+        inst cn : ceramic-cap(0.1e-6)
+        net (cp.p[1], bus.P)
+        net (cn.p[1], bus.N)
+        net tp (cp.p[2], terminated-lvds.P)
+        net tn (cn.p[2], terminated-lvds.N)
+        property(tp.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
+        property(tn.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
+        check check-characteristic-impedance(tp, 50.0)
+        check check-characteristic-impedance(tn, 50.0)
+        res-strap(terminated-lvds.P, terminated-lvds.N, ["resistance" => 100.0 "min-rated-power" => 0.01])
+      LVDS-TERMINATION-AC-DUAL-RESISTOR:
+        ; the bus source has 0.1uF cap in series on P, N
+        inst cp : ceramic-cap(0.1e-6)
+        inst cn : ceramic-cap(0.1e-6)
+        net (cp.p[1], bus.P)
+        net (cn.p[1], bus.N)
+        net tp (cp.p[2], terminated-lvds.P)
+        net tn (cn.p[2], terminated-lvds.N)
+        property(tp.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
+        property(tn.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
+        check check-characteristic-impedance(tp, 50.0)
+        check check-characteristic-impedance(tn, 50.0)
+        res-strap(terminated-lvds.P, vdd, ["resistance" => 130.0 "min-rated-power" => 0.01])
+        res-strap(terminated-lvds.P, gnd, ["resistance" => 82.0 "min-rated-power" => 0.01])
+        res-strap(terminated-lvds.N, vdd, ["resistance" => 130.0 "min-rated-power" => 0.01])
+        res-strap(terminated-lvds.N, gnd, ["resistance" => 82.0 "min-rated-power" => 0.01])
+      LVDS-TERMINATION-AC-INTEGRATED-TERM-DUAL-RESISTOR:
+        ; the bus source has 0.1uF cap in series on P, N
+        inst cp : ceramic-cap(0.1e-6)
+        inst cn : ceramic-cap(0.1e-6)
+        net (cp.p[1], bus.P)
+        net (cn.p[1], bus.N)
+        net tp (cp.p[2], terminated-lvds.P)
+        net tn (cn.p[2], terminated-lvds.N)
+        property(tp.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
+        property(tn.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
+        check check-characteristic-impedance(tp, 50.0)
+        check check-characteristic-impedance(tn, 50.0)
+        ; and the receiver has integrated termination
+        res-strap(terminated-lvds.P, vdd, ["resistance" => 10.0e3 "min-rated-power" => 0.01])
+        res-strap(terminated-lvds.P, gnd, ["resistance" => 5.7e3 "min-rated-power" => 0.01])
+        res-strap(terminated-lvds.N, vdd, ["resistance" => 10.0e3 "min-rated-power" => 0.01])
+        res-strap(terminated-lvds.N, gnd, ["resistance" => 5.7e3 "min-rated-power" => 0.01])
+      LVDS-TERMINATION-AC-DUAL-RESISTOR-SPLIT-CAP:
+        ; the bus source has 0.1uF cap in series on P, N
+        inst cp : ceramic-cap(0.1e-6)
+        inst cn : ceramic-cap(0.1e-6)
+        net (cp.p[1], bus.P)
+        net (cn.p[1], bus.N)
+        net tp (cp.p[2], terminated-lvds.P)
+        net tn (cn.p[2], terminated-lvds.N)
+        property(tp.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
+        property(tn.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
+        check check-characteristic-impedance(tp, 50.0)
+        check check-characteristic-impedance(tn, 50.0)
+        ; The capacitor filters commonmode noise and helps with transmission line skew. Another 
+        ; advantage of this circuit is lower power consumption
+        inst c : ceramic-cap(0.1e-6)
+        res-strap(terminated-lvds.P, c.p[1], ["resistance" => 50.0 "min-rated-power" => 0.01])
+        res-strap(terminated-lvds.N, c.p[1], ["resistance" => 50.0 "min-rated-power" => 0.01])
+        net (c.p[2], gnd)
+        res-strap(c.p[1], vdd, ["resistance" => 10.0e3 "min-rated-power" => 0.01])
+        res-strap(c.p[1], gnd, ["resistance" => 5.7e3 "min-rated-power" => 0.01])
+      LVDS-TERMINATION-AC-DUAL-RESISTOR-SPLIT-REDUCED:
+        ; the bus source has 0.1uF cap in series on P, N
+        inst cp : ceramic-cap(0.1e-6)
+        inst cn : ceramic-cap(0.1e-6)
+        net (cp.p[1], bus.P)
+        net (cn.p[1], bus.N)
+        net tp (cp.p[2], terminated-lvds.P)
+        net tn (cn.p[2], terminated-lvds.N)
+        property(tp.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
+        property(tn.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
+        check check-characteristic-impedance(tp, 50.0)
+        check check-characteristic-impedance(tn, 50.0)
+        ; The advantage of this method is reduced component count. The disadvantage is
+        ; that there is some differential skew between the positive and negative input terminals.
+        res-strap(terminated-lvds.P, terminated-lvds.N, ["resistance" => 100.0 "min-rated-power" => 0.01])
+        res-strap(terminated-lvds.N, vdd, ["resistance" => 10.0e3 "min-rated-power" => 0.01])
+        res-strap(terminated-lvds.N, gnd, ["resistance" => 5.7e3 "min-rated-power" => 0.01])
+    terminated-lvds
+
+; if you don't want to pass Vdd to the terminate-lvds call
+; we will do it for you :)
+;public defn terminate-lvds (bus:JITXObject, gnd:JITXObject, method:LVDS-Termination-Method) :
+;  terminate-lvds(bus, gnd, false, method)
+
