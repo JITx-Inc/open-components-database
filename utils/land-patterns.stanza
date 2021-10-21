@@ -1676,6 +1676,46 @@ public defn two-pin-chip-landpattern (length:Toleranced,
     DENSITY-LEVEL, polarized?
   )
 
+public defn parse-chip-package-code (code:String) -> Dims : 
+  ; helper function to insert decimal point after first character.
+  defn insert-decimal (s:String) -> String :
+    to-string $ "%_.%_" % [s[0], s[1 to false]] 
+
+  ; validate the code :
+  ;   - must be all numeric (TBD: extract metric/imperial information before calling)
+  ;   - must be 4, 5, or 6 characters long
+  if find({not digit?(_)}, code) is-not False or 
+     not contains?([4, 5, 6], length(code)) :
+    fatal("%_ is not a valid chip package string." % [code])
+
+  ; split the length/width sub strings
+  val [lstr, wstr] =
+    if length(code) == 4 or length(code) == 5 : 
+      [code[0 to 2], code[2 to false]]
+    else : 
+      [code[0 to 3], code[3 to false]]
+  
+  ; insert decimal point and convert to numbers.
+  val length = to-double(insert-decimal(lstr)) as Double
+  val width  = to-double(insert-decimal(wstr)) as Double
+  Dims(length, width)
+
+public pcb-landpattern two-pin-chip-landpattern (code:String, polarized?:True|False, imperial?:True|False) : 
+  name = to-string $ "%_%_%_" % [
+    code, "i" when imperial? else "", "p" when polarized? else ""]
+  description = to-string $ "Auto generated %_ (%_)%_ land pattern." % [
+    code, "Imperial" when imperial? else "Metric", ", Polarized" when polarized? else ""]
+  var dims = parse-chip-package-code(code)
+  if imperial? :
+    dims = Dims(x(dims) * 25.4, y(dims) * 25.4)
+  val package-length = tol(x(dims), 0.0)
+  val package-width  = tol(y(dims), 0.0)
+  val lead-length    = tol(x(dims) * 0.33, 0.0) ; total guess
+  make-two-pin-chip-landpattern(package-length, package-width, lead-length, polarized?)
+
+public defn two-pin-chip-landpattern (code:String) : 
+  two-pin-chip-landpattern(code, false, false)
+
 ; Helper function to lookup the hole-to-lead diameter based on the density level of the design.
 defn hole-to-lead-diameter (d:DensityLevel) -> [Double, Double]:
   switch(d):
