@@ -82,7 +82,7 @@ public defn terminate-usb-2 (bus:JITXObject) :
     ; Return the terminated bus
     terminated-usb-2
 
-pcb-module termination (method:LVDS-Termination-Method) :
+pcb-module terminate-lvds-module (method:LVDS-Termination-Method) :
   port terminated-lvds : lvds
   port bus : lvds
   port power : power
@@ -110,10 +110,6 @@ pcb-module termination (method:LVDS-Termination-Method) :
       net (cn.p[1], bus.N)
       net tp (cp.p[2], terminated-lvds.P)
       net tn (cn.p[2], terminated-lvds.N)
-      property(tp.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
-      property(tn.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
-      check check-characteristic-impedance(tp, 50.0)
-      check check-characteristic-impedance(tn, 50.0)
       res-strap(terminated-lvds.P, terminated-lvds.N, ["resistance" => 100.0 "min-rated-power" => 10.0e-3])
     LVDS-TERMINATION-AC-DUAL-RESISTOR:
       ; the bus source has 0.1uF cap in series on P, N
@@ -123,10 +119,6 @@ pcb-module termination (method:LVDS-Termination-Method) :
       net (cn.p[1], bus.N)
       net tp (cp.p[2], terminated-lvds.P)
       net tn (cn.p[2], terminated-lvds.N)
-      property(tp.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
-      property(tn.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
-      check check-characteristic-impedance(tp, 50.0)
-      check check-characteristic-impedance(tn, 50.0)
       res-strap(terminated-lvds.P, power.vdd, ["resistance" => 130.0 "min-rated-power" => 10.0e-3])
       res-strap(terminated-lvds.P, power.gnd, ["resistance" => 82.0 "min-rated-power" => 10.0e-3])
       res-strap(terminated-lvds.N, power.vdd, ["resistance" => 130.0 "min-rated-power" => 10.0e-3])
@@ -139,10 +131,6 @@ pcb-module termination (method:LVDS-Termination-Method) :
       net (cn.p[1], bus.N)
       net tp (cp.p[2], terminated-lvds.P)
       net tn (cn.p[2], terminated-lvds.N)
-      property(tp.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
-      property(tn.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
-      check check-characteristic-impedance(tp, 50.0)
-      check check-characteristic-impedance(tn, 50.0)
       ; and the receiver has integrated termination
       res-strap(terminated-lvds.P, power.vdd, ["resistance" => 10.0e3 "min-rated-power" => 10.0e-3])
       res-strap(terminated-lvds.P, power.gnd, ["resistance" => 5.69e3 "min-rated-power" => 10.0e-3])
@@ -156,10 +144,6 @@ pcb-module termination (method:LVDS-Termination-Method) :
       net (cn.p[1], bus.N)
       net tp (cp.p[2], terminated-lvds.P)
       net tn (cn.p[2], terminated-lvds.N)
-      property(tp.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
-      property(tn.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
-      check check-characteristic-impedance(tp, 50.0)
-      check check-characteristic-impedance(tn, 50.0)
       ; The capacitor filters commonmode noise and helps with transmission line skew. Another 
       ; advantage of this circuit is lower power consumption
       inst c : ceramic-cap(0.1e-6)
@@ -176,10 +160,6 @@ pcb-module termination (method:LVDS-Termination-Method) :
       net (cn.p[1], bus.N)
       net tp (cp.p[2], terminated-lvds.P)
       net tn (cn.p[2], terminated-lvds.N)
-      property(tp.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
-      property(tn.transmission-line) = TransmissionLine(Interval(49.5, 50.5, 50.0))
-      check check-characteristic-impedance(tp, 50.0)
-      check check-characteristic-impedance(tn, 50.0)
       ; The advantage of this method is reduced component count. The disadvantage is
       ; that there is some differential skew between the positive and negative input terminals.
       res-strap(terminated-lvds.P, terminated-lvds.N, ["resistance" => 100.0 "min-rated-power" => 10.0e-3])
@@ -190,16 +170,9 @@ pcb-module termination (method:LVDS-Termination-Method) :
 ; a helpful reference is https://www.ti.com/lit/an/slaa840/slaa840.pdf
 public defn terminate-lvds (bus:JITXObject, gnd:JITXObject, vdd:JITXObject, method:LVDS-Termination-Method) :
   inside pcb-module:
-    inst t:termination(method)
+    inst t:terminate-lvds-module(method)
     net (vdd t.power.vdd)
     net (gnd t.power.gnd)
     net (bus t.bus)
-    ; creates just one schematic group for all lvds terminations
-    ;schematic-group(t) = lvds-termination
     t.terminated-lvds
-
-; if you don't want to pass Vdd to the terminate-lvds call
-; we will do it for you :)
-;public defn terminate-lvds (bus:JITXObject, gnd:JITXObject, method:LVDS-Termination-Method) :
-;  terminate-lvds(bus, gnd, false, method)
 
