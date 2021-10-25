@@ -13,37 +13,41 @@ defpackage ocdb/symbols :
 ; 
 
 public pcb-enum ocdb/utils/ResistorSymbolType :
-  RESISTOR-STD
-  RESISTOR-VARIABLE
-  RESISTOR-POT
-  RESISTOR-PHOTO
-  RESISTOR-THERM
-  RESISTOR-ARRAY
+  ResistorStd
+  ResistorVariable
+  ResistorPot
+  ResistorPhoto
+  ResistorTherm
+  ResistorArray
+
+public pcb-enum ocdb/utils/Polarized :
+  CapacitorPolarized
+  CapacitorNonPolarized
 
 public pcb-enum ocdb/utils/DiodeSymbolType :
-  DIODE-STD
-  DIODE-LED
-  DIODE-PHOTO
-  DIODE-ZENER
-  DIODE-SCHOTTKY
+  DiodeStd
+  DiodeLED
+  DiodePhoto
+  DiodeZener
+  DiodeSchottky
 
 public pcb-enum ocdb/utils/OptoSymbolType :
-  OPTO-EMITTER
-  OPTO-DETECTOR
+  OptoEmitter
+  OptoDetector
 
 public pcb-enum ocdb/utils/BJTSymbolType :
-  BJT-NPN
-  BJT-PNP
+  BJTNpn
+  BJTPnp
 
 public pcb-enum ocdb/utils/FETSymbolType :
-  FET-N-TYPE
-  FET-NMOS
-  FET-P-TYPE
-  FET-PMOS
+  FETNType
+  FETNmos
+  FETPType
+  FETPmos
 
 public pcb-enum ocdb/utils/FETSymbolMode :
-  FET-ENHANCEMENT
-  FET-DEPLETION
+  FETEnhancement
+  FETDepletion
 
 ; ======= Altium symbols =======================================================
 
@@ -230,20 +234,20 @@ public pcb-symbol resistor-sym (r-type:ResistorSymbolType|False, r-num:Int|False
   match(r-type) :
     (s:ResistorSymbolType) :
       switch(s) :
-        RESISTOR-STD :
+        ResistorStd :
           ; do nothing special here
-        RESISTOR-VARIABLE :
+        ResistorVariable :
           var-arrow()
-        RESISTOR-POT :
+        ResistorPot :
           pin p[3] at unit-point(-1.0, 0.0)
           unit-line([[-1.0, 0.0], [-0.6, 0.0]])
           unit-triangle([-0.6, 0.0], [-0.3, 0.0], 0.3)
-        RESISTOR-PHOTO :
-          draw-opto(OPTO-DETECTOR)
-        RESISTOR-THERM :
+        ResistorPhoto :
+          draw-opto(OptoDetector)
+        ResistorTherm :
           var-arrow()
           unit-text([-0.75, 0.0],"T")
-        RESISTOR-ARRAY :
+        ResistorArray :
           fatal("Resistor array (for %_ parallel resistors) not implemented yet." % [r-num])
         else : fatal("Incorrect resistor type %_." % [s])
     (o) : false
@@ -257,7 +261,7 @@ public defn resistor-sym (r-type:ResistorSymbolType|False) :
 public defn resistor-sym () :
   resistor-sym(false, false)
 
-public pcb-symbol capacitor-sym (pol?:True|False) :
+public pcb-symbol capacitor-sym (pol:Polarized) :
   pin p[1] at unit-point(0.0, 1.0)
   pin p[2] at unit-point(0.0, -1.0)
   
@@ -265,18 +269,18 @@ public pcb-symbol capacitor-sym (pol?:True|False) :
   unit-line(0.1, [[-0.5, 0.2], [0.5, 0.2]])
   unit-line([[0.0, -0.2], [0.0, -1.0]])
 
-  if pol? :
+  if pol == CapacitorPolarized :
     unit-text([0.7, 0.7], "+")
     val a = asin(0.5 / 0.8)
     unit-approx-arc([0.0, -1.0], 0.8, PI / 2.0 + a, PI / 2.0 - a, 0.1)
-  else :
+  else if pol == CapacitorNonPolarized:
     unit-line(0.1, [[-0.5, -0.2], [0.5, -0.2]])
     
   unit-ref([1.0, 0.5])
   unit-val([1.0, -0.5])
   
 public defn capacitor-sym () :
-  capacitor-sym(false)
+  capacitor-sym(CapacitorNonPolarized)
 
 public pcb-symbol inductor-sym :
   pin p[1] at unit-point(0.0, -1.0)
@@ -353,12 +357,13 @@ public pcb-symbol diode-sym (d-type:DiodeSymbolType|False) :
   match(d-type) :
     (s:DiodeSymbolType) :
       switch(s) :
-        DIODE-LED      : draw-opto(OPTO-EMITTER)
-        DIODE-PHOTO    : draw-opto(OPTO-DETECTOR)
-        DIODE-ZENER    :
+        DiodeStd      :  ; do nothing for now
+        DiodeLED      : draw-opto(OptoEmitter)
+        DiodePhoto    : draw-opto(OptoDetector)
+        DiodeZener    :
           unit-line([[-0.7, -0.2], [-0.5, -0.4]])
           unit-line([[0.5, -0.4], [0.7, -0.6]])
-        DIODE-SCHOTTKY :
+        DiodeSchottky :
           unit-line([[-0.5, -0.4], [-0.5, -0.15], [-0.3, -0.15]])
           unit-line([[0.5, -0.4], [0.5, -0.65], [0.3, -0.65]])
         else : fatal("Incorrect diode symbol type %_." % [d-type])
@@ -412,21 +417,21 @@ public pcb-symbol diode-rgb-led :
   unit-triangle([xr, ybot], [xr, (ybot - 0.8)], 1.0)
   unit-line([[xr,(ybot - 0.8)], [xr, -1.5]])
   unit-line([[xr - 0.5, (ybot - 0.8)], [xr + 0.5, (ybot - 0.8)]])
-  draw-opto(OPTO-EMITTER, [xr, 0.0])
+  draw-opto(OptoEmitter, [xr, 0.0])
   unit-text([(xr - 0.3) -1.2], "R")
 
   ; green 
   unit-triangle([xg, ybot], [xg, (ybot - 0.8)], 1.0)
   unit-line([[xg,(ybot - 0.8)], [xg, -1.5]])
   unit-line([[xg - 0.5, (ybot - 0.8)], [xg + 0.5, (ybot - 0.8)]])
-  draw-opto(OPTO-EMITTER, [xg, 0.0])
+  draw-opto(OptoEmitter, [xg, 0.0])
   unit-text([(xg - 0.3) -1.2], "G")
 
   ; blue 
   unit-triangle([xb, ybot], [xb, (ybot - 0.8)], 1.0)
   unit-line([[xb,(ybot - 0.8)], [xb, -1.5]])
   unit-line([[xb - 0.5, (ybot - 0.8)], [xb + 0.5, (ybot - 0.8)]])
-  draw-opto(OPTO-EMITTER, [xb, 0.0])
+  draw-opto(OptoEmitter, [xb, 0.0])
   unit-text([(xb - 0.3) -1.2], "B")
 
   ; add remaining lines
@@ -443,13 +448,12 @@ public defn draw-opto (dir:OptoSymbolType, offset:Point|[Double, Double]) :
   unit-line([[xoff + 0.5, yoff + 0.1], [xoff + 0.9, (yoff - 0.3)]])
   unit-line([[xoff + 0.5, (yoff - 0.2)], [xoff + 0.9, (yoff - 0.6)]])
   switch(dir) :
-    OPTO-EMITTER :
+    OptoEmitter :
       unit-line([[xoff + 0.75, (yoff - 0.3)], [xoff + 0.9, (yoff - 0.3)], [xoff + 0.9, (yoff - 0.15)]])
       unit-line([[xoff + 0.75, (yoff - 0.6)], [xoff + 0.9, (yoff - 0.6)], [xoff + 0.9, (yoff - 0.45)]])
-    OPTO-DETECTOR :
+    OptoDetector :
       unit-line([[xoff + 0.5, (yoff - 0.05)], [xoff + 0.5, yoff + 0.1], [xoff + 0.65, yoff + 0.1]])
       unit-line([[xoff + 0.5, (yoff - 0.35)], [xoff + 0.5, (yoff - 0.2)], [xoff + 0.65, (yoff - 0.2)]])
-    else : fatal("Incorrect opto type %_." % [dir])
   unit-circle(offset, 0.75)
 
 public defn draw-opto (dir:OptoSymbolType) :
@@ -473,9 +477,9 @@ public pcb-symbol bjt-sym (bjt-type:BJTSymbolType) :
   unit-line([[0.75, -0.875], [1.0, -1.0]])
 
   switch(bjt-type) :
-    BJT-NPN :
+    BJTNPN :
       unit-triangle([0.0, -0.5], [0.5, -0.75], 0.3)
-    BJT-PNP :
+    BJTPNP :
       unit-triangle([0.5, 0.75], [0.0, 0.5], 0.3)
     else:
       fatal("Incorrect BJT type %_.", % [bjt-type])
@@ -484,7 +488,7 @@ public pcb-symbol bjt-sym (bjt-type:BJTSymbolType) :
   unit-val([1.0, -0.5])
 
 public defn bjt-sym () :
-  bjt-sym(BJT-NPN)
+  bjt-sym(BJTNpn)
 
 public pcb-symbol fet-sym (type:FETSymbolType, mode:FETSymbolMode, diode?:True|False, bulk?:True|False) :
   
@@ -492,28 +496,26 @@ public pcb-symbol fet-sym (type:FETSymbolType, mode:FETSymbolMode, diode?:True|F
   ; Stanza does not support a fall-through behavior for its switch statement.
   ; https://stackoverflow.com/questions/66498304/how-to-write-a-fall-through-switch-statement-in-stanza
   val n-type? = switch(type) :
-    FET-N-TYPE :
+    FETNType :
       unit-line([[0.0, 0.0], [-0.25, 0.0]])
       unit-triangle([-0.25, 0.0], [-0.5, 0.0], 0.3)
       if not bulk? : unit-line([[0.0, 0.0], [0.0, -0.5]])
       true
-    FET-NMOS :
+    FETNmos :
       unit-line([[0.0, 0.0], [-0.25, 0.0]])
       unit-triangle([-0.25, 0.0], [-0.5, 0.0], 0.3)
       if not bulk? : unit-line([[0.0, 0.0], [0.0, -0.5]])
       true
-    FET-P-TYPE :
+    FETPType :
       unit-line([[-0.5, 0.0], [-0.25, 0.0]])
       unit-triangle([-0.25, 0.0], [0.0, 0.0], 0.3)
       if not bulk? : unit-line([[0.0, 0.0], [0.0, 0.5]])
       false
-    FET-PMOS :
+    FETPmos :
       unit-line([[-0.5, 0.0], [-0.25, 0.0]])
       unit-triangle([-0.25, 0.0], [0.0, 0.0], 0.3)
       if not bulk? : unit-line([[0.0, 0.0], [0.0, 0.5]])
       false
-    else :
-      fatal("Incorrect FET channel type %_." % [type])
 
   pin g at unit-point(-1.0, 0.0) with:
     direction = Left
@@ -546,14 +548,12 @@ public pcb-symbol fet-sym (type:FETSymbolType, mode:FETSymbolMode, diode?:True|F
   unit-line(0.1, [[-0.75, 0.65], [-0.75, -0.65]])
   
   switch(mode) :
-    FET-ENHANCEMENT :
+    FETEnhancement :
       for i in 0 to 3 do :
         val dy = to-double(i) * 0.5
         unit-line(0.1, [[-0.5, 0.65 - dy], [-0.5, 0.35 - dy]])
-    FET-DEPLETION :
+    FETDepletion :
       unit-line(0.1, [[-0.5, 0.65], [-0.5, -0.65]])
-    else :
-      fatal("Incorrect FET mode %_." % [mode])
 
   if diode? :
     unit-line([[0.0, -0.5], [0.5, -0.5], [0.5, -0.2]])
@@ -571,10 +571,10 @@ public defn fet-sym (type:FETSymbolType, mode:FETSymbolMode) :
   fet-sym(type, mode, true)
 
 public defn fet-sym (type:FETSymbolType) :
-  fet-sym(type, FET-ENHANCEMENT)
+  fet-sym(type, FETEnhancement)
   
 public defn fet-sym () :
-  fet-sym(FET-N-TYPE)
+  fet-sym(FETNType)
 
 ; ====== Op-Amps, Logic Gates ==================================================
 
