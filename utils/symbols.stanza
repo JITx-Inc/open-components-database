@@ -18,11 +18,17 @@ public pcb-enum ocdb/utils/ResistorSymbolType :
   ResistorPot
   ResistorPhoto
   ResistorTherm
-  ResistorArray
 
 public pcb-enum ocdb/utils/Polarized :
   CapacitorPolarized
   CapacitorNonPolarized
+
+public pcb-enum ocdb/utils/InductorSymbolType :
+  InductorStd
+  InductorIronCore
+  InductorFerriteCore
+  InductorVariable
+  InductorPreset
 
 public pcb-enum ocdb/utils/DiodeSymbolType :
   DiodeStd
@@ -211,7 +217,9 @@ public pcb-symbol ground-sym :
 
 ; ====== Discrete Passives (Resistors, Capacitors, Inductors) ==================
 
-public pcb-symbol resistor-sym (r-type:ResistorSymbolType|False, r-num:Int|False) :
+; Resistor symbol generator
+; 
+public pcb-symbol resistor-sym (r-type:ResistorSymbolType) :
   pin p[1] at unit-point(0.0, -1.0)
   pin p[2] at unit-point(0.0, 1.0)
   
@@ -231,36 +239,26 @@ public pcb-symbol resistor-sym (r-type:ResistorSymbolType|False, r-num:Int|False
     unit-line([[-0.6, -0.8], [0.6,0.8]])
     unit-triangle([0.45, 0.6], [0.6, 0.8], 0.3)
 
-  match(r-type) :
-    (s:ResistorSymbolType) :
-      switch(s) :
-        ResistorStd :
-          ; do nothing special here
-          false
-        ResistorVariable :
-          var-arrow()
-        ResistorPot :
-          pin p[3] at unit-point(-1.0, 0.0)
-          unit-line([[-1.0, 0.0], [-0.6, 0.0]])
-          unit-triangle([-0.6, 0.0], [-0.3, 0.0], 0.3)
-        ResistorPhoto :
-          draw-opto(OptoDetector)
-        ResistorTherm :
-          var-arrow()
-          unit-text([-0.75, 0.0],"T")
-        ResistorArray :
-          fatal("Resistor array (for %_ parallel resistors) not implemented yet." % [r-num])
-        else : fatal("Incorrect resistor type %_." % [s])
-    (o) : false
+  switch(r-type) :
+    ResistorStd :
+      false  ; do nothing special here
+    ResistorVariable :
+      var-arrow()
+    ResistorPot :
+      pin p[3] at unit-point(-1.0, 0.0)
+      unit-line([[-1.0, 0.0], [-0.6, 0.0]])
+      unit-triangle([-0.6, 0.0], [-0.3, 0.0], 0.3)
+    ResistorPhoto :
+      draw-opto(OptoDetector)
+    ResistorTherm :
+      var-arrow()
+      unit-text([-0.75, 0.0],"T")
 
   unit-ref([1.0, 0.5])
   unit-val([1.0, -0.5])
 
-public defn resistor-sym (r-type:ResistorSymbolType|False) :
-  resistor-sym(r-type, false)
-
 public defn resistor-sym () :
-  resistor-sym(false, false)
+  resistor-sym(ResistorStd)
 
 public pcb-symbol capacitor-sym (pol:Polarized) :
   pin p[1] at unit-point(0.0, 1.0)
@@ -283,7 +281,7 @@ public pcb-symbol capacitor-sym (pol:Polarized) :
 public defn capacitor-sym () :
   capacitor-sym(CapacitorNonPolarized)
 
-public pcb-symbol inductor-sym :
+public pcb-symbol inductor-sym (r-type:InductorSymbolType) :
   pin p[1] at unit-point(0.0, -1.0)
   pin p[2] at unit-point(0.0, 1.0)
 
@@ -293,6 +291,23 @@ public pcb-symbol inductor-sym :
   for i in 0 to 3 do :
     unit-approx-arc([0.0, 0.5 - 0.5 * to-double(i)], 0.25, 3.0 * PI / 2.0, PI / 2.0, 0.1)
   
+  ; https://electricalvoice.com/inductor-and-its-types/
+  switch(l-type) :
+    InductorStd :
+      false  ; do nothing special here
+    InductorIronCore :
+      unit-line([[-0.55, -0.75], [-0.55, 0.75]])
+      unit-line([[-0.6, -0.75], [-0.6, 0.75]])
+    InductorFerriteCore :
+      for i in 0 to 3 do :
+        val dy = to-double(i) * 0.375
+        unit-line(0.1, [[-0.55, 0.75 - dy], [-0.55, 0.45 - dy]])
+        unit-line(0.1, [[-0.60, 0.75 - dy], [-0.60, 0.45 - dy]])
+    InductorVariable :
+      var-arrow()
+    InductorPreset :
+      var-arrow()
+      unit-text([-0.75, 0.0],"F")
   unit-ref([1.0, 0.5])
   unit-val([1.0, -0.5])
 
@@ -346,7 +361,7 @@ public defn crystal-sym () :
 
 ; TODO: Factor diode shape to allow scaled translation and reuse
 
-public pcb-symbol diode-sym (d-type:DiodeSymbolType|False) :
+public pcb-symbol diode-sym (d-type:DiodeSymbolType) :
   pin a at unit-point(0.0, 1.0)
   pin c at unit-point(0.0, -1.0)
 
@@ -355,26 +370,21 @@ public pcb-symbol diode-sym (d-type:DiodeSymbolType|False) :
   unit-line([[0.0, -0.4], [0.0, -1.0]])
   unit-line([[-0.5, -0.4], [0.5, -0.4]])  
   
-  match(d-type) :
-    (s:DiodeSymbolType) :
-      switch(s) :
-        DiodeStd      : false ; do nothing for now
-        DiodeLED      : draw-opto(OptoEmitter)
-        DiodePhoto    : draw-opto(OptoDetector)
-        DiodeZener    :
-          unit-line([[-0.7, -0.2], [-0.5, -0.4]])
-          unit-line([[0.5, -0.4], [0.7, -0.6]])
-        DiodeSchottky :
-          unit-line([[-0.5, -0.4], [-0.5, -0.15], [-0.3, -0.15]])
-          unit-line([[0.5, -0.4], [0.5, -0.65], [0.3, -0.65]])
-        else : fatal("Incorrect diode symbol type %_." % [d-type])
-    (o) : false
-
+  switch(d-type) :
+    DiodeStd      : false ; do nothing for now
+    DiodeLED      : draw-opto(OptoEmitter)
+    DiodePhoto    : draw-opto(OptoDetector)
+    DiodeZener    :
+      unit-line([[-0.7, -0.2], [-0.5, -0.4]])
+      unit-line([[0.5, -0.4], [0.7, -0.6]])
+    DiodeSchottky :
+      unit-line([[-0.5, -0.4], [-0.5, -0.15], [-0.3, -0.15]])
+      unit-line([[0.5, -0.4], [0.5, -0.65], [0.3, -0.65]])
   unit-ref([1.0, 0.5])
   unit-val([1.0, -0.5])
 
 public defn diode-sym () :
-  diode-sym(false)
+  diode-sym(DiodeStd)
 
 public pcb-symbol diode-tvs :
   pin a at unit-point(0.0, 1.5)
@@ -460,7 +470,6 @@ public defn draw-opto (dir:OptoSymbolType, offset:Point|[Double, Double]) :
 public defn draw-opto (dir:OptoSymbolType) :
   draw-opto(dir, [0.0,0.0])
 
-
 public pcb-symbol bjt-sym (bjt-type:BJTSymbolType) :
   pin e at unit-point(1.0, -1.0)
   pin c at unit-point(1.0, 1.0)
@@ -491,7 +500,6 @@ public defn bjt-sym () :
 
 public pcb-symbol fet-sym (type:FETSymbolType, mode:FETSymbolMode, diode?:True|False, bulk?:True|False) :
   
-
   ; Stanza does not support a fall-through behavior for its switch statement.
   ; https://stackoverflow.com/questions/66498304/how-to-write-a-fall-through-switch-statement-in-stanza
   val n-type? = switch(type) :
