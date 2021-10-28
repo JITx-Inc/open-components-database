@@ -37,7 +37,9 @@ val dio-syms = [
                 DiodeLED
                 DiodePhoto
                 DiodeZener
-                DiodeSchottky ]
+                DiodeSchottky 
+                DiodeTVSUnipolar
+                DiodeTVSBipolar ]
 
 val bjt-syms = [
                 BJTNpn
@@ -81,6 +83,13 @@ pcb-component test-dio (d:DiodeSymbolType) :
   val lp = ipc-two-pin-landpattern("0402")
   landpattern = lp(p[1] => lp.p[1], p[2] => lp.p[2])
 
+pcb-component test-tvs () :
+  port p : pin[[1 2]]
+  val ds = diode-tvs
+  symbol = ds(p[1] => ds.a, p[2] => ds.c)
+  val lp = ipc-two-pin-landpattern("0402")
+  landpattern = lp(p[1] => lp.p[1], p[2] => lp.p[2])
+
 pcb-component test-bjt (b:BJTSymbolType) :
   port p : pin[[1 2 3]]
   val bs = bjt-sym(b)
@@ -88,12 +97,18 @@ pcb-component test-bjt (b:BJTSymbolType) :
   val lp = dummy-landpattern(3, [0.0, 0.0])
   landpattern = lp(p[1] => lp.p[1], p[2] => lp.p[2], p[3] => lp.p[3])
 
-pcb-component test-fet (ft:FETSymbolType, fm:FETSymbolMode, d?:True|False ) :
-  port p : pin[[1 2 3]]
-  val fs = fet-sym(ft, fm, d?)
-  symbol = fs(p[1] => fs.g, p[2] => fs.s, p[3] => fs.d)
-  val lp = dummy-landpattern(3, [0.0, 0.0])
-  landpattern = lp(p[1] => lp.p[1], p[2] => lp.p[2], p[3] => lp.p[3])
+pcb-component test-fet (ft:FETSymbolType, fm:FETSymbolMode, d?:True|False, b?:True|False ) :
+  val fs = fet-sym(ft, fm, d?, b?)
+  if b? == true :
+    port p : pin[[1 2 3 4]]
+    symbol = fs(p[1] => fs.g, p[2] => fs.s, p[3] => fs.d, p[4] => fs.b)
+    val lp = dummy-landpattern(4, [0.0, 0.0])
+    landpattern = lp(p[1] => lp.p[1], p[2] => lp.p[2], p[3] => lp.p[3], p[4] => lp.p[4])
+  else :
+    port p : pin[[1 2 3]]
+    symbol = fs(p[1] => fs.g, p[2] => fs.s, p[3] => fs.d)
+    val lp = dummy-landpattern(3, [0.0, 0.0])
+    landpattern = lp(p[1] => lp.p[1], p[2] => lp.p[2], p[3] => lp.p[3])
 
 pcb-module test-symbols :
 
@@ -117,17 +132,22 @@ pcb-module test-symbols :
     inst d1 : test-dio(d)
     diodes[i] = d1
 
+  inst tvs1 : test-tvs()
+
   var bjts = Array<JITXObject>(length(bjt-syms))
   for (b in bjt-syms, i in 0 to false) do :
     inst b1 : test-bjt(b)
     bjts[i] = b1
 
-  var fets = Array<JITXObject>(2 * length(fet-syms) * length(fet-mode-syms))
-  for (f in fet-syms, i in 0 to false) do :
-    for (m in fet-mode-syms) do :
-        for (d? in [true false]) do :
-            inst f1 : test-fet(f, m, d?)
-            fets[i] = f1
+  var fets = Array<JITXObject>(2 * 2 * length(fet-syms) * length(fet-mode-syms))
+  var index:Int = 0
+  for (f in fet-syms) do :
+      for (m in fet-mode-syms) do :
+          for (d? in [true false]) do :
+            for (b? in [true false]) do :
+                inst f1 : test-fet(f, m, d?, b?)
+                fets[index] = f1
+                index = index + 1
 
 make-default-board(test-symbols, 4, Rectangle(25.0, 25.0))
 
