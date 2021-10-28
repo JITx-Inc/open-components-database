@@ -3,10 +3,16 @@ defpackage ocdb/test/test-symbols :
   import core
   import jitx
   import jitx/commands
+
   import ocdb/defaults
-  import ocdb/generic-components
   import ocdb/symbols
+  import ocdb/box-symbol
   import ocdb/land-patterns
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import ocdb/terminations
+  import ocdb/symbol-utils
 
 val res-syms = [
                 ResistorStd
@@ -82,9 +88,9 @@ pcb-component test-bjt (b:BJTSymbolType) :
   val lp = dummy-landpattern(3, [0.0, 0.0])
   landpattern = lp(p[1] => lp.p[1], p[2] => lp.p[2], p[3] => lp.p[3])
 
-pcb-component test-fet (ft:FETSymbolType, fm:FETSymbolMode) :
+pcb-component test-fet (ft:FETSymbolType, fm:FETSymbolMode, d?:True|False ) :
   port p : pin[[1 2 3]]
-  val fs = fet-sym(ft, fm)
+  val fs = fet-sym(ft, fm, d?)
   symbol = fs(p[1] => fs.g, p[2] => fs.s, p[3] => fs.d)
   val lp = dummy-landpattern(3, [0.0, 0.0])
   landpattern = lp(p[1] => lp.p[1], p[2] => lp.p[2], p[3] => lp.p[3])
@@ -116,11 +122,12 @@ pcb-module test-symbols :
     inst b1 : test-bjt(b)
     bjts[i] = b1
 
-  var fets = Array<JITXObject>(length(fet-syms) * length(fet-mode-syms))
+  var fets = Array<JITXObject>(2 * length(fet-syms) * length(fet-mode-syms))
   for (f in fet-syms, i in 0 to false) do :
     for (m in fet-mode-syms) do :
-      inst f1 : test-fet(f, m)
-      fets[i] = f1
+        for (d? in [true false]) do :
+            inst f1 : test-fet(f, m, d?)
+            fets[i] = f1
 
 make-default-board(test-symbols, 4, Rectangle(25.0, 25.0))
 
