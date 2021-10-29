@@ -6,7 +6,10 @@ defpackage ocdb/test/landpattern-generators:
   import jitx/commands
   import ocdb/land-patterns
   import ocdb/st-microelectronics/landpatterns
-
+  import ocdb/defaults 
+  import ocdb/rules
+  import ocdb/test/test-design
+  
 deftest bga-pad-names : 
   val s = "ABCDEFGHJKLMNPRTUVWY"
   val pin-names = BGAPadNames(length(s), length(s), false)
@@ -19,70 +22,27 @@ defn find-silkscreen (x, name) :
     match(spec:Silkscreen):
       /name(spec) == name
 
-defn test-landpattern (lp:LandPattern, expect-pol?:True) : 
-  ; check that it has a courtyard
-  val courtyard = find({specifier(_) is Courtyard}, layers(lp))
-  #EXPECT(courtyard is-not False)
+defn test-landpattern-in-design (lp:LandPattern) : 
+  pcb-module module : 
+    inst i: default-component(lp)
+  test-design(name(lp), module, 4, Rectangle(20.0, 20.0), sierra-adv-rules)
 
-  ; check that there is an indicator, if necessary
-  if expect-pol?:
-    #EXPECT(find-silkscreen(lp, "pol") is-not False)
+defn basic-landpattern-test (lp:LandPattern, expect-pol?:True) : 
+  val name = to-string $ "basic-landpattern-test-%_" % [name(lp)]
+  deftest (name) :
+    ; check that it has a courtyard
+    val courtyard = find({specifier(_) is Courtyard}, layers(lp))
+    #EXPECT(courtyard is-not False)
 
-  ; check that the reference label exists
-  val ref-label = find-silkscreen(lp, "values")
-  #EXPECT(ref-label is-not False)
+    ; check that there is an indicator, if necessary
+    if expect-pol?:
+      #EXPECT(find-silkscreen(lp, "pol") is-not False)
 
-val stm-lps = [
-  UFBGA64
-  UFBGA132
-  LFBGA100
-  LFBGA144
-  LFBGA354
-  TFBGA100
-  TFBGA216
-  TFBGA225
-  TFBGA64
-  UFBGA100
-  UFBGA121
-  UFBGA129
-  UFBGA144
-  UFBGA169
-  UFBGA73
-  WLCSP18
-  WLCSP20
-  WLCSP25
-  WLCSP36
-  WLCSP49
-  WLCSP52
-  WLCSP63
-  WLCSP64
-  WLCSP66
-  WLCSP72
-  WLCSP81
-  WLCSP90
-  WLCSP100
-  WLCSP104
-  WLCSP115
-  WLCSP132
-  WLCSP143
-  WLCSP144
-  WLCSP156
-  WLCSP168
-  WLCSP180
-  TSSOP20 
-  LQFP100
-  LQFP128
-  LQFP144
-  LQFP176
-  LQFP208
-  LQFP32
-  LQFP48
-  LQFP64
-  LQFP80
-  UFQFPN28
-  UFQFPN32
-  UFQFPN48
-]
-for lp in stm-lps do : 
-  deftest (to-string(name(lp))) : 
-    test-landpattern(lp, true)
+    ; check that the reference label exists
+    val ref-label = find-silkscreen(lp, "values")
+    #EXPECT(ref-label is-not False)
+
+for landpattern in STM32-LAND-PATTERNS do : 
+  basic-landpattern-test(landpattern, true)
+  test-landpattern-in-design(landpattern)
+
