@@ -27,15 +27,14 @@ defn stm-to-jitx (voltage-limits:STMVoltageLimits) -> Interval :
   Interval(min-val(voltage-limits), max-val(voltage-limits), false)
 
 ;Generate pin-properties inside of a component.
-public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> HashTable<String, String> :
-  val pin-pad-remapping = HashTable<String, String|Int>()
+public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> HashTable<Ref, Ref> :
   inside pcb-component :
     val generic-props = stm-to-jitx $ generic-pin(pin-properties)
     val power-props = stm-to-jitx $ power-pin(pin-properties)
     
     ;Determine if the pads numeric (Double -> Int) or named (Ref -> String).
     val numeric-pads? = any?({pad(_) is Int}, rows(pin-properties))
-    val named-pads? = any?({pad(_) is String}, rows(pin-properties))
+    val named-pads? = any?({pad(_) is Ref}, rows(pin-properties))
     
     ;If the pads are neither or both, then we are using malformed data.
     if numeric-pads? and named-pads? :
@@ -44,10 +43,8 @@ public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> HashTabl
       fatal("Generated a micro-controller without pads.") 
     
     ; We need to compile a list of reused pad to pin mappings.
-    val pad-mappings = HashTable<String|Int, Vector<String>>()
-    defn check-pad (pad:String|Int, pin:String):
-      if get?(pad-mappings, pad) is False : 
-        pad-mappings[pad] = Vector<String>()
+    val pad-mappings = HashTable-init<Ref|Int, Vector<Ref>>(Vector<Ref>{})
+    defn check-pad (pad:Ref|Int, pin:Ref):
       add(pad-mappings[pad], pin)
       length(pad-mappings[pad]) == 1
 
@@ -56,10 +53,8 @@ public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> HashTabl
     pin-properties : 
       [pin:Ref | pads : (Ref|Int) ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
       for row in rows(pin-properties) do : 
-        val pin-ref = ref-string-to-ref(pin(row))
-        val pad-ref = match(pad(row)):
-          (i:Int): i
-          (s:String): raw-string-to-ref(s)
+        val pin-ref = pin(row)
+        val pad-ref = pad(row)
 
         if check-pad(pad(row), pin(row)) : 
           match(generic-props?(row), power-props?(row)) :
@@ -68,13 +63,13 @@ public defn to-jitx-pin-properties (pin-properties:STMPinProperties) -> HashTabl
             (g:False, p:True)  : [(pin-ref) | (pad-ref) | side(row) |       -       | power-props]
             (g:False, p:False) : [(pin-ref) | (pad-ref) | side(row) |       -       |      -     ]
     
-    to-hashtable<String, String> $ 
+    to-hashtable<Ref, Ref> $ 
       for shared in values(pad-mappings) seq-cat : 
-        var root: String|False = false
+        var root: Ref|False = false
         for pin in shared seq : 
           if root is False:
             root = pin
-          pin => (root as String)
+          pin => (root as Ref)
 
 ;Generate all bundles and store them in a table indexed by name.
 public defn to-jitx-bundles (bundles:Tuple<STMBundle>) -> HashTable<String, Bundle> :
@@ -88,12 +83,13 @@ public defn to-jitx-bundles (bundles:Tuple<STMBundle>) -> HashTable<String, Bund
   bundle-table
 
 ;Generate all support statements inside of a component which will include bundles from bundle-table.
-public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTable<String, Bundle>, pin-name-table:HashTable<String, String>) -> False :
-  defn lookup-pin (pin-name:String) : 
-    ref-string-to-ref $ 
-      match(get?(pin-name-table, pin-name)) : 
-        (s:String): s
-        (f:False): pin-name
+public defn to-jitx-supports (supports:Tuple<STMSupports>,
+                              bundle-table:HashTable<String, Bundle>,
+                              pin-name-table:HashTable<Ref, Ref>) -> False :
+  defn lookup-pin (pin-name:Ref) :
+    match(get?(pin-name-table, pin-name)) : 
+      (r:Ref): r
+      (f:False): pin-name
   
   ;Generate a supports statement for a bundle with the given mappings.
   defn generate-support (b:Bundle, mappings:Tuple<STMSupportMapping>) :
@@ -101,7 +97,7 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
       supports b :
         for mapping in mappings do :
           ;Left hand side of the mapping is the bundle pin.
-          val key = dot(b, ref-string-to-ref(bundle-pin(mapping)))
+          val key = dot(b, bundle-pin(mapping))
           ;Right hand side of the mapping is a local or required pin.
           val value = match(require(mapping)): 
             (req:False): dot(self, lookup-pin(pin(mapping)))
@@ -118,7 +114,7 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
         option :
           for mapping in mappings do :
             ;Left hand side of the mapping is the bundle pin.
-            val key = dot(b1, ref-string-to-ref(bundle-pin(mapping)))
+            val key = dot(b1, bundle-pin(mapping))
             ;Right hand side of the mapping is a local or required pin.
             val value = match(require(mapping)): 
               (req:False): 
@@ -130,7 +126,7 @@ public defn to-jitx-supports (supports:Tuple<STMSupports>, bundle-table:HashTabl
         option :
           require p : b2
           for mapping in mappings do :
-            val bundle-pin-name = ref-string-to-ref(bundle-pin(mapping))
+            val bundle-pin-name = bundle-pin(mapping)
             ;Left hand side of the mapping is the bundle pin.
             val key = dot(b1, bundle-pin-name)
             ;Right hand side of the mapping is a required pin from the alternate bundle.
@@ -243,39 +239,3 @@ public defn mcu-module (component:Instantiable) -> (Tuple<KeyValue<Symbol,?>> ->
     connect-debug(mcu, settings[`debug-interface], settings[`debug-connector])
     setup-clocks(mcu, settings[`HSE-freq], settings[`HSE-ppm], settings[`HSE-source], settings[`LSE-freq], settings[`LSE-ppm], settings[`LSE-source])
   module
-
-;=========================================
-;=============== Utilities ===============
-;=========================================
-
-;Convert a String that may have brackets to a Ref.
-defn ref-string-to-ref (text:String) -> Ref :
-  ;regex-match implementation incomplete so we can't do exact matches with "^mypattern$"
-  ;val match-result = regex-match("^(\\w+).([\\w\.])+$", text)
-  if text[length(text) - 1] == ']' :
-    val idx = last-index-of-char(text, '[') as Int
-    IndexRef(ref-string-to-ref(text[0 to idx]), to-int!(text[(idx + 1) to (length(text) - 1)]))
-  else :
-    val idx = last-index-of-char(text, '.')
-    match(idx: Int) :
-      FieldRef(ref-string-to-ref(text[0 to idx]), Ref(text[(idx + 1) to length(text)]))
-    else :
-      Ref(text)
-
-;Convert a String without brackets to a Ref.
-defn raw-string-to-ref (text:String) -> Ref :
-  val last-digit-index = label<Int> break :
-    for i in (length(text) - 1) through 0 by -1 do :
-      if not digit?(text[i]) :
-        break(i + 1)
-    0
-  if last-digit-index == 0 :
-    val ref = Ref("p")
-    val index = to-int!(text)
-    IndexRef(ref, index)
-  else if last-digit-index == length(text) :
-    Ref(text)
-  else :
-    val ref = Ref(text[0 to last-digit-index])
-    val index = to-int!(text[last-digit-index to false])
-    IndexRef(ref, index)
