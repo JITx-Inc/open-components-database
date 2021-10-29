@@ -80,7 +80,7 @@ pcb-module sensor-mote :
   public inst hum : ocdb/texas-instruments/HDC1080/module
   require i2c:i2c from proc
   net H-I2C (i2c, hum.i2c)
-  add-open-drain-pullups(i2c, ldo.vout.vdd)
+  val i2c-pullups = add-open-drain-pullups(i2c, ldo.vout.vdd)
 
   ; Add the particle counter interface and place on bottom, and connect
   public inst particle-counter : pms7003
@@ -100,21 +100,26 @@ pcb-module sensor-mote :
   net (protected-usb.vbus particle-counter.vin)
 
   ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
-  add-rgb-indicator(60.0, proc, P3V3)
+  val rgb = add-rgb-indicator(60.0, proc, P3V3)
 
   ; Add probe loops
-  add-testpoint([ proc.uart.tx
-                  proc.uart.rx
-                  hum.i2c.sda
-                  hum.i2c.scl
-                  proc.en
-                  proc.boot
-                  PC-TX
-                  PC-RX
-                  P5V0
-                  P3V3
-                  gnd gnd gnd
-                  ], "smd-loop")
+  val debug-tps = add-testpoint([ proc.uart.tx
+                                  proc.uart.rx
+                                  proc.en
+                                  gnd
+                                  proc.boot], Testpoint-SMDLoop)
+
+  val power-tps = add-testpoint([ P5V0
+                                  P3V3
+                                  gnd ], Testpoint-SMDLoop)
+
+  val hum-tps = add-testpoint([   hum.i2c.sda
+                                  hum.i2c.scl], Testpoint-SMDLoop)
+
+  val pms-tps = add-testpoint([   PC-TX
+                                  PC-RX
+                                  gnd ], Testpoint-SMDLoop)
+ 
 
   ; Add a ground plane
   geom(gnd):
@@ -122,19 +127,19 @@ pcb-module sensor-mote :
     copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = board-shape
 
   ; Apply groups to sub-circuits for schematic
-  schematic-group([proc, ant]) = proc
-  schematic-group([usb, ldo, cp2105]) = power
-  schematic-group(hum) = hum
-  schematic-group(particle-counter) = particle-counter
+  schematic-group([proc, ant, debug-tps rgb, i2c-pullups]) = esp32
+  schematic-group([usb, ldo, cp2105, power-tps containing-instance(protected-usb) as JITXObject]) = power
+  schematic-group([hum hum-tps]) = humidity-sensor
+  schematic-group([particle-counter pms-tps]) = particle-counter
 
   layout-group([proc, ant]) = proc
-  layout-group([usb, ldo, cp2105]) = power
-  layout-group(hum) = hum
+  layout-group([usb, ldo, cp2105 containing-instance(protected-usb) as JITXObject]) = power
+  layout-group([hum hum-tps]) = hum
   layout-group(particle-counter) = particle-counter
 
   net VBUS (usb.usb-2.vbus.vdd)
-  net USB-N (usb.usb-2.data.N)
-  net USB-P (usb.usb-2.data.P)
+  net D- (usb.usb-2.data.N)
+  net D+ (usb.usb-2.data.P)
 
   ; Set up netclasses
   val power-net-class = NetClass(`Power, [`min-trace => 0.50])
@@ -142,7 +147,7 @@ pcb-module sensor-mote :
     property(n.net-class) = power-net-class
   ; Rules for JLC2313 Stackup, 45-Ohm characteristic impedance
   val usb-net-class = NetClass(`USB, [`min-trace => 0.224 `min-space => 0.3])
-  for n in [USB-N USB-P] do :
+  for n in [D- D+] do :
     property(n.net-class) = usb-net-class
 
   check-design(self)
