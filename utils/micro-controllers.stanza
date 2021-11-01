@@ -22,10 +22,79 @@ defpackage ocdb/micro-controllers :
 ;======================== Accessor ==========================
 ;============================================================
 
+doc: \<>
+One can query an actual STM micro-controller from the JITX database that can be bought.
+The component is wrapped in our parametrizeable micro-controller module.
+This call requires internet access.
+`micro-controller` calls the lower level [Part Query API](../../jitx-commands/dbquery.md) adding the list of attributes provided
+ by the user on top of design settings.
+
+```stanza
+public defn micro-controller (params:Tuple<KeyValue>) -> (Tuple<KeyValue<Symbol,?>> -> Instantiable)
+```
+
+Example:
+
+```stanza
+#use-added-syntax(jitx)
+defpackage ocdb/designs/mcu :
+  import core
+
+  import jitx
+  import jitx/commands
+
+  import ocdb/defaults
+  import ocdb/micro-controllers
+  import ocdb/generic-components
+
+println("Available mcu cores: %_" % [look-up-micro-controllers("core")])
+
+val BOARD-SHAPE = RoundedRectangle(25.0, 25.0, 0.25)
+pcb-module my-design:
+  inst mcu : micro-controller(["core" => "ARM Cortex-M3"])([`bypass-package => 4.7e-6])
+  add-mounting-holes(BOARD-SHAPE, [2, 3])
+
+make-default-board(my-design, 4, BOARD-SHAPE)
+view-board()
+view-schematic()
+```
+
+`micro-controller(["core" => "ARM Cortex-M3"])` is a module generator for an STM micro-controller
+based on the ARM Cortex-M3. It needs to be run with arguments `\[`bypass-package => 4.7e-6\]` for our micro-controller
+API to generate a module with the required configuration.
+
+See [ocdb/stm-to-jitx](#ocdbstm-to-jitx) for documentation of the micro-controller generator.
+<>
+
 public defn micro-controller (params:Tuple<KeyValue>) -> (Tuple<KeyValue<Symbol,?>> -> Instantiable) :
   val mcu = MicroController(params)
   val component = to-jitx(mcu)
   mcu-module(component)
+
+;============================================================
+;================ look-up-micro-controllers =================
+;============================================================
+
+doc: \<>
+```stanza
+public defn look-up-micro-controllers (attribute: String) -> Tuple
+public defn look-up-micro-controllers (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple
+```
+
+Looks up the list of available values (at most 1000 returned) for `attribute` amongst micro-controllers in the JITX database.
+This call filters on the same properties as [MicroController](#micro-controller-accessors). Additional properties `filter-properties` can
+be given in argument to restrict further criteria on the considered micro-controllers.
+
+Example:
+```stanza
+$ jitx repl
+stanza> import ocdb/micro-controllers
+stanza> println("Available mcu cores: %_" % [look-up-micro-controllers("core")])
+Available mcu cores: ["ARM Cortex-M0+" "ARM Cortex-M3" "ARM Cortex-M4" "ARM Cortex-M7"]
+stanza> println $ look-up-micro-controllers("io")
+[21.0 36.0 37.0 109.0 111.0 114.0]
+```
+<>
 
 public defn look-up-micro-controllers (attribute: String) -> Tuple :
   look-up-micro-controllers(attribute, [])
@@ -45,6 +114,43 @@ public defn look-up-micro-controllers (attribute: String, filter-properties:Tupl
 ;============================================================
 ;===================== Micro Controller =====================
 ;============================================================
+
+doc: \<>
+There are about 600 STM micro-controllers in the JITX database. Most of them are currently out-of-stock in trusted sellers,
+this is why the [default design requirements](#microcontroller-accessors) filter out most micro-controllers for sourcing constraints.
+
+Check the [properties reference](../utilities/properties.md) for a description of supported attributes.
+
+Here are available attribute values with [default design requirements](#microcontroller-accessors) as of 10/14/2021. They can be queried anytime with:
+```stanza
+$ jitx repl
+stanza> import ocdb/micro-controllers
+stanza> for attribute in ["manufacturer", "mpn", "trust", "dimensions", "mounting", "rated-temperature", "core", "core-architecture", "data-width", "flash", "frequency", "io", "line", "mfg-package", "ram", "eeprom", "series", "supply-voltage", "rated-esd"] do :
+      >   println("| %_ | %@ |" % [attribute, look-up-micro-controllers(attribute)])
+```
+
+| Attribute | Values |
+|:-----|:-----|
+| manufacturer | "STMicroelectronics" |
+| mpn | "STM32L031G6U6" "STM32L100C6U6A" "STM32L152QEH6" "STM32L476QEI6" "STM32F412CGU6" "STM32F767ZIT6" |
+| trust | "low" |
+| dimensions (x, y, z, area) | (4.0, 4.0, 0.55, 16.0) (7.0, 7.0, 0.55, 49.0) (7.0, 7.0, 0.6, 49.0) (22.0, 22.0, 1.6, 484.0) |
+| mounting | "smd" |
+| rated-temperature (min, max) | (-40.0, 85.0) |
+| core | "ARM Cortex-M0+" "ARM Cortex-M3" "ARM Cortex-M4" "ARM Cortex-M7" |
+| core-architecture | "ARM" |
+| data-width | 32.0 |
+| flash | 16000.0 32000.0 512000.0 2048000.0 |
+| frequency | 32000000.0 80000000.0 100000000.0 216000000.0 |
+| io | 21.0 37.0 111.0 109.0 36.0 114.0 |
+| line | "STM32F412" "STM32F7x7" "STM32L0x1" "STM32L100" "STM32L151/152" "STM32L4x6" |
+| mfg-package | "UFQFPN28" "UFQFPN48" "UFBGA132" "LQFP144" |
+| ram | 8000.0 10000.0 80000.0 128000.0 256000.0 384000.0 |
+| eeprom | 1024000.0 2048000.0 16384000.0 |
+| series | "STM32L0" "STM32L1" "STM32L4" "STM32F4" "STM32F7" |
+| supply-voltage (min, max) | (1.65, 3.6) (1.8, 3.6) (1.71, 3.6]) (1.7, 3.6) |
+| rated-esd | 2000.0 |
+<>
 
 public defstruct MicroController <: Component :
   ; Generic properties
@@ -106,6 +212,160 @@ public defn MicroController (json: JObject) -> MicroController :
                   create-bundles(json),
                   create-supports(json))
 
+;============================================================
+;=============== MicroController Accessors ==================
+;============================================================
+
+doc: \<>
+One can query an actual micro-controller from the JITX database that you can be bought. This call requires internet access.
+`MicroController` calls the lower level [Part Query API](../../jitx-commands/dbquery.md) adding the list of attributes provided
+ by the user on top of design settings.
+
+```stanza
+public defn MicroController (properties:Tuple<KeyValue>) -> MicroController
+```
+
+Fixed Requirements :
+* category: "microcontroller"
+
+Default design Requirements (set by global variables defined in `ocdb/design-vars`) :
+*  _sort: \["area"]\
+* max-rated-temperature.min: 0.0
+* min-rated-temperature.max: 25.0
+* _stock: 100
+* _sellers: \["Digi-Key" "Mouser" "Newark" "Allied Electronics & Automation" "Avnet" "Future Electronics" "Arrow Electronics"\]
+
+Those design requirements can be changed, either by changing `ocdb/design-vars` or by importing `ocdb/design-vars` and
+setting new values for the global variables:
+* _sort: set by `OPTIMIZE-FOR`.
+* max-rated-temperature.min / min-rated-temperature.max : set by `OPERATING-TEMPERATURE`.
+* _stock: set by `DESIGN_QUANTITY`.
+* _sellers: can be overridden creating ~/.jitx/current/user.params with
+```stanza
+bom :
+  vendors = ("seller 1" "seller 2")
+```
+
+Sellers need to spell exactly seller names from the Octopart reference or they will be ignored: [Octopart reference](https://octopart.com/api/v4/values#sellers)
+
+Here are accessors to override design requirements:
+```stanza
+public defn MicroController (properties:Tuple<KeyValue>,
+                             exist:Tuple<String>) -> MicroController
+public defn MicroController (properties:Tuple<KeyValue>,
+                             exist:Tuple<String>,
+                             sort:Tuple<String>,
+                             operating-temperature:[Double, Double]|False) -> MicroController
+```
+
+Arguments:
+* `exist`: one can require the resulting micro-controller to have an attribute that is otherwise optional (for example "tolerance").
+* `sort`: overrides the sorting arguments that would otherwise be `OPTIMIZE-FOR`.
+* `operating-temperature`: overrides the rated temperature range that would otherwise be `OPERATING-TEMPERATURE`.
+
+Example: Find the best micro-controllers for our design requirements (optimizes by area by default)
+```stanza
+$ jitx repl
+stanza> import ocdb/micro-controllers
+stanza> val mcu = MicroController([])
+stanza> println $ mcu
+MicroController(
+  mpn = STM32L031G6U6
+  trust = low
+  (x, y, z) = (4.0, 4.0, 0.55)
+  mounting = smd
+  rated-temperature = MinMaxRange(min=-40.0, max=85.0)
+  core = ARM Cortex-M0+
+  core-architecture = ARM
+  data-width = 32
+  flash = 16000.0
+  frequency = 32000000.0
+  io = 21
+  line = STM32L0x1
+  mfg-package = UFQFPN28
+  ram = 8000.0
+  eeprom = 1024000.0
+  series = STM32L0
+  supply-voltage = MinMaxRange(min=-40.0, max=85.0)
+  rated-esd = 2000.0
+  sellers =
+    Seller(
+      company-name = Mouser
+      resolved-price = 2.55
+      offers = (
+        SellerOffer(
+          inventory-level = 110
+          prices = (
+            SellerOfferPrice(quantity = 1, converted-price = 3.29)
+            SellerOfferPrice(quantity = 10, converted-price = 2.96)
+            SellerOfferPrice(quantity = 50, converted-price = 2.96)
+            SellerOfferPrice(quantity = 100, converted-price = 2.55)
+            SellerOfferPrice(quantity = 250, converted-price = 2.4)
+            SellerOfferPrice(quantity = 500, converted-price = 2.11)
+            SellerOfferPrice(quantity = 1000, converted-price = 1.83)
+            SellerOfferPrice(quantity = 5880, converted-price = 1.82)
+            SellerOfferPrice(quantity = 10000, converted-price = 1.83)))))
+  resolved-price = 2.55)
+```
+
+```stanza
+public defn MicroControllers (properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<MicroController>
+```
+Similar to `MicroController` but querying up to 25 micro-controllers.
+
+```stanza
+public defn MicroController (raw-json: JObject) -> MicroController
+```
+Creates a `MicroController` from a `JObject`.
+
+Example:
+```stanza
+$ jitx repl
+stanza> import jitx/commands
+stanza> import ocdb/db-parts
+stanza> import json
+stanza> val jobject = dbquery-first(["category" => "microcontroller" "flash" => 32.0e3, "_stock" => 1, "_sellers" => ["Mouser"]]) as JObject
+stanza> val mcu = MicroController(jobject)
+stanza> println $ mcu
+MicroController(
+  mpn = STM32L100C6U6A
+  trust = low
+  (x, y, z) = (7.0, 7.0, 0.55)
+  mounting = smd
+  rated-temperature = MinMaxRange(min=-40.0, max=85.0)
+  core = ARM Cortex-M3
+  core-architecture = ARM
+  data-width = 32
+  flash = 32000.0
+  frequency = 32000000.0
+  io = 37
+  line = STM32L100
+  mfg-package = UFQFPN48
+  ram = 10000.0
+  series = STM32L1
+  supply-voltage = MinMaxRange(min=-40.0, max=85.0)
+  sellers =
+    Seller(
+      company-name = Mouser
+      resolved-price = 4.45
+      offers = (
+        SellerOffer(
+          inventory-level = 2
+          prices = (
+            SellerOfferPrice(quantity = 1, converted-price = 4.45)
+            SellerOfferPrice(quantity = 10, converted-price = 4.0)
+            SellerOfferPrice(quantity = 25, converted-price = 3.78)
+            SellerOfferPrice(quantity = 50, converted-price = 3.78)
+            SellerOfferPrice(quantity = 100, converted-price = 3.28)
+            SellerOfferPrice(quantity = 250, converted-price = 3.11)
+            SellerOfferPrice(quantity = 500, converted-price = 2.79)
+            SellerOfferPrice(quantity = 1000, converted-price = 2.36)
+            SellerOfferPrice(quantity = 2500, converted-price = 2.24)
+            SellerOfferPrice(quantity = 10000, converted-price = 2.24)))))
+  resolved-price = 4.45)
+```
+<>
+
 public defn MicroController (user-properties:Tuple<KeyValue>) -> MicroController :
   MicroController(user-properties, [])
 
@@ -141,6 +401,90 @@ defn micro-controller-query-properties (user-properties:Tuple<KeyValue>,
 ;======================= MCU to JITX ========================
 ;============================================================
 
+doc: \<>
+A module can be generated instantiating a [MicroController](#microcontroller-struct) and
+taking user options to parametrize the micro-controller module.
+
+```stanza
+;Generate a module that accepts user options and instantiates the given component.
+public defn mcu-module (component:Instantiable) -> (Tuple<KeyValue<Symbol,?>> -> Instantiable) :
+  pcb-module module (options:Tuple<KeyValue<Symbol,?>>) :
+    schematic-group(self) = stm
+    val settings = Settings(DEFAULT-SETTINGS)
+    for entry in options do :
+      settings[key(entry)] = value(entry)
+
+    public inst mcu : component
+
+    connect-reset(mcu)
+    connect-power(mcu)
+    generate-bypass(mcu, settings[`bypass-package], settings[`bypass-pin])
+    set-boot(mcu, settings[`boot-from])
+    connect-debug(mcu, settings[`debug-interface], settings[`debug-connector])
+    setup-clocks(mcu, settings[`HSE-freq], settings[`HSE-ppm], settings[`HSE-source], settings[`LSE-freq], settings[`LSE-ppm], settings[`LSE-source])
+  module
+```
+
+[`micro-controller`](#micro-controller) is a shorthand to generate a module from micro-controller requirements.
+
+Example :
+```stanza
+#use-added-syntax(jitx)
+defpackage ocdb/designs/mcu :
+  import core
+  import ocdb/micro-controllers
+
+pcb-module my-design:
+  inst mcu : micro-controller(["core" => "ARM Cortex-M3"])([`bypass-package => 4.7e-6])
+```
+is equivalent to
+```stanza
+#use-added-syntax(jitx)
+defpackage ocdb/designs/mcu :
+  import core
+  import ocdb/micro-controllers
+
+val mcu = MicroController(["core" => "ARM Cortex-M3"])
+val module-generator = mcu-module $ to-jitx(mcu)
+
+pcb-module my-design:
+  inst mcu : module-generator([`bypass-package => 4.7e-6])
+```
+
+Available user settings are:
+
+* Adding a bypass capacitor between each power pin individually and the ground
+
+| Option | Values | Default |
+|:-----|:-----|:-----|
+| \`bypass-package | `Double` | 4.7e-6 |
+| \`bypass-pin | `Double` | 100.0e-9 |
+
+* Configuring booting method
+
+| Option | Values | Default |
+|:-----|:-----|:-----|
+| \`boot-from | "flash", "system", "sram"  | "flash" |
+
+* Connecting a debug interface
+
+| Option | Values | Default |
+|:-----|:-----|:-----|
+| \`debug-interface | `Bundle` | `swd()` (pins: swdio, swdclk) |
+| \`debug-connector | `Instantiable` | `ocdb/tag-connect/TC2050-IDC-NL/module` (pins: p\[1 through 10\]) |
+
+* Configuring the micro-controller clock
+
+| Option | Values | Default |
+|:-----|:-----|:-----|
+| \`HSE-freq | `Double` | 16.0e6 |
+| \`HSE-ppm | `Double` | 30.0e-6 |
+| \`HSE-source | "crystal", "osc" | "crystal" |
+| \`LSE-freq | `Double` | 32.768e3 |
+| \`LSE-ppm | `Double` | 0.05 |
+| \`LSE-source | "crystal", "osc" | "crystal" |
+<>
+
 pcb-component mcu-component (manufacturer:String,
                              mpn:String,
                              pp:STMPinProperties,
@@ -156,6 +500,30 @@ pcb-component mcu-component (manufacturer:String,
   throw(Exception("%_ is not a supported package." % [pkg])) when lp is False
   assign-landpattern(lp as LandPattern)
   make-box-symbol()
+
+;============================================================
+;======================== to-jitx ===========================
+;============================================================
+
+doc: \<>
+``stanza
+defmethod to-jitx (m: MicroController) -> Instantiable
+```
+
+Takes a `MicroController` struct and returns an instance.
+Example:
+```stanza
+#use-added-syntax(jitx)
+defpackage my-design :
+  import ocdb/db-parts
+  import ocdb/micro-controllers
+
+val micro-controller = MicroController(["max-io" => 40])
+
+pcb-module my-module :
+  inst res : to-jitx(micro-controller)
+```
+<>
 
 public defmethod to-jitx (m:MicroController) : 
   mcu-component(manufacturer(m), mpn(m), pin-properties(m), supports(m), bundles(m), mfg-package(m))
