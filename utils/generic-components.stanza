@@ -511,7 +511,7 @@ pcb-module my-design :
 
 public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg-name:String) :
   port p : pin[1 through 2]
-  val sym = capacitor-sym(false)
+  val sym = capacitor-sym()
   val pkg = ipc-two-pin-landpattern(pkg-name)
   symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
   landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
@@ -540,7 +540,7 @@ public defn gen-cap-cmp (cap:Double) :
 public pcb-component gen-tant-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg:String) :
   pin a 
   pin c
-  val sym = capacitor-sym(true)
+  val sym = capacitor-sym(CapacitorPolarized)
   symbol = sym(a => sym.p[1], c => sym.p[2])
   emodel = Capacitor(cap, tol, max-v)
   switch(pkg) :
@@ -584,7 +584,7 @@ public defn gen-tant-cap-cmp (cap:Double, tol:Double) :
 ;<>
 
 ```stanza
-public pcb-component gen-res-cmp (r-type:String|False, res:Double, tol:Double, pwr:Double, pkg-name:String)
+public pcb-component gen-res-cmp (r-type:ResistorSymbolType, res:Double, tol:Double, pwr:Double, pkg-name:String)
 ```
 THis is a generic resistor component, this is not an actual part that can be bought. This call does not require internet access.
 Pins are `p[1]` and `p[2]`.
@@ -617,7 +617,7 @@ pcb-module my-design :
 ```
 <>
 
-public pcb-component gen-res-cmp (r-type:String|False, res:Double, tol:Double, pwr:Double, pkg-name:String) :
+public pcb-component gen-res-cmp (r-type:ResistorSymbolType, res:Double, tol:Double, pwr:Double, pkg-name:String) :
   ; if r-type is Symbol and (r-type as Symbol) == `pot :
   ;   port p : pin[1 2 3]
   ; else :
@@ -641,16 +641,16 @@ public pcb-component gen-res-cmp (r-type:String|False, res:Double, tol:Double, p
     "[R] {p[1]} {p[2]} {res}"
 
 public defn gen-res-cmp (res:Double, tol:Double, pkg:String) :
-  gen-res-cmp(false, res, tol, 0.0625, pkg)
+  gen-res-cmp(ResistorStd, res, tol, 0.0625, pkg)
 
 public defn gen-res-cmp (res:Double, tol:Double, pwr:Double) :
-  gen-res-cmp(false, res, tol, 0.0625, "0402")
+  gen-res-cmp(ResistorStd, res, tol, 0.0625, "0402")
 
 public defn gen-res-cmp (res:Double, tol:Double) :
   gen-res-cmp(res, tol, 0.0625)
 
 public defn gen-res-cmp (res:Double, pkg:String) :
-  gen-res-cmp(false, res, 2.0, 0.0625, pkg)
+  gen-res-cmp(ResistorStd, res, 2.0, 0.0625, pkg)
 
 public defn gen-res-cmp (res:Double) :
   gen-res-cmp(res, 2.0)
@@ -661,7 +661,7 @@ public defn gen-res-cmp (res:Double) :
 
 doc: \<>
 ```stanza
-public pcb-component gen-ind-cmp (ind:Double, tol:Double, max-i:Double)
+public pcb-component gen-ind-cmp (l-type:InductorSymbolType, ind:Double, tol:Double, max-i:Double)
 ```
 THis is a generic inductor component, this is not an actual part that can be bought. This call does not require internet access.
 Pins are `p[1]` and `p[2]`.
@@ -687,11 +687,12 @@ pcb-module my-design :
 ```
 <>
 
-public pcb-component gen-ind-cmp (ind:Double, tol:Double, max-i:Double) :
+public pcb-component gen-ind-cmp (l-type:InductorSymbolType, ind:Double, tol:Double, max-i:Double) :
   port p : pin[1 through 2]
   emodel = Inductor(ind,tol,max-i)
 
-  symbol = inductor-sym(p[1] => inductor-sym.p[1], p[2] => inductor-sym.p[2])
+  val sym = inductor-sym(l-type)
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
   landpattern = INDC1005X55(p[1] => INDC1005X55.p[1], p[2] => INDC1005X55.p[2]) ;TODO: all inductors 0402
   reference-prefix = "L"
   property(self.inductor) = true
@@ -700,7 +701,7 @@ public pcb-component gen-ind-cmp (ind:Double, tol:Double, max-i:Double) :
   property(self.max-current) = max-i
 
 public defn gen-ind-cmp (ind:Double, tol:Double) :
-  gen-ind-cmp(ind, tol, 0.1)
+  gen-ind-cmp(InductorStd, ind, tol, 0.1) ; 100mA default
 
 public defn gen-ind-cmp (ind:Double) :
   gen-ind-cmp(ind, 10.0)
