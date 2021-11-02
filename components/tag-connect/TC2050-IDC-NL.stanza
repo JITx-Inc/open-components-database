@@ -5,14 +5,14 @@ defpackage ocdb/tag-connect/TC2050-IDC-NL :
   import math
   import jitx
   import jitx/commands
-  import ocdb/defaults
-
-  import ocdb/land-patterns
-  import ocdb/symbols
+  import ocdb/box-symbol
   import ocdb/bundles
+  import ocdb/defaults
+  import ocdb/land-patterns
   import ocdb/generator-utils
   import ocdb/generic-components
-  import ocdb/box-symbol
+  import ocdb/module-utils
+  import ocdb/symbols
 
 ; NOTE UNUSUAL PINOUT
 ; Datasheet showing pinout: https://www.tag-connect.com/wp-content/uploads/bsk-pdf-manager/TC2050-IDC-NL_Datasheet_8.pdf
@@ -61,33 +61,6 @@ public pcb-component component :
   supports power:
     power.vdd => self.p[1]
     power.gnd => self.p[3]
-    ; power.gnd => self.p[5]
-    ; power.gnd => self.p[7]
-    ; power.gnd => self.p[9]
-    ; net (power.gnd self.p[5])
-  
-public pcb-module module :
-  port j : jtag()
-  port swd : swd()
-  port pwr : power
-  public inst jtag : ocdb/tag-connect/TC2050-IDC-NL/component
-  net (j.trstn, jtag.p[10])
-  net (j.tdi, jtag.p[8])
-  net (j.tdo, jtag.p[6])
-  net (j.tck, swd.swdclk, jtag.p[4])
-  net (j.tms, swd.swdio, jtag.p[2])
-  net (pwr.vdd, jtag.p[1])
-  net (pwr.gnd, jtag.p[9], jtag.p[5], jtag.p[3])
 
-  val jtag-bundle = /jtag()
-  val con = jtag
-  supports jtag-bundle:
-    jtag-bundle.trstn => con.p[10]
-    jtag-bundle.tdi => con.p[8]
-    jtag-bundle.tdo => con.p[6]
-    jtag-bundle.tck => con.p[4]
-    jtag-bundle.tms => con.p[2]
-
-  supports /swd():
-    /swd().swdclk => con.p[4]
-    /swd().swdio  => con.p[2]
+public pcb-module module : 
+  make-10-pin-debug-connector-module(component)
