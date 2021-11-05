@@ -5,6 +5,7 @@ defpackage ocdb/st-microelectronics/stm-api :
   import math
   import jitx
   import jitx/commands
+  
 
   import ocdb/defaults
   import ocdb/land-patterns
@@ -18,6 +19,59 @@ defpackage ocdb/st-microelectronics/stm-api :
   import ocdb/checks
 
 ; public pcb-struct ocdb/st-microelectronics/stm-api/STmicroConfigs :
+public pcb-enum components/st-microelectronics/PowerPinNames :
+  VDD
+  VDDA
+  VBAT
+  VDD1V2
+  VDD3V3USB
+  VDD5V0USB
+  ; V1V2PHYHS
+  ; V1V5SMPS
+  ; VDD1V2DSI
+  ; VDD1V2DSIPHY
+  ; VDD1V2DSIREG
+  ; VDD1V2UNUSED
+  ; VDDA1V1REG
+  ; VDDA1V8DSI
+  ; VDDA1V8REG
+  ; VDDA1V8UNUSED
+  ; VDDCAP
+  ; VDDCORE
+  ; VDDDSI
+  ; VDDIO2
+  ; VDDLDO
+  ; VDDMMC
+  ; VDDPA
+  ; VDDPHYHS
+  ; VDDQDDR
+  ; VDDRF
+  ; VDDRF1V55
+  ; VDDSD
+  ; VDDSD12
+  ; VDDSD3
+  ; VDDSDMMC
+  ; VDDSMPS
+  ; VDDUSB
+  ; VDDPLL
+  ; VDDPLL2
+  ; VDDUNUSED
+  ; VLCD
+  ; VLXSMPS
+
+public pcb-enum components/st-microelectronics/GndPinNames :
+  VSS
+  VSSA
+  ; VSSDSI
+  ; VSSRF
+  ; VSSSD
+  ; VSSSMPS
+  ; VSSPLL
+  ; VSSPLL2
+  ; VSSUSBHS
+
+
+
 
 public deftype Settings
 public defmulti entries (s:Settings) -> Tuple<KeyValue<Symbol,?>>
@@ -40,78 +94,172 @@ public val DEFAULT-SETTINGS = [
     `bypass-pin => 100.0e-9
     `boot-from => "flash"
     `debug-interface => swd()
-    `debug-connector => ocdb/tag-connect/TC2050-IDC-NL/module
+    `debug-connector => ocdb/tag-connect/TC2050-IDC/module
     `HSE-freq => 16.0e6   `HSE-ppm => 30.0e-6 `HSE-source => "crystal"
     `LSE-freq => 32.768e3 `LSE-ppm => 0.05 `LSE-source => "crystal"]
 
-defn power-pins (stm:JITXObject) -> Tuple<JITXObject> :
-  val result = to-tuple $ for p in pins(stm) filter :
-    substring?(lower-case(to-string(ref(p))), "vdd")
-  if empty?(result):
+
+defn last (text: String, c: Char) -> Int|False :
+  find({text[_] == c}, in-reverse(0 to length(text)))
+
+defn ref-internal (text: String) -> Ref :
+  if text[length(text) - 1] == ']' :
+    val idx = last(text, '[') as Int
+    IndexRef(ref-internal(text[0 to idx]), to-int!(text[(idx + 1) to (length(text) - 1)]))
+  else :
+    val idx = last(text, '.')
+    match(idx: Int) :
+      FieldRef(ref-internal(text[0 to idx]), Ref(text[(idx + 1) to length(text)]))
+    else :
+      Ref(text)
+
+defn ref (text: String) -> Ref|False :
+  if text == "false" :
+    false
+  else :
+    ref-internal(text)
+
+defn parse (my-ref: Ref) -> String :
+   match(my-ref) :
+     (v: VarRef) : to-string(v)
+     (i: IndexRef) : parse(ref(i))
+     (f: FieldRef) : to-string(field(f))
+
+defn match-pin? (pin-ref:Ref power:String) :
+  val p-ref = parse(pin-ref)
+  if p-ref == power :
+    true
+
+defn find-pins-list (obj:JITXObject my-pin:String) :
+  val result = to-tuple $ for p in pins(obj) filter :
+    if substring?(to-string(ref(p)), my-pin) :
+      match-pin?(ref(p), my-pin)
+  result
+
+defn find-pins? (obj:JITXObject my-pin:String) :
+  val result = to-tuple $ for p in pins(obj) filter :
+    if substring?(to-string(ref(p)), my-pin) :
+      match-pin?(ref(p), my-pin)
+  not empty?(result)
+
+defn power-pins (stm:JITXObject vdd-pin:PowerPinNames) -> Tuple<JITXObject> :
+  val found-pins = find-pins-list(stm, to-string(vdd-pin))
+  if empty?(found-pins) :
     fatal("%_ is missing an identifiable power pin." % [ref(stm)])
-  result
-defn gnd-pins (stm:JITXObject) -> Tuple<JITXObject> :
-  val result = to-tuple $ for p in pins(stm) filter :
-    substring?(lower-case(to-string(ref(p))), "vss")
-  if empty?(result):
+  found-pins
+
+defn power-pins-list (stm:JITXObject vdd-pin:PowerPinNames) -> Tuple<JITXObject> :
+  find-pins-list(stm, to-string(vdd-pin))
+
+defn power-pins (stm:JITXObject) -> Tuple<JITXObject> :
+  power-pins(stm, VDD)
+
+defn gnd-pins (stm:JITXObject, gnd-pin:GndPinNames) -> Tuple<JITXObject> :
+  val found-pins = find-pins-list(stm, to-string(gnd-pin))
+  if empty?(found-pins) :
     fatal("%_ is missing an identifiable ground pin." % [ref(stm)])
-  result
+  found-pins
+
+defn gnd-pins-list (stm:JITXObject, gnd-pin:GndPinNames) -> Tuple<JITXObject> :
+  find-pins-list(stm, to-string(gnd-pin))
+
+defn gnd-pins (stm:JITXObject) -> Tuple<JITXObject> :
+  gnd-pins(stm, VSS)
+
+public defn generate-named-bypass (stm:JITXObject, bypass-cap-package:Double|False, bypass-cap-pin:Double, vdd-net:PowerPinNames, gnd-net:GndPinNames) :
+  inside pcb-module :
+    val power-pin-list = power-pins(stm, vdd-net)
+    val gnd-pin-list = gnd-pins(stm, gnd-net)
+    match(bypass-cap-package) :
+      (bp: Double) : bypass-cap-strap(power-pin-list[0], gnd-pin-list[0], bp)
+      (bp: False) : false
+    for p in power-pin-list do :
+      bypass-cap-strap(p,  gnd-pin-list[0], bypass-cap-pin)
 
 public defn generate-bypass (stm:JITXObject, bypass-package:Double, bypass-pin:Double) :
   inside pcb-module :
-    val power-pins = power-pins(stm)
-    val gnd-pin = gnd-pins(stm)[0]
-    if length(power-pins) > 0 :
-      bypass-cap-strap(power-pins[0], gnd-pin, bypass-package)
-      for p in power-pins do :
-        bypass-cap-strap(p,  gnd-pin, bypass-pin)
+    val power-pin-list = power-pins(stm, VDD)
+    val gnd-pin-list = gnd-pins(stm, VSS)
+    bypass-cap-strap(power-pin-list[0], gnd-pin-list[0], bypass-package)
+    for p in power-pin-list do :
+      bypass-cap-strap(p,  gnd-pin-list[0], bypass-pin)
+
+
+public defn connect-named-power (stm:JITXObject, power-port-name:String, vdd-net:PowerPinNames, gnd-net:GndPinNames) :
+  inside pcb-module :
+    val vdd-pin-list = power-pins-list(stm, vdd-net)
+    val gnd-pin-list = gnd-pins-list(stm, gnd-net)
+    if length(vdd-pin-list) > 0 and length(gnd-pin-list) > 0 :
+      val power-port-symbol = to-symbol(power-port-name)
+      make-port(power-port-symbol, power)
+      for p in vdd-pin-list do :
+        make-net(to-symbol(vdd-net), [self.(power-port-symbol).vdd, p])
+      for p in gnd-pin-list do :
+        make-net(to-symbol(gnd-net), [self.(power-port-symbol).gnd, p])
+      val v-range = recommended-voltage(property(vdd-pin-list[0].power-pin))
+      if contains?(v-range, 3.3):
+        property(vdd-pin-list[0].power-request) = [3.3, 0.1, 3.3 * 0.03]
+      else if contains?(v-range, 2.5):
+        property(vdd-pin-list[0].power-request) = [2.5, 0.1, 2.5 * 0.03]
+      else if contains?(v-range, 1.8):
+        property(vdd-pin-list[0].power-request) = [1.8, 0.1, 1.8 * 0.03]
+      else if contains?(v-range, 1.2):
+        property(vdd-pin-list[0].power-request) = [1.2, 0.1, 1.2 * 0.03]
+
+      property(vdd-pin-list[0].gnd-ref) = gnd-pin-list[0]
+
 
 public defn connect-power (stm:JITXObject) :
   inside pcb-module :
-    val power-pins = power-pins(stm)
-    val gnd-pins = gnd-pins(stm)
+    val vdd-pin-list = power-pins(stm, VDD)
+    val gnd-pin-list = gnd-pins(stm, VSS)
     port power : power
-    for p in power-pins do : 
+    for p in vdd-pin-list do : 
       net VDD (power.vdd p)
-    for p in gnd-pins do   :
+    for p in gnd-pin-list do :
        net GND (p, power.gnd)
 
-    val v-range = recommended-voltage(property(power-pins[0].power-pin))
+    val v-range = recommended-voltage(property(vdd-pin-list[0].power-pin))
     if contains?(v-range, 3.3):
-      property(power-pins[0].power-request) = [3.3, 0.1, 3.3 * 0.03]
+      property(vdd-pin-list[0].power-request) = [3.3, 0.1, 3.3 * 0.03]
+    else if contains?(v-range, 2.5):
+      property(vdd-pin-list[0].power-request) = [2.5, 0.1, 2.5 * 0.03]
     else if contains?(v-range, 1.8):
-      property(power-pins[0].power-request) = [1.8, 0.1, 1.8 * 0.03]
+      property(vdd-pin-list[0].power-request) = [1.8, 0.1, 1.8 * 0.03]
+    else if contains?(v-range, 1.2):
+      property(vdd-pin-list[0].power-request) = [1.2, 0.1, 1.2 * 0.03]
 
-    property(power-pins[0].gnd-ref) = gnd-pins[0]
+    property(vdd-pin-list[0].gnd-ref) = gnd-pin-list[0]
 
     ; TODO Add battery option to API, currently assumes none.
-    if has-pin?(stm, "VBAT") :
+    if find-pins?(stm, "VBAT") :
       net (stm.VBAT power.vdd)
+
 
 public defn connect-reset (stm:JITXObject) :
   inside pcb-module :
     pin reset
-    net (stm.NRST reset)
-    
-    val power-pin = power-pins(stm)[0]
-    val gnd-pin = gnd-pins(stm)[0]
-    res-strap(power-pin, stm.NRST, 10.0e3)
-    cap-strap(power-pin, stm.NRST, 10.0e-9)
-        
-    ; Look for power-on reset pins
-    if has-pin?(stm, "NPOR") :
-      val v-range = recommended-voltage(property(power-pin.power-pin))
-      if contains?(v-range, 1.8):
-        inst mon : ocdb/on-semiconductor/NCP30x/component(1.8)
-        bypass-cap-strap(stm.NPOR, gnd-pin, 0.1e-6)
-        net (mon.gnd, gnd-pin)
-        net (mon.input, power-pin)
-        net (mon.output, stm.NPOR)
+    if find-pins?(stm, "NRST") :
+      net (stm.NRST reset)
+      val power-pin = power-pins(stm, VDD)[0]
+      val gnd-pin = gnd-pins(stm, VSS)[0]
+      res-strap(power-pin, stm.NRST, 10.0e3)
+      cap-strap(power-pin, stm.NRST, 10.0e-9)
+
+      ; Look for power-on reset pins
+      if find-pins?(stm, "NPOR") :
+        val v-range = recommended-voltage(property(power-pin.power-pin))
+        if contains?(v-range, 1.8):
+          inst mon : ocdb/on-semiconductor/NCP30x/component(1.8)
+          bypass-cap-strap(stm.NPOR, gnd-pin, 0.1e-6)
+          net (mon.gnd, gnd-pin)
+          net (mon.input, power-pin)
+          net (mon.output, stm.NPOR)
 
 
 defn has-pin? (stm:JITXObject, pin-q:String) :
   val t = to-tuple $ for p in pins(stm) filter :
-    substring?(to-string(ref(p)), pin-q)
+    if to-string(ref(p)) == pin-q : true
   not empty?(t)
 
 defn has-port? (stm:JITXObject, port-q:String) :
@@ -121,26 +269,30 @@ defn has-port? (stm:JITXObject, port-q:String) :
 
 public defn set-boot (stm:JITXObject, boot-from:String) :
   inside pcb-module :
-    val power-pin = power-pins(stm)[0]
-    val gnd-pin = gnd-pins(stm)[0]
-    switch(boot-from):
-      "flash" :
-        res-strap(stm.BOOT[0], gnd-pin, 10.0e3)
-      "system" :
-        if not has-pin?(stm, "BOOT[1]") : 
-          println("system boot not supported on %_." % [ref(stm)])
-        else :
-          res-strap(stm.BOOT[1], gnd-pin, 10.0e3)
-          res-strap(stm.BOOT[0], power-pin, 10.0e3)
-      "sram" :
-        if not has-pin?(stm, "BOOT[1]") : 
-          println("system boot not supported on %_." % [ref(stm)])
-        else:
-          res-strap(stm.BOOT[1], power-pin, 10.0e3)
-          res-strap(stm.BOOT[0], power-pin, 10.0e3)
+    val power-pin = power-pins(stm, VDD)[0]
+    val gnd-pin = gnd-pins(stm, VSS)[0]
+    val boot-pins = find-pins-list(stm, "BOOT")
+    val num-boot-pins = length(boot-pins)
+    if num-boot-pins > 0 :
+      switch(boot-from):
+        "flash" :
+          res-strap(stm.BOOT[0], gnd-pin, 10.0e3)
+        "system" :
+          if num-boot-pins != 2 :
+            println("system boot not supported on %_." % [ref(stm)])
+          else :
+            res-strap(stm.BOOT[1], gnd-pin, 10.0e3)
+            res-strap(stm.BOOT[0], power-pin, 10.0e3)
+        "sram" :
+          if num-boot-pins != 2 :
+            println("system boot not supported on %_." % [ref(stm)])
+          else:
+            res-strap(stm.BOOT[1], power-pin, 10.0e3)
+            res-strap(stm.BOOT[0], power-pin, 10.0e3)
 
-    check connected(stm.BOOT[0])
-    if has-pin?(stm, "BOOT[1]") : 
+    if num-boot-pins > 0 :
+      check connected(stm.BOOT[0])
+    if num-boot-pins > 1 : 
       check connected(stm.BOOT[1])
 
 defn supports? (module:InstantiableType, bundle:Bundle) -> True|False :
@@ -162,15 +314,8 @@ public defn connect-debug (stm:JITXObject, debug-interface:Bundle, connector:Ins
       schematic-group(debug-con) = debug
 
       if has-port?(debug-con, "power") :
-        require debug-p: power from debug-con
-        net (debug-p.vdd, power-pins(stm)[0])
-        net (debug-p.gnd, gnd-pins(stm)[0])
-
-      ; only connect reset to NRST if using the SWD bundle      
-      if name(debug-interface) == name(swd()) : 
-        require debug-reset: reset from self.debug-con
-        net (debug-reset.reset, stm.NRST)
-
+        net (debug-con.power.vdd, power-pins(stm, VDD)[0])
+        net (debug-con.power.gnd, gnd-pins(stm, VSS)[0])
     else :
       println("Unsupported debug-interface on %_" % [ref(stm)])
 
@@ -178,8 +323,8 @@ public defn connect-debug (stm:JITXObject, debug-interface:Bundle, connector:Ins
 
 public defn setup-clocks (stm:JITXObject, HSE-freq:Double, HSE-ppm:Double, HSE-source:String, LSE-freq:Double, LSE-ppm:Double, LSE-source:String) :
   inside pcb-module:
-    val power-pin = power-pins(stm)[0]
-    val gnd-pin = gnd-pins(stm)[0]
+    val power-pin = power-pins(stm, VDD)[0]
+    val gnd-pin = gnd-pins(stm, VSS)[0]
     ; Can we add an external clock, and do we need one?
     if supports?(instantiable-type(stm), high-freq-oscillator) and HSE-ppm < 0.03 :
       switch(HSE-source):
