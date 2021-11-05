@@ -172,7 +172,7 @@ public defstruct MicroController <: Component :
   line: String
   mfg-package: String
   ram: Double
-  eeprom: Double
+  eeprom: Double|False
   series: String
   supply-voltage: MinMaxRange
   rated-esd: Double|False
@@ -202,7 +202,7 @@ public defn MicroController (json: JObject) -> MicroController :
                   json["line"] as String,
                   json["mfg-package"] as String,
                   json["ram"] as Double,
-                  json["eeprom"] as Double,
+                  optional-double(json, "eeprom"),
                   json["series"] as String
                   parse-supply-voltage(json),
                   optional-double(json, "rated-esd"),
@@ -418,7 +418,9 @@ public defn mcu-module (component:Instantiable) -> (Tuple<KeyValue<Symbol,?>> ->
 
     connect-reset(mcu)
     connect-power(mcu)
+    connect-named-power(mcu, "VDDA", VDDA, VSSA)
     generate-bypass(mcu, settings[`bypass-package], settings[`bypass-pin])
+    generate-named-bypass(mcu, false, settings[`bypass-pin], VDDA, VSSA)
     set-boot(mcu, settings[`boot-from])
     connect-debug(mcu, settings[`debug-interface], settings[`debug-connector])
     setup-clocks(mcu, settings[`HSE-freq], settings[`HSE-ppm], settings[`HSE-source], settings[`LSE-freq], settings[`LSE-ppm], settings[`LSE-source])
