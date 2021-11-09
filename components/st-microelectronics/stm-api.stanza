@@ -130,38 +130,40 @@ defn match-pin? (pin-ref:Ref power:String) :
   if p-ref == power :
     true
 
-defn find-pins-list (obj:JITXObject my-pin:String) :
+defn match-pins (obj:JITXObject m-pin:String) :
   val result = to-tuple $ for p in pins(obj) filter :
-    if substring?(to-string(ref(p)), my-pin) :
-      match-pin?(ref(p), my-pin)
+    if substring?(to-string(ref(p)), m-pin) :
+      match-pin?(ref(p), m-pin)
+  result
+
+defn get-pins-list (obj:JITXObject my-pin:String) :
+  val result = match-pins(obj, my-pin)
   result
 
 defn find-pins? (obj:JITXObject my-pin:String) :
-  val result = to-tuple $ for p in pins(obj) filter :
-    if substring?(to-string(ref(p)), my-pin) :
-      match-pin?(ref(p), my-pin)
+  val result = match-pins(obj, my-pin)
   not empty?(result)
 
 defn power-pins (stm:JITXObject vdd-pin:PowerPinNames) -> Tuple<JITXObject> :
-  val found-pins = find-pins-list(stm, to-string(vdd-pin))
+  val found-pins = get-pins-list(stm, to-string(vdd-pin))
   if empty?(found-pins) :
     fatal("%_ is missing an identifiable power pin." % [ref(stm)])
   found-pins
 
 defn power-pins-list (stm:JITXObject vdd-pin:PowerPinNames) -> Tuple<JITXObject> :
-  find-pins-list(stm, to-string(vdd-pin))
+  get-pins-list(stm, to-string(vdd-pin))
 
 defn power-pins (stm:JITXObject) -> Tuple<JITXObject> :
   power-pins(stm, VDD)
 
 defn gnd-pins (stm:JITXObject, gnd-pin:GndPinNames) -> Tuple<JITXObject> :
-  val found-pins = find-pins-list(stm, to-string(gnd-pin))
+  val found-pins = get-pins-list(stm, to-string(gnd-pin))
   if empty?(found-pins) :
     fatal("%_ is missing an identifiable ground pin." % [ref(stm)])
   found-pins
 
 defn gnd-pins-list (stm:JITXObject, gnd-pin:GndPinNames) -> Tuple<JITXObject> :
-  find-pins-list(stm, to-string(gnd-pin))
+  get-pins-list(stm, to-string(gnd-pin))
 
 defn gnd-pins (stm:JITXObject) -> Tuple<JITXObject> :
   gnd-pins(stm, VSS)
@@ -271,7 +273,7 @@ public defn set-boot (stm:JITXObject, boot-from:String) :
   inside pcb-module :
     val power-pin = power-pins(stm, VDD)[0]
     val gnd-pin = gnd-pins(stm, VSS)[0]
-    val boot-pins = find-pins-list(stm, "BOOT")
+    val boot-pins = get-pins-list(stm, "BOOT")
     val num-boot-pins = length(boot-pins)
     if num-boot-pins > 0 :
       switch(boot-from):
