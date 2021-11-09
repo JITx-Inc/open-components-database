@@ -51,7 +51,7 @@ println("Available mcu cores: %_" % [look-up-micro-controllers("core")])
 
 val BOARD-SHAPE = RoundedRectangle(25.0, 25.0, 0.25)
 pcb-module my-design:
-  inst mcu : micro-controller(["core" => "ARM Cortex-M3"])([`bypass-package => 4.7e-6])
+  inst mcu : micro-controller(["core" => "ARM Cortex-M3"])([`cap-bypass-package => 4.7e-6])
   add-mounting-holes(BOARD-SHAPE, [2, 3])
 
 make-default-board(my-design, 4, BOARD-SHAPE)
@@ -60,7 +60,7 @@ view-schematic()
 ```
 
 `micro-controller(["core" => "ARM Cortex-M3"])` is a module generator for an STM micro-controller
-based on the ARM Cortex-M3. It needs to be run with arguments `\[`bypass-package => 4.7e-6\]` for our micro-controller
+based on the ARM Cortex-M3. It needs to be run with arguments `\[`cap-bypass-package => 4.7e-6\]` for our micro-controller
 API to generate a module with the required configuration.
 
 See [ocdb/stm-to-jitx](#ocdbstm-to-jitx) for documentation of the micro-controller generator.
@@ -419,8 +419,8 @@ public defn mcu-module (component:Instantiable) -> (Tuple<KeyValue<Symbol,?>> ->
     connect-reset(mcu)
     connect-power(mcu)
     connect-named-power(mcu, "VDDA", VDDA, VSSA)
-    generate-bypass(mcu, settings[`bypass-package], settings[`bypass-pin])
-    generate-named-bypass(mcu, false, settings[`bypass-pin], VDDA, VSSA)
+    generate-bypass(mcu, settings[`cap-bypass-package], settings[`cap-bypass-pin])
+    generate-named-bypass(mcu, false, settings[`cap-bypass-pin], VDDA, VSSA)
     set-boot(mcu, settings[`boot-from])
     connect-debug(mcu, settings[`debug-interface], settings[`debug-connector])
     setup-clocks(mcu, settings[`HSE-freq], settings[`HSE-ppm], settings[`HSE-source], settings[`LSE-freq], settings[`LSE-ppm], settings[`LSE-source])
@@ -437,7 +437,7 @@ defpackage ocdb/designs/mcu :
   import ocdb/micro-controllers
 
 pcb-module my-design:
-  inst mcu : micro-controller(["core" => "ARM Cortex-M3"])([`bypass-package => 4.7e-6])
+  inst mcu : micro-controller(["core" => "ARM Cortex-M3"])([`cap-bypass-package => 4.7e-6])
 ```
 is equivalent to
 ```stanza
@@ -450,17 +450,24 @@ val mcu = MicroController(["core" => "ARM Cortex-M3"])
 val module-generator = mcu-module $ to-jitx(mcu)
 
 pcb-module my-design:
-  inst mcu : module-generator([`bypass-package => 4.7e-6])
+  inst mcu : module-generator([`cap-bypass-package => 4.7e-6])
 ```
 
 Available user settings are:
+
+* Adding a resistor and capacitor pull-up between the reset pin and power supply
+
+| Option | Values | Default |
+|:-----|:-----|:-----|
+| \`reset-pullup | `Double` | 10.0e3 |
+| \`reset-cap | `Double` | 10.0e-9 |
 
 * Adding a bypass capacitor between each power pin individually and the ground
 
 | Option | Values | Default |
 |:-----|:-----|:-----|
-| \`bypass-package | `Double` | 4.7e-6 |
-| \`bypass-pin | `Double` | 100.0e-9 |
+| \`cap-bypass-package | `Double` | 4.7e-6 |
+| \`cap-bypass-pin | `Double` | 100.0e-9 |
 
 * Configuring booting method
 
@@ -576,5 +583,5 @@ defn short-print-items (m: MicroController) -> Tuple<Printable> :
 ;============================================================
 
 defn parse-supply-voltage (json: JObject) -> MinMaxRange :
-  val supply-voltage-json = json["rated-temperature"] as JObject
+  val supply-voltage-json = json["supply-voltage"] as JObject
   MinMaxRange(supply-voltage-json["min"] as Double, supply-voltage-json["max"] as Double)

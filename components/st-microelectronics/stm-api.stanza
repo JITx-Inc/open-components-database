@@ -18,8 +18,7 @@ defpackage ocdb/st-microelectronics/stm-api :
   import ocdb/property-structs
   import ocdb/checks
 
-; public pcb-struct ocdb/st-microelectronics/stm-api/STmicroConfigs :
-public pcb-enum components/st-microelectronics/PowerPinNames :
+public pcb-enum components/st-microelectronics/PwrPinNames :
   VDD
   VDDA
   VBAT
@@ -74,7 +73,8 @@ public pcb-enum components/st-microelectronics/ResetPinNames :
   NRST
   NPOR
 
-
+public pcb-enum components/st-microelectronics/BootPinNames :
+  BOOT
 
 
 public deftype Settings
@@ -94,11 +94,12 @@ public defn Settings (initial-entries:Tuple<KeyValue<Symbol,?>>) :
       table[k]
 
 public val DEFAULT-SETTINGS = [
-    `bypass-package => 4.7e-6
-    `bypass-pin => 100.0e-9
+    `cap-bypass-package => 4.7e-6
+    `cap-bypass-pin => 100.0e-9
     `reset-pullup => 10.0e3
     `reset-cap => 10.0e-9
     `boot-from => "flash"
+    `boot-resistor => 10.0e3
     `debug-interface => swd()
     `debug-connector => ocdb/tag-connect/TC2050-IDC/module
     `HSE-freq => 16.0e6   `HSE-ppm => 30.0e-6 `HSE-source => "crystal"
@@ -136,17 +137,19 @@ defn match-pin? (pin-ref:Ref power:String) :
   if p-ref == power :
     true
 
+; return list of pins that match name (exactly) / don't check for empty
 defn get-pin-list (obj:JITXObject m-pin:String) :
   val result = to-tuple $ for p in pins(obj) filter :
     if substring?(to-string(ref(p)), m-pin) :
       match-pin?(ref(p), m-pin)
   result
 
+; find the pin exact match return a boolean
 defn find-pin? (obj:JITXObject my-pin:String) :
   val result = get-pin-list(obj, my-pin)
   not empty?(result)
 
-defn power-pins (stm:JITXObject vdd-pin:PowerPinNames) -> Tuple<JITXObject> :
+defn power-pins (stm:JITXObject vdd-pin:PwrPinNames) -> Tuple<JITXObject> :
   val found-pins = get-pin-list(stm, to-string(vdd-pin))
   if empty?(found-pins) :
     fatal("%_ is missing an identifiable power pin." % [ref(stm)])
@@ -155,7 +158,7 @@ defn power-pins (stm:JITXObject vdd-pin:PowerPinNames) -> Tuple<JITXObject> :
 defn power-pins (stm:JITXObject) -> Tuple<JITXObject> :
   power-pins(stm, VDD)
 
-defn power-pins-list (stm:JITXObject vdd-pin:PowerPinNames) -> Tuple<JITXObject> :
+defn power-pins-list (stm:JITXObject vdd-pin:PwrPinNames) -> Tuple<JITXObject> :
   get-pin-list(stm, to-string(vdd-pin))
 
 defn gnd-pins (stm:JITXObject, gnd-pin:GndPinNames) -> Tuple<JITXObject> :
@@ -174,25 +177,40 @@ public defn generate-bypass (stm:JITXObject, cap-bypass-package:Double, cap-bypa
   generate-package-bypass(stm, cap-bypass-package)
   generate-pin-bypass(stm, cap-bypass-pin)
 
-public defn generate-pin-bypass (stm:JITXObject, vdd-net:PowerPinNames, gnd-net:GndPinNames, cap-bypass-pin:Double) :
+public defn generate-bypass (stm:JITXObject) :
+  val settings = Settings(DEFAULT-SETTINGS)
+  generate-package-bypass(stm, VDD, VSS, settings[`cap-bypass-package])
+  generate-pin-bypass(stm, VDD, VSS, settings[`cap-bypass-pin])
+
+public defn generate-pin-bypass (stm:JITXObject, vdd-net:PwrPinNames, gnd-net:GndPinNames, cap-bypass-pin:Double) :
   inside pcb-module :
-    val power-pin = power-pins(stm, vdd-net)[0]
-    val gnd-pin = gnd-pins(stm, gnd-net)[0]
-    bypass-cap-strap(power-pin, gnd-pin, cap-bypass-pin)
+    val power-pins = power-pins-list(stm, vdd-net)
+    val gnd-pins = gnd-pins-list(stm, gnd-net)
+    if length(power-pins) > 0 and length(gnd-pins) > 0 :
+      bypass-cap-strap(power-pins[0], gnd-pins[0], cap-bypass-pin)
 
 public defn generate-pin-bypass (stm:JITXObject, cap-bypass-pin:Double) :
   generate-pin-bypass(stm, VDD, VSS, cap-bypass-pin)
 
-public defn generate-package-bypass (stm:JITXObject, vdd-net:PowerPinNames, gnd-net:GndPinNames, cap-bypass-package:Double) :
+public defn generate-pin-bypass (stm:JITXObject) :
+  val settings = Settings(DEFAULT-SETTINGS)
+  generate-pin-bypass(stm, VDD, VSS, settings[`cap-bypass-pin])
+
+public defn generate-package-bypass (stm:JITXObject, vdd-net:PwrPinNames, gnd-net:GndPinNames, cap-bypass-package:Double) :
   inside pcb-module :
-    val power-pin = power-pins(stm, vdd-net)[0]
-    val gnd-pin = gnd-pins(stm, gnd-net)[0]
-    bypass-cap-strap(power-pin, gnd-pin, cap-bypass-package)
+    val power-pins = power-pins-list(stm, vdd-net)
+    val gnd-pins = gnd-pins-list(stm, gnd-net)
+    if length(power-pins) > 0 and length(gnd-pins) > 0 :
+      bypass-cap-strap(power-pins[0], gnd-pins[0], cap-bypass-package)
 
 public defn generate-package-bypass (stm:JITXObject, cap-bypass-package:Double) :
   generate-package-bypass(stm, VDD, VSS, cap-bypass-package)
 
-public defn connect-power (stm:JITXObject, power-port-name:String, vdd-net:PowerPinNames, gnd-net:GndPinNames) :
+public defn generate-package-bypass (stm:JITXObject) :
+  val settings = Settings(DEFAULT-SETTINGS)
+  generate-package-bypass(stm, VDD, VSS, settings[`cap-bypass-package])
+
+public defn connect-power (stm:JITXObject, power-port-name:String, vdd-net:PwrPinNames, gnd-net:GndPinNames) :
   inside pcb-module :
     val vdd-pin-list = power-pins-list(stm, vdd-net)
     val gnd-pin-list = gnd-pins-list(stm, gnd-net)
@@ -218,7 +236,7 @@ public defn connect-power (stm:JITXObject, power-port-name:String, vdd-net:Power
 public defn connect-power (stm:JITXObject) :
   connect-power(stm, "power", VDD, VSS)
 
-public defn connect-battery (stm:JITXObject, bat-net:PowerPinNames, vdd-net:PowerPinNames) :
+public defn connect-battery (stm:JITXObject, bat-net:PwrPinNames, vdd-net:PwrPinNames) :
   inside pcb-module :
   ; TODO Add battery option to API, currently assumes none.
     val b-net = get-pin-list(stm, to-string(bat-net))
@@ -227,25 +245,25 @@ public defn connect-battery (stm:JITXObject, bat-net:PowerPinNames, vdd-net:Powe
       if length(p-pin) > 0 :
         net (b-net p-pin[0])
 
-public defn connect-battery (stm:JITXObject, bat-net:PowerPinNames) :
+public defn connect-battery (stm:JITXObject, bat-net:PwrPinNames) :
   connect-battery(stm, bat-net, VDD)
 
 public defn connect-battery (stm:JITXObject) :
   connect-battery(stm, VBAT, VDD)
 
-public defn connect-reset (stm:JITXObject reset-net:ResetPinNames vdd-net:PowerPinNames gnd-net:GndPinNames reset-pullup:Double reset-cap:Double) :
+public defn connect-reset (stm:JITXObject reset-net:ResetPinNames vdd-net:PwrPinNames gnd-net:GndPinNames reset-pullup:Double reset-cap:Double) :
   inside pcb-module :
     pin reset
     val reset-pin-list = get-pin-list(stm, to-string(reset-net))
     if length(reset-pin-list) > 0 :
-      val power-pin = power-pins(stm, VDD)
+      val power-pins = power-pins-list(stm, VDD)
       for p in reset-pin-list do :
         net (p reset)
-        if length(power-pin) > 0 :
-          res-strap(power-pin[0], p, reset-pullup)
-          cap-strap(power-pin[0], p, reset-cap)
+        if length(power-pins) > 0 :
+          res-strap(power-pins[0], p, reset-pullup)
+          cap-strap(power-pins[0], p, reset-cap)
 
-public defn connect-reset (stm:JITXObject reset-net:ResetPinNames vdd-net:PowerPinNames gnd-net:GndPinNames) :
+public defn connect-reset (stm:JITXObject reset-net:ResetPinNames vdd-net:PwrPinNames gnd-net:GndPinNames) :
   val settings = Settings(DEFAULT-SETTINGS)
   connect-reset(stm reset-net vdd-net gnd-net settings[`reset-pullup] settings[`reset-cap])
 
@@ -263,20 +281,21 @@ public defn connect-reset (stm:JITXObject) :
   val settings = Settings(DEFAULT-SETTINGS)
   connect-reset(stm NRST VDD VSS settings[`reset-pullup] settings[`reset-cap])
 
-public defn connect-por (stm:JITXObject, por-net:ResetPinNames, vdd-net:PowerPinNames, gnd-net:GndPinNames) :
+public defn connect-por (stm:JITXObject, por-net:ResetPinNames, vdd-net:PwrPinNames, gnd-net:GndPinNames) :
   inside pcb-module :
     pin por
     val por-pin = get-pin-list(stm, to-string(por-net))
     if length(por-pin) > 0 :
-      val power-pin = power-pins(stm, vdd-net)[0]
-      val gnd-pin = gnd-pins(stm, gnd-net)[0]
-      val v-range = recommended-voltage(property(power-pin.power-pin))
-      if contains?(v-range, 1.8):
-        inst mon : ocdb/on-semiconductor/NCP30x/component(1.8)
-        bypass-cap-strap(por-pin[0], gnd-pin, 0.1e-6)
-        net (mon.gnd, gnd-pin)
-        net (mon.input, power-pin)
-        net (mon.output, por-pin[0])
+      val power-pins = power-pins-list(stm, vdd-net)
+      val gnd-pins = gnd-pins-list(stm, gnd-net)
+      val v-range = recommended-voltage(property(power-pins[0].power-pin))
+      if length(power-pins) > 0 and length(gnd-pins) > 0 :
+        if contains?(v-range, 1.8):
+          inst mon : ocdb/on-semiconductor/NCP30x/component(1.8)
+          bypass-cap-strap(por-pin[0], gnd-pins[0], 0.1e-6) ; hardcoded value for now (eek)
+          net (mon.gnd, gnd-pins[0])
+          net (mon.input, power-pins[0])
+          net (mon.output, por-pin[0])
 
 public defn connect-por (stm:JITXObject, por-net:ResetPinNames) :
   connect-por(stm, por-net, VDD, VSS)
@@ -294,34 +313,59 @@ defn has-port? (stm:JITXObject, port-q:String) :
     substring?(to-string(ref(p)), port-q)
   not empty?(t)
 
-public defn set-boot (stm:JITXObject, boot-from:String) :
+public defn set-boot (stm:JITXObject, boot-net:BootPinNames, vdd-net:PwrPinNames, gnd-net:GndPinNames, boot-from:String, boot-resistor:Double) :
   inside pcb-module :
-    val power-pin = power-pins(stm, VDD)[0]
-    val gnd-pin = gnd-pins(stm, VSS)[0]
-    val boot-pins = get-pin-list(stm, "BOOT")
+    val power-pins = power-pins-list(stm, vdd-net)
+    val gnd-pins = gnd-pins-list(stm, gnd-net)
+    val boot-pins = get-pin-list(stm, to-string(boot-net))
     val num-boot-pins = length(boot-pins)
     if num-boot-pins > 0 :
       switch(boot-from):
         "flash" :
-          res-strap(stm.BOOT[0], gnd-pin, 10.0e3)
+          if length(gnd-pins) > 0 :
+            res-strap(stm.BOOT[0], gnd-pins[0], boot-resistor)
         "system" :
-          if num-boot-pins != 2 :
-            println("system boot not supported on %_." % [ref(stm)])
+          if num-boot-pins != 2 or length(power-pins) == 0 or length(gnd-pins) == 0:
+            fatal("system boot not supported on %_." % [ref(stm)])
           else :
-            res-strap(stm.BOOT[1], gnd-pin, 10.0e3)
-            res-strap(stm.BOOT[0], power-pin, 10.0e3)
+            res-strap(stm.BOOT[1], gnd-pins[0], boot-resistor)
+            res-strap(stm.BOOT[0], power-pins[0], boot-resistor)
         "sram" :
-          if num-boot-pins != 2 :
-            println("system boot not supported on %_." % [ref(stm)])
+          if num-boot-pins != 2 and length(power-pins) == 0 :
+            fatal("system boot not supported on %_." % [ref(stm)])
           else:
-            res-strap(stm.BOOT[1], power-pin, 10.0e3)
-            res-strap(stm.BOOT[0], power-pin, 10.0e3)
+            res-strap(stm.BOOT[1], power-pins[0], boot-resistor)
+            res-strap(stm.BOOT[0], power-pins[0], boot-resistor)
     if num-boot-pins > 0 :
       check connected(stm.BOOT[0])
-    if num-boot-pins > 1 : 
+    if num-boot-pins > 1 :
       check connected(stm.BOOT[1])
 
-defn supports? (module:InstantiableType, bundle:Bundle) -> True|False :
+public defn set-boot (stm:JITXObject, boot-net:BootPinNames, vdd-net:PwrPinNames, gnd-net:GndPinNames, boot-from:String) :
+  val settings = Settings(DEFAULT-SETTINGS)
+  set-boot(stm, boot-net, vdd-net, gnd-net, boot-from, settings[`boot-resistor])
+
+public defn set-boot (stm:JITXObject, boot-net:BootPinNames, vdd-net:PwrPinNames, gnd-net:GndPinNames) :
+  val settings = Settings(DEFAULT-SETTINGS)
+  set-boot(stm, boot-net, vdd-net, gnd-net, settings[`boot-from], settings[`boot-resistor])
+
+public defn set-boot (stm:JITXObject, boot-net:BootPinNames) :
+  val settings = Settings(DEFAULT-SETTINGS)
+  set-boot(stm, boot-net, VDD, VSS, settings[`boot-from], settings[`boot-resistor])
+
+public defn set-boot (stm:JITXObject, boot-net:BootPinNames, boot-from:String, boot-resistor:Double) :
+  val settings = Settings(DEFAULT-SETTINGS)
+  set-boot(stm, boot-net, VDD, VSS, boot-from, boot-resistor)
+
+public defn set-boot (stm:JITXObject, boot-from:String, boot-resistor:Double) :
+  val settings = Settings(DEFAULT-SETTINGS)
+  set-boot(stm, BOOT, VDD, VSS, boot-from, boot-resistor)
+
+public defn set-boot (stm:JITXObject, boot-from:String) :
+  val settings = Settings(DEFAULT-SETTINGS)
+  set-boot(stm, BOOT, VDD, VSS, boot-from, settings[`boot-resistor])
+
+defn supports? (module:InstantiableType, bundle:PortType) -> True|False :
   pcb-module temp :
     inst i : module
     require r:bundle from i
@@ -343,61 +387,69 @@ public defn connect-debug (stm:JITXObject, debug-interface:Bundle, connector:Ins
         net (debug-con.power.vdd, power-pins(stm, VDD)[0])
         net (debug-con.power.gnd, gnd-pins(stm, VSS)[0])
     else :
-      println("Unsupported debug-interface on %_" % [ref(stm)])
+      fatal("Unsupported debug-interface on %_" % [ref(stm)])
 
 ; defn select-crystal (freq:Double, ppm:double):
-
+; this is janky code which needs to be optimized with a better crystal/osc selection
 public defn setup-clocks (stm:JITXObject, HSE-freq:Double, HSE-ppm:Double, HSE-source:String, LSE-freq:Double, LSE-ppm:Double, LSE-source:String) :
   inside pcb-module:
-    val power-pin = power-pins(stm, VDD)[0]
-    val gnd-pin = gnd-pins(stm, VSS)[0]
-    ; Can we add an external clock, and do we need one?
-    if supports?(instantiable-type(stm), high-freq-oscillator) and HSE-ppm < 0.03 :
-      switch(HSE-source):
-        "crystal" :
-            ; supported crystal oscillator frequencies
-          val HSE-FREQS = [
-            16.0e6,
-            24.0e6,
-            25.0e6,
-            26.0e6,
-            32.0e6,
-          ]
-          inst hf-xtal :
-            if contains?(HSE-FREQS, HSE-freq): 
-              ocdb/epson/TSX-3225/component(HSE-freq)
-            else:
-              ocdb/abracon/AMB7/component(HSE-freq)
-          if contains?(HSE-FREQS, HSE-freq) :
-            net (hf-xtal.gnd, gnd-pin)
+    val power-pins = power-pins-list(stm, VDD)
+    val gnd-pins = gnd-pins-list(stm, VSS)
+    if length(power-pins) > 0 and length(gnd-pins) > 0 :
+      val power-pin = power-pins[0]
+      val gnd-pin = gnd-pins[0]
+      ; Can we add an external clock, and do we need one?
+      if supports?(instantiable-type(stm), high-freq-oscillator) and HSE-ppm < 0.03 :
+        switch(HSE-source):
+          "crystal" :
+              ; supported crystal oscillator frequencies
+            val HSE-FREQS = [
+              16.0e6,
+              24.0e6,
+              25.0e6,
+              26.0e6,
+              32.0e6,
+            ]
+            inst hf-xtal :
+              if contains?(HSE-FREQS, HSE-freq): 
+                ocdb/epson/TSX-3225/component(HSE-freq)
+              else:
+                ocdb/abracon/AMB7/component(HSE-freq)
+            if contains?(HSE-FREQS, HSE-freq) :
+              net (hf-xtal.gnd, gnd-pin)
 
-          require hf-osc:high-freq-oscillator from stm
-          net (hf-osc.in hf-xtal.p[1])
-          net (hf-osc.out hf-xtal.p[2])
-          val hf-cb = add-xtal-caps(hf-xtal, gnd-pin)
-          check-oscillator(hf-xtal, CrystalOscillator(2.0e-3, 100.0e-6, 3.0e-12, HSE-ppm * HSE-freq, HSE-freq), hf-cb)
-        "osc" :
-          if HSE-ppm > 25.0e-6 :
             require hf-osc:high-freq-oscillator from stm
-            inst osc :  ocdb/abracon/AMPM/module(HSE-freq)
-            net (hf-osc.in osc.out)
-            net (osc.power.gnd, gnd-pin)
-            net (osc.power.vdd, power-pin)
-          else : 
-            println("MEMS oscillators in library can't meet ppm. Try a 'crystal' source.")
-    if supports?(instantiable-type(stm), low-freq-oscillator) and LSE-ppm < 0.03 :
-      switch(LSE-source):
-        "crystal" :
-          if LSE-freq == 32.768e3 :
-            require lf-osc:low-freq-oscillator from stm
-            inst losc : ocdb/epson/FC-135/component
-            net (lf-osc.in losc.p[1])
-            net (lf-osc.out losc.p[2])
-            val lf-cb = add-xtal-caps(losc, gnd-pin)
-            check-oscillator(losc, CrystalOscillator(3.1e-6, 0.5e-6, 4.0e-12, 50.0e-6 * 32.768e3, 32.768e3), lf-cb)
+            net (hf-osc.in hf-xtal.p[1])
+            net (hf-osc.out hf-xtal.p[2])
+            val hf-cb = add-xtal-caps(hf-xtal, gnd-pin)
+            check-oscillator(hf-xtal, CrystalOscillator(2.0e-3, 100.0e-6, 3.0e-12, HSE-ppm * HSE-freq, HSE-freq), hf-cb)
+          "osc" :
+            if HSE-ppm > 25.0e-6 :
+              require hf-osc:high-freq-oscillator from stm
+              inst osc :  ocdb/abracon/AMPM/module(HSE-freq)
+              net (hf-osc.in osc.out)
+              net (osc.power.gnd, gnd-pin)
+              net (osc.power.vdd, power-pin)
+            else : 
+              fatal("MEMS oscillators in library can't meet ppm. Try a 'crystal' source.")
+      if supports?(instantiable-type(stm), low-freq-oscillator) and LSE-ppm < 0.03 :
+        switch(LSE-source):
+          "crystal" :
+            if LSE-freq == 32.768e3 :
+              require lf-osc:low-freq-oscillator from stm
+              inst losc : ocdb/epson/FC-135/component
+              net (lf-osc.in losc.p[1])
+              net (lf-osc.out losc.p[2])
+              val lf-cb = add-xtal-caps(losc, gnd-pin)
+              check-oscillator(losc, CrystalOscillator(3.1e-6, 0.5e-6, 4.0e-12, 50.0e-6 * 32.768e3, 32.768e3), lf-cb)
+            else:
+              fatal("Unsupported frequency for LSE: %_. Try 32.768e3." % [LSE-freq])
           else:
-            println("Unsupported frequency for LSE: %_. Try 32.768e3." % [LSE-freq])
-        else:
-          println("Unsupported sourece for LSE. Try a 'crystal' source.")
-    else if LSE-ppm < 0.03:
-      println("%_ does not support an external LSE source." % [ref(stm)])
+            fatal("Unsupported sourece for LSE. Try a 'crystal' source.")
+      else if LSE-ppm < 0.03:
+        fatal("%_ does not support an external LSE source." % [ref(stm)])
+
+
+
+
+
