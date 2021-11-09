@@ -96,8 +96,8 @@ public defn Settings (initial-entries:Tuple<KeyValue<Symbol,?>>) :
 public val DEFAULT-SETTINGS = [
     `bypass-package => 4.7e-6
     `bypass-pin => 100.0e-9
-    `por-pullup => 10.0e3
-    `por-cap => 10.0e-9
+    `reset-pullup => 10.0e3
+    `reset-cap => 10.0e-9
     `boot-from => "flash"
     `debug-interface => swd()
     `debug-connector => ocdb/tag-connect/TC2050-IDC/module
@@ -170,19 +170,27 @@ defn gnd-pins (stm:JITXObject) -> Tuple<JITXObject> :
 defn gnd-pins-list (stm:JITXObject, gnd-pin:GndPinNames) -> Tuple<JITXObject> :
   get-pin-list(stm, to-string(gnd-pin))
 
-public defn generate-named-bypass (stm:JITXObject, cap-bypass-package:Double|False, cap-bypass-pin:Double, vdd-net:PowerPinNames, gnd-net:GndPinNames) :
-  inside pcb-module :
-    val power-pin-list = power-pins(stm, vdd-net)
-    val gnd-pin = gnd-pins(stm, gnd-net)[0]
-    match(cap-bypass-package) :
-      (bp: Double) : bypass-cap-strap(power-pin-list[0], gnd-pin, bp)
-      (bp: False) : false
-    for p in power-pin-list do :
-      bypass-cap-strap(p,  gnd-pin, cap-bypass-pin)
-
 public defn generate-bypass (stm:JITXObject, cap-bypass-package:Double, cap-bypass-pin:Double) :
+  generate-package-bypass(stm, cap-bypass-package)
+  generate-pin-bypass(stm, cap-bypass-pin)
+
+public defn generate-pin-bypass (stm:JITXObject, vdd-net:PowerPinNames, gnd-net:GndPinNames, cap-bypass-pin:Double) :
   inside pcb-module :
-    generate-named-bypass(stm, cap-bypass-package, cap-bypass-pin, VDD, VSS)
+    val power-pin = power-pins(stm, vdd-net)[0]
+    val gnd-pin = gnd-pins(stm, gnd-net)[0]
+    bypass-cap-strap(power-pin, gnd-pin, cap-bypass-pin)
+
+public defn generate-pin-bypass (stm:JITXObject, cap-bypass-pin:Double) :
+  generate-pin-bypass(stm, VDD, VSS, cap-bypass-pin)
+
+public defn generate-package-bypass (stm:JITXObject, vdd-net:PowerPinNames, gnd-net:GndPinNames, cap-bypass-package:Double) :
+  inside pcb-module :
+    val power-pin = power-pins(stm, vdd-net)[0]
+    val gnd-pin = gnd-pins(stm, gnd-net)[0]
+    bypass-cap-strap(power-pin, gnd-pin, cap-bypass-package)
+
+public defn generate-package-bypass (stm:JITXObject, cap-bypass-package:Double) :
+  generate-package-bypass(stm, VDD, VSS, cap-bypass-package)
 
 public defn connect-named-power (stm:JITXObject, power-port-name:String, vdd-net:PowerPinNames, gnd-net:GndPinNames) :
   inside pcb-module :
@@ -207,13 +215,8 @@ public defn connect-named-power (stm:JITXObject, power-port-name:String, vdd-net
 
       property(vdd-pin-list[0].gnd-ref) = gnd-pin-list[0]
 
-
 public defn connect-power (stm:JITXObject) :
   connect-named-power(stm, "power", VDD, VSS)
-
-    ; TODO Add battery option to API, currently assumes none.
-    ; if find-pin?(stm, "VBAT") :
-    ;   net (stm.VBAT power.vdd)
 
 public defn connect-battery (stm:JITXObject, bat-net:PowerPinNames, vdd-net:PowerPinNames) :
   inside pcb-module :
@@ -230,7 +233,7 @@ public defn connect-battery (stm:JITXObject, bat-net:PowerPinNames) :
 public defn connect-battery (stm:JITXObject) :
   connect-battery(stm, VBAT, VDD)
 
-public defn connect-reset (stm:JITXObject reset-net:ResetPinNames vdd-net:PowerPinNames gnd-net:GndPinNames por-pullup:Double por-cap:Double) :
+public defn connect-reset (stm:JITXObject reset-net:ResetPinNames vdd-net:PowerPinNames gnd-net:GndPinNames reset-pullup:Double reset-cap:Double) :
   inside pcb-module :
     pin reset
     val reset-pin-list = get-pin-list(stm, to-string(reset-net))
@@ -239,30 +242,26 @@ public defn connect-reset (stm:JITXObject reset-net:ResetPinNames vdd-net:PowerP
       for p in reset-pin-list do :
         net (p reset)
         if length(power-pin) > 0 :
-          res-strap(power-pin[0], p, por-pullup)
-          cap-strap(power-pin[0], p, por-cap)
+          res-strap(power-pin[0], p, reset-pullup)
+          cap-strap(power-pin[0], p, reset-cap)
 
 public defn connect-reset (stm:JITXObject reset-net:ResetPinNames vdd-net:PowerPinNames gnd-net:GndPinNames) :
   val settings = Settings(DEFAULT-SETTINGS)
-  connect-reset(stm reset-net vdd-net gnd-net settings[`por-pullup] settings[`por-cap])
+  connect-reset(stm reset-net vdd-net gnd-net settings[`reset-pullup] settings[`reset-cap])
+
+public defn connect-reset (stm:JITXObject reset-net:ResetPinNames reset-pullup:Double reset-cap:Double) :
+  connect-reset(stm reset-net VDD VSS reset-pullup reset-cap)
 
 public defn connect-reset (stm:JITXObject reset-net:ResetPinNames) :
   val settings = Settings(DEFAULT-SETTINGS)
-  connect-reset(stm reset-net VDD VSS settings[`por-pullup] settings[`por-cap])
+  connect-reset(stm reset-net VDD VSS settings[`reset-pullup] settings[`reset-cap])
+
+public defn connect-reset (stm:JITXObject reset-pullup:Double reset-cap:Double) :
+  connect-reset(stm NRST VDD VSS reset-pullup reset-cap)
 
 public defn connect-reset (stm:JITXObject) :
   val settings = Settings(DEFAULT-SETTINGS)
-  connect-reset(stm NRST VDD VSS settings[`por-pullup] settings[`por-cap])
-
-      ; Look for power-on reset pins
-      ; if find-pin?(stm, "NPOR") :
-      ;   val v-range = recommended-voltage(property(power-pin.power-pin))
-      ;   if contains?(v-range, 1.8):
-      ;     inst mon : ocdb/on-semiconductor/NCP30x/component(1.8)
-      ;     bypass-cap-strap(stm.NPOR, gnd-pin, 0.1e-6)
-      ;     net (mon.gnd, gnd-pin)
-      ;     net (mon.input, power-pin)
-      ;     net (mon.output, stm.NPOR)
+  connect-reset(stm NRST VDD VSS settings[`reset-pullup] settings[`reset-cap])
 
 public defn connect-por (stm:JITXObject, por-net:ResetPinNames, vdd-net:PowerPinNames, gnd-net:GndPinNames) :
   inside pcb-module :
@@ -317,7 +316,6 @@ public defn set-boot (stm:JITXObject, boot-from:String) :
           else:
             res-strap(stm.BOOT[1], power-pin, 10.0e3)
             res-strap(stm.BOOT[0], power-pin, 10.0e3)
-
     if num-boot-pins > 0 :
       check connected(stm.BOOT[0])
     if num-boot-pins > 1 : 
