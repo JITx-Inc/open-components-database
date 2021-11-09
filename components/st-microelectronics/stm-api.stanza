@@ -295,7 +295,7 @@ public defn set-boot (stm:JITXObject, boot-from:String) :
     if num-boot-pins > 1 : 
       check connected(stm.BOOT[1])
 
-defn supports? (module:InstantiableType, bundle:PortType) -> True|False :
+defn supports? (module:InstantiableType, bundle:Bundle) -> True|False :
   pcb-module temp :
     inst i : module
     require r:bundle from i
@@ -303,14 +303,16 @@ defn supports? (module:InstantiableType, bundle:PortType) -> True|False :
   val result = assign-pins?()
   result is-not False
 
-public defn connect-debug (stm:JITXObject, debug-interface:PortType, connector:Instantiable) :
+public defn connect-debug (stm:JITXObject, debug-interface:Bundle, connector:Instantiable) :
   inside pcb-module:
     if supports?(instantiable-type(stm), debug-interface) and supports?(connector, debug-interface):
-      inst debug-con : connector
+      public inst debug-con : connector
       require debug-m:debug-interface from stm
       require debug-c:debug-interface from debug-con
+      
       net DEBUG (debug-m debug-c)
       schematic-group(debug-con) = debug
+
       if has-port?(debug-con, "power") :
         net (debug-con.power.vdd, power-pins(stm, VDD)[0])
         net (debug-con.power.gnd, gnd-pins(stm, VSS)[0])
@@ -373,8 +375,3 @@ public defn setup-clocks (stm:JITXObject, HSE-freq:Double, HSE-ppm:Double, HSE-s
           println("Unsupported sourece for LSE. Try a 'crystal' source.")
     else if LSE-ppm < 0.03:
       println("%_ does not support an external LSE source." % [ref(stm)])
-
-
-
-
-

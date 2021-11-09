@@ -13,6 +13,7 @@ defpackage ocdb/maxim/MAX300x:
   import ocdb/symbols
   import ocdb/box-symbol
   import ocdb/property-structs
+  import ocdb/checks
 
 public pcb-component component :
   name = "MAX3001EEUP+T"
@@ -50,6 +51,8 @@ public pcb-component component :
   eval-when has-property?(self.VCC.rail-voltage):
     property(self.VCC.power-pin) = PowerPin(Interval(1.65, property(self.VCC.rail-voltage), false))
 
+  check connected(self.EN)
+
 
 public pcb-module module :
   port vcc:power
@@ -59,9 +62,9 @@ public pcb-module module :
   pin en
 
   inst buffer : ocdb/maxim/MAX300x/component
-  bypass-cap-strap(buffer.VCC, buffer.GND, 0.1)
-  bypass-cap-strap(buffer.VCC, buffer.GND, 1.0)
-  bypass-cap-strap(buffer.VL, buffer.GND, 0.1)
+  bypass-cap-strap(buffer.VCC, buffer.GND, 0.1e-6)
+  bypass-cap-strap(buffer.VCC, buffer.GND, 1.0e-6)
+  bypass-cap-strap(buffer.VL, buffer.GND, 0.1e-6)
 
   net (vcc.gnd vl.gnd, buffer.GND)
   net (vcc.vdd, buffer.VCC)
@@ -70,3 +73,5 @@ public pcb-module module :
   for i in 1 through 8 do :
     net (io-vl[i], buffer.IO-VL[i])
     net (io-vcc[i], buffer.IO-VCC[i])
+
+  schematic-group(self) = max300x
