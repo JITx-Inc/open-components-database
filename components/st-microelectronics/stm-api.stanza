@@ -26,6 +26,7 @@ public pcb-enum components/st-microelectronics/PowerPinNames :
   VDD1V2
   VDD3V3USB
   VDD5V0USB
+  VDDIO2
   ; V1V2PHYHS
   ; V1V5SMPS
   ; VDD1V2DSI
@@ -39,7 +40,6 @@ public pcb-enum components/st-microelectronics/PowerPinNames :
   ; VDDCAP
   ; VDDCORE
   ; VDDDSI
-  ; VDDIO2
   ; VDDLDO
   ; VDDMMC
   ; VDDPA
@@ -70,6 +70,10 @@ public pcb-enum components/st-microelectronics/GndPinNames :
   ; VSSPLL2
   ; VSSUSBHS
 
+public pcb-enum components/st-microelectronics/ResetPinNames :
+  NRST
+  NPOR
+
 
 
 
@@ -92,6 +96,8 @@ public defn Settings (initial-entries:Tuple<KeyValue<Symbol,?>>) :
 public val DEFAULT-SETTINGS = [
     `bypass-package => 4.7e-6
     `bypass-pin => 100.0e-9
+    `por-pullup => 10.0e3
+    `por-cap => 10.0e-9
     `boot-from => "flash"
     `debug-interface => swd()
     `debug-connector => ocdb/tag-connect/TC2050-IDC/module
@@ -130,62 +136,53 @@ defn match-pin? (pin-ref:Ref power:String) :
   if p-ref == power :
     true
 
-defn match-pins (obj:JITXObject m-pin:String) :
+defn get-pin-list (obj:JITXObject m-pin:String) :
   val result = to-tuple $ for p in pins(obj) filter :
     if substring?(to-string(ref(p)), m-pin) :
       match-pin?(ref(p), m-pin)
   result
 
-defn get-pins-list (obj:JITXObject my-pin:String) :
-  val result = match-pins(obj, my-pin)
-  result
-
-defn find-pins? (obj:JITXObject my-pin:String) :
-  val result = match-pins(obj, my-pin)
+defn find-pin? (obj:JITXObject my-pin:String) :
+  val result = get-pin-list(obj, my-pin)
   not empty?(result)
 
 defn power-pins (stm:JITXObject vdd-pin:PowerPinNames) -> Tuple<JITXObject> :
-  val found-pins = get-pins-list(stm, to-string(vdd-pin))
+  val found-pins = get-pin-list(stm, to-string(vdd-pin))
   if empty?(found-pins) :
     fatal("%_ is missing an identifiable power pin." % [ref(stm)])
   found-pins
 
-defn power-pins-list (stm:JITXObject vdd-pin:PowerPinNames) -> Tuple<JITXObject> :
-  get-pins-list(stm, to-string(vdd-pin))
-
 defn power-pins (stm:JITXObject) -> Tuple<JITXObject> :
   power-pins(stm, VDD)
 
+defn power-pins-list (stm:JITXObject vdd-pin:PowerPinNames) -> Tuple<JITXObject> :
+  get-pin-list(stm, to-string(vdd-pin))
+
 defn gnd-pins (stm:JITXObject, gnd-pin:GndPinNames) -> Tuple<JITXObject> :
-  val found-pins = get-pins-list(stm, to-string(gnd-pin))
+  val found-pins = get-pin-list(stm, to-string(gnd-pin))
   if empty?(found-pins) :
     fatal("%_ is missing an identifiable ground pin." % [ref(stm)])
   found-pins
 
-defn gnd-pins-list (stm:JITXObject, gnd-pin:GndPinNames) -> Tuple<JITXObject> :
-  get-pins-list(stm, to-string(gnd-pin))
-
 defn gnd-pins (stm:JITXObject) -> Tuple<JITXObject> :
   gnd-pins(stm, VSS)
 
-public defn generate-named-bypass (stm:JITXObject, bypass-cap-package:Double|False, bypass-cap-pin:Double, vdd-net:PowerPinNames, gnd-net:GndPinNames) :
+defn gnd-pins-list (stm:JITXObject, gnd-pin:GndPinNames) -> Tuple<JITXObject> :
+  get-pin-list(stm, to-string(gnd-pin))
+
+public defn generate-named-bypass (stm:JITXObject, cap-bypass-package:Double|False, cap-bypass-pin:Double, vdd-net:PowerPinNames, gnd-net:GndPinNames) :
   inside pcb-module :
     val power-pin-list = power-pins(stm, vdd-net)
-    val gnd-pin-list = gnd-pins(stm, gnd-net)
-    match(bypass-cap-package) :
-      (bp: Double) : bypass-cap-strap(power-pin-list[0], gnd-pin-list[0], bp)
+    val gnd-pin = gnd-pins(stm, gnd-net)[0]
+    match(cap-bypass-package) :
+      (bp: Double) : bypass-cap-strap(power-pin-list[0], gnd-pin, bp)
       (bp: False) : false
     for p in power-pin-list do :
-      bypass-cap-strap(p,  gnd-pin-list[0], bypass-cap-pin)
+      bypass-cap-strap(p,  gnd-pin, cap-bypass-pin)
 
-public defn generate-bypass (stm:JITXObject, bypass-package:Double, bypass-pin:Double) :
+public defn generate-bypass (stm:JITXObject, cap-bypass-package:Double, cap-bypass-pin:Double) :
   inside pcb-module :
-    val power-pin-list = power-pins(stm, VDD)
-    val gnd-pin-list = gnd-pins(stm, VSS)
-    bypass-cap-strap(power-pin-list[0], gnd-pin-list[0], bypass-package)
-    for p in power-pin-list do :
-      bypass-cap-strap(p,  gnd-pin-list[0], bypass-pin)
-
+    generate-named-bypass(stm, cap-bypass-package, cap-bypass-pin, VDD, VSS)
 
 public defn connect-named-power (stm:JITXObject, power-port-name:String, vdd-net:PowerPinNames, gnd-net:GndPinNames) :
   inside pcb-module :
@@ -212,52 +209,81 @@ public defn connect-named-power (stm:JITXObject, power-port-name:String, vdd-net
 
 
 public defn connect-power (stm:JITXObject) :
-  inside pcb-module :
-    val vdd-pin-list = power-pins(stm, VDD)
-    val gnd-pin-list = gnd-pins(stm, VSS)
-    port power : power
-    for p in vdd-pin-list do : 
-      net VDD (power.vdd p)
-    for p in gnd-pin-list do :
-       net GND (p, power.gnd)
-
-    val v-range = recommended-voltage(property(vdd-pin-list[0].power-pin))
-    if contains?(v-range, 3.3):
-      property(vdd-pin-list[0].power-request) = [3.3, 0.1, 3.3 * 0.03]
-    else if contains?(v-range, 2.5):
-      property(vdd-pin-list[0].power-request) = [2.5, 0.1, 2.5 * 0.03]
-    else if contains?(v-range, 1.8):
-      property(vdd-pin-list[0].power-request) = [1.8, 0.1, 1.8 * 0.03]
-    else if contains?(v-range, 1.2):
-      property(vdd-pin-list[0].power-request) = [1.2, 0.1, 1.2 * 0.03]
-
-    property(vdd-pin-list[0].gnd-ref) = gnd-pin-list[0]
+  connect-named-power(stm, "power", VDD, VSS)
 
     ; TODO Add battery option to API, currently assumes none.
-    if find-pins?(stm, "VBAT") :
-      net (stm.VBAT power.vdd)
+    ; if find-pin?(stm, "VBAT") :
+    ;   net (stm.VBAT power.vdd)
 
+public defn connect-battery (stm:JITXObject, bat-net:PowerPinNames, vdd-net:PowerPinNames) :
+  inside pcb-module :
+  ; TODO Add battery option to API, currently assumes none.
+    val b-net = get-pin-list(stm, to-string(bat-net))
+    if not empty?(b-net) :
+      val p-pin = get-pin-list(stm, to-string(vdd-net))
+      if length(p-pin) > 0 :
+        net (b-net p-pin[0])
 
-public defn connect-reset (stm:JITXObject) :
+public defn connect-battery (stm:JITXObject, bat-net:PowerPinNames) :
+  connect-battery(stm, bat-net, VDD)
+
+public defn connect-battery (stm:JITXObject) :
+  connect-battery(stm, VBAT, VDD)
+
+public defn connect-reset (stm:JITXObject reset-net:ResetPinNames vdd-net:PowerPinNames gnd-net:GndPinNames por-pullup:Double por-cap:Double) :
   inside pcb-module :
     pin reset
-    if find-pins?(stm, "NRST") :
-      net (stm.NRST reset)
-      val power-pin = power-pins(stm, VDD)[0]
-      val gnd-pin = gnd-pins(stm, VSS)[0]
-      res-strap(power-pin, stm.NRST, 10.0e3)
-      cap-strap(power-pin, stm.NRST, 10.0e-9)
+    val reset-pin-list = get-pin-list(stm, to-string(reset-net))
+    if length(reset-pin-list) > 0 :
+      val power-pin = power-pins(stm, VDD)
+      for p in reset-pin-list do :
+        net (p reset)
+        if length(power-pin) > 0 :
+          res-strap(power-pin[0], p, por-pullup)
+          cap-strap(power-pin[0], p, por-cap)
+
+public defn connect-reset (stm:JITXObject reset-net:ResetPinNames vdd-net:PowerPinNames gnd-net:GndPinNames) :
+  val settings = Settings(DEFAULT-SETTINGS)
+  connect-reset(stm reset-net vdd-net gnd-net settings[`por-pullup] settings[`por-cap])
+
+public defn connect-reset (stm:JITXObject reset-net:ResetPinNames) :
+  val settings = Settings(DEFAULT-SETTINGS)
+  connect-reset(stm reset-net VDD VSS settings[`por-pullup] settings[`por-cap])
+
+public defn connect-reset (stm:JITXObject) :
+  val settings = Settings(DEFAULT-SETTINGS)
+  connect-reset(stm NRST VDD VSS settings[`por-pullup] settings[`por-cap])
 
       ; Look for power-on reset pins
-      if find-pins?(stm, "NPOR") :
-        val v-range = recommended-voltage(property(power-pin.power-pin))
-        if contains?(v-range, 1.8):
-          inst mon : ocdb/on-semiconductor/NCP30x/component(1.8)
-          bypass-cap-strap(stm.NPOR, gnd-pin, 0.1e-6)
-          net (mon.gnd, gnd-pin)
-          net (mon.input, power-pin)
-          net (mon.output, stm.NPOR)
+      ; if find-pin?(stm, "NPOR") :
+      ;   val v-range = recommended-voltage(property(power-pin.power-pin))
+      ;   if contains?(v-range, 1.8):
+      ;     inst mon : ocdb/on-semiconductor/NCP30x/component(1.8)
+      ;     bypass-cap-strap(stm.NPOR, gnd-pin, 0.1e-6)
+      ;     net (mon.gnd, gnd-pin)
+      ;     net (mon.input, power-pin)
+      ;     net (mon.output, stm.NPOR)
 
+public defn connect-por (stm:JITXObject, por-net:ResetPinNames, vdd-net:PowerPinNames, gnd-net:GndPinNames) :
+  inside pcb-module :
+    pin por
+    val por-pin = get-pin-list(stm, to-string(por-net))
+    if length(por-pin) > 0 :
+      val power-pin = power-pins(stm, vdd-net)[0]
+      val gnd-pin = gnd-pins(stm, gnd-net)[0]
+      val v-range = recommended-voltage(property(power-pin.power-pin))
+      if contains?(v-range, 1.8):
+        inst mon : ocdb/on-semiconductor/NCP30x/component(1.8)
+        bypass-cap-strap(por-pin[0], gnd-pin, 0.1e-6)
+        net (mon.gnd, gnd-pin)
+        net (mon.input, power-pin)
+        net (mon.output, por-pin[0])
+
+public defn connect-por (stm:JITXObject, por-net:ResetPinNames) :
+  connect-por(stm, por-net, VDD, VSS)
+
+public defn connect-por (stm:JITXObject) :
+  connect-por(stm, NPOR, VDD, VSS)
 
 defn has-pin? (stm:JITXObject, pin-q:String) :
   val t = to-tuple $ for p in pins(stm) filter :
@@ -273,7 +299,7 @@ public defn set-boot (stm:JITXObject, boot-from:String) :
   inside pcb-module :
     val power-pin = power-pins(stm, VDD)[0]
     val gnd-pin = gnd-pins(stm, VSS)[0]
-    val boot-pins = get-pins-list(stm, "BOOT")
+    val boot-pins = get-pin-list(stm, "BOOT")
     val num-boot-pins = length(boot-pins)
     if num-boot-pins > 0 :
       switch(boot-from):
