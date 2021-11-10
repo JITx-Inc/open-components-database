@@ -174,8 +174,8 @@ defn gnd-pins-list (stm:JITXObject, gnd-pin:GndPinNames) -> Tuple<JITXObject> :
   get-pin-list(stm, to-string(gnd-pin))
 
 public defn generate-bypass (stm:JITXObject, cap-bypass-package:Double, cap-bypass-pin:Double) :
-  generate-package-bypass(stm, cap-bypass-package)
-  generate-pin-bypass(stm, cap-bypass-pin)
+  generate-package-bypass(stm, VDD, VSS, cap-bypass-package)
+  generate-pin-bypass(stm, VDD, VSS, cap-bypass-pin)
 
 public defn generate-bypass (stm:JITXObject) :
   val settings = Settings(DEFAULT-SETTINGS)
@@ -187,7 +187,8 @@ public defn generate-pin-bypass (stm:JITXObject, vdd-net:PwrPinNames, gnd-net:Gn
     val power-pins = power-pins-list(stm, vdd-net)
     val gnd-pins = gnd-pins-list(stm, gnd-net)
     if length(power-pins) > 0 and length(gnd-pins) > 0 :
-      bypass-cap-strap(power-pins[0], gnd-pins[0], cap-bypass-pin)
+      for p in power-pins do :
+        bypass-cap-strap(p, gnd-pins[0], cap-bypass-pin)
 
 public defn generate-pin-bypass (stm:JITXObject, cap-bypass-pin:Double) :
   generate-pin-bypass(stm, VDD, VSS, cap-bypass-pin)
