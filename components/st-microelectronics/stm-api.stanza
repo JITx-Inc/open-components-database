@@ -6,7 +6,6 @@ defpackage ocdb/st-microelectronics/stm-api :
   import jitx
   import jitx/commands
   
-
   import ocdb/defaults
   import ocdb/land-patterns
   import ocdb/symbols
@@ -152,7 +151,7 @@ defn find-pin? (obj:JITXObject my-pin:String) :
 defn power-pins (stm:JITXObject vdd-pin:PwrPinNames) -> Tuple<JITXObject> :
   val found-pins = get-pin-list(stm, to-string(vdd-pin))
   if empty?(found-pins) :
-    fatal("%_ is missing an identifiable power pin." % [ref(stm)])
+    fatal("%_ is missing an identifiable power pin (%_)." % [ref(stm), to-string(found-pins[0])])
   found-pins
 
 defn power-pins (stm:JITXObject) -> Tuple<JITXObject> :
@@ -164,7 +163,7 @@ defn power-pins-list (stm:JITXObject vdd-pin:PwrPinNames) -> Tuple<JITXObject> :
 defn gnd-pins (stm:JITXObject, gnd-pin:GndPinNames) -> Tuple<JITXObject> :
   val found-pins = get-pin-list(stm, to-string(gnd-pin))
   if empty?(found-pins) :
-    fatal("%_ is missing an identifiable ground pin." % [ref(stm)])
+    fatal("%_ is missing an identifiable ground pin (%_)." % [ref(stm), to-string(found-pins[0])])
   found-pins
 
 defn gnd-pins (stm:JITXObject) -> Tuple<JITXObject> :
@@ -318,13 +317,13 @@ public defn set-boot (stm:JITXObject, boot-net:BootPinNames, vdd-net:PwrPinNames
             res-strap(stm.BOOT[0], gnd-pins[0], boot-resistor)
         "system" :
           if num-boot-pins != 2 or length(power-pins) == 0 or length(gnd-pins) == 0:
-            fatal("system boot not supported on %_." % [ref(stm)])
+            fatal("system boot not supported on %_ due to boot config or power." % [ref(stm)])
           else :
             res-strap(stm.BOOT[1], gnd-pins[0], boot-resistor)
             res-strap(stm.BOOT[0], power-pins[0], boot-resistor)
         "sram" :
           if num-boot-pins != 2 and length(power-pins) == 0 :
-            fatal("system boot not supported on %_." % [ref(stm)])
+            fatal("system boot not supported on %_ due to boot config or power." % [ref(stm)])
           else:
             res-strap(stm.BOOT[1], power-pins[0], boot-resistor)
             res-strap(stm.BOOT[0], power-pins[0], boot-resistor)
@@ -424,7 +423,7 @@ public defn setup-clocks (stm:JITXObject, HSE-freq:Double, HSE-ppm:Double, HSE-s
               net (osc.power.gnd, gnd-pin)
               net (osc.power.vdd, power-pin)
             else : 
-              fatal("MEMS oscillators in library can't meet ppm. Try a 'crystal' source.")
+              fatal("Oscillators in library can't meet ppm target (%_). Try a 'crystal' source." % [HSE-ppm])
       if supports?(instantiable-type(stm), low-freq-oscillator) and LSE-ppm < 0.03 :
         switch(LSE-source):
           "crystal" :
@@ -436,9 +435,9 @@ public defn setup-clocks (stm:JITXObject, HSE-freq:Double, HSE-ppm:Double, HSE-s
               val lf-cb = add-xtal-caps(losc, gnd-pin)
               check-oscillator(losc, CrystalOscillator(3.1e-6, 0.5e-6, 4.0e-12, 50.0e-6 * 32.768e3, 32.768e3), lf-cb)
             else:
-              fatal("Unsupported frequency for LSE: %_. Try 32.768e3." % [LSE-freq])
+              fatal("Unsupported frequency for LSE: %_. Use 32.768e3 Hz." % [LSE-freq])
           else:
-            fatal("Unsupported sourece for LSE. Try a 'crystal' source.")
+            fatal("Unsupported source for LSE. Try a 'crystal' source.")
       else if LSE-ppm < 0.03:
         fatal("%_ does not support an external LSE source." % [ref(stm)])
 
