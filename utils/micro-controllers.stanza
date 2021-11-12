@@ -152,13 +152,13 @@ stanza> for attribute in ["manufacturer", "mpn", "trust", "dimensions", "mountin
 | rated-esd | 2000.0 |
 <>
 
-public defstruct MicroController <: Component :
+public pcb-struct ocdb/micro-controllers/MicroController <: Component :
   ; Generic properties
   manufacturer: String
   mpn: String
   trust: String
-  x: Double with: (as-method => true)
-  y: Double with: (as-method => true)
+  x_: Double ; with: (as-method => true)
+  y_: Double ; with: (as-method => true)
   z: Double|False
   mounting: String
   rated-temperature: MinMaxRange|False
@@ -176,11 +176,21 @@ public defstruct MicroController <: Component :
   series: String
   supply-voltage: MinMaxRange
   rated-esd: Double|False
-  sellers: Tuple<Seller>|False with: (as-method => true)
-  resolved-price: Double|False with: (as-method => true)
+  sellers_: Tuple<Seller>|False ; with: (as-method => true)
+  resolved-price_: Double|False ; with: (as-method => true)
   pin-properties: STMPinProperties
   bundles: Tuple<STMBundle>
   supports: Tuple<STMSupports>
+
+defmethod x (c:MicroController) : 
+  x_(c)
+defmethod y (c:MicroController) : 
+  y_(c)
+defmethod sellers (c:MicroController) : 
+  sellers_(c)
+defmethod resolved-price (c:MicroController) : 
+  resolved-price_(c)
+
 
 public defn MicroController (json: JObject) -> MicroController :
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
@@ -487,6 +497,20 @@ Available user settings are:
 | \`LSE-source | "crystal", "osc" | "crystal" |
 <>
 
+pcb-component mcu-component (mcu:MicroController) : 
+  manufacturer = manufacturer(mcu)
+  mpn = mpn(mcu)
+  val mappings = to-jitx-pin-properties(pin-properties(mcu))
+  val bundle-table = to-jitx-bundles(bundles(mcu))
+  to-jitx-supports(supports(mcu), bundle-table, mappings)
+  val lp = find({name(_) == mfg-package(mcu)}, STM32-LAND-PATTERNS)
+  throw(Exception("%_ is not a supported package." % [mfg-package(mcu)])) when lp is False
+  assign-landpattern(lp as LandPattern)
+  make-box-symbol()
+
+  #for field in [trust, x, y, z, mounting, rated-temperature, core, core-architecture, data-width, flash, frequency, io, line, ram, eeprom, series, supply-voltage, rated-esd, sellers, resolved-price] :
+    property(self.field) = field(mcu)  
+
 pcb-component mcu-component (manufacturer:String,
                              mpn:String,
                              pp:STMPinProperties,
@@ -502,7 +526,7 @@ pcb-component mcu-component (manufacturer:String,
   throw(Exception("%_ is not a supported package." % [pkg])) when lp is False
   assign-landpattern(lp as LandPattern)
   make-box-symbol()
-
+  
 ;============================================================
 ;======================== to-jitx ===========================
 ;============================================================
