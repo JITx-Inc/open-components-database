@@ -17,7 +17,8 @@ defpackage ocdb/st-microelectronics/stm-api :
   import ocdb/property-structs
   import ocdb/checks
 
-public pcb-enum components/st-microelectronics/PwrPinNames :
+public deftype STMPinNames
+public pcb-enum components/st-microelectronics/PwrPinNames <: STMPinNames :
   VDD
   VDDA
   VBAT
@@ -57,7 +58,7 @@ public pcb-enum components/st-microelectronics/PwrPinNames :
   ; VLCD
   ; VLXSMPS
 
-public pcb-enum components/st-microelectronics/GndPinNames :
+public pcb-enum components/st-microelectronics/GndPinNames <: STMPinNames :
   VSS
   VSSA
   ; VSSDSI
@@ -68,14 +69,14 @@ public pcb-enum components/st-microelectronics/GndPinNames :
   ; VSSPLL2
   ; VSSUSBHS
 
-public pcb-enum components/st-microelectronics/ResetPinNames :
+public pcb-enum components/st-microelectronics/ResetPinNames <: STMPinNames :
   NRST
   NPOR
 
-public pcb-enum components/st-microelectronics/BootPinNames :
+public pcb-enum components/st-microelectronics/BootPinNames <: STMPinNames :
   BOOT
 
-public pcb-enum components/st-microelectronics/ReferencePinNames :
+public pcb-enum components/st-microelectronics/ReferencePinNames <: STMPinNames :
   VREF+
 
 
@@ -147,14 +148,14 @@ defn get-pin-list (obj:JITXObject, pin-id:?) :
   result
 
 ; find the pin exact match return a boolean
-defn find-pin? (obj:JITXObject, my-pin:String|PwrPinNames|GndPinNames|ResetPinNames|BootPinNames|ReferencePinNames) :
+defn find-pin? (obj:JITXObject, my-pin:String|STMPinNames) :
   val result = get-pin-list(obj, my-pin)
   not empty?(result)
 
 defn power-pins (stm:JITXObject, vdd-pin:PwrPinNames) -> Tuple<JITXObject> :
   val found-pins = get-pin-list(stm, vdd-pin)
   if empty?(found-pins) :
-    fatal("%_ is missing an identifiable power pin (%_)." % [ref(stm), to-string(found-pins[0])])
+    fatal("%_ is missing an identifiable power pin (%_)." % [ref(stm), to-string(vdd-pin)])
   found-pins
 
 defn power-pins (stm:JITXObject) -> Tuple<JITXObject> :
@@ -166,7 +167,7 @@ defn power-pins-list (stm:JITXObject, vdd-pin:PwrPinNames|ReferencePinNames) -> 
 defn gnd-pins (stm:JITXObject, gnd-pin:GndPinNames) -> Tuple<JITXObject> :
   val found-pins = get-pin-list(stm, gnd-pin)
   if empty?(found-pins) :
-    fatal("%_ is missing an identifiable ground pin (%_)." % [ref(stm), to-string(found-pins[0])])
+    fatal("%_ is missing an identifiable ground pin (%_)." % [ref(stm), to-string(gnd-pin)])
   found-pins
 
 defn gnd-pins (stm:JITXObject) -> Tuple<JITXObject> :
@@ -180,8 +181,10 @@ public defn generate-pin-bypass (stm:JITXObject, vdd-net:PwrPinNames|ReferencePi
     val power-pins = power-pins-list(stm, vdd-net)
     val gnd-pins = gnd-pins-list(stm, gnd-net)
     if not empty?(gnd-pins) :
-      for p in power-pins do :
-        bypass-cap-strap(p, gnd-pins[0], cap-bypass-pin)
+      if not empty?(power-pins) : ; added this to allow a true/false return val
+        for p in power-pins do :
+          bypass-cap-strap(p, gnd-pins[0], cap-bypass-pin)
+        true
 
 public defn generate-pin-bypass (stm:JITXObject, cap-bypass-pin:Double) :
   generate-pin-bypass(stm, VDD, VSS, cap-bypass-pin)
@@ -196,6 +199,7 @@ public defn generate-package-bypass (stm:JITXObject, vdd-net:PwrPinNames, gnd-ne
     val gnd-pins = gnd-pins-list(stm, gnd-net)
     if not empty?(power-pins) and not empty?(gnd-pins) :
       bypass-cap-strap(power-pins[0], gnd-pins[0], cap-bypass-package)
+      true
 
 public defn generate-package-bypass (stm:JITXObject, cap-bypass-package:Double) :
   generate-package-bypass(stm, VDD, VSS, cap-bypass-package)
@@ -239,6 +243,7 @@ public defn connect-battery (stm:JITXObject, bat-net:PwrPinNames, vdd-net:PwrPin
       val p-pin = get-pin-list(stm, vdd-net)
       if not empty?(p-pin) :
         net (b-net p-pin[0])
+        true
 
 public defn connect-battery (stm:JITXObject, bat-net:PwrPinNames) :
   connect-battery(stm, bat-net, VDD)
@@ -254,6 +259,7 @@ public defn connect-reference (stm:JITXObject, ref-net:ReferencePinNames, vdd-ne
       val p-pin = get-pin-list(stm, vdd-net)
       if not empty?(p-pin) :
         net (r-net p-pin[0])
+        true
 
 public defn connect-reset (stm:JITXObject, reset-net:ResetPinNames, vdd-net:PwrPinNames, gnd-net:GndPinNames, reset-pullup:Double, reset-cap:Double) :
   inside pcb-module :
@@ -265,9 +271,13 @@ public defn connect-reset (stm:JITXObject, reset-net:ResetPinNames, vdd-net:PwrP
         net (p reset)
         if not empty?(power-pins) :
           match(reset-pullup) :
-            (r: Double)       : res-strap(power-pins[0], p, r)
+            (r: Double) :
+              res-strap(power-pins[0], p, r)
+              true
           match(reset-cap) :
-            (c: Double)     : cap-strap(power-pins[0], p, c)
+            (c: Double) :
+              cap-strap(power-pins[0], p, c)
+              true
 
 public defn connect-reset (stm:JITXObject, reset-net:ResetPinNames, vdd-net:PwrPinNames, gnd-net:GndPinNames) :
   val settings = Settings(DEFAULT-SETTINGS)
@@ -294,14 +304,15 @@ public defn connect-por (stm:JITXObject, por-net:ResetPinNames, vdd-net:PwrPinNa
     if not empty?(por-pin) :
       val power-pins = power-pins-list(stm, vdd-net)
       val gnd-pins = gnd-pins-list(stm, gnd-net)
-      val v-range = recommended-voltage(property(power-pins[0].power-pin))
       if not empty?(power-pins) and not empty?(gnd-pins) :
+        val v-range = recommended-voltage(property(power-pins[0].power-pin))
         if contains?(v-range, 1.8) :
           inst mon : ocdb/on-semiconductor/NCP30x/component(1.8)
           bypass-cap-strap(por-pin[0], gnd-pins[0], 0.1e-6) ; hardcoded value for now (eek)
           net (mon.gnd, gnd-pins[0])
           net (mon.input, power-pins[0])
           net (mon.output, por-pin[0])
+          true
 
 public defn connect-por (stm:JITXObject, por-net:ResetPinNames) :
   connect-por(stm, por-net, VDD, VSS)
@@ -459,9 +470,11 @@ public defn connect-stm (stm:JITXObject, settings:?) :
   ; used to be in stm-to-jitx but it's better here
   if connect-power(stm, "power", VDD, VSS) :
     ; can generate the package bypass capacitor option
-    generate-package-bypass(stm, VDD, VSS, settings[`cap-bypass-package])
+    if not generate-package-bypass(stm, VDD, VSS, settings[`cap-bypass-package]) :
+      fatal("Unable to instantiate package bypass capacitor!")
     ; can generate the pin bypass capacitor option
-    generate-pin-bypass(stm, VDD, VSS, settings[`cap-bypass-pin])
+    if not generate-pin-bypass(stm, VDD, VSS, settings[`cap-bypass-pin]) :
+      fatal("Unable to instantiate pin bypass capacitor(s).")
   else :
     if not find-pin?(stm, VDD) :
       fatal("Unable to instantiate power port using VDD pins! Check VDD pin availability and usage.")
@@ -471,15 +484,18 @@ public defn connect-stm (stm:JITXObject, settings:?) :
   if find-pin?(stm, VDDA) :
     if find-pin?(stm, VSSA) :
       connect-power(stm, "VDDA", VDDA, VSSA)
-      generate-pin-bypass(stm, VDDA, VSSA, settings[`cap-bypass-pin])
+      if not generate-pin-bypass(stm, VDDA, VSSA, settings[`cap-bypass-pin]) :
+        fatal("Unable to add pin bypass cap between VDDA/VSSA!")
     else if connect-power(stm, "VDDA", VDDA, VSS) :
-      generate-pin-bypass(stm, VDDA, VSS, settings[`cap-bypass-pin])
+      if not generate-pin-bypass(stm, VDDA, VSS, settings[`cap-bypass-pin]) :
+        fatal("Unable to add pin bypass cap between VDDA/VSS!")
     else :
       fatal("Unable to instantiate power port on VDDA! Check VDDA/VSSA/VSS pin availability and usage.")
 
   if find-pin?(stm, VDDIO2) :
     if connect-power(stm, "VDDIO2", VDDIO2, VSS) :
-      generate-pin-bypass(stm, VDDIO2, VSS, settings[`cap-bypass-pin])
+      if not generate-pin-bypass(stm, VDDIO2, VSS, settings[`cap-bypass-pin]) :
+        fatal("Unable to add pin bypass cap between VDDIO2/VSS!")
     else :
       fatal("Unable to instantiate power port on VDDIO2! Check VDDIO2/VSS pin availability and usage.")
   
@@ -491,11 +507,13 @@ public defn connect-stm (stm:JITXObject, settings:?) :
 
   ; power on reset has a few options for customization
   if find-pin?(stm, NPOR) :
-    connect-por(stm, NPOR, VDD, VSS)
+    if not connect-por(stm, NPOR, VDD, VSS) :
+      fatal("Unable to instantiate nPOR circuit! Check nPOR pin availability and usage.")
 
   ; battery connection has a no connectivity customization options
   if find-pin?(stm, VBAT) :
-    connect-battery(stm, VBAT, VDD)
+    if not connect-battery(stm, VBAT, VDD) :
+      fatal("Unable to connect VBAT pin! Check VBAT pin availability and usage.")
 
   ; many customization options for boot configuration (which nets, resistor value, etc)
   if find-pin?(stm, BOOT) :
@@ -503,15 +521,21 @@ public defn connect-stm (stm:JITXObject, settings:?) :
 
   if find-pin?(stm, VREF+) :
     if find-pin?(stm, VDDA) :
-      connect-reference(stm, VREF+, VDDA)
+      if not connect-reference(stm, VREF+, VDDA) :
+        fatal("Unable to connect VREF+ to VDDA! Check VREF+ pin availability and usage.")
       if find-pin?(stm, VSSA) :
-        generate-pin-bypass(stm, VREF+, VSSA, settings[`cap-bypass-pin])
+        if not generate-pin-bypass(stm, VREF+, VSSA, settings[`cap-bypass-pin]) :
+          fatal("Unable to add pin bypass cap between VREF+ and VSSA!")
       else :
-        generate-pin-bypass(stm, VREF+, VSS, settings[`cap-bypass-pin])
+        if not generate-pin-bypass(stm, VREF+, VSS, settings[`cap-bypass-pin]) :
+          fatal("Unable to add pin bypass cap between VREF+ and VSS!")
     else :
-      connect-reference(stm, VREF+, VDD)
-      generate-pin-bypass(stm, VREF+, VSS, settings[`cap-bypass-pin])
-
+      if connect-reference(stm, VREF+, VDD) :
+        if not generate-pin-bypass(stm, VREF+, VSS, settings[`cap-bypass-pin]) :
+          fatal("Unable to add pin bypass cap between VREF+/VSS!")
+      else :
+        fatal("Unable to connect VREF+ to VDD! Check VREF+ pin availability and usage.")
+  
   connect-debug(stm, settings[`debug-interface], settings[`debug-connector])
 
   setup-clocks(stm, settings[`HSE-freq], settings[`HSE-ppm], settings[`HSE-source], settings[`LSE-freq], settings[`LSE-ppm], settings[`LSE-source])
