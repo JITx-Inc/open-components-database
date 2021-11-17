@@ -133,13 +133,13 @@ defn parse (my-ref: Ref) -> String :
      (i: IndexRef) : parse(ref(i))
      (f: FieldRef) : to-string(field(f))
 
-defn match-pin? (pin-ref:Ref power:String) :
+defn match-pin? (pin-ref:Ref, power:String) :
   val p-ref = parse(pin-ref)
   if p-ref == power :
     true
 
 ; return list of pins that match name (exactly) / don't check for empty
-defn get-pin-list (obj:JITXObject pin-id:?) :
+defn get-pin-list (obj:JITXObject, pin-id:?) :
   val pin-name = to-string(pin-id)
   val result = to-tuple $ for p in pins(obj) filter :
     if substring?(to-string(ref(p)), pin-name) :
@@ -147,11 +147,11 @@ defn get-pin-list (obj:JITXObject pin-id:?) :
   result
 
 ; find the pin exact match return a boolean
-defn find-pin? (obj:JITXObject my-pin:String|PwrPinNames|GndPinNames|ResetPinNames|BootPinNames|ReferencePinNames) :
+defn find-pin? (obj:JITXObject, my-pin:String|PwrPinNames|GndPinNames|ResetPinNames|BootPinNames|ReferencePinNames) :
   val result = get-pin-list(obj, my-pin)
   not empty?(result)
 
-defn power-pins (stm:JITXObject vdd-pin:PwrPinNames) -> Tuple<JITXObject> :
+defn power-pins (stm:JITXObject, vdd-pin:PwrPinNames) -> Tuple<JITXObject> :
   val found-pins = get-pin-list(stm, vdd-pin)
   if empty?(found-pins) :
     fatal("%_ is missing an identifiable power pin (%_)." % [ref(stm), to-string(found-pins[0])])
@@ -160,7 +160,7 @@ defn power-pins (stm:JITXObject vdd-pin:PwrPinNames) -> Tuple<JITXObject> :
 defn power-pins (stm:JITXObject) -> Tuple<JITXObject> :
   power-pins(stm, VDD)
 
-defn power-pins-list (stm:JITXObject vdd-pin:PwrPinNames|ReferencePinNames) -> Tuple<JITXObject> :
+defn power-pins-list (stm:JITXObject, vdd-pin:PwrPinNames|ReferencePinNames) -> Tuple<JITXObject> :
   get-pin-list(stm, vdd-pin)
 
 defn gnd-pins (stm:JITXObject, gnd-pin:GndPinNames) -> Tuple<JITXObject> :
@@ -255,8 +255,7 @@ public defn connect-reference (stm:JITXObject, ref-net:ReferencePinNames, vdd-ne
       if not empty?(p-pin) :
         net (r-net p-pin[0])
 
-;public defn connect-reset (stm:JITXObject reset-net:ResetPinNames vdd-net:PwrPinNames gnd-net:GndPinNames reset-pullup:Double reset-cap:Double) :
-public defn connect-reset (stm:JITXObject reset-net:ResetPinNames vdd-net:PwrPinNames gnd-net:GndPinNames reset-pullup:Double reset-cap:Double) :
+public defn connect-reset (stm:JITXObject, reset-net:ResetPinNames, vdd-net:PwrPinNames, gnd-net:GndPinNames, reset-pullup:Double, reset-cap:Double) :
   inside pcb-module :
     pin reset
     val reset-pin-list = get-pin-list(stm, reset-net)
@@ -270,18 +269,18 @@ public defn connect-reset (stm:JITXObject reset-net:ResetPinNames vdd-net:PwrPin
           match(reset-cap) :
             (c: Double)     : cap-strap(power-pins[0], p, c)
 
-public defn connect-reset (stm:JITXObject reset-net:ResetPinNames vdd-net:PwrPinNames gnd-net:GndPinNames) :
+public defn connect-reset (stm:JITXObject, reset-net:ResetPinNames, vdd-net:PwrPinNames, gnd-net:GndPinNames) :
   val settings = Settings(DEFAULT-SETTINGS)
   connect-reset(stm reset-net vdd-net gnd-net settings[`reset-pullup] settings[`reset-cap])
 
-public defn connect-reset (stm:JITXObject reset-net:ResetPinNames reset-pullup:Double reset-cap:Double) :
+public defn connect-reset (stm:JITXObject, reset-net:ResetPinNames, reset-pullup:Double, reset-cap:Double) :
   connect-reset(stm reset-net VDD VSS reset-pullup reset-cap)
 
-public defn connect-reset (stm:JITXObject reset-net:ResetPinNames) :
+public defn connect-reset (stm:JITXObject, reset-net:ResetPinNames) :
   val settings = Settings(DEFAULT-SETTINGS)
   connect-reset(stm reset-net VDD VSS settings[`reset-pullup] settings[`reset-cap])
 
-public defn connect-reset (stm:JITXObject reset-pullup:Double reset-cap:Double) :
+public defn connect-reset (stm:JITXObject, reset-pullup:Double, reset-cap:Double) :
   connect-reset(stm NRST VDD VSS reset-pullup reset-cap)
 
 public defn connect-reset (stm:JITXObject) :
