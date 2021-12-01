@@ -15,6 +15,8 @@ defpackage ocdb/generic-components:
   import ocdb/symbols
   import ocdb/box-symbol
   import ocdb/property-structs
+  import ocdb/symbol-utils
+  import ocdb/tolerance
 
 ; ========================================================
 ; ====== Standard packages for the passive solver ========
@@ -556,7 +558,7 @@ public pcb-component gen-tant-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg
   pin c
   val sym = capacitor-sym(CapacitorPolarized)
   symbol = sym(a => sym.p[1], c => sym.p[2])
-  emodel = Capacitor(cap, tol, max-v)
+  ; emodel = Capacitor(cap, tol, max-v)
   switch(pkg) :
     "0402" : landpattern = CAPT1005X55(a => CAPT1005X55.p[1] c => CAPT1005X55.p[2])
     "0603" : landpattern = CAPT1608X80(a => CAPT1608X80.p[1] c => CAPT1608X80.p[2])
@@ -721,6 +723,66 @@ public defn gen-ind-cmp (ind:Double, tol:Double) :
 
 public defn gen-ind-cmp (ind:Double) :
   gen-ind-cmp(ind, 10.0)
+; ========================================================
+; ===================== gen-led-cmp ======================
+; ========================================================
+public pcb-component gen-led-cmp (vf:Toleranced, itest:Double, color:String, pkg-name:String) :
+  pin a
+  pin c
+  description = string-join(["LED, GENERIC, ", color, " Vf ", to-string(center(vf)), "V, If ", to-string(to-int(itest * 1000.0)), "mA, ", pkg-name])
+  mpn = string-join([color ", Vf ", to-string(center(vf)), "V, If ", to-string(to-int(itest * 1000.0)), "mA"])
+  name = string-join(["Generic", color, " LED ", pkg-name])
+  val sym = diode-sym(DiodeLED)
+  symbol = sym(a => sym.a, c => sym.c)
+  val land = ipc-two-pin-pol-landpattern(pkg-name)
+  landpattern = land(a => land.a, c => land.c)
+  var vf-center = 0.0
+  vf-center = center(vf)
+  reference-prefix = "D"
+  property(self.diode) = true
+  property(self.forward-voltage) = vf-center ; Vf
+  property(self.test-current) = itest ; If or Itest
+  property(self.NamedColor) = color
+
+
+public defn gen-led-cmp (vf:Double, itest:Double, color:String, pkg-name:String) :
+  gen-led-cmp(tol(vf,0.1), itest, color, pkg-name)
+
+public defn gen-led-cmp (vf:Toleranced, color:String, pkg-name:String) :
+  gen-led-cmp(vf, 20.0e-3, color, pkg-name)
+
+public defn gen-led-cmp (vf:Double, color:String, pkg-name:String) :
+  gen-led-cmp(tol(vf,0.1), 20.0e-3, color, pkg-name)
+
+public defn gen-led-cmp (vf:Toleranced, pkg-name:String) :
+  gen-led-cmp(vf, 20.0e-3, "ANY COLOR", pkg-name)
+
+public defn gen-led-cmp (vf:Double, pkg-name:String) :
+  gen-led-cmp(tol(vf,0.1), 20.0e-3, "ANY COLOR", pkg-name)
+
+public defn gen-led-cmp (vf:Toleranced, itest:Double) :
+  gen-led-cmp(vf, itest, "ANY COLOR", MIN-PKG)
+
+public defn gen-led-cmp (vf:Double, itest:Double) :
+  gen-led-cmp(tol(vf,0.1), itest, "ANY COLOR", MIN-PKG)
+
+public defn gen-led-cmp (vf:Toleranced, itest:Double, pkg-name:String) :
+  gen-led-cmp(vf, itest, "ANY COLOR", pkg-name)
+
+public defn gen-led-cmp (vf:Double, itest:Double, pkg-name:String) :
+  gen-led-cmp(tol(vf,0.1), itest, "ANY COLOR", pkg-name)
+
+public defn gen-led-cmp (vf:Toleranced) :
+  gen-led-cmp(vf, 0.02, "ANY COLOR", MIN-PKG)
+
+public defn gen-led-cmp (vf:Double) :
+  gen-led-cmp(tol(vf,0.1), 0.02, "ANY COLOR", MIN-PKG)
+
+public defn gen-led-cmp (color:String, pkg-name:String) :
+  gen-led-cmp(tol(2.0,0.2), 0.02, color, pkg-name)
+
+public defn gen-led-cmp (pkg-name:String) :
+  gen-led-cmp(tol(2.0,0.2), 0.02, "ANY COLOR", pkg-name)
 
 ; ========================================================
 ; ============ Component strapping functions =============
