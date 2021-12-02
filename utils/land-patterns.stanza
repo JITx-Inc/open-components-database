@@ -1062,16 +1062,11 @@ defn pad-size (i:IpcResults) -> Dims:
 
 ; Helper function to apply a thermal pad shape, if it is provided. Assumes that the
 ; land pattern is centered at (0.0, 0.0).
-defn make-thermal-pad (shape?:False|Shape, max-thermal-dims:Dims, num-pins:Int):
+defn make-thermal-pad (shape?:False|Shape, num-pins:Int):
   if num-pins < 0:
     fatal("make-thermal-pad(...) failed: num-pins must positive. Called with %_" % [num-pins])
   match(shape?:Shape):
     val thermal-dims = dims(shape?)
-    if x(thermal-dims) >= x(max-thermal-dims) or
-       y(thermal-dims) >= y(max-thermal-dims):
-      print("make-thermal-pad(...): shape exceeds expected thermal pad area. Called with %_, while the expected dimensions are %_. (ignorable)" % [
-        shape?, max-thermal-dims
-      ])
     inside pcb-landpattern:
       pad p[num-pins + 1]: smd-pad(shape?) at loc(0.0, 0.0)
 
@@ -1196,7 +1191,6 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
     ref-label(0.0, text-y)
 
     make-thermal-pad(exposed-metal-heat-feature?, 
-                     Dims(Gmin(ipc-ew), Gmin(ipc-ns)), 
                      num-pins-west + num-pins-south + num-pins-east + num-pins-north)
   
 public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on the west face
@@ -1452,7 +1446,7 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number 
 
     ;----------------------------------------------------
     ; place the thermal pad
-    make-thermal-pad(exposed-metal-heat-feature?, Dims(Gmin(ipc), min-value(package-width)), num-pins)
+    make-thermal-pad(exposed-metal-heat-feature?, num-pins)
 
 ; Create an SOIC landpattern with default density level and optional thermal pad
 public defn make-n-pin-soic-landpattern (num-pins:Int, ; the number of pins of the component
@@ -1507,6 +1501,109 @@ public defn make-dfn-landpattern (num-pins:Int,                 ; number of pins
                               terminal-length, terminal-width,
                               DENSITY-LEVEL,
                               exposed-metal-heat-feature?)
+
+
+public defn draw-pol-marker (locs:Tuple<Pose>, 
+                             part-sz:Dims,
+                             pad-sz:Dims,
+                             ) : 
+  inside pcb-landpattern : 
+    val mask-reg        = clearance(SolderMaskRegistration)
+    val silk-mask-space = clearance(MinSilkSolderMaskSpace)
+    val min-silk        = clearance(MinSilkscreenWidth)
+
+    val pad-loc = center(locs[0])
+    val pol-x = min(-0.5 * x(part-sz), x(pad-loc) - 0.5 * x(pad-sz))
+    val pol-y = max( 0.5 * y(part-sz), y(pad-loc) + 0.5 * y(pad-sz))
+    val line-length = 2.0 * min-silk
+
+    val dist = mask-reg + silk-mask-space + min-silk * 0.5 + 0.01
+    val line = Line(min-silk, [Point(-0.5 * line-length, 0.0), Point(0.5 * line-length, 0.0)])
+    layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * line
+    
+
+public defstruct LandPatternSide : 
+  side:Dir,
+  num-pins:Int, 
+
+public defn make-dual-row-smd-landpattern (primary-num-pins:    Int,    ; the number of pins on the primary side of the land pattern
+                                        secondary-num-pins:  Int,    ; the number of pins on the other side of the land pattern
+                                        primary-pin-pitch:   Double, ; the pitch of the pins on the primary side of the land pattern
+                                        secondary-pin-pitch: Double, ; the pitch of pins on the other side of the land pattern
+                                        lead-span:       Toleranced, ; the lead span across the package
+                                        package-length:  Toleranced, ; the length of the package
+                                        package-width:   Toleranced, ; the width of the package
+                                        lead-type:       LandProtrusionType   ; optional lead/land protrusion type
+                                        terminal-length: Toleranced,          ; the length of the terminals of the land pattern
+                                        terminal-width:  Toleranced,          ; the width of the terminals of the land pattern
+                                        with-pol-marker?: True|False,         ; optional polarity marker 
+                                        density-level:   DensityLevel,        ; optional density level
+                                        exposed-metal-heat-feature?:False|Shape) : ; optional thermal pad shape 
+  inside pcb-landpattern : 
+    val fillets = lead-fillets(lead-type, density-level)
+    val ipc = ipc-formula(lead-span, terminal-length, 
+                          terminal-width, fillets)
+    val pad-sz = pad-size(ipc)
+
+    defn make-grid (n:Int, p:Double) : 
+      val sz = Dims(Gmin(ipc) + x(pad-sz), p)
+      to-tuple $ grid-locs(n / 2, 2, x(sz), y(sz), false)
+
+    val primary-locs   = make-grid(2 * primary-num-pins, primary-pin-pitch)[0 to primary-num-pins]
+    val secondary-locs = make-grid(2 * secondary-num-pins, secondary-pin-pitch)[secondary-num-pins to false]
+    val locs = to-tuple(cat-all([primary-locs, in-reverse(secondary-locs)]))
+
+    for (i in 1 to false, l in locs) do : 
+      pad p[i] : smd-pad(Rectangle(pad-sz)) at l
+    
+    val [max-y, min-y] = fork-on-seq(seq(y{center(_)}, locs), maximum, minimum)
+    val lp-sz = enlarge(Dims(Zmax(ipc), y(pad-sz) + max-y - min-y), 2.0 * clearance(SolderMaskRegistration))
+    val part-sz = Dims(max-value(package-length), max-value(package-width))
+    val cy-sz = enlarge(max(lp-sz, part-sz), 2.0 * courtyard-excess(fillets))
+    layer(Courtyard(Top)) = Rectangle(cy-sz)
+    if with-pol-marker? : 
+      draw-pol-marker(locs, part-sz, pad-sz)
+    
+    make-thermal-pad(exposed-metal-heat-feature?, length(locs))
+    
+    val text-y = 0.5 * (y(cy-sz) + clearance(MinSilkscreenTextHeight))
+    ref-label(0.0, text-y)
+
+public defn make-dual-row-smd-landpattern (primary-num-pins:    Int,     ; number of pins on one side of the land pattern
+                                        secondary-num-pins:  Int,     ; number of pins on the other side of the land pattern
+                                        primary-pin-pitch:   Double,  ; the pitch of pins on the primary side of the land pattern
+                                        secondary-pin-pitch: Double,  ; the pitch of the pins on the other side of the land pattern
+                                        lead-span:       Toleranced,  ; the lead span across the land pattern
+                                        package-length:  Toleranced,  ; the length of the package
+                                        package-width:   Toleranced,  ; the width of the package
+                                        terminal-length: Toleranced,  ; the length of the terminals
+                                        terminal-width:  Toleranced) : ; the width of the terminals 
+  make-dual-row-smd-landpattern(primary-num-pins, secondary-num-pins, 
+                             primary-pin-pitch, secondary-pin-pitch, 
+                             lead-span, package-length, package-width, 
+                             BigGullWingLeads, terminal-length, terminal-width,
+                             true,
+                             DENSITY-LEVEL, false)
+
+public defn make-dual-row-smd-landpattern (
+  primary-num-pins:    Int,    ; the number of pins along one side of the land pattern
+  secondary-num-pins:  Int,    ; the number of pins along the other side of the land pattern
+  primary-pin-pitch:   Double, ; the pitch of pins on the primary side of the land pattern
+  secondary-pin-pitch: Double, ; the pitch of pins on the secondary side of the land pattern
+  lead-span:       Toleranced, ; the overal lead span, across both sides of the land pattern
+  package-length:  Toleranced, ; the length of the package
+  package-width:   Toleranced, ; the width of the package
+  terminal-length: Toleranced, ; the length of the terminals of the package
+  terminal-width:  Toleranced, ; the width of the terminals of the package 
+  with-pol-marker?: True|False ; optional parameter to include or remove the polarity marker
+): 
+  make-dual-row-smd-landpattern(primary-num-pins, secondary-num-pins, 
+                             primary-pin-pitch, secondary-pin-pitch, 
+                             lead-span, package-length, package-width, 
+                             BigGullWingLeads, 
+                             terminal-length, terminal-width,
+                             with-pol-marker?,
+                             DENSITY-LEVEL, false)
 
 public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vertical) dimension of the package
                                            width:Toleranced,  ; the width (horizontal) dimension of the package
