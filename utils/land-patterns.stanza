@@ -1079,16 +1079,11 @@ defn pad-size (i:IpcResults) -> Dims:
 
 ; Helper function to apply a thermal pad shape, if it is provided. Assumes that the
 ; land pattern is centered at (0.0, 0.0).
-defn make-thermal-pad (shape?:False|Shape, max-thermal-dims:Dims, num-pins:Int):
+defn make-thermal-pad (shape?:False|Shape, num-pins:Int):
   if num-pins < 0:
     fatal("make-thermal-pad(...) failed: num-pins must positive. Called with %_" % [num-pins])
   match(shape?:Shape):
     val thermal-dims = dims(shape?)
-    if x(thermal-dims) >= x(max-thermal-dims) or
-       y(thermal-dims) >= y(max-thermal-dims):
-      fatal("make-thermal-pad(...) failed: shape exceeds maximum thermal pad dimensions. Called with %_, while the maximum dimensions are %_." % [
-        shape?, max-thermal-dims
-      ])
     inside pcb-landpattern:
       pad p[num-pins + 1]: smd-pad(shape?) at loc(0.0, 0.0)
 
@@ -1213,7 +1208,6 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
     ref-label(0.0, text-y)
 
     make-thermal-pad(exposed-metal-heat-feature?, 
-                     Dims(Gmin(ipc-ew), Gmin(ipc-ns)), 
                      num-pins-west + num-pins-south + num-pins-east + num-pins-north)
   
 public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on the west face
@@ -1469,7 +1463,7 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number 
 
     ;----------------------------------------------------
     ; place the thermal pad
-    make-thermal-pad(exposed-metal-heat-feature?, Dims(Gmin(ipc), min-value(package-width)), num-pins)
+    make-thermal-pad(exposed-metal-heat-feature?, num-pins)
 
 ; Create an SOIC landpattern with default density level and optional thermal pad
 public defn make-n-pin-soic-landpattern (num-pins:Int, ; the number of pins of the component
@@ -1587,7 +1581,7 @@ public defn make-dual-row-smd-landpattern (primary-num-pins:    Int,    ; the nu
     if with-pol-marker? : 
       draw-pol-marker(locs, part-sz, pad-sz)
     
-    make-thermal-pad(exposed-metal-heat-feature?, Dims(Gmin(ipc), y(part-sz)), length(locs))
+    make-thermal-pad(exposed-metal-heat-feature?, length(locs))
     
     val text-y = 0.5 * (y(cy-sz) + clearance(MinSilkscreenTextHeight))
     ref-label(0.0, text-y)
