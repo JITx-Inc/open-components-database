@@ -144,70 +144,6 @@ defn remove-duplicate-keys (hs:Seqable<Seqable<KeyValue<String, ?>>>) -> Tuple<K
 ; ==================== ceramic-cap =======================
 ; ========================================================
 
-doc: \<>
-One can query an actual SMD capacitor from the JITX database that can be bought. This call requires internet access.
-`ceramic-cap` calls the lower level [Part Query API](../../jitx-commands/dbquery.md) adding the list of attributes provided
- by the user on top of design settings.
-
-```stanza
-public defn ceramic-cap (params:Tuple<KeyValue>)
-```
-
-Fixed Requirements :
-* category: "capacitor"
-* type: "ceramic"
-* mounting: "smd"
-* minimum_quantity: 1
-
-Default design Requirements (set by global variables defined in `ocdb/design-vars`) :
-* min-stock: 500
-* _sort: \["area"\]
-* min-rated-voltage: 10.0
-* max-rated-temperature.min: 0.0
-* min-rated-temperature.max: 25.0
-* case: \["0201" "02016" "0202" "0302" "0303" "0402" "0404" "0503" "0505" "0603" "0612" "0805" "1206" "1210" "1218" "1812" "2010" "2512" "2525" "2615" "2616" "3920" "4122" "4823" "5329" "6030"\]
-
-Those design requirements can be changed, either by changing `ocdb/design-vars` or by importing `ocdb/design-vars` and
-setting new values for the global variables:
-* min-stock: this is 5 times `DESIGN-QUANTITY`. Which means that `DESIGN-QUANTITY` default is 100.
-* _sort: set by `OPTIMIZE-FOR`.
-* min-rated-voltage: set by `MIN-CAP-VOLTAGE` in Volts.
-* \[max-rated-temperature.min min-rated-temperature.max\] : rated-temperature range in degC set by `OPERATING-TEMPERATURE`.
-* case: computed from `MIN-PKG`. `MIN-PKG` default is "0201".
-
-Example: instantiating a 50nF±5% ceramic capacitor with a rated voltage of at least 100V.
-
-```stanza
-#use-added-syntax(jitx)
-defpackage my-design :
-  import ocdb/generic-components
-  import ocdb/design-vars
-
-; Overrides default value set in ocdb/design-vars
-MIN-CAP-VOLTAGE = 100.0
-
-pcb-module my-module :
-  inst capacitor : ceramic-cap(["capacitance" => 50.0e-9 "tolerance" => 0.05])
-```
-
-Here are the quick accessors:
-```stanza
-public defn ceramic-cap (capacitance:Double, tolerance:Double)
-public defn ceramic-cap (capacitance:Double)
-```
-The capacitance is in Farads and the tolerance is unit-less (0.01 is ±1%).
-
-Example: instantiating a 5nF±5% ceramic capacitor
-```stanza
-#use-added-syntax(jitx)
-defpackage my-design :
-  import ocdb/generic-components
-
-pcb-module my-module :
-  inst capacitor : ceramic-cap(5.0e-9, 0.05)
-```
-<>
-
 ; Generic ceramic capacitor from database (of 600k options)
 public defn ceramic-cap (user-params:Tuple<KeyValue>) -> Instantiable :
   val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
@@ -231,37 +167,46 @@ public defn ceramic-caps (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Inst
 ; =============== look-up-ceramic-caps ===================
 ; ========================================================
 
-doc: \<>
-```stanza
-public defn look-up-ceramic-caps (attribute: String) -> Tuple
-public defn look-up-ceramic-caps (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple
-```
-
-Looks up the list of available values (at most 1000 returned) for `attribute` amongst chip capacitors in the JITX database.
-This call filters on the same properties as [ceramic-cap](#ceramic-cap). Additional properties `filter-properties` can
-be given in argument to restrict further criteria on the considered chip capacitors.
-
-Example:
-```stanza
-$ jitx repl
-stanza> import ocdb/generic-components
-stanza> println $ look-up-ceramic-caps("tolerance.max", ["capacitance" => 10.0e-9])
-[0.01 0.02 0.05 0.1 0.2 0.8 1.0]
-stanza> println $ look-up-ceramic-caps("rated-current-pk")
-[]
-stanza> println $ look-up-ceramic-caps("rated-voltage")
-[10.0 16.0 25.0 35.0 50.0 63.0 75.0 80.0 100.0 150.0 200.0 250.0 450.0 500.0 630.0 1000.0 1200.0 1500.0 2000.0 2500.0 3000.0 4000.0 6000.0]
-stanza> println $ look-up-ceramic-caps("rated-voltage", ["capacitance" => 50.0e-9, "tolerance" => 0.05])
-[50.0 100.0]
-```
-In this example we can see that there rated current peak is not indicated for capacitors of type ceramic.
-<>
-
 public defn look-up-ceramic-caps (attribute: String) -> Tuple :
   look-up-ceramic-caps(attribute, [])
 
 public defn look-up-ceramic-caps (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
   val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+                                        smd-query-properties()
+                                        filter-properties]
+  look-up-capacitors(attribute, params)
+
+; ========================================================
+; ==================== tantalum-cap =======================
+; ========================================================
+; Use for adding an instance of a tantalum cap from the JITX database to your design.
+public defn tantalum-cap (user-params:Tuple<KeyValue>) -> Instantiable :
+  val params = remove-duplicate-keys $ [["anode" => "tantalum" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+                                        smd-query-properties()
+                                        user-params]
+  to-jitx $ Capacitor(params)
+
+public defn tantalum-cap (cap:Double) -> Instantiable :
+  tantalum-cap(["capacitance" => cap])
+
+public defn tantalum-cap (cap:Double, tolerance:Double) -> Instantiable :
+  tantalum-cap(["capacitance" => cap "tolerance" => tolerance])
+
+public defn tantalum-caps (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
+  val params = remove-duplicate-keys $ [["anode" => "tantalum" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+                                        smd-query-properties()
+                                        user-params]
+  map(to-jitx, Capacitors(params, limit))
+
+; ========================================================
+; =============== look-up-tantalum-caps ===================
+; ========================================================
+; Looks up the list of available values for attribute amongst tantalum capacitors in the JITX database.
+public defn look-up-tantalum-caps (attribute: String) -> Tuple :
+  look-up-tantalum-caps(attribute, [])
+
+public defn look-up-tantalum-caps (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
+  val params = remove-duplicate-keys $ [["anode" => "tantalum" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         filter-properties]
   look-up-capacitors(attribute, params)
