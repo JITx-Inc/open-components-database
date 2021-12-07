@@ -1,0 +1,201 @@
+; Code in this project is directly linked to docs.jitx.com with the anchor calls.
+; More information on components is at: https://docs.jitx.com/lib/components.html
+; This is a small project full of different examples of:
+; - instantiating resistors
+; - instantiating capacitors
+; - instantiating inductors
+
+#use-added-syntax(jitx)
+defpackage doc-examples :
+  import core
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/generic-components
+  import ocdb/symbols
+  import ocdb/db-parts
+; ANCHOR: design-vars
+  import ocdb/design-vars
+
+; Overrides default value set in ocdb/design-vars
+MIN-PKG = "0603"
+MIN-CAP-VOLTAGE = 6.3
+; ANCHOR_END: design-vars
+
+pcb-module example-instances :
+; ANCHOR: resistor-examples
+; res1 = 10 kΩ
+  inst res1 : chip-resistor(10.0e3)
+
+; res2 = 0.01 Ω, 0.5% tolerance
+  inst res2 : chip-resistor(0.01, 0.005)
+
+; res3 = 0.01 Ω, 0.5% tolerance, 0.5 Watt or more
+  inst res3 : chip-resistor(["resistance" => 0.01 "tolerance" => 0.005 "min-rated-power" => 0.5])
+
+; res4 = 1 Ω, 0.5% tolerance, 1206 size
+  inst res4 : chip-resistor(["resistance" => 1.0 "tolerance" => 0.005 "case" => "1206"])
+
+; res5 = 100 mΩ, 0.5% tolerance, 1210 size or larger
+  inst res5 : chip-resistor(["resistance" => 100.0e-3 "tolerance" => 0.005 "case" => get-valid-pkg-list("1210")])
+  
+; res6 = 100 mΩ, 0.5% tolerance, 1210 size or larger, rated to 60° C or above
+  inst res6 : chip-resistor(["resistance" => 0.1 "tolerance" => 0.005 "case" => get-valid-pkg-list("1210") "min-rated-temperature.max" => 60.0])
+
+  var some-voltage = 3.0
+  val some-current = 5.0e-3
+; res7 = First, the value is calculated ( (5-3)/0.005 =  400 Ω), then it's rounded to the closest 5% resistor value (402 Ω), then a 402 Ω resistor of 1% tolerance is returned.
+  inst res7 : chip-resistor(closest-std-val( (5.0 - some-voltage) / some-current,5.0), 0.01)
+; ANCHOR_END: resistor-examples
+
+; ANCHOR: resistor-strap
+  pin gnd
+  pin power-5v
+  pin signal
+; 10 kΩ between power-5v and signal
+  res-strap(power-5v, signal, 10.0e3) 
+  
+; 120 Ω, 1% tolerance between gnd and signal
+  res-strap(gnd, signal, 120.0, 0.01) 
+  
+; 0.01 Ω, 1% tolerance, 0.5 Watt or more between power-5v and signal
+  res-strap(power-5v, signal, ["resistance" => 0.01 "tolerance" => 0.005 "min-rated-power" => 0.5]) 
+; ANCHOR_END: resistor-strap
+; ANCHOR: resistor-generic
+; instantiating a 5Ω generic resistor
+  inst r-gen1 : gen-res-cmp(5.0)
+
+; instantiating a 5Ω generic resistor with a 1206 package
+  inst r-gen2 : gen-res-cmp(5.0, "1206")
+
+; instantiating a 120Ω photo resistor, 10% tolerance, 0.5W, with a 0805 package
+  inst r-gen3 : gen-res-cmp(ResistorPhoto, 120.0, 0.10, 0.5, "0805")
+; ANCHOR_END: resistor-generic
+; ANCHOR: resistor-struct
+  val resistor = Resistor(["resistance" => 0.01 "case" => "1206" "min-rated-power" => 0.5])
+  inst res : to-jitx(resistor)
+  println(resistor)
+; ANCHOR_END: resistor-struct
+
+; ANCHOR: capacitor-examples
+; c1 =  22pF ceramic capacitor
+  inst c1 : ceramic-cap(22.0e-12)
+
+; c2 =  10nF±5% ceramic capacitor
+  inst c2 : ceramic-cap(10.0e-9, 0.05)
+
+; c3 =  1uF ceramic capacitor, 100V minimum rated voltage.
+  inst c3 : ceramic-cap(["capacitance" => 1.0e-6 "min-rated-voltage" => 100.0])
+
+; c4 =  1uF±10% ceramic capacitor, 100V minimum rated voltage and a case of 1206.
+  inst c4 : ceramic-cap(["capacitance" => 1.0e-6 "tolerance" => 0.10 "min-rated-voltage" => 100.0 "case" => "1206"])
+
+; c5 =  1uF±10% ceramic capacitor, 100V minimum rated voltage and a case of 1206 or larger.
+  inst c5 : ceramic-cap(["capacitance" => 1.0e-6 "tolerance" => 0.10 "min-rated-voltage" => 100.0 "case" => get-valid-pkg-list("1206")])
+
+; c6 =  1uF ceramic capacitor, the negative tolerance between -5% and -22%. A tolerance of -20% +80% will satisfy this.
+  inst c6 : ceramic-cap(["capacitance" => 1.0e-6 "min-tolerance.min" => -0.22, "max-tolerance.min" => -0.05])
+
+; c7 =  1uF ceramic capacitor, the negative tolerance between -5% and -22%, the positive tolerance between 60% and 100%. A tolerance of -20% +80% will satisfy this.
+  inst c7 : ceramic-cap(["capacitance" => 1.0e-6 "min-tolerance.min" => -0.22, "max-tolerance.min" => -0.05, "min-tolerance.max" => 0.6, "max-tolerance.max" => 1.0])
+
+; c8 =  1uF, X7R ceramic capacitor.
+  inst c8 : ceramic-cap(["capacitance" => 1.0e-6 "temperature-coefficient.code" => "X7R"])
+
+; c9 =  68pF ceramic capacitor, 100V minimum rated voltage, type C0G
+  inst c9 : ceramic-cap(["capacitance" => 68.0e-12 "min-rated-voltage" => 100.0 "temperature-coefficient.code" => "C0G"])
+
+; c10 =  68pF ceramic capacitor, 100V minimum rated voltage, type X7R or C0G
+  inst c10 : ceramic-cap(["capacitance" => 68.0e-12 "min-rated-voltage" => 100.0 "temperature-coefficient.code" => ["C0G" "X7R"]])
+
+; c11 =  1uF± ceramic capacitor, 60V minimum rated voltage, and `metadata.applications` matches one of the fields in the `automotive-metadata` value.
+  val automative-metadata = ["Audio, Automotive" "Automotive" "Automotive, Boardflex Sensitive" "Automotive, Boardflex Sensitive, ESD Protection" "Automotive, Bypass, Decoupling" "Automotive, Bypass, Decoupling, Boardflex Sensitive" "Automotive, Bypass, Decoupling, Boardflex Sensitive, ESD Protection" "Automotive, Bypass, Decoupling, ESD Protection" "Automotive, EMI, RFI Suppression" "Automotive, ESD Protection" "Automotive, High Temperature Reflow" "Automotive, SMPS Filtering" "Automotive, SMPS Filtering, Boardflex Sensitive" "Automotive, SMPS Filtering, Bypass, Decoupling" "Automotive; DC Link, DC Filtering" "Automotive; DC Link, DC Filtering; High Frequency, Switching; High Pulse, DV/DT" "Automotive; DC Link, DC Filtering; High Pulse, DV/DT; Snubber" "Automotive; EMI, RFI Suppression" "Automotive; High Frequency, Switching" "Automotive; High Frequency, Switching; High Pulse, DV/DT" "Automotive; High Frequency, Switching; High Pulse, DV/DT; Snubber" "Automotive; Power Factor Correction (PFC)" "High Reliability, Automotive" "High Reliability, Automotive, Boardflex Sensitive" "RF, Microwave, High Frequency, Automotive" "Safety, Automotive" "Safety, Automotive, Boardflex Sensitive"]
+  inst c11 : ceramic-cap(["capacitance" => 1.0e-6 "min-rated-voltage" => 60.0 "metadata.applications" => automative-metadata])
+
+; c12 =  ceramic capacitor who's value is calculated based on a capacitance * a double, then rounded to the nearest 20% standard value, 60V minimum rated voltage.
+  val test-voltage = 5.0
+  inst c12 : ceramic-cap(["capacitance" => closest-std-val(test-voltage * 1.0e-6,20.0) "min-rated-voltage" => 60.0])
+
+; c13 = the largest value capacitor in case size 0805, 100V minimum rated voltage, and `metadata.applications` matches one of the fields in the `automotive-metadata` value.
+  inst c13 : ceramic-cap(["_sort" => ["-capacitance"] "case" => "0805" "min-rated-voltage" => 30.0 "metadata.applications" => automative-metadata])
+; ANCHOR_END: capacitor-examples
+; ANCHOR: capacitor-strap
+  pin reset
+  pin vio
+
+; 10nF ceramic capacitor
+  cap-strap(reset, vio, 10.0e-9)
+
+; 10nF±5% ceramic capacitor
+  cap-strap(reset, vio, 10.0e-9, 0.05)
+
+; 1uF ceramic capacitor, 100V minimum rated voltage.
+  cap-strap(reset, vio, ["capacitance" => 1.0e-6 "min-rated-voltage" => 100.0])
+; ANCHOR_END: capacitor-strap
+; ANCHOR: capacitor-generic
+; 10nF ceramic capacitor
+  inst gen-c1 : gen-cap-cmp(5.0e-9)
+
+; 100nF, 10V capacitor
+  inst gen-c2 : gen-cap-cmp(0.1e-6, 10.0)
+
+; 1uF ceramic capacitor, 1206 case size
+  inst gen-c3 : gen-cap-cmp(1.0e-6, "1206")
+
+; 4.7uF ceramic capacitor, 10%, 35V, 1206 case size
+  inst gen-c4 : gen-cap-cmp(4.7e-6, 0.1, 35.0, "1206")
+; ANCHOR_END: capacitor-generic
+; ANCHOR: capacitor-struct
+  val capacitor = Capacitor(["tolerance" => 0.05 "min-rated-voltage" => 100.0])
+  inst cap : to-jitx(capacitor)
+  println(capacitor)
+; ANCHOR_END: capacitor-struct
+; ANCHOR: inductor-examples
+; inductor1 = 4.7µH±5% SMD inductor
+  inst inductor1 : smd-inductor(4.7e-6, 0.05)
+
+; inductor2 = SMD inductor with the 20% standard value closest to 2µH, tolerance 10%, wirewound, 1210 size or larger, rated to 40° C or above
+  inst inductor2 : smd-inductor(["inductance" => closest-std-val(2.0e-6,20.0) "tolerance" => 0.10 "type" => "Wirewound" "case" => get-valid-pkg-list("1210") "min-rated-temperature.max" => 40.0])
+
+; inductor3 = inductor with value of 2µH or larger, saturation current of 200mA or larger, current rating of 1A or larger, 1210 size or larger, shielded or semi-shielded, rated to 40° C or above
+  inst inductor3 : smd-inductor(["min-inductance" => 2.0e-6 "min-saturation-current" => 0.2 "min-current-rating" => 1.0 "case" => get-valid-pkg-list("1210") "shielding" => ["shielded" "semi-shielded"] "min-rated-temperature.max" => 40.0])
+; ANCHOR_END: inductor-examples
+; ANCHOR: inductor-strap
+  pin filter-5v
+  pin out-5v
+; 5µH inductor connected between filter-5v and out-5v
+  ; inst strap-ind1 : ind-strap(filter-5v, out-5v, 1.0e-6)
+
+; 5µH 20% tolerance inductor connected between filter-5v and out-5v
+  ; inst strap-ind2 : ind-strap(filter-5v, out-5v, 5.0e-6, 0.2)
+
+; SMD inductor with the 20% standard value closest to 2µH, tolerance 10%, wirewound, 1210 size or larger, rated to 40° C or above, connected between filter-5v and out-5v
+  ; inst strap-ind3 : ind-strap(filter-5v, out-5v, ["inductance" => closest-std-val(2.0e-6,20.0) "tolerance" => 0.10 "type" => "Wirewound" "case" => get-valid-pkg-list("1210") "min-rated-temperature.max" => 40.0])
+; ANCHOR_END: inductor-strap
+; ANCHOR: inductor-generic
+; Instantiating a 5µH generic inductor
+  inst gen-ind1 : gen-ind-cmp(5.0e-6)
+
+; Instantiating a 5µH, 20% generic inductor
+  inst gen-ind2 : gen-ind-cmp(5.0e-6, 0.2)
+
+; Instantiating a 5µH, 10%, 2 Amp generic inductor with iron core symbol
+  inst gen-ind3 : gen-ind-cmp(InductorIronCore, 1.0e-6, 0.1, 2.0)
+; ANCHOR_END: inductor-generic
+; ANCHOR: inductor-struct 
+; SMD inductor with the 20% standard value closest to 4µH, tolerance 10%, wirewound, 1210 size or larger
+  val inductor = Inductor(["inductance" => closest-std-val(4.0e-6,20.0) "tolerance" => 0.10 "type" => "Wirewound" "case" => get-valid-pkg-list("1210")])
+  inst ind : to-jitx(inductor)
+  println(inductor)
+; ANCHOR_END: inductor-struct 
+make-default-board(example-instances, 2, Rectangle(25.0, 25.0))
+
+; Export CAD with default options
+; export-cad()
+
+; Show the Schematic and PCB for the design
+view-board()
+view-schematic()
+
+; Print the MPN of the resistor from the design
+; println(mpn?(my-design.r))
