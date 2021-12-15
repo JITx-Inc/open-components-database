@@ -1212,7 +1212,7 @@ public pcb-module inverted-f-antenna :
 public defn add-rgb-indicator (brightness:Double, proc:JITXObject, vin:JITXObject):
   inside pcb-module:
     pcb-module rgb-indicator :
-      port pwm : timer[3]
+      port control-pins : timer[3]
       val vio = 3.3 ; TODO: get this from the vin pin property
       ; Calculate resistance to get appropriate brightness
       defn calc-r (l:JITXObject, brightness:Double, vio:Double):
@@ -1220,13 +1220,13 @@ public defn add-rgb-indicator (brightness:Double, proc:JITXObject, vin:JITXObjec
         closest-std-val((vio - property(l.forward-voltage)) / i, 5.0)
       public inst led : ocdb/foshan-optoelectronics/FM-B2020RGBA-HG/component ; TODO: make generic
       
-      res-strap(pwm[0].timer, led.l.r, calc-r(led.l.r, brightness, vio))
-      res-strap(pwm[1].timer, led.l.g, calc-r(led.l.g, brightness, vio))
-      res-strap(pwm[2].timer, led.l.b, calc-r(led.l.b, brightness, vio))
+      res-strap(control-pins[0].timer, led.l.r, calc-r(led.l.r, brightness, vio))
+      res-strap(control-pins[1].timer, led.l.g, calc-r(led.l.g, brightness, vio))
+      res-strap(control-pins[2].timer, led.l.b, calc-r(led.l.b, brightness, vio))
 
     inst rgb:rgb-indicator
-    require pwm:timer[3] from proc
+    require control-pins:timer[3] from proc
     net (vin, rgb.led.l.a)
-    net (pwm rgb.pwm)
+    net (control-pins rgb.control-pins)
     rgb
 
