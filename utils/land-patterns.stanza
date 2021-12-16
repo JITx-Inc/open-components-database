@@ -619,39 +619,129 @@ public pcb-landpattern two-pin-landpattern (Z:Double, G:Double, X:Double, w:Doub
 public pcb-landpattern two-pin-polarized-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
   make-two-pin-landpattern(Z,G,X,w,h,true,true)
 
-public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False):
+public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, density:DensityLevel, polarized?:True|False): ; thing to change
+; public defn make-two-pin-chip-landpattern (length:Toleranced,
+;                                            width:Toleranced,
+;                                            lead-length:Toleranced,
+;                                            lead-width?:False|Toleranced,
+;                                            density-level:DensityLevel,
+;                                            polarized?:True|False):
   inside pcb-landpattern :
-    val [Z, G, X, nr, nc] = switch(part-name) :
-      "008004":[0.35, 0.10, 0.14, 0.35, 0.14]
-      "01005": [0.56, 0.20, 0.23, 0.56, 0.23]
-      "0201" : [1.12, 0.20, 0.42, 1.12, 0.42]
-      "0402" : [1.53, 0.39, 0.62, 1.53, 0.62]
-      "0603" : [2.55, 0.65, 1.00, 2.55, 1.00]
-      "0805" : [2.90, 0.90, 2.00, 2.90, 2.00]
-      "1206" : [4.05, 1.65, 1.80, 4.60, 2.30]
-      "1210" : [4.40, 1.20, 2.70, 5.00, 3.00]
-      "2010" : [6.20, 2.60, 2.70, 7.00, 3.00]
-      "2512" : [7.35, 4.85, 3.40, 3.90, 7.90]
-      "2920" : [9.70, 5.10, 5.60, 10.0, 6.00]
+    val        [length,                        width,                         lead-length,                   lead-width] = switch(part-name) : 
+      ; "009005" 
+      ; "01005" - 01005 and below should not be designed with generic or IPC land patterns due to manufacturability issues, call `make-two-pin-chip-landpattern(` directly
+      "0201" : [min-typ-max(0.57, 0.60, 0.63), min-typ-max(0.27, 0.30, 0.33), min-typ-max(0.10, 0.15, 0.20), min-typ-max(0.27, 0.30, 0.33)]
+      "0603m" : [min-typ-max(0.57, 0.60, 0.63), min-typ-max(0.27, 0.30, 0.33), min-typ-max(0.10, 0.15, 0.20), min-typ-max(0.27, 0.30, 0.33)]
+      "0202" : [min-typ-max(0.57, 0.60, 0.63), min-typ-max(0.57, 0.60, 0.63), min-typ-max(0.10, 0.15, 0.20), min-typ-max(0.57, 0.60, 0.63)]
+      "0606m" : [min-typ-max(0.57, 0.60, 0.63), min-typ-max(0.57, 0.60, 0.63), min-typ-max(0.10, 0.15, 0.20), min-typ-max(0.57, 0.60, 0.63)]
+      "0204" : [min-typ-max(0.40, 0.50, 0.60), min-typ-max(0.90, 1.00, 1.10), min-typ-max(0.10, 0.25, 0.40), min-typ-max(0.90, 1.00, 1.10)]
+      "0510m" : [min-typ-max(0.40, 0.50, 0.60), min-typ-max(0.90, 1.00, 1.10), min-typ-max(0.10, 0.25, 0.40), min-typ-max(0.90, 1.00, 1.10)]
+      "0306" : [min-typ-max(0.65, 0.80, 0.95), min-typ-max(1.45, 1.60, 1.75), min-typ-max(0.20, 0.35, 0.50), min-typ-max(1.45, 1.60, 1.75)]
+      "0816m" : [min-typ-max(0.65, 0.80, 0.95), min-typ-max(1.45, 1.60, 1.75), min-typ-max(0.20, 0.35, 0.50), min-typ-max(1.45, 1.60, 1.75)]
+      "0402" : [min-typ-max(0.90, 1.00, 1.10), min-typ-max(0.40, 0.50, 0.60), min-typ-max(0.10, 0.25, 0.40), min-typ-max(0.40, 0.50, 0.60)]
+      "1005m" : [min-typ-max(0.90, 1.00, 1.10), min-typ-max(0.40, 0.50, 0.60), min-typ-max(0.10, 0.25, 0.40), min-typ-max(0.40, 0.50, 0.60)]
+      "0505" : [min-typ-max(1.02, 1.40, 1.78), min-typ-max(1.02, 1.40, 1.78), min-typ-max(0.05, 0.10, 0.20), min-typ-max(1.02, 1.40, 1.78)]
+      "1414m" : [min-typ-max(1.02, 1.40, 1.78), min-typ-max(1.02, 1.40, 1.78), min-typ-max(0.05, 0.10, 0.20), min-typ-max(1.02, 1.40, 1.78)]
+      "0508" : [min-typ-max(1.02, 1.27, 1.52), min-typ-max(1.75, 2.00, 2.25), min-typ-max(0.10, 0.13, 0.16), min-typ-max(1.75, 2.00, 2.25)]
+      "1220m" : [min-typ-max(1.02, 1.27, 1.52), min-typ-max(1.75, 2.00, 2.25), min-typ-max(0.10, 0.13, 0.16), min-typ-max(1.75, 2.00, 2.25)]
+      "0603" : [min-typ-max(1.45, 1.60, 1.75), min-typ-max(0.65, 0.80, 0.95), min-typ-max(0.20, 0.35, 0.50), min-typ-max(0.65, 0.80, 0.95)]
+      "1608m" : [min-typ-max(1.45, 1.60, 1.75), min-typ-max(0.65, 0.80, 0.95), min-typ-max(0.20, 0.35, 0.50), min-typ-max(0.65, 0.80, 0.95)]
+      "0612" : [min-typ-max(1.40, 1.60, 1.80), min-typ-max(3.00, 3.20, 3.40), min-typ-max(0.10, 0.13, 0.16), min-typ-max(3.00, 3.20, 3.40)]
+      "1632m" : [min-typ-max(1.40, 1.60, 1.80), min-typ-max(3.00, 3.20, 3.40), min-typ-max(0.10, 0.13, 0.16), min-typ-max(3.00, 3.20, 3.40)]
+      "0805" : [min-typ-max(1.80, 2.00, 2.20), min-typ-max(1.10, 1.20, 1.30), min-typ-max(0.20, 0.50, 0.80), min-typ-max(1.10, 1.20, 1.30)]
+      "2012m" : [min-typ-max(1.80, 2.00, 2.20), min-typ-max(1.10, 1.20, 1.30), min-typ-max(0.20, 0.50, 0.80), min-typ-max(1.10, 1.20, 1.30)]
+      "1111" : [tol(2.79, 0.38),                tol(2.79, 0.38),               tol(0.38,0.25),               tol(2.79, 0.38)]
+      "2828m" : [tol(2.79, 0.38),                tol(2.79, 0.38),               tol(0.38,0.25),               tol(2.79, 0.38)]
+      "1206" : [min-typ-max(3.00, 3.20, 3.40), min-typ-max(1.40, 1.60, 1.80), min-typ-max(0.25, 0.50, 0.75), min-typ-max(1.40, 1.60, 1.80)]
+      "3216m" : [min-typ-max(3.00, 3.20, 3.40), min-typ-max(1.40, 1.60, 1.80), min-typ-max(0.25, 0.50, 0.75), min-typ-max(1.40, 1.60, 1.80)]
+      "1210" : [min-typ-max(3.00, 3.20, 3.40), min-typ-max(2.30, 2.50, 2.70), min-typ-max(0.25, 0.50, 0.75), min-typ-max(2.30, 2.50, 2.70)]
+      "3225m" : [min-typ-max(3.00, 3.20, 3.40), min-typ-max(2.30, 2.50, 2.70), min-typ-max(0.25, 0.50, 0.75), min-typ-max(2.30, 2.50, 2.70)]
+; 1218
+; 1305
+; 1410
+; 1411
+; 1505
+; 1507
+; 1510
+; 1611
+; 1706
+; 1708
+; 1805
+; 1808
+; 1810
+      "1812" : [min-typ-max(4.20, 4.50, 4.80), min-typ-max(2.90, 3.20, 3.50), min-typ-max(0.25, 0.60, 0.95), min-typ-max(2.90, 3.20, 3.50)]
+      "4532m" : [min-typ-max(4.20, 4.50, 4.80), min-typ-max(2.90, 3.20, 3.50), min-typ-max(0.25, 0.60, 0.95), min-typ-max(2.90, 3.20, 3.50)]
+      "1825" : [min-typ-max(4.20, 4.50, 4.80), min-typ-max(6.00, 6.40, 6.80), min-typ-max(0.25, 0.60, 0.95), min-typ-max(6.00, 6.40, 6.80)]
+      "4564m" : [min-typ-max(4.20, 4.50, 4.80), min-typ-max(6.00, 6.40, 6.80), min-typ-max(0.25, 0.60, 0.95), min-typ-max(6.00, 6.40, 6.80)]
+; 1905
+; 1913
+; 2005
+; 2008
+; 2010
+; 2013
+; 2208
+; 2211
+; 2214
+; 2215
+      "2220" : [min-typ-max(5.20, 5.60, 6.00), min-typ-max(4.60, 5.00, 5.40), min-typ-max(0.25, 0.60, 0.95), min-typ-max(4.60, 5.00, 5.40)]
+      "2225" : [min-typ-max(5.20, 5.60, 6.00), min-typ-max(5.90, 6.00, 6.30), min-typ-max(0.25, 0.60, 0.95), min-typ-max(5.90, 6.00, 6.30)]
+; 2311
+; 2312
+; 2325
+; 2410
+; 2414
+; 2416
+; 2420
+; 2520
+; 2525
+; 2711
+; 2721
+; 2810
+; 2812
+; 2820
+; 2824
+; 2825
+; 2910
+; 2915
+; 2917
+; 2924
+; 3010
+; 3015
+; 3017
+; 3022
+; 3024
+; 3025
+; 3040
+; 3115
+; 3226
+      "3528" : [min-typ-max(3.30, 3.50, 3.70), min-typ-max(2.10, 2.20, 2.30), min-typ-max(0.50, 0.80, 1.10), min-typ-max(2.10, 2.20, 2.30)]
+; 3640
+; 3838
+; 3925
+; 3931
+; 4030
+; 5040
+; 5829
+; 6030
+; 6031
+; 6039
+; 6054
+; 6560
+      "7260" : [min-typ-max(7.00, 7.30, 7.60), min-typ-max(2.30, 2.40, 2.50), min-typ-max(4.00, 4.10, 4.20), min-typ-max(2.30, 2.40, 2.50)]
+      "7343" : [min-typ-max(7.00, 7.30, 7.60), min-typ-max(2.30, 2.40, 2.50), min-typ-max(1.00, 1.30, 1.60), min-typ-max(2.30, 2.40, 2.50)]
       else : 
-        val [l w] = switch(length(part-name)):
-          4 : [2 2]
-          5 : [2 3]
-          6 : [3 3]
-        val len = (to-double(part-name[0 to l]) as Double )* 25.4 / (pow(10.0, to-double(l)))
-        val width = (to-double(part-name[l to (l + w)]) as Double )* 25.4 / (pow(10.0, to-double(w)))
-        val Z = len + 2.0 * (0.084 * len - 0.00543)
-        val G = len * 0.465 - 0.222
-        val X = width
-        val nr = Z
-        val nc = X
-        [Z, G, X, nr, nc]
-    make-two-pin-landpattern(Z, G, X, nr, nc, courtyard?, polarized?)
+        fatal("No land-pattern dimensions for package code _%" % [part-name])
+    make-two-pin-chip-landpattern(length, width, lead-length, lead-width, density, polarized?)
+
     external-names = ([part-name])
-    ref-label()
+    ; ref-label()
 
 public defn make-ipc-two-pin-landpattern (part-name:String) :
-  make-ipc-two-pin-landpattern(part-name, true, false)
+  make-ipc-two-pin-landpattern(part-name, true, DENSITY-LEVEL, false)
+
+public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False) :
+  make-ipc-two-pin-landpattern(part-name, courtyard?, DENSITY-LEVEL, polarized?)
+
 
 ; last 3 are made up
 ;<test>
@@ -659,18 +749,26 @@ part-name: "01005" "008004" "006003" "01007" "5040"
 <test>
 public pcb-landpattern ipc-two-pin-landpattern (part-name:String) :
   make-ipc-two-pin-landpattern(part-name, true, false)
-  ref-label()
+  ; ref-label()
 
 public pcb-landpattern ipc-two-pin-landpattern (part-name:String, pol?:True|False) :
   make-ipc-two-pin-landpattern(part-name, true, pol?)
-  ref-label()
+  ; ref-label()
+
+public pcb-landpattern ipc-two-pin-landpattern (part-name:String, density:DensityLevel, pol?:True|False) :
+  make-ipc-two-pin-landpattern(part-name, true, density, pol?)
+  ; ref-label()
 
 ;<test>
 part-name: "1210"
 <test>
 public pcb-landpattern ipc-two-pin-pol-landpattern (part-name:String) :
   make-ipc-two-pin-landpattern(part-name, true, true)
-  ref-label()
+  ; ref-label()
+
+public pcb-landpattern ipc-two-pin-pol-landpattern (part-name:String, density:DensityLevel) :
+  make-ipc-two-pin-landpattern(part-name, true, density, true)
+  ; ref-label()
 
 public defn make-soic127p-landpattern (n:Int, lead-span:Double) :
   ensure-even-positive!(n, "make-soic127p-landpattern")
