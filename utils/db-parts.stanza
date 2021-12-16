@@ -146,7 +146,7 @@ public defstruct Resistor <: Component :
   y: Double with: (as-method => true)
   z: Double|False
   mounting: String
-  rated-temperature: MinMaxRange|False
+  rated-temperature: RatedTemperature|False
   case: String|False
   sourcing: Sourcing
   metadata: Tuple<KeyValue>
@@ -270,7 +270,7 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
     property(self.y) = y(resistor)
     property(self.z) = z(resistor)
     property(self.mounting) = mounting(resistor)
-    match(rated-temperature: MinMaxRange): property(self.rated-temperature) = RatedTemperature(Interval(min(rated-temperature), max(rated-temperature), false))
+    match(rated-temperature: RatedTemperature): property(self.rated-temperature) = rated-temperature
     property(self.case) = /case(resistor)
     property(self.metadata) = metadata(resistor)
     property(self.type) = type(resistor)
@@ -686,7 +686,7 @@ defstruct Capacitor <: Component :
   y: Double with: (as-method => true)
   z: Double|False
   mounting: String
-  rated-temperature: MinMaxRange|False
+  rated-temperature: RatedTemperature|False
   case: String|False
   sourcing: Sourcing
   metadata: Tuple<KeyValue>
@@ -857,7 +857,7 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
     property(self.y) = y(capacitor)
     property(self.z) = z(capacitor)
     property(self.mounting) = mounting(capacitor)
-    match(rated-temperature: MinMaxRange): property(self.rated-temperature) = RatedTemperature(Interval(min(rated-temperature), max(rated-temperature), false))
+    match(rated-temperature: RatedTemperature): property(self.rated-temperature) = rated-temperature
     property(self.metadata) = metadata(capacitor)
     property(self.type) = type(capacitor)
     match(tolerance: MinMaxRange): property(self.tolerance) = [min(tolerance), max(tolerance)]
@@ -1146,7 +1146,7 @@ defstruct Inductor <: Component :
   y: Double with: (as-method => true)
   z: Double|False
   mounting: String
-  rated-temperature: MinMaxRange|False
+  rated-temperature: RatedTemperature|False
   case: String|False
   sourcing: Sourcing
   metadata: Tuple<KeyValue>
@@ -1256,7 +1256,7 @@ defmethod to-jitx (inductor: Inductor) -> Instantiable :
     property(self.y) = y(inductor)
     property(self.z) = z(inductor)
     property(self.mounting) = mounting(inductor)
-    match(rated-temperature: MinMaxRange): property(self.rated-temperature) = RatedTemperature(Interval(min(rated-temperature), max(rated-temperature), false))
+    match(rated-temperature: RatedTemperature): property(self.rated-temperature) = rated-temperature
     property(self.case) = /case(inductor)
     property(self.metadata) = metadata(inductor)
     property(self.type) = type(inductor)
@@ -1611,10 +1611,10 @@ public pcb-struct ocdb/db-parts/MinMaxRange :
   min: Double
   max: Double
 
-public defn parse-rated-temperature (json: JObject) -> MinMaxRange|False :
+public defn parse-rated-temperature (json: JObject) -> RatedTemperature|False :
   val rated-temperature-json = get?(json, "rated-temperature")
   match(rated-temperature-json: JObject) :
-    MinMaxRange(rated-temperature-json["min"] as Double, rated-temperature-json["max"] as Double)
+    RatedTemperature(Interval(rated-temperature-json["min"] as Double, rated-temperature-json["max"] as Double, false))
 
 defn parse-tolerance (json: JObject) -> MinMaxRange|False :
   val tolerance-json = get?(json, "tolerance")
