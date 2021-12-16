@@ -37,8 +37,13 @@ public defn add-open-drain-pullups (bus:JITXObject, vio:JITXObject, clk-rate:Dou
   inside pcb-module:
     val rise-time = 0.35 / (clk-rate * 5.0) ; Signal bandwidth~ 5x clock rate for fairly sharp edge
     val r = closest-std-val(rise-time / (0.8473 * bus-capacitance), 10.0)
-    for p in ports(bus) do :
-      res-strap(p, vio, r)
+    pcb-module collector (r-val:Double, count:Int):
+      public inst r : chip-resistor(r-val)[count]
+    inst rs:collector(r, length(ports(bus)))
+    for (p in ports(bus), i in 0 to false) do :
+      net (rs.r[i].p[1] p)
+      net (rs.r[i].p[2] vio)
+    rs
 
 ; Default is 100kHz clock rate, 100pF bus capacitance.
 public defn add-open-drain-pullups (bus:JITXObject, vio:JITXObject) :

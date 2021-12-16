@@ -14,6 +14,7 @@ defpackage ocdb/designs/ble-mote :
   import ocdb/generic-components
   import ocdb/property-structs
   import ocdb/checks
+  import ocdb/rules
 
 
 OPERATING-TEMPERATURE = [-20.0 50.0]
@@ -79,7 +80,7 @@ pcb-module sensor-mote :
   public inst hum : ocdb/texas-instruments/HDC1080/module
   require i2c:i2c from proc
   net H-I2C (i2c, hum.i2c)
-  add-open-drain-pullups(i2c, ldo.vout.vdd)
+  val i2c-pullups = add-open-drain-pullups(i2c, ldo.vout.vdd)
 
   ; Add the particle counter interface and place on bottom, and connect
   public inst particle-counter : pms7003
@@ -99,48 +100,79 @@ pcb-module sensor-mote :
   net (protected-usb.vbus particle-counter.vin)
 
   ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
-  add-rgb-indicator(60.0, proc, P3V3)
+  val rgb = add-rgb-indicator(60.0, proc, P3V3)
 
   ; Add probe loops
-  add-testpoint([ proc.uart.tx
-                  proc.uart.rx
-                  hum.i2c.sda
-                  hum.i2c.scl
-                  proc.en
-                  proc.boot
-                  PC-TX
-                  PC-RX
-                  P5V0
-                  P3V3
-                  gnd gnd gnd
-                  ], "smd-loop")
+  val debug-tps = add-testpoint([ proc.uart.tx
+                                  proc.uart.rx
+                                  proc.en
+                                  gnd
+                                  proc.boot], Testpoint-SMDLoop)
+
+  val power-tps = add-testpoint([ P5V0
+                                  P3V3
+                                  gnd ], Testpoint-SMDLoop)
+
+  val hum-tps = add-testpoint([   hum.i2c.sda
+                                  hum.i2c.scl], Testpoint-SMDLoop)
+
+  val pms-tps = add-testpoint([   PC-TX
+                                  PC-RX
+                                  gnd ], Testpoint-SMDLoop)
+ 
 
   ; Add a ground plane
   geom(gnd):
     copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = board-shape
+    copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = board-shape
 
-  ; Apply groups to sub-circuits for schematic
-  schematic-group([proc, ant]) = proc
-  schematic-group([usb, ldo, cp2105]) = power
-  schematic-group(hum) = hum
-  schematic-group(particle-counter) = particle-counter
+  ; Apply groups to sub-circuits for schematic and layout
+  schematic-group([proc, ant, debug-tps rgb, i2c-pullups]) = esp32
+  schematic-group([usb, ldo, cp2105, power-tps containing-instance(protected-usb) as JITXObject]) = power
+  schematic-group([hum hum-tps]) = humidity-sensor
+  schematic-group([particle-counter pms-tps]) = particle-counter
+
+  layout-group([proc, ant]) = proc
+  layout-group([usb, ldo, cp2105 containing-instance(protected-usb) as JITXObject]) = power
+  layout-group([hum hum-tps]) = hum
+  layout-group(particle-counter) = particle-counter
+
+  net VBUS (usb.usb-2.vbus.vdd)
+  net D- (usb.usb-2.data.N)
+  net D+ (usb.usb-2.data.P)
+
+  ; Set up netclasses
+  val power-net-class = NetClass(`Power, [`min-trace => 0.50])
+  for n in [P5V0 P3V3 VBUS] do :
+    property(n.net-class) = power-net-class
+  ; Rules for JLC2313 Stackup, 45-Ohm characteristic impedance
+  val usb-net-class = NetClass(`USB, [`min-trace => 0.224 `min-space => 0.3])
+  for n in [D- D+] do :
+    property(n.net-class) = usb-net-class
 
   check-design(self)
 
+val final-design = run-final-passes(sensor-mote)
+
 ; === Setup visualizations and exports ===
 ; Set the active design directory for CAD
-set-design("ble-mote")
-
-val final-design = run-final-passes(sensor-mote)
+set-design("hardware/ble-mote")
 ; Configure design to have a default 4-layer stackup and design rules.
-make-default-board(final-design, 4, board-shape)
+set-main-module(final-design)
+set-board(default-board(4, board-shape))
+set-rules(jlcpcb-rules)
+run-checks("checks.txt")
+
+set-paper(ANSI-A4)
 
 ; Show the Schematic and PCB for the design
 view-board()
 view-schematic()
 
 ; Export CAD
-export-cad()
+; set-export-board?(false)
+; export-cad()
 
 ; Solve and export Bill of Materials
 ; export-bom()
+
