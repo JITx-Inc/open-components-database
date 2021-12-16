@@ -17,17 +17,13 @@ defpackage ocdb/checks:
 public defn check-design (module:JITXObject):
   inside pcb-module:
     for i in component-instances(module) do :
-
       check rated-temperature(i)
-
       if has-property?(i.capacitance) :
-        check capacitor-check(i)
-
+        check capacitor-component(i)
       if has-property?(i.resistance) :
-        check resistor-check(i)
+        check resistor-component(i)
 
       for p in pins(i) do :
-        ; Check more pins once we get more voltage information from SPICE
         if has-property?(p.generic-pin) :
           check generic-pin(p)
         if has-property?(p.power-pin) :
@@ -190,7 +186,7 @@ public pcb-check voltage-levels (p:JITXObject, range:[Double,Double,Double]) :
 ; ====================================
 
 ; Checks resistors against operating point and environment
-public pcb-check resistor-check (r:JITXObject) :
+public pcb-check resistor-component (r:JITXObject) :
   #CHECK(has-property?(r.resistor))
   #CHECK(has-property?(r.operating-point))
   val [vpk i temp] = [[min(peak-voltage(property(r.operating-point))) max(peak-voltage(property(r.operating-point)))] max(peak-current(property(r.operating-point))) OPERATING-TEMPERATURE[1]]
@@ -207,7 +203,7 @@ public pcb-check resistor-check (r:JITXObject) :
     val pwr = derating * property(r.rated-power)
     #CHECK(pwr * DERATE-RESISTOR-POWER > power)
 
-public pcb-check capacitor-check (c:JITXObject) :
+public pcb-check capacitor-component (c:JITXObject) :
   #CHECK(has-property?(c.capacitor))
   #CHECK(has-property?(c.operating-point))
 
