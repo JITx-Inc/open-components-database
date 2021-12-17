@@ -140,6 +140,7 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
       manufacturer = manufacturer-string
 
     mpn = mpn(resistor)
+    val height = z(resistor)
 
     val description-string = lookup?(metadata(resistor), "description")
     match(description-string: String) :
@@ -150,8 +151,8 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
     symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
     val case = case(resistor)
     match(case: String) :
-      if all?(digit?, to-seq(case)) :
-        val pkg = ipc-two-pin-landpattern(case)
+      if check-valid-rectangle-pkg-list(case) :
+        val pkg = ipc-two-pin-landpattern(case,height)
         landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
       else :  ; example: case = "Axial"
         val pkg = dummy-landpattern(2, [x(resistor) y(resistor)])
@@ -350,6 +351,9 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
     val pol? = not (type-string == "ceramic" or type-string == "film")
     val esr = esr(capacitor)
     val case = case(capacitor)
+    val height = match(z(capacitor)):
+      (d:Double) : d
+      (f:False) : 0.4
     if pol? :
       pin a
       pin c
@@ -357,8 +361,8 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
       symbol = sym(a => sym.p[1], c => sym.p[2])
 
       match(case: String) :
-        if all?(digit?, to-seq(case)) :
-          val pkg = ipc-two-pin-landpattern(case, pol?)
+        if check-valid-rectangle-pkg-list(case) :
+          val pkg = ipc-two-pin-landpattern(case, height, pol?)
           landpattern = pkg(a => pkg.a, c => pkg.c)
         else :
           val pkg = dummy-landpattern(2, [x(capacitor) y(capacitor)])
@@ -383,8 +387,8 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
       symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
 
       match(case: String) :
-        if all?(digit?, to-seq(case)) :
-          val pkg = ipc-two-pin-landpattern(case)
+        if check-valid-rectangle-pkg-list(case) :
+          val pkg = ipc-two-pin-landpattern(case,height)
           landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
         else :
           val pkg = dummy-landpattern(2, [x(capacitor) y(capacitor)])
