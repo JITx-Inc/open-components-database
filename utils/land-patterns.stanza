@@ -684,11 +684,24 @@ public defn make-ipc-two-pin-landpattern (part-name:String,
       external-names = ([part-name])
 
   else if lead-type == SmallFlatRibbonLLeads or lead-type == BigFlatRibbonLLeads :
+    inside pcb-landpattern :
+      val                 [length,                        width,                         lead-length,                   lead-width] = switch contains?{_, part-name} : 
+      ; val                 [ribbon-length,                   ribbon-width,                  ribbon-lead-length,            ribbon-lead-width] = switch contains?{_, part-name} : 
+        ;imperial, metric
+        ["2816", "2817", "7142m"] : [tol(7.1,0.3),          tol(4.2,0.3),                  tol(2.0,0.5),                  tol(4.2,0.3)]
+        ["2953",        "Wide 5929"] : [tol(7.5,0.2),       tol(15.0,0.2),                 tol(1.10,0.1),                 tol(15.0,0.2)]
+        ["3920", "1052m"] : [tol(10.0,0.3),                 tol(5.2,0.3),                  min-typ-max(1.1,2.0,2.5),      tol(5.2,0.3)]
+        else : 
+          fatal("No default land-pattern dimensions in make-ipc-two-pin-landpattern for package code %_ " % [part-name])
+      make-two-pin-chip-landpattern(length, width, height, lead-length, lead-width, density, polarized?)
+      external-names = ([part-name])
     println("FIXME: add all the things for this lead type Ribbon")
   else if lead-type == SmallGullWingLeads or lead-type ==  BigGullWingLeads :
     println("FIXME: add all the things for this lead type Gull Wing")
   else if lead-type ==  JLeads :
     println("FIXME: add all the things for this lead type J-leads")
+  ; else if lead-type ==  Conformal : ; Add new lead-type for conformal caps
+  ;   println("FIXME: add all the things for this lead type J-leads")
   else : 
     fatal("The 'make-ipc-two-pin-landpattern' land pattern function does not support that lead type!")
 
