@@ -1,0 +1,534 @@
+#use-added-syntax(jitx)
+defpackage ocdb/st-microelectronics/STM32F407ZET6 :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/symbol-utils
+  import ocdb/generic-components
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/tolerance
+  import ocdb/property-structs
+
+  import ocdb/st-microelectronics/generate-ioc
+
+public pcb-landpattern STM-LQFP144:
+  make-qfp-landpattern(144,            ;Number of pins
+                      0.5,             ;Pitch:                      e
+                      tol(22.0, 0.2),  ;Outer size (lead-to-lead):  D and E
+                      tol(20.0, 0.2),  ;Package size:               D1 and E1
+                      tol(0.6, 0.15),  ;Lead size in x direction:   L
+                      tol(0.22, 0.05)) ;Lead size in y direction:   b
+
+public pcb-component component :
+  name = "STM32F407ZET6"
+  reference-prefix = "U"
+  mpn = "STM32F407ZET6"
+  property(self.stm32-series) = "STM32F4"
+  property(self.stm32-refname) = "STM32F407Z(E-G)Tx"
+  property(self.stm32-mfg-package) = "LQFP144"
+  description = "1.8V ~ 3.6V 32-Bit ARM® Cortex®-M4 168MHz FLASH LQFP-144_20x20x05P ST Microelectronics ROHS"
+
+  ; val VDD-PINS = [144 17 30 39 131 121 108 95 62 52 72 84]
+  ; val VSS-PINS = [16 38 130 120 107 94 61 51 83]
+
+  val FT-props = GenericPin(Interval(-0.3, 5.5, false), 8.0)
+  val TT-props = GenericPin(Interval(-0.3, 3.6, false), 8.0)
+  val FT-I-props = GenericPin(Interval(-0.3, 5.5, false), 3.0)
+  val reset-props = GenericPin(Interval(-0.3, 5.5, false), 8.0)
+  val boot-props = GenericPin(Interval(-0.3, 5.5, false), 8.0)
+  ; val generic-props = GenericPin(Interval(-0.3, 5.5, false), 20.0)
+  val power-props = PowerPin(Interval(1.8, 3.6, false))
+  val battery-props = PowerPin(Interval(1.65 3.6, false))
+
+  ; [pin:Ref | pads : (Ref|Int) ... | side:Dir | generic-pin:GenericPin | power-pin:PowerPin]
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir | bank:Ref | generic-pin:GenericPin | power-pin:PowerPin | stm32-pin-name:String ] ; <- tbd look at microsemi fpga
+    [ PE[2]          |   1 | Right | IO-E   | FT-props      | -             | "PE2"            ] ;| I/O | FT  | -      | TRACECLK,FSMC_A23,ETH_MII_TXD3,EVENTOUT                                                                             | -
+    [ PE[3]          |   2 | Right | IO-E   | FT-props      | -             | "PE3"            ] ;| I/O | FT  | -      | TRACED0,FSMC_A19,EVENTOUT                                                                                           | -
+    [ PE[4]          |   3 | Right | IO-E   | FT-props      | -             | "PE4"            ] ;| I/O | FT  | -      | TRACED1,FSMC_A20,DCMI_D4,EVENTOUT                                                                                   | -
+    [ PE[5]          |   4 | Right | IO-E   | FT-props      | -             | "PE5"            ] ;| I/O | FT  | -      | TRACED2,FSMC_A21,TIM9_CH1,DCMI_D6,EVENTOUT                                                                          | -
+    [ PE[6]          |   5 | Right | IO-E   | FT-props      | -             | "PE6"            ] ;| I/O | FT  | -      | TRACED3,FSMC_A22,TIM9_CH2,DCMI_D7,EVENTOUT                                                                          | -
+    [ VBAT           |   6 | Up    | supply | -             | battery-props | "VBAT"           ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ PC[13]         |   7 | Left  | IO-C   | FT-I-props    | -             | "PC13-ANTI_TAMP" ] ;| I/O | FT  | (2)(3) | EVENTOUT                                                                                                            | RTC_OUT,RTC_TAMP1,RTC_TS
+    [ PC[14]         |   8 | Down  | IO-C   | FT-I-props    | -             | "PC14-OSC32_IN"  ] ;| I/O | FT  | (2)(3) | OSC32_IN,EVENTOUT                                                                                                   | OSC32_IN(4)
+    [ PC[15]         |   9 | Down  | IO-C   | FT-I-props    | -             | "PC15-OSC32_OUT" ] ;| I/O | FT  | (2)(3) | OSC32_OUT,EVENTOUT                                                                                                  | OSC32_OUT(4)
+    [ PF[0]          |  10 | Right | IO-F   | FT-props      | -             | "PF0"            ] ;| I/O | FT  | -      | FSMC_A0,I2C2_SDA,EVENTOUT                                                                                           | -
+    [ PF[1]          |  11 | Right | IO-F   | FT-props      | -             | "PF1"            ] ;| I/O | FT  | -      | FSMC_A1,I2C2_SCL,EVENTOUT                                                                                           | -
+    [ PF[2]          |  12 | Right | IO-F   | FT-props      | -             | "PF2"            ] ;| I/O | FT  | -      | FSMC_A2,I2C2_SMBA,EVENTOUT                                                                                          | -
+    [ PF[3]          |  13 | Right | IO-F   | FT-props      | -             | "PF3"            ] ;| I/O | FT  | (4)    | FSMC_A3,EVENTOUT                                                                                                    | ADC3_IN9
+    [ PF[4]          |  14 | Right | IO-F   | FT-props      | -             | "PF4"            ] ;| I/O | FT  | (4)    | FSMC_A4,EVENTOUT                                                                                                    | ADC3_IN14
+    [ PF[5]          |  15 | Right | IO-F   | FT-props      | -             | "PF5"            ] ;| I/O | FT  | (4)    | FSMC_A5,EVENTOUT                                                                                                    | ADC3_IN15
+    [ PF[6]          |  18 | Right | IO-F   | FT-props      | -             | "PF6"            ] ;| I/O | FT  | (4)    | TIM10_CH1,FSMC_NIORD,EVENTOUT                                                                                       | ADC3_IN4
+    [ PF[7]          |  19 | Right | IO-F   | FT-props      | -             | "PF7"            ] ;| I/O | FT  | (4)    | TIM11_CH1,FSMC_NREG,EVENTOUT                                                                                        | ADC3_IN5
+    [ PF[8]          |  20 | Right | IO-F   | FT-props      | -             | "PF8"            ] ;| I/O | FT  | (4)    | TIM13_CH1,FSMC_NIOWR,EVENTOUT                                                                                       | ADC3_IN6
+    [ PF[9]          |  21 | Right | IO-F   | FT-props      | -             | "PF9"            ] ;| I/O | FT  | (4)    | TIM14_CH1,FSMC_CD,EVENTOUT                                                                                          | ADC3_IN7
+    [ PF[10]         |  22 | Right | IO-F   | FT-props      | -             | "PF10"           ] ;| I/O | FT  | (4)    | FSMC_INTR,EVENTOUT                                                                                                  | ADC3_IN8
+    [ PH[0]          |  23 | Down  | IO-H   | FT-props      | -             | "PH0-OSC_IN"     ] ;| I/O | FT  | -      | OSC_IN,EVENTOUT                                                                                                     | OSC_IN(4)
+    [ PH[1]          |  24 | Down  | IO-H   | FT-props      | -             | "PH1-OSC_OUT"    ] ;| I/O | FT  | -      | OSC_OUT,EVENTOUT                                                                                                    | OSC_OUT(4)
+    [ NRST           |  25 | Up    | SYS    | reset-props   | -             | "NRST"           ] ;| I/O | RST | -      | -                                                                                                                   | -
+    [ PC[0]          |  26 | Left  | IO-C   | FT-props      | -             | "PC0"            ] ;| I/O | FT  | (4)    | OTG_HS_ULPI_STP,EVENTOUT                                                                                            | ADC123_IN10
+    [ PC[1]          |  27 | Left  | IO-C   | FT-props      | -             | "PC1"            ] ;| I/O | FT  | (4)    | ETH_MDC,EVENTOUT                                                                                                    | ADC123_IN11
+    [ PC[2]          |  28 | Left  | IO-C   | FT-props      | -             | "PC2"            ] ;| I/O | FT  | (4)    | SPI2_MISO,OTG_HS_ULPI_DIR,ETH_MII_TXD2,I2S2ext_SD,EVENTOUT                                                          | ADC123_IN12
+    [ PC[3]          |  29 | Left  | IO-C   | FT-props      | -             | "PC3"            ] ;| I/O | FT  | (4)    | SPI2_MOSI,I2S2_SD,OTG_HS_ULPI_NXT,ETH_MII_TX_CLK,EVENTOUT                                                           | ADC123_IN13
+    [ PA[0]          |  34 | Left  | IO-A   | FT-props      | -             | "PA0-WKUP"       ] ;| I/O | FT  | (5)    | USART2_CTS,UART4_TX,ETH_MII_CRS,TIM2_CH1_ETR,TIM5_CH1,TIM8_ETR,EVENTOUT                                             | ADC123_IN0,WKUP(4)
+    [ PA[1]          |  35 | Left  | IO-A   | FT-props      | -             | "PA1"            ] ;| I/O | FT  | (4)    | USART2_RTS,UART4_RX,ETH_RMII_REF_CLK,ETH_MII_RX_CLK,TIM5_CH2,TIM2_CH2,EVENTOUT                                      | ADC123_IN1
+    [ PA[2]          |  36 | Left  | IO-A   | FT-props      | -             | "PA2"            ] ;| I/O | FT  | (4)    | USART2_TX,TIM5_CH3,TIM9_CH1,TIM2_CH3,ETH_MDIO,EVENTOUT                                                              | ADC123_IN2
+    [ PA[3]          |  37 | Left  | IO-A   | FT-props      | -             | "PA3"            ] ;| I/O | FT  | (4)    | USART2_RX,TIM5_CH4,TIM9_CH2,TIM2_CH4,OTG_HS_ULPI_D0,ETH_MII_COL,EVENTOUT                                            | ADC123_IN3
+    [ PA[4]          |  40 | Left  | IO-A   | TT-props      | -             | "PA4"            ] ;| I/O | TTa | (4)    | SPI1_NSS,SPI3_NSS,USART2_CK,DCMI_HSYNC,OTG_HS_SOF,I2S3_WS,EVENTOUT                                                  | ADC12_IN4,DAC_OUT1
+    [ PA[5]          |  41 | Left  | IO-A   | TT-props      | -             | "PA5"            ] ;| I/O | TTa | (4)    | SPI1_SCK,OTG_HS_ULPI_CK,TIM2_CH1_ETR,TIM8_CH1N,EVENTOUT                                                             | ADC12_IN5,DAC_OUT2
+    [ PA[6]          |  42 | Left  | IO-A   | FT-props      | -             | "PA6"            ] ;| I/O | FT  | (4)    | SPI1_MISO,TIM8_BKIN,TIM13_CH1,DCMI_PIXCLK,TIM3_CH1,TIM1_BKIN,EVENTOUT                                               | ADC12_IN6
+    [ PA[7]          |  43 | Left  | IO-A   | FT-props      | -             | "PA7"            ] ;| I/O | FT  | (4)    | SPI1_MOSI,TIM8_CH1N,TIM14_CH1,TIM3_CH2,ETH_MII_RX_DV,TIM1_CH1N,ETH_RMII_CRS_DV,EVENTOUT                             | ADC12_IN7
+    [ PC[4]          |  44 | Left  | IO-C   | FT-props      | -             | "PC4"            ] ;| I/O | FT  | (4)    | ETH_RMII_RX_D0,ETH_MII_RX_D0,EVENTOUT                                                                               | ADC12_IN14
+    [ PC[5]          |  45 | Left  | IO-C   | FT-props      | -             | "PC5"            ] ;| I/O | FT  | (4)    | ETH_RMII_RX_D1,ETH_MII_RX_D1,EVENTOUT                                                                               | ADC12_IN15
+    [ PB[0]          |  46 | Left  | IO-B   | FT-props      | -             | "PB0"            ] ;| I/O | FT  | (4)    | TIM3_CH3,TIM8_CH2N,OTG_HS_ULPI_D1,ETH_MII_RXD2,TIM1_CH2N,EVENTOUT                                                   | ADC12_IN8
+    [ PB[1]          |  47 | Left  | IO-B   | FT-props      | -             | "PB1"            ] ;| I/O | FT  | (4)    | TIM3_CH4,TIM8_CH3N,OTG_HS_ULPI_D2,ETH_MII_RXD3,TIM1_CH3N,EVENTOUT                                                   | ADC12_IN9
+    [ PB[2]          |  48 | Left  | IO-B   | FT-props      | -             | "PB2"            ] ;| I/O | FT  | -      | BOOT1,EVENTOUT                                                                                                      | -
+    [ PF[11]         |  49 | Right | IO-F   | FT-props      | -             | "PF11"           ] ;| I/O | FT  | -      | DCMI_D12,EVENTOUT                                                                                                   | -
+    [ PF[12]         |  50 | Right | IO-F   | FT-props      | -             | "PF12"           ] ;| I/O | FT  | -      | FSMC_A6,EVENTOUT                                                                                                    | -
+    [ PF[13]         |  53 | Right | IO-F   | FT-props      | -             | "PF13"           ] ;| I/O | FT  | -      | FSMC_A7,EVENTOUT                                                                                                    | -
+    [ PF[14]         |  54 | Right | IO-F   | FT-props      | -             | "PF14"           ] ;| I/O | FT  | -      | FSMC_A8,EVENTOUT                                                                                                    | -
+    [ PF[15]         |  55 | Right | IO-F   | FT-props      | -             | "PF15"           ] ;| I/O | FT  | -      | FSMC_A9,EVENTOUT                                                                                                    | -
+    [ PG[0]          |  56 | Right | IO-G   | FT-props      | -             | "PG0"            ] ;| I/O | FT  | -      | FSMC_A10,EVENTOUT                                                                                                   | -
+    [ PG[1]          |  57 | Right | IO-G   | FT-props      | -             | "PG1"            ] ;| I/O | FT  | -      | FSMC_A11,EVENTOUT                                                                                                   | -
+    [ PE[7]          |  58 | Right | IO-E   | FT-props      | -             | "PE7"            ] ;| I/O | FT  | -      | FSMC_D4,TIM1_ETR,EVENTOUT                                                                                           | -
+    [ PE[8]          |  59 | Right | IO-E   | FT-props      | -             | "PE8"            ] ;| I/O | FT  | -      | FSMC_D5,TIM1_CH1N,EVENTOUT                                                                                          | -
+    [ PE[9]          |  60 | Right | IO-E   | FT-props      | -             | "PE9"            ] ;| I/O | FT  | -      | FSMC_D6,TIM1_CH1,EVENTOUT                                                                                           | -
+    [ PE[10]         |  63 | Right | IO-E   | FT-props      | -             | "PE10"           ] ;| I/O | FT  | -      | FSMC_D7,TIM1_CH2N,EVENTOUT                                                                                          | -
+    [ PE[11]         |  64 | Right | IO-E   | FT-props      | -             | "PE11"           ] ;| I/O | FT  | -      | FSMC_D8,TIM1_CH2,EVENTOUT                                                                                           | -
+    [ PE[12]         |  65 | Right | IO-E   | FT-props      | -             | "PE12"           ] ;| I/O | FT  | -      | FSMC_D9,TIM1_CH3N,EVENTOUT                                                                                          | -
+    [ PE[13]         |  66 | Right | IO-E   | FT-props      | -             | "PE13"           ] ;| I/O | FT  | -      | FSMC_D10,TIM1_CH3,EVENTOUT                                                                                          | -
+    [ PE[14]         |  67 | Right | IO-E   | FT-props      | -             | "PE14"           ] ;| I/O | FT  | -      | FSMC_D11,TIM1_CH4,EVENTOUT                                                                                          | -
+    [ PE[15]         |  68 | Right | IO-E   | FT-props      | -             | "PE15"           ] ;| I/O | FT  | -      | FSMC_D12,TIM1_BKIN,EVENTOUT                                                                                         | -
+    [ PB[10]         |  69 | Left  | IO-B   | FT-props      | -             | "PB10"           ] ;| I/O | FT  | -      | SPI2_SCK,I2S2_CK,I2C2_SCL,USART3_TX,OTG_HS_ULPI_D3,ETH_MII_RX_ER,TIM2_CH3,EVENTOUT                                  | -
+    [ PB[11]         |  70 | Left  | IO-B   | FT-props      | -             | "PB11"           ] ;| I/O | FT  | -      | I2C2_SDA,USART3_RX,OTG_HS_ULPI_D4,ETH_RMII_TX_EN,ETH_MII_TX_EN,TIM2_CH4,EVENTOUT                                    | -
+    [ VCAP[1]        |  71 | Up    | supply | -             | -             | "VCAP_1"         ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ PB[12]         |  73 | Left  | IO-B   | FT-props      | -             | "PB12"           ] ;| I/O | FT  | -      | SPI2_NSS,I2S2_WS,I2C2_SMBA,USART3_CK,TIM1_BKIN,CAN2_RX,OTG_HS_ULPI_D5,ETH_RMII_TXD0,ETH_MII_TXD0,OTG_HS_ID,EVENTOUT | -
+    [ PB[13]         |  74 | Left  | IO-B   | FT-props      | -             | "PB13"           ] ;| I/O | FT  | -      | SPI2_SCK,I2S2_CK,USART3_CTS,TIM1_CH1N,CAN2_TX,OTG_HS_ULPI_D6,ETH_RMII_TXD1,ETH_MII_TXD1,EVENTOUT                    | OTG_HS_VBUS
+    [ PB[14]         |  75 | Left  | IO-B   | FT-props      | -             | "PB14"           ] ;| I/O | FT  | -      | SPI2_MISO,TIM1_CH2N,TIM12_CH1,OTG_HS_DM,USART3_RTS,TIM8_CH2N,I2S2ext_SD,EVENTOUT                                    | -
+    [ PB[15]         |  76 | Left  | IO-B   | FT-props      | -             | "PB15"           ] ;| I/O | FT  | -      | SPI2_MOSI,I2S2_SD,TIM1_CH3N,TIM8_CH3N,TIM12_CH2,OTG_HS_DP,EVENTOUT                                                  | RTC_REFIN
+    [ PD[8]          |  77 | Right | IO-D   | FT-props      | -             | "PD8"            ] ;| I/O | FT  | -      | FSMC_D13,USART3_TX,EVENTOUT                                                                                         | -
+    [ PD[9]          |  78 | Right | IO-D   | FT-props      | -             | "PD9"            ] ;| I/O | FT  | -      | FSMC_D14,USART3_RX,EVENTOUT                                                                                         | -
+    [ PD[10]         |  79 | Right | IO-D   | FT-props      | -             | "PD10"           ] ;| I/O | FT  | -      | FSMC_D15,USART3_CK,EVENTOUT                                                                                         | -
+    [ PD[11]         |  80 | Right | IO-D   | FT-props      | -             | "PD11"           ] ;| I/O | FT  | -      | FSMC_CLE,FSMC_A16,USART3_CTS,EVENTOUT                                                                               | -
+    [ PD[12]         |  81 | Right | IO-D   | FT-props      | -             | "PD12"           ] ;| I/O | FT  | -      | FSMC_ALE,FSMC_A17,TIM4_CH1,USART3_RTS,EVENTOUT                                                                      | -
+    [ PD[13]         |  82 | Right | IO-D   | FT-props      | -             | "PD13"           ] ;| I/O | FT  | -      | FSMC_A18,TIM4_CH2,EVENTOUT                                                                                          | -
+    [ PD[14]         |  85 | Right | IO-D   | FT-props      | -             | "PD14"           ] ;| I/O | FT  | -      | FSMC_D0,TIM4_CH3,EVENTOUT,EVENTOUT                                                                                  | -
+    [ PD[15]         |  86 | Right | IO-D   | FT-props      | -             | "PD15"           ] ;| I/O | FT  | -      | FSMC_D1,TIM4_CH4,EVENTOUT                                                                                           | -
+    [ PG[2]          |  87 | Right | IO-G   | FT-props      | -             | "PG2"            ] ;| I/O | FT  | -      | FSMC_A12,EVENTOUT                                                                                                   | -
+    [ PG[3]          |  88 | Right | IO-G   | FT-props      | -             | "PG3"            ] ;| I/O | FT  | -      | FSMC_A13,EVENTOUT                                                                                                   | -
+    [ PG[4]          |  89 | Right | IO-G   | FT-props      | -             | "PG4"            ] ;| I/O | FT  | -      | FSMC_A14,EVENTOUT                                                                                                   | -
+    [ PG[5]          |  90 | Right | IO-G   | FT-props      | -             | "PG5"            ] ;| I/O | FT  | -      | FSMC_A15,EVENTOUT                                                                                                   | -
+    [ PG[6]          |  91 | Right | IO-G   | FT-props      | -             | "PG6"            ] ;| I/O | FT  | -      | FSMC_INT2,EVENTOUT                                                                                                  | -
+    [ PG[7]          |  92 | Right | IO-G   | FT-props      | -             | "PG7"            ] ;| I/O | FT  | -      | FSMC_INT3,USART6_CK,EVENTOUT                                                                                        | -
+    [ PG[8]          |  93 | Right | IO-G   | FT-props      | -             | "PG8"            ] ;| I/O | FT  | -      | USART6_RTS,ETH_PPS_OUT,EVENTOUT                                                                                     | -
+    [ PC[6]          |  96 | Left  | IO-C   | FT-props      | -             | "PC6"            ] ;| I/O | FT  | -      | I2S2_MCK,TIM8_CH1,SDIO_D6,USART6_TX,DCMI_D0,TIM3_CH1,EVENTOUT                                                       | -
+    [ PC[7]          |  97 | Left  | IO-C   | FT-props      | -             | "PC7"            ] ;| I/O | FT  | -      | I2S3_MCK,TIM8_CH2,SDIO_D7,USART6_RX,DCMI_D1,TIM3_CH2,EVENTOUT                                                       | -
+    [ PC[8]          |  98 | Left  | IO-C   | FT-props      | -             | "PC8"            ] ;| I/O | FT  | -      | TIM8_CH3,SDIO_D0,TIM3_CH3,USART6_CK,DCMI_D2,EVENTOUT                                                                | -
+    [ PC[9]          |  99 | Left  | IO-C   | FT-props      | -             | "PC9"            ] ;| I/O | FT  | -      | I2S_CKIN,MCO2,TIM8_CH4,SDIO_D1,I2C3_SDA,DCMI_D3,TIM3_CH4,EVENTOUT                                                   | -
+    [ PA[8]          | 100 | Left  | IO-A   | FT-props      | -             | "PA8"            ] ;| I/O | FT  | -      | MCO1,USART1_CK,TIM1_CH1,I2C3_SCL,OTG_FS_SOF,EVENTOUT                                                                | -
+    [ PA[9]          | 101 | Left  | IO-A   | FT-props      | -             | "PA8"            ] ;| I/O | FT  | -      | USART1_TX,TIM1_CH2,I2C3_SMBA,DCMI_D0,EVENTOUT                                                                       | OTG_FS_VBUS
+    [ PA[10]         | 102 | Left  | IO-A   | FT-props      | -             | "PA8"            ] ;| I/O | FT  | -      | USART1_RX,TIM1_CH3,OTG_FS_ID,DCMI_D1,EVENTOUT                                                                       | -
+    [ PA[11]         | 103 | Left  | IO-A   | FT-props      | -             | "PA8"            ] ;| I/O | FT  | -      | USART1_CTS,CAN1_RX,TIM1_CH4,OTG_FS_DM,EVENTOUT                                                                      | -
+    [ PA[12]         | 104 | Left  | IO-A   | FT-props      | -             | "PA12"           ] ;| I/O | FT  | -      | USART1_RTS,CAN1_TX,TIM1_ETR,OTG_FS_DP,EVENTOUT                                                                      | -
+    [ PA[13]         | 105 | Left  | SYS    | FT-props      | -             | "PA13"           ] ;| I/O | FT  | -      | JTMS-SWDIO,EVENTOUT                                                                                                 | -
+    [ VCAP[2]        | 106 | Up    | supply | -             | -             | "VCAP_2"         ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ PA[14]         | 109 | Left  | SYS    | FT-props      | -             | "PA14"           ] ;| I/O | FT  | -      | JTCK-SWCLK,EVENTOUT                                                                                                 | -
+    [ PA[15]         | 110 | Left  | IO-A   | FT-props      | -             | "PA15"           ] ;| I/O | FT  | -      | JTDI,SPI3_NSS,I2S3_WS,TIM2_CH1_ETR,SPI1_NSS,EVENTOUT                                                                | -
+    [ PC[10]         | 111 | Left  | IO-C   | FT-props      | -             | "PC10"           ] ;| I/O | FT  | -      | SPI3_SCK,I2S3_CK,UART4_TX,SDIO_D2,DCMI_D8,USART3_TX,EVENTOUT                                                        | -
+    [ PC[11]         | 112 | Left  | IO-C   | FT-props      | -             | "PC11"           ] ;| I/O | FT  | -      | UART4_RX,SPI3_MISO,SDIO_D3,DCMI_D4,USART3_RX,I2S3ext_SD,EVENTOUT                                                    | -
+    [ PC[12]         | 113 | Left  | IO-C   | FT-props      | -             | "PC12"           ] ;| I/O | FT  | -      | UART5_TX,SDIO_CK,DCMI_D9,SPI3_MOSI,I2S3_SD,USART3_CK,EVENTOUT                                                       | -
+    [ PD[0]          | 114 | Right | IO-D   | FT-props      | -             | "PD0"            ] ;| I/O | FT  | -      | FSMC_D2,CAN1_RX,EVENTOUT                                                                                            | -
+    [ PD[1]          | 115 | Right | IO-D   | FT-props      | -             | "PD1"            ] ;| I/O | FT  | -      | FSMC_D3,CAN1_TX,EVENTOUT                                                                                            | -
+    [ PD[2]          | 116 | Right | IO-D   | FT-props      | -             | "PD2"            ] ;| I/O | FT  | -      | TIM3_ETR,UART5_RX,SDIO_CMD,DCMI_D11,EVENTOUT                                                                        | -
+    [ PD[3]          | 117 | Right | IO-D   | FT-props      | -             | "PD3"            ] ;| I/O | FT  | -      | FSMC_CLK,USART2_CTS,EVENTOUT                                                                                        | -
+    [ PD[4]          | 118 | Right | IO-D   | FT-props      | -             | "PD4"            ] ;| I/O | FT  | -      | FSMC_NOE,USART2_RTS,EVENTOUT                                                                                        | -
+    [ PD[5]          | 119 | Right | IO-D   | FT-props      | -             | "PD5"            ] ;| I/O | FT  | -      | FSMC_NWE,USART2_TX,EVENTOUT                                                                                         | -
+    [ PD[6]          | 122 | Right | IO-D   | FT-props      | -             | "PD6"            ] ;| I/O | FT  | -      | FSMC_NWAIT,USART2_RX,EVENTOUT                                                                                       | -
+    [ PD[7]          | 123 | Right | IO-D   | FT-props      | -             | "PD7"            ] ;| I/O | FT  | -      | USART2_CK,FSMC_NE1,FSMC_NCE2,EVENTOUT                                                                               | -
+    [ PG[9]          | 124 | Right | IO-G   | FT-props      | -             | "PG9"            ] ;| I/O | FT  | -      | USART6_RX,FSMC_NE2,FSMC_NCE3,EVENTOUT                                                                               | -
+    [ PG[10]         | 125 | Right | IO-G   | FT-props      | -             | "PG10"           ] ;| I/O | FT  | -      | FSMC_NCE4_1,FSMC_NE3,EVENTOUT                                                                                       | -
+    [ PG[11]         | 126 | Right | IO-G   | FT-props      | -             | "PG11"           ] ;| I/O | FT  | -      | FSMC_NCE4_2,ETH_MII_TX_EN,ETH _RMII_TX_EN,EVENTOUT                                                                  | -
+    [ PG[12]         | 127 | Right | IO-G   | FT-props      | -             | "PG12"           ] ;| I/O | FT  | -      | FSMC_NE4,USART6_RTS,EVENTOUT                                                                                        | -
+    [ PG[13]         | 128 | Right | IO-G   | FT-props      | -             | "PG13"           ] ;| I/O | FT  | -      | FSMC_A24,USART6_CTS,ETH_MII_TXD0,ETH_RMII_TXD0,EVENTOUT                                                             | -
+    [ PG[14]         | 129 | Right | IO-G   | FT-props      | -             | "PG14"           ] ;| I/O | FT  | -      | FSMC_A25,USART6_TX,ETH_MII_TXD1,ETH_RMII_TXD1,EVENTOUT                                                              | -
+    [ PG[15]         | 132 | Right | IO-G   | FT-props      | -             | "PG15"           ] ;| I/O | FT  | -      | USART6_CTS,DCMI_D13,EVENTOUT                                                                                        | -
+    [ PB[3]          | 133 | Left  | IO-B   | FT-props      | -             | "PB3"            ] ;| I/O | FT  | -      | JTDO,TRACESWO,SPI3_SCK,I2S3_CK,TIM2_CH2,SPI1_SCK,EVENTOUT                                                           | -
+    [ PB[4]          | 134 | Left  | IO-B   | FT-props      | -             | "PB4"            ] ;| I/O | FT  | -      | NJTRST,SPI3_MISO,TIM3_CH1,SPI1_MISO,I2S3ext_SD,EVENTOUT                                                             | -
+    [ PB[5]          | 135 | Left  | IO-B   | FT-props      | -             | "PB5"            ] ;| I/O | FT  | -      | I2C1_SMBA,CAN2_RX,OTG_HS_ULPI_D7,ETH_PPS_OUT,TIM3_CH2,SPI1_MOSI,SPI3_MOSI,DCMI_D10,I2S3_SD,EVENTOUT                 | -
+    [ PB[6]          | 136 | Left  | IO-B   | FT-props      | -             | "PB6"            ] ;| I/O | FT  | -      | I2C1_SCL,TIM4_CH1,CAN2_TX,DCMI_D5,USART1_TX,EVENTOUT                                                                | -
+    [ PB[7]          | 137 | Left  | IO-B   | FT-props      | -             | "PB7"            ] ;| I/O | FT  | -      | I2C1_SDA,FSMC_NL,DCMI_VSYNC,USART1_RX,TIM4_CH2,EVENTOUT                                                             | -
+    [ BOOT[0]        | 138 | Down  | SYS    | boot-props    | -             | "BOOT0"          ] ;| I   | B   | -      | -                                                                                                                   | VPP
+    [ PB[8]          | 139 | Left  | IO-B   | FT-props      | -             | "PB8"            ] ;| I/O | FT  | -      | TIM4_CH3,SDIO_D4,TIM10_CH1,DCMI_D6,ETH_MII_TXD3,I2C1_SCL,CAN1_RX,EVENTOUT                                           | -
+    [ PB[9]          | 140 | Left  | IO-B   | FT-props      | -             | "PB9"            ] ;| I/O | FT  | -      | SPI2_NSS,I2S2_WS,TIM4_CH4,TIM11_CH1,SDIO_D5,DCMI_D7,I2C1_SDA,CAN1_TX,EVENTOUT                                       | -
+    [ PE[0]          | 141 | Right | IO-E   | FT-props      | -             | "PE0"            ] ;| I/O | FT  | -      | TIM4_ETR,FSMC_NBL0,DCMI_D2,EVENTOUT                                                                                 | -
+    [ PE[1]          | 142 | Right | IO-E   | FT-props      | -             | "PE1"            ] ;| I/O | FT  | -      | FSMC_NBL1,DCMI_D3,EVENTOUT                                                                                          | -
+    [ PDR_ON         | 143 | Right | SYS    | FT-props      | -             | "PDR_ON"         ] ;| I   | FT  | -      | -                                                                                                                   | -
+    [ VSSA           |  31 | Down  | supply | -             | -             | "VSSA"           ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VREF+          |  32 | Up    | supply | -             | power-props   | "VREF+"          ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VDDA           |  33 | Up    | supply | -             | power-props   | "VDDA"           ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VDD[0]         | 144 | Up    | supply | -             | power-props   | "VDD"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VDD[1]         |  17 | Up    | supply | -             | power-props   | "VDD"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VDD[2]         |  30 | Up    | supply | -             | power-props   | "VDD"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VDD[3]         |  39 | Up    | supply | -             | power-props   | "VDD"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VDD[4]         | 131 | Up    | supply | -             | power-props   | "VDD"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VDD[5]         | 121 | Up    | supply | -             | power-props   | "VDD"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VDD[6]         | 108 | Up    | supply | -             | power-props   | "VDD"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VDD[7]         |  95 | Up    | supply | -             | power-props   | "VDD"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VDD[8]         |  62 | Up    | supply | -             | power-props   | "VDD"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VDD[9]         |  52 | Up    | supply | -             | power-props   | "VDD"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VDD[10]        |  72 | Up    | supply | -             | power-props   | "VDD"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VDD[11]        |  84 | Up    | supply | -             | power-props   | "VDD"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VSS[0]         |  16 | Down  | supply | -             | -             | "VSS"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VSS[1]         |  38 | Down  | supply | -             | -             | "VSS"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VSS[2]         | 130 | Down  | supply | -             | -             | "VSS"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VSS[3]         | 120 | Down  | supply | -             | -             | "VSS"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VSS[4]         | 107 | Down  | supply | -             | -             | "VSS"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VSS[5]         |  94 | Down  | supply | -             | -             | "VSS"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VSS[6]         |  61 | Down  | supply | -             | -             | "VSS"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VSS[7]         |  51 | Down  | supply | -             | -             | "VSS"            ] ;| S   | -   | -      | -                                                                                                                   | -
+    [ VSS[8]         |  83 | Down  | supply | -             | -             | "VSS"            ] ;| S   | -   | -      | -                                                                                                                   | -
+
+  make-box-symbol()
+  assign-landpattern(STM-LQFP144)
+
+  pcb-bundle SWD_SWDIO:
+    pin p
+  pcb-bundle SWD_SWDCLK:
+    pin p
+
+  supports SWD_SWDIO:
+    SWD_SWDIO.p => self.PA[13]
+  supports SWD_SWDCLK:
+    SWD_SWDCLK.p => self.PA[14]
+
+  supports swd() :
+    require swdio : SWD_SWDIO
+    require swdclk : SWD_SWDCLK
+    swd().swdio  => swdio.p
+    swd().swdclk => swdclk.p
+    property(swdio.p.stm32-signal-name) = "SYS_JTMS-SWDIO"
+    property(swdclk.p.stm32-signal-name) = "SYS_JTCK-SWCLK"
+    property(swdio.p.stm32-pin-mode)  = ocdb/st-microelectronics/generate-ioc/SerialWireDebugMode
+    property(swdclk.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/SerialWireDebugMode
+
+  ; supports power:
+  ;   for i in 0 to 12 do :
+  ;     power.vdd => self.VDD[i]
+  ;   for i in 0 to 9 do :
+  ;     power.gnd => self.VSS[i]
+
+  supports reset:
+    reset.reset => self.NRST
+
+  val ADC12-LIST = [self.PA[0] self.PA[1] self.PA[2] self.PA[3] self.PA[4] self.PA[5] self.PA[6] self.PA[7] self.PB[0] self.PB[1] self.PC[0] self.PC[1] self.PC[2] self.PC[3] self.PC[4] self.PC[5]]
+  val ADC3-LIST = [self.PA[0] self.PA[1] self.PA[2] self.PA[3] self.PF[6] self.PF[7] self.PF[8] self.PF[9] self.PF[10] self.PF[3] self.PC[0] self.PC[1] self.PC[2] self.PC[3] self.PF[4] self.PF[5]]
+  val ADC3-UNIQUE-LIST = [4 5 6 7 8 9 14 15]
+
+  for (p in ADC12-LIST, i in 0 to false) do :
+    supports adc:
+      adc.adc => p
+      property(p.stm32-signal-name) = to-string("ADCx_IN%_" % [i])
+      property(p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/ADC1IP
+      ;property(swdio.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/ADC2IP
+
+
+  for i in ADC3-UNIQUE-LIST do :
+    val p = ADC3-LIST[i]
+    supports adc:
+      adc.adc => p
+      property(p.stm32-signal-name) = to-string("ADC3_IN%_" % [i])
+      property(p.stm32-adc-mode) = to-string("IN%_" % [i])
+      property(p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/ADC3IP
+
+  for i in 0 to 16 do :
+    supports gpio :
+      gpio.gpio => self.PA[i]
+      property(self.PA[i].stm32-signal-name) = "GPIO"
+      
+  for i in 0 to 16 do :
+    supports gpio :
+      gpio.gpio => self.PB[i]
+      property(self.PB[i].stm32-signal-name) = "GPIO"
+
+  for i in 0 to 16 do :
+    supports gpio :
+      gpio.gpio => self.PC[i]
+      property(self.PC[i].stm32-signal-name) = "GPIO"
+
+  for i in 0 to 16 do :
+    supports gpio :
+      gpio.gpio => self.PD[i]
+      property(self.PD[i].stm32-signal-name) = "GPIO"
+
+  for i in 0 to 16 do :
+    supports gpio :
+      gpio.gpio => self.PE[i]
+      property(self.PE[i].stm32-signal-name) = "GPIO"
+
+  for i in 0 to 16 do :
+    supports gpio :
+      gpio.gpio => self.PF[i]
+      property(self.PF[i].stm32-signal-name) = "GPIO"
+
+  for i in 0 to 2 do :
+    supports gpio :
+      gpio.gpio => self.PH[i]
+      property(self.PH[i].stm32-signal-name) = "GPIO"
+
+  pcb-bundle RCC_OSC_IN:
+    pin p
+  pcb-bundle RCC_OSC_OUT:
+    pin p
+
+  supports RCC_OSC_IN:
+    RCC_OSC_IN.p => self.PH[0]
+  supports RCC_OSC_OUT:
+    RCC_OSC_OUT.p => self.PH[1]
+
+  supports high-freq-oscillator:
+    require in-pin: RCC_OSC_IN
+    require out-pin: RCC_OSC_OUT
+    high-freq-oscillator.in => in-pin.p
+    high-freq-oscillator.out => out-pin.p
+    property(in-pin.p.stm32-signal-name) = "RCC_OSC_IN"
+    property(out-pin.p.stm32-signal-name) = "RCC_OSC_OUT"
+    property(in-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/HSEExternalMode
+    property(out-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/HSEExternalMode
+    property(in-pin.p.stm32-pin-locked) = true
+    property(out-pin.p.stm32-pin-locked) = true
+
+
+  pcb-bundle RCC_OSC32_IN:
+    pin p
+  pcb-bundle RCC_OSC32_OUT:
+    pin p
+
+  supports RCC_OSC32_IN:
+    RCC_OSC32_IN.p => self.PC[14]
+  supports RCC_OSC32_OUT:
+    RCC_OSC32_OUT.p => self.PC[15]
+
+  supports low-freq-oscillator:
+    require in-pin: RCC_OSC32_IN
+    require out-pin: RCC_OSC32_OUT
+    low-freq-oscillator.in => in-pin.p
+    low-freq-oscillator.out => out-pin.p
+    property(in-pin.p.stm32-signal-name) = "RCC_OSC32_IN"
+    property(out-pin.p.stm32-signal-name) = "RCC_OSC32_OUT"
+    property(in-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/LSEExternalMode
+    property(out-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/LSEExternalMode
+    property(in-pin.p.stm32-pin-locked) = true
+    property(out-pin.p.stm32-pin-locked) = true
+    property(in-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/RTCIP
+    property(out-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/RTCIP
+
+  pcb-bundle USART1_TX:
+    pin p
+  pcb-bundle USART1_RX:
+    pin p
+
+  supports USART1_TX:
+    USART1_TX.p => self.PA[9]
+  supports USART1_TX:
+    USART1_TX.p => self.PB[6]
+  supports USART1_RX:
+    USART1_RX.p => self.PA[10]
+  supports USART1_RX:
+    USART1_RX.p => self.PB[7]
+
+  supports uart():
+    require tx-pin: USART1_TX
+    require rx-pin: USART1_RX
+    uart().tx => tx-pin.p
+    uart().rx => rx-pin.p
+    property(tx-pin.p.stm32-signal-name) = "USART1_TX"
+    property(rx-pin.p.stm32-signal-name) = "USART1_RX"
+    property(tx-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/SerialWireMode
+    property(rx-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/SerialWireMode
+    property(tx-pin.p.stm32-pin-locked) = true
+    property(rx-pin.p.stm32-pin-locked) = true
+    property(tx-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/USART1IP
+    property(rx-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/USART1IP
+
+  pcb-bundle USART2_TX:
+    pin p
+  pcb-bundle USART2_RX:
+    pin p
+
+  supports USART2_TX:
+    USART2_TX.p => self.PA[2]
+  supports USART2_TX:
+    USART2_TX.p => self.PD[5]
+  supports USART2_RX:
+    USART2_RX.p => self.PA[3]
+  supports USART2_RX:
+    USART2_RX.p => self.PD[6]
+
+  supports uart():
+    require tx-pin: USART2_TX
+    require rx-pin: USART2_RX
+    uart().tx => tx-pin.p
+    uart().rx => rx-pin.p
+    property(tx-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/SerialWireMode
+    property(rx-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/SerialWireMode
+    property(tx-pin.p.stm32-signal-name) = "USART2_TX"
+    property(rx-pin.p.stm32-signal-name) = "USART2_RX"
+    property(tx-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/USART2IP
+    property(rx-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/USART2IP
+
+  pcb-bundle I2C1_SCL:
+    pin p
+  pcb-bundle I2C1_SDA:
+    pin p
+
+  supports I2C1_SCL:
+    I2C1_SCL.p => self.PB[6]
+  supports I2C1_SCL:
+    I2C1_SCL.p => self.PB[8]
+  supports I2C1_SDA:
+    I2C1_SDA.p => self.PB[7]
+  supports I2C1_SDA:
+    I2C1_SDA.p => self.PB[9]
+
+  supports i2c:
+    require scl-pin: I2C1_SCL
+    require sda-pin: I2C1_SDA
+    i2c.scl => scl-pin.p
+    i2c.sda => sda-pin.p
+    property(scl-pin.p.stm32-signal-name) = "I2C1_SCL"
+    property(sda-pin.p.stm32-signal-name) = "I2C1_SDA"
+    property(scl-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/I2CMode
+    property(sda-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/I2CMode
+    property(scl-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/I2C1IP
+    property(sda-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/I2C1IP
+
+  pcb-bundle I2C2_SCL:
+    pin p
+  pcb-bundle I2C2_SDA:
+    pin p
+
+  supports I2C2_SCL:
+    I2C2_SCL.p => self.PF[1]
+  supports I2C2_SCL:
+    I2C2_SCL.p => self.PB[10]
+  supports I2C2_SDA:
+    I2C2_SDA.p => self.PF[0]
+  supports I2C2_SDA:
+    I2C2_SDA.p => self.PB[11]
+
+  supports i2c:
+    require scl-pin: I2C2_SCL
+    require sda-pin: I2C2_SDA
+    i2c.scl => scl-pin.p
+    i2c.sda => sda-pin.p
+    property(scl-pin.p.stm32-signal-name) = "I2C2_SCL"
+    property(sda-pin.p.stm32-signal-name) = "I2C2_SDA"
+    property(scl-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/I2CMode
+    property(sda-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/I2CMode
+    property(scl-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/I2C2IP
+    property(sda-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/I2C2IP
+
+  pcb-bundle SPI1_MOSI:
+    pin p
+  pcb-bundle SPI1_MISO:
+    pin p
+  pcb-bundle SPI1_SCK:
+    pin p
+  pcb-bundle SPI1_NSS:
+    pin p
+
+  supports SPI1_NSS:
+    SPI1_NSS.p => self.PA[4]
+  supports SPI1_NSS:
+    SPI1_NSS.p => self.PA[15]
+  supports SPI1_SCK:
+    SPI1_SCK.p => self.PA[5]
+  supports SPI1_SCK:
+    SPI1_SCK.p => self.PB[3]
+  supports SPI1_MOSI:
+    SPI1_MOSI.p => self.PA[7]
+  supports SPI1_MOSI:
+    SPI1_MOSI.p => self.PB[5]
+  supports SPI1_MISO:
+    SPI1_MISO.p => self.PA[6]
+  supports SPI1_MISO:
+    SPI1_MISO.p => self.PB[4]
+
+  supports spi-controller():
+    require sdo-pin: SPI1_MOSI
+    require sdi-pin: SPI1_MISO
+    require sck-pin: SPI1_SCK
+    require cs-pin: SPI1_NSS ; how to make this optional?
+    spi-controller().cipo => sdo-pin.p
+    spi-controller().copi => sdi-pin.p
+    spi-controller().sck => sck-pin.p
+    spi-controller().cs => cs-pin.p
+
+    property(sdo-pin.p.stm32-signal-name) = "SPI1_MOSI"
+    property(sdi-pin.p.stm32-signal-name) = "SPI1_MISO"
+    property(sck-pin.p.stm32-signal-name) = "SPI1_SCK"
+    property(cs-pin.p.stm32-signal-name) = "SPI1_NSS"
+    property(sdo-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/SPIMode
+    property(sdi-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/SPIMode
+    property(sck-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/SPIMode
+    property(cs-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/SPIMode
+    property(sdo-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/SPI1IP
+    property(sdi-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/SPI1IP
+    property(sck-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/SPI1IP
+    property(cs-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/SPI1IP
+
+  pcb-bundle SPI2_MOSI:
+    pin p
+  pcb-bundle SPI2_MISO:
+    pin p
+  pcb-bundle SPI2_SCK:
+    pin p
+  pcb-bundle SPI2_NSS:
+    pin p
+
+  supports SPI2_NSS:
+    SPI2_NSS.p => self.PB[12]
+  supports SPI2_NSS:
+    SPI2_NSS.p => self.PB[9]
+  supports SPI2_SCK:
+    SPI2_SCK.p => self.PB[10]
+  supports SPI2_SCK:
+    SPI2_SCK.p => self.PB[13]
+  supports SPI2_MOSI:
+    SPI2_MOSI.p => self.PC[3]
+  supports SPI2_MOSI:
+    SPI2_MOSI.p => self.PB[15]
+  supports SPI2_MISO:
+    SPI2_MISO.p => self.PC[2]
+  supports SPI2_MISO:
+    SPI2_MISO.p => self.PB[14]
+
+  supports spi-controller():
+    require sdo-pin: SPI2_MOSI
+    require sdi-pin: SPI2_MISO
+    require sck-pin: SPI2_SCK
+    require cs-pin: SPI2_NSS ; how to make this optional?
+    spi-controller().cipo => sdo-pin.p
+    spi-controller().copi => sdi-pin.p
+    spi-controller().sck => sck-pin.p
+    spi-controller().cs => cs-pin.p
+    property(sdo-pin.p.stm32-signal-name) = "SPI2_MOSI"
+    property(sdi-pin.p.stm32-signal-name) = "SPI2_MISO"
+    property(sck-pin.p.stm32-signal-name) = "SPI2_SCK"
+    property(cs-pin.p.stm32-signal-name) = "SPI2_NSS"
+    property(sdo-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/SPIMode
+    property(sdi-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/SPIMode
+    property(sck-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/SPIMode
+    property(cs-pin.p.stm32-pin-mode) = ocdb/st-microelectronics/generate-ioc/SPIMode
+    property(sdo-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/SPI2IP
+    property(sdi-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/SPI2IP
+    property(sck-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/SPI2IP
+    property(cs-pin.p.stm32-ip-name) = ocdb/st-microelectronics/generate-ioc/SPI2IP
+    ;property(cs-pin.p.pin-mode) = "NSS_Signal_Hard_Output"
