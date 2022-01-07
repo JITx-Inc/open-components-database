@@ -15,6 +15,8 @@ defpackage ocdb/generic-components:
   import ocdb/symbols
   import ocdb/box-symbol
   import ocdb/property-structs
+  import ocdb/symbol-utils
+  import ocdb/tolerance
 
 ; ========================================================
 ; ====== Standard packages for the passive solver ========
@@ -207,17 +209,23 @@ pcb-module my-module :
 <>
 
 ; Generic ceramic capacitor from database (of 600k options)
-public defn ceramic-cap (user-params:Tuple<KeyValue>) :
+public defn ceramic-cap (user-params:Tuple<KeyValue>) -> Instantiable :
   val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         user-params]
   to-jitx $ Capacitor(params)
 
-public defn ceramic-cap (cap:Double) :
+public defn ceramic-cap (cap:Double) -> Instantiable :
   ceramic-cap(["capacitance" => cap])
 
-public defn ceramic-cap (cap:Double, tolerance:Double) :
+public defn ceramic-cap (cap:Double, tolerance:Double) -> Instantiable :
   ceramic-cap(["capacitance" => cap "tolerance" => tolerance])
+
+public defn ceramic-caps (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
+  val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+                                        smd-query-properties()
+                                        user-params]
+  map(to-jitx, Capacitors(params, limit))
 
 ; ========================================================
 ; =============== look-up-ceramic-caps ===================
@@ -323,15 +331,19 @@ pcb-module my-module :
 <>
 
 ; Generic chip resistor from database (of 600k options)
-public defn chip-resistor (user-params:Tuple<KeyValue>) :
+public defn chip-resistor (user-params:Tuple<KeyValue>) -> Instantiable :
   val params = remove-duplicate-keys([smd-query-properties() user-params])
   to-jitx $ Resistor(params)
 
-public defn chip-resistor (resistance:Double) :
+public defn chip-resistor (resistance:Double) -> Instantiable :
   chip-resistor(["resistance" => resistance])
 
-public defn chip-resistor (resistance:Double, tolerance:Double) :
+public defn chip-resistor (resistance:Double, tolerance:Double) -> Instantiable :
   chip-resistor(["resistance" => resistance "tolerance" => tolerance])
+
+public defn chip-resistors (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
+  val params = remove-duplicate-keys([smd-query-properties() user-params])
+  map(to-jitx, Resistors(params, limit))
 
 ; ========================================================
 ; ================ look-up-chip-resistors ================
@@ -430,15 +442,19 @@ pcb-module my-module :
 <>
 
 ; Generic inductors from database of standard packages (0402, 0603... 10k options)
-public defn smd-inductor (user-params:Tuple<KeyValue>) :
+public defn smd-inductor (user-params:Tuple<KeyValue>) -> Instantiable :
   val params = remove-duplicate-keys([smd-query-properties() user-params])
   to-jitx $ Inductor(params)
 
-public defn smd-inductor (ind:Double) :
+public defn smd-inductor (ind:Double) -> Instantiable :
   smd-inductor(["inductance" => ind])
 
-public defn smd-inductor (ind:Double, tolerance:Double) :
+public defn smd-inductor (ind:Double, tolerance:Double) -> Instantiable :
   smd-inductor(["inductance" => ind "tolerance" => tolerance])
+
+public defn smd-inductors (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
+  val params = remove-duplicate-keys([smd-query-properties() user-params])
+  map(to-jitx, Inductors(params, limit))
 
 ; ========================================================
 ; ================ look-up-smd-inductors =================
@@ -707,6 +723,65 @@ public defn gen-ind-cmp (ind:Double, tol:Double) :
 
 public defn gen-ind-cmp (ind:Double) :
   gen-ind-cmp(ind, 10.0)
+; ========================================================
+; ===================== gen-led-cmp ======================
+; ========================================================
+public pcb-component gen-led-cmp (vf:Toleranced, itest:Double, color:String, pkg-name:String) :
+  pin a
+  pin c
+  description = to-string("LED, GENERIC, %_, Vf %_V, If %_ mA, %_" % [color, center(vf), to-int(itest * 1000.0), pkg-name])
+  mpn = to-string("%_, Vf %_, If %_ mA" % [color, to-string(center(vf)), to-string(to-int(itest * 1000.0))])
+  name = to-string("Generic %_ LED %_" % [color, pkg-name])
+  val sym = diode-sym(DiodeLED)
+  symbol = sym(a => sym.a, c => sym.c)
+  val land = ipc-two-pin-pol-landpattern(pkg-name)
+  landpattern = land(a => land.a, c => land.c)
+  var vf-center = 0.0
+  vf-center = center(vf)
+  reference-prefix = "D"
+  property(self.diode) = true
+  property(self.forward-voltage) = vf-center ; Vf
+  property(self.test-current) = itest ; If or Itest
+  property(self.NamedColor) = color
+
+public defn gen-led-cmp (vf:Double, itest:Double, color:String, pkg-name:String) :
+  gen-led-cmp(tol(vf,0.1), itest, color, pkg-name)
+
+public defn gen-led-cmp (vf:Toleranced, color:String, pkg-name:String) :
+  gen-led-cmp(vf, 20.0e-3, color, pkg-name)
+
+public defn gen-led-cmp (vf:Double, color:String, pkg-name:String) :
+  gen-led-cmp(tol(vf,0.1), 20.0e-3, color, pkg-name)
+
+public defn gen-led-cmp (vf:Toleranced, pkg-name:String) :
+  gen-led-cmp(vf, 20.0e-3, "ANY COLOR", pkg-name)
+
+public defn gen-led-cmp (vf:Double, pkg-name:String) :
+  gen-led-cmp(tol(vf,0.1), 20.0e-3, "ANY COLOR", pkg-name)
+
+public defn gen-led-cmp (vf:Toleranced, itest:Double) :
+  gen-led-cmp(vf, itest, "ANY COLOR", MIN-PKG)
+
+public defn gen-led-cmp (vf:Double, itest:Double) :
+  gen-led-cmp(tol(vf,0.1), itest, "ANY COLOR", MIN-PKG)
+
+public defn gen-led-cmp (vf:Toleranced, itest:Double, pkg-name:String) :
+  gen-led-cmp(vf, itest, "ANY COLOR", pkg-name)
+
+public defn gen-led-cmp (vf:Double, itest:Double, pkg-name:String) :
+  gen-led-cmp(tol(vf,0.1), itest, "ANY COLOR", pkg-name)
+
+public defn gen-led-cmp (vf:Toleranced) :
+  gen-led-cmp(vf, 0.02, "ANY COLOR", MIN-PKG)
+
+public defn gen-led-cmp (vf:Double) :
+  gen-led-cmp(tol(vf,0.1), 0.02, "ANY COLOR", MIN-PKG)
+
+public defn gen-led-cmp (color:String, pkg-name:String) :
+  gen-led-cmp(tol(2.0,0.2), 0.02, color, pkg-name)
+
+public defn gen-led-cmp (pkg-name:String) :
+  gen-led-cmp(tol(2.0,0.2), 0.02, "ANY COLOR", pkg-name)
 
 ; ========================================================
 ; ============ Component strapping functions =============
