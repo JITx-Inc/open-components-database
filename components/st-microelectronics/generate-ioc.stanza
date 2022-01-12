@@ -14,78 +14,78 @@ defpackage ocdb/st-microelectronics/generate-ioc:
   import ocdb/property-structs
   import ocdb/bundles
 
-public pcb-enum ocdb/st-microelectronics/generate-ioc/GPIOModes :
-  GPIOOutput   ; GPIO_Output
-  GPIOInput    ; GPIO_Input
-  GPIOAnalog   ; GPIO_Analog
-  GPIOEventOut ; GPIO_EVENTOUT
-  GPIOExtI     ; GPXTI
+public pcb-enum ocdb/st-microelectronics/generate-ioc/STMGPIOModes :
+  STMGPIOOutput   ; GPIO_Output
+  STMGPIOInput    ; GPIO_Input
+  STMGPIOAnalog   ; GPIO_Analog
+  STMGPIOEventOut ; GPIO_EVENTOUT
+  STMGPIOExtI     ; GPXTI
 
-public pcb-enum ocdb/st-microelectronics/generate-ioc/GPIOSpeed :
-  GPIOSpeedLow      ; nothing needs to be added to the ioc file?
-  GPIOSpeedMedium   ; GPIO_SPEED_FREQ_MEDIUM
-  GPIOSpeedHigh     ; GPIO_SPEED_FREQ_HIGH
-  GPIOSpeedVeryHigh ; GPIO_SPEED_FREQ_VERY_HIGH
+public pcb-enum ocdb/st-microelectronics/generate-ioc/STMGPIOSpeed :
+  STMGPIOSpeedLow      ; nothing needs to be added to the ioc file?
+  STMGPIOSpeedMedium   ; GPIO_SPEED_FREQ_MEDIUM
+  STMGPIOSpeedHigh     ; GPIO_SPEED_FREQ_HIGH
+  STMGPIOSpeedVeryHigh ; GPIO_SPEED_FREQ_VERY_HIGH
 
-public pcb-enum ocdb/st-microelectronics/generate-ioc/GPIOPuPd :
-  GPIOPullUp        ; Pull up
-  GPIOPullDown      ; Pull down (not for open drain IOs)
-  GPIONoPull        ; No pull up or pull down
+public pcb-enum ocdb/st-microelectronics/generate-ioc/STMGPIOPuPd :
+  STMGPIOPullUp        ; Pull up
+  STMGPIOPullDown      ; Pull down (not for open drain IOs)
+  STMGPIONoPull        ; No pull up or pull down
 
-public pcb-enum ocdb/st-microelectronics/generate-ioc/USARTMode :
-  USARTSynchronous
-  USARTAsynchronous
-  USARTSingleWire
-  USARTMultiprocessor
-  USARTIRDA
-  USARTSmartcard
-  USARTSmartcardWClk
-  USARTLIN
+public pcb-enum ocdb/st-microelectronics/generate-ioc/STMUSARTMode :
+  STMUSARTSynchronous
+  STMUSARTAsynchronous
+  STMUSARTSingleWire
+  STMUSARTMultiprocessor
+  STMUSARTIRDA
+  STMUSARTSmartcard
+  STMUSARTSmartcardWClk
+  STMUSARTLIN
 
-public pcb-enum ocdb/st-microelectronics/generate-ioc/SPIType :
-  SPIFullDuplexController
-  SPIFullDuplexPeripheral
-  SPIHalfDuplexController
-  SPIHalfDuplexPeripheral
-  SPIRxController
-  SPIRxPeripheral
-  SPITxController
-  SPITxPeripheral
+public pcb-enum ocdb/st-microelectronics/generate-ioc/STMSPIType :
+  STMSPIFullDuplexController
+  STMSPIFullDuplexPeripheral
+  STMSPIHalfDuplexController
+  STMSPIHalfDuplexPeripheral
+  STMSPIRxController
+  STMSPIRxPeripheral
+  STMSPITxController
+  STMSPITxPeripheral
 
-public pcb-enum ocdb/st-microelectronics/generate-ioc/PinMode :
-  I2CMode
-  SPIMode
-  SerialWireMode
-  SerialWireDebugMode
-  HSEExternalMode
-  LSEExternalMode
+public pcb-enum ocdb/st-microelectronics/generate-ioc/STMPinMode :
+  STMI2CMode
+  STMSPIMode
+  STMSerialWireMode
+  STMSerialWireDebugMode
+  STMHSEExternalMode
+  STMLSEExternalMode
 
 public pcb-enum ocdb/st-microelectronics/generate-ioc/STM32IPs :
-  I2C1IP   ; I2C1
-  I2C2IP   ; I2C2
-  CAN1IP   ; CAN1
-  CAN2IP   ; CAN2
-  USART1IP ; USART1
-  USART2IP ; USART2
-  USART3IP ; USART3
-  UART4IP  ; UART4
-  UART5IP  ; UART5
-  USART6IP ; USART6
-  RCCIP    ; RCC - default
-  RTCIP    ; RTC - when adding 32kHz xtal?
-  SPI1IP   ; SPI1
-  SPI2IP   ; SPI2
-  SPI3IP   ; SPI3
-  SYSIP    ; SYS - default
-  NVICIP   ; NVIC - default
-  ADC1IP   ; ADC1
-  ADC2IP   ; ADC2
-  ADC3IP   ; ADC3
-  DACIP    ; DAC
+  STMI2C1IP   ; I2C1
+  STMI2C2IP   ; I2C2
+  STMCAN1IP   ; CAN1
+  STMCAN2IP   ; CAN2
+  STMUSART1IP ; USART1
+  STMUSART2IP ; USART2
+  STMUSART3IP ; USART3
+  STMUART4IP  ; UART4
+  STMUART5IP  ; UART5
+  STMUSART6IP ; USART6
+  STMRCCIP    ; RCC - default
+  STMRTCIP    ; RTC - when adding 32kHz xtal?
+  STMSPI1IP   ; SPI1
+  STMSPI2IP   ; SPI2
+  STMSPI3IP   ; SPI3
+  STMSYSIP    ; SYS - default
+  STMNVICIP   ; NVIC - default
+  STMADC1IP   ; ADC1
+  STMADC2IP   ; ADC2
+  STMADC3IP   ; ADC3
+  STMDACIP    ; DAC
 
 defn ioc-file-header () -> String :
   val header = "#MicroXplorer Configuration settings - do not modify\nFile.Version=6\nboard=custom\n"
-  to-string(header)
+  header
 
 defn valid-instance (i : JITXObject) :
   match(mpn?(i): String) :
@@ -94,79 +94,73 @@ defn valid-instance (i : JITXObject) :
   else :
     false
 
-; defn add-comma-to-params (exist-params)
-;   if not exist-params :
-;     [""]
-;   else :
-;     [","]
-
 defn stm32-ip-name (ip : STM32IPs) -> String :
   switch(ip) :
-    I2C1IP   : "I2C1" ; I2C1
-    I2C2IP   : "I2C2" ; I2C2
-    CAN1IP   : "CAN1" ; CAN1
-    CAN2IP   : "CAN2" ; CAN2
-    USART1IP : "USART1" ; USART1
-    USART2IP : "USART2" ; USART2
-    USART3IP : "USART3" ; USART3
-    UART4IP  : "UART4" ; UART4
-    UART5IP  : "UART5" ; UART5
-    USART6IP : "USART6" ; USART6
-    RCCIP    : "RCC" ; RCC - default
-    RTCIP    : "RTC" ; RTC - when adding 32kHz xtal?
-    SPI1IP   : "SPI1" ; SPI1
-    SPI2IP   : "SPI2" ; SPI2
-    SPI3IP   : "SPI3" ; SPI3
-    SYSIP    : "SYS" ; SYS - default
-    NVICIP   : "NVIC" ; NVIC - default
-    ADC1IP   : "ADC1" ; ADC1
-    ADC2IP   : "ADC2" ; ADC2
-    ADC3IP   : "ADC3" ; ADC3
-    DACIP    : "DAC" ; DAC
+    STMI2C1IP   : "I2C1" ; I2C1
+    STMI2C2IP   : "I2C2" ; I2C2
+    STMCAN1IP   : "CAN1" ; CAN1
+    STMCAN2IP   : "CAN2" ; CAN2
+    STMUSART1IP : "USART1" ; USART1
+    STMUSART2IP : "USART2" ; USART2
+    STMUSART3IP : "USART3" ; USART3
+    STMUART4IP  : "UART4" ; UART4
+    STMUART5IP  : "UART5" ; UART5
+    STMUSART6IP : "USART6" ; USART6
+    STMRCCIP    : "RCC" ; RCC - default
+    STMRTCIP    : "RTC" ; RTC - when adding 32kHz xtal?
+    STMSPI1IP   : "SPI1" ; SPI1
+    STMSPI2IP   : "SPI2" ; SPI2
+    STMSPI3IP   : "SPI3" ; SPI3
+    STMSYSIP    : "SYS" ; SYS - default
+    STMNVICIP   : "NVIC" ; NVIC - default
+    STMADC1IP   : "ADC1" ; ADC1
+    STMADC2IP   : "ADC2" ; ADC2
+    STMADC3IP   : "ADC3" ; ADC3
+    STMDACIP    : "DAC" ; DAC
 
 
-defn stm32-spi-type (mode : SPIType) -> String :
+defn stm32-spi-type (mode : STMSPIType) -> String :
   switch(mode) :
-    SPIFullDuplexController : "Full_Duplex_Master"
-    SPIFullDuplexPeripheral : "Full_Duplex_Slave"
-    SPIHalfDuplexController : "Simplex_Bidirectional_Master"
-    SPIHalfDuplexPeripheral : "Simplex_Bidirectional_Slave"
-    SPIRxController :         "RX_Only_Simplex_Unidirect_Master"
-    SPIRxPeripheral :         "RX_Only_Simplex_Unidirect_Slave"
-    SPITxController :         "TX_Only_Simplex_Unidirect_Master"
-    SPITxPeripheral :         "TX_Only_Simplex_Unidirect_Slave"
+    STMSPIFullDuplexController : "Full_Duplex_Master"
+    STMSPIFullDuplexPeripheral : "Full_Duplex_Slave"
+    STMSPIHalfDuplexController : "Simplex_Bidirectional_Master"
+    STMSPIHalfDuplexPeripheral : "Simplex_Bidirectional_Slave"
+    STMSPIRxController :         "RX_Only_Simplex_Unidirect_Master"
+    STMSPIRxPeripheral :         "RX_Only_Simplex_Unidirect_Slave"
+    STMSPITxController :         "TX_Only_Simplex_Unidirect_Master"
+    STMSPITxPeripheral :         "TX_Only_Simplex_Unidirect_Slave"
 
-defn stm32-usart-mode (mode : USARTMode) -> String :
+defn stm32-usart-mode (mode : STMUSARTMode) -> String :
   switch(mode) :
-    USARTSynchronous :    "Synchronous"
-    USARTAsynchronous :   "Asynchronous"
-    USARTSingleWire :     "Half_duplex(single_wire_mode)"
-    USARTMultiprocessor : "Multiprocessor_communication"
-    USARTIRDA :           "IrDA"
-    USARTSmartcard :      "SmartCard"
-    USARTSmartcardWClk :  "SmartCard_With_Clock"
-    USARTLIN :            "LIN"
+    STMUSARTSynchronous :    "Synchronous"
+    STMUSARTAsynchronous :   "Asynchronous"
+    STMUSARTSingleWire :     "Half_duplex(single_wire_mode)"
+    STMUSARTMultiprocessor : "Multiprocessor_communication"
+    STMUSARTIRDA :           "IrDA"
+    STMUSARTSmartcard :      "SmartCard"
+    STMUSARTSmartcardWClk :  "SmartCard_With_Clock"
+    STMUSARTLIN :            "LIN"
 
-defn stm32-gpio-mode (mode : GPIOModes) -> String :
+defn stm32-gpio-mode (mode : STMGPIOModes) -> String :
   switch(mode) :
-    GPIOOutput :   "GPIO_Output"
-    GPIOInput :    "GPIO_Input"
-    GPIOAnalog :   "GPIO_Analog"
-    GPIOEventOut : "EVENTOUT"
-    GPIOExtI :     "GPXTI\n# can't currently write EXTI pins correctly."
+    STMGPIOOutput :   "GPIO_Output"
+    STMGPIOInput :    "GPIO_Input"
+    STMGPIOAnalog :   "GPIO_Analog"
+    STMGPIOEventOut : "EVENTOUT"
+    STMGPIOExtI :     "GPXTI\n# can't currently write EXTI pins correctly."
 
-defn stm32-io-speed (speed : GPIOSpeed) -> String :
+defn stm32-io-speed (speed : STMGPIOSpeed) -> String :
   switch(speed) :
-    GPIOSpeedLow :      "GPIO_SPEED_FREQ_LOW"
-    GPIOSpeedMedium :   "GPIO_SPEED_FREQ_MEDIUM"
-    GPIOSpeedHigh :     "GPIO_SPEED_FREQ_HIGH"
-    GPIOSpeedVeryHigh : "GPIO_SPEED_FREQ_VERY_HIGH"
+    STMGPIOSpeedLow :      "GPIO_SPEED_FREQ_LOW"
+    STMGPIOSpeedMedium :   "GPIO_SPEED_FREQ_MEDIUM"
+    STMGPIOSpeedHigh :     "GPIO_SPEED_FREQ_HIGH"
+    STMGPIOSpeedVeryHigh : "GPIO_SPEED_FREQ_VERY_HIGH"
 
-defn stm32-pupd (mode : GPIOPuPd) -> String :
+defn stm32-pupd (mode : STMGPIOPuPd) -> String :
   switch(mode) :
-    GPIOPullUp :   "GPIO_PULLUP"
-    GPIOPullDown : "GPIO_PULLDOWN"
-    GPIONoPull :   "GPIO_NOPULL"
+    STMGPIOPullUp :   "GPIO_PULLUP"
+    STMGPIOPullDown : "GPIO_PULLDOWN"
+    STMGPIONoPull :   "GPIO_NOPULL"
 
 defn compose-ioc-contents (i : JITXObject) :
   val ip-template = "Mcu.IP%_=%_\n"
@@ -176,7 +170,7 @@ defn compose-ioc-contents (i : JITXObject) :
   var pin-params : String = ""
   var ip-content : String = ""
   val ip-names = HashSet<STM32IPs>()
-  var exist-params = false
+  var exist-params? = false
   inside pcb-module :
     if has-property?(i.stm32-series) :
       content = append(content, to-string("Mcu.Family=%_\n" % [property(i.stm32-series)]))
@@ -185,9 +179,9 @@ defn compose-ioc-contents (i : JITXObject) :
     if has-property?(i.stm32-mfg-package) :
       content = append(content, to-string("Mcu.Package=%_\n" % [property(i.stm32-mfg-package)]))
     var index:Int = 0
-    add(ip-names, RCCIP)        
-    add(ip-names, SYSIP)        
-    add(ip-names, NVICIP)        
+    add(ip-names, STMRCCIP)        
+    add(ip-names, STMSYSIP)        
+    add(ip-names, STMNVICIP)        
     ; let's list IPs now
     for p in pins(i) do :
       if has-property?(p.stm32-ip-name) :
@@ -220,7 +214,7 @@ defn compose-ioc-contents (i : JITXObject) :
             if connected?(p) :
               pin-content = ""
               pin-params = ""
-              exist-params = false
+              exist-params? = false
               pin-params = append(pin-params, to-string("%_.GPIOParameters=" % [property(p.stm32-pin-name)]))
               if has-property?(p.stm32-gpio-iomode) :
                 pin-content = append(pin-content, to-string("%_.Signal=%_\n" % [property(p.stm32-pin-name), stm32-gpio-mode(property(p.stm32-gpio-iomode))]))
@@ -230,54 +224,53 @@ defn compose-ioc-contents (i : JITXObject) :
                 if has-property?(p.stm32-adc-mode) :
                   pin-content = append(pin-content, to-string("%_.Mode=%_\n" % [property(p.stm32-pin-name), property(p.stm32-adc-mode)]))
               if has-property?(p.stm32-gpio-speed) :
-                if exist-params == true :
-                  pin-params = append(pin-params, to-string(","))
+                if exist-params? :
+                  pin-params = append(pin-params, ",")
                 else :
-                  exist-params = true
-                pin-params = append(pin-params, to-string("GPIO_Speed"))
-                exist-params = true
+                  exist-params? = true
+                pin-params = append(pin-params, "GPIO_Speed")
                 pin-content = append(pin-content, to-string("%_.GPIO_Speed=%_\n" % [property(p.stm32-pin-name), stm32-io-speed(property(p.stm32-gpio-speed))]))
               if has-property?(p.stm32-gpio-pupd) :
-                if exist-params == true :
-                  pin-params = append(pin-params, to-string(","))
+                if exist-params? :
+                  pin-params = append(pin-params, ",")
                 else :
-                  exist-params = true
-                pin-params = append(pin-params, to-string("GPIO_PuPd"))
+                  exist-params? = true
+                pin-params = append(pin-params, "GPIO_PuPd")
                 pin-content = append(pin-content, to-string("%_.GPIO_PuPd=%_\n" % [property(p.stm32-pin-name), stm32-pupd(property(p.stm32-gpio-pupd))]))
                 pin-content = append(pin-content, to-string("%_.Locked=true\n" % [property(p.stm32-pin-name)]))
               if has-property?(p.stm32-gpio-label) :
-                if exist-params == true :
-                  pin-params = append(pin-params, to-string(","))
+                if exist-params? :
+                  pin-params = append(pin-params, ",")
                 else :
-                  exist-params = true
-                pin-params = append(pin-params, to-string("GPIO_Label"))
+                  exist-params? = true
+                pin-params = append(pin-params, "GPIO_Label")
                 pin-content = append(pin-content, to-string("%_.GPIO_Label=%_\n" % [property(p.stm32-pin-name), property(p.stm32-gpio-label)]))
               if has-property?(p.stm32-pin-mode) :
                 switch(property(p.stm32-pin-mode)) :
-                  I2CMode :
+                  STMI2CMode :
                     pin-content = append(pin-content, to-string("%_.Mode=I2C\n" % [property(p.stm32-pin-name)]))
-                  SPIMode :
+                  STMSPIMode :
                     if has-property?(p.stm32-spi-mode) :
                       pin-content = append(pin-content, to-string("%_.Mode=%_\n" % [property(p.stm32-pin-name), stm32-spi-type(property(p.stm32-spi-mode))]))
-                  SerialWireMode :
+                  STMSerialWireMode :
                     if has-property?(p.stm32-uxart-mode) :
                       pin-content = append(pin-content, to-string("%_.Mode=%_\n" % [property(p.stm32-pin-name), stm32-usart-mode(property(p.stm32-uxart-mode))]))
                     else :
                       pin-content = append(pin-content, to-string("# No SerialWire mode defined on %_\n" % [property(p.stm32-pin-name)]))
-                  SerialWireDebugMode :
+                  STMSerialWireDebugMode :
                     pin-content = append(pin-content, to-string("%_.Mode=SerialWire\n" % [property(p.stm32-pin-name)]))
-                  HSEExternalMode :
+                  STMHSEExternalMode :
                     pin-content = append(pin-content, to-string("%_.Mode=HSE-External-Oscillator\n" % [property(p.stm32-pin-name)]))
-                  LSEExternalMode :
+                  STMLSEExternalMode :
                     pin-content = append(pin-content, to-string("%_.Mode=LSE-External-Oscillator\n" % [property(p.stm32-pin-name)]))
               if has-property?(p.stm32-pin-locked) :
                 if property(p.stm32-pin-locked) :
                   pin-content = append(pin-content, to-string("%_.Locked=true\n" % [property(p.stm32-pin-name)]))
 
               ; output data for a pin now
-              if exist-params == true :
+              if exist-params? :
                 content = append(content, to-string("%_\n" % [pin-params]))
-              if length(pin-content) > 0 :
+              if not empty?(pin-content) :
                 content = append(content, pin-content)
     content
 
