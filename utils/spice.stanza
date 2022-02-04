@@ -1,0 +1,136 @@
+#use-added-syntax(jitx)
+defpackage ocdb/spice:
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/symbols
+  import ocdb/land-patterns
+  import ocdb/box-symbol
+
+public pcb-struct ocdb/des :
+  references:Tuple<String>
+  library-part:Instantiable
+
+public pcb-struct ocdb/imported-spice-component :
+  reference:String
+  element:String
+  nets:List
+  pins:List
+  comp-val:Double
+  parameters:List
+
+defn to-pin-name (raw:String) : 
+  if to-int(raw) is Int:
+    Ref("p")[to-int(raw) as Int]
+  else :
+    Ref(raw)
+
+defn to-net-name (raw:String) : 
+  if to-int(raw) is Int:
+    to-string("%_" % [raw])
+  else :
+    raw
+
+public defn ListTable<K,V> () : HashTable<K,List<V>>(List())
+public defn add<?K,?V> (table:Table<?K,List<?V>>, k:K, v:V) : update(table, cons{v, _}, k)
+
+public defn import-spice-netlist (path:String, mappings:Tuple<des>) :
+  val raw = (to-tuple $ split(slurp(path), "\n"))
+  val ref-to-pins = ListTable<String, [String, String, String]>()
+
+  val raw-nets = Vector<String>()
+  val components = Vector<imported-spice-component>()
+
+; read in each line, save it in form <refdes:String>, [<prefix:String>, net, net]
+; Example: Rload, [R, 1, GND]
+; refdes is key
+; add each net to raw-nets
+  for (r in raw, i in 1 to false) do :
+    val line = to-tuple(split(r, " "))
+    if length(line) != 3 :
+      fatal("Malformed netlist at line %_" % [i])
+    val ref = line[0]
+    val [net1, net2] = [line[1], line[2]]
+    val prefix = to-string(ref[0])
+    add(raw-nets, net1)
+    add(raw-nets, net2)
+    println(ref)
+    add(components, imported-spice-component(ref, ; reference:String
+      prefix, ; element:String
+      to-list([net1, net2]), ; nets:List()
+      to-list([1,2]), ; pins:List()
+      1.0, ;   comp-val:Double
+      to-list([]);   parameters:List()
+    ))
+
+deftype Settings
+defmulti entries (s:Settings) -> Tuple<KeyValue<Symbol,?>>
+defmulti set (s:Settings, k:Symbol, value) -> False
+defmulti get (s:Settings, k:Symbol) -> ?
+defn Settings (initial-entries:Tuple<KeyValue<Symbol,?>>) :
+  val table = to-hashtable<Symbol,?>(initial-entries)
+  new Settings :
+    defmethod entries (this) :
+      val sorted-keys = qsort(keys(table))
+      to-tuple $ for k in sorted-keys seq :
+        k => table[k]
+    defmethod set (this, k:Symbol, v) :
+      table[k] = v
+    defmethod get (this, k:Symbol) :
+      table[k]
+
+val DEFAULT-PART-SETTINGS = [
+    `mpn => ""
+    `manufacturer => ""
+    `capacitance => 100.0e-6
+    `tolerance => 20.0
+    `max-voltage => 10.0
+    `temperature-coefficient => "X7R"
+    `inductance => 10.0e-3
+    `max-current => 1.0
+    `forward-current => 1.0
+    `forward-voltage => 1.0
+    `max-current => 1.0
+    `max-reverse-voltage => 1.0
+    `resistance => 100.0
+    `max-power => 0.125
+       ]
+
+public defn capacitor (options:Tuple<KeyValue<Symbol,?>>) :
+  ;Overwrite with users options
+  val settings = Settings(DEFAULT-PART-SETTINGS)
+  for entry in options do :
+    settings[key(entry)] = value(entry)
+  capacitor(settings[`mpn], settings[`manufacturer], settings[`capacitance], settings[`tolerance], settings[`max-voltage], settings[`temperature-coefficient])
+  
+pcb-component capacitor (mpn:String, manufacturer:String, capacitance:Double, tolerance:Double, max-voltage:Double, temperature-coefficient:String) :
+  port p : pin[[1 2]]
+  emodel = Capacitor(capacitance, tolerance, max-voltage, false, false, temperature-coefficient, "Ceramic")
+  val sym = capacitor-sym(CapacitorNonPolarized)
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+  val land = dummy-landpattern(2, [1.0 1.0])
+  landpattern = land(p[1] => land.p[1], p[2] => land.p[2])
+  reference-prefix = "C"
+  manufacturer = manufacturer
+  mpn = mpn
+
+public defn resistor (options:Tuple<KeyValue<Symbol,?>>) :
+  ;Overwrite with users options
+  val settings = Settings(DEFAULT-PART-SETTINGS)
+  for entry in options do :
+    settings[key(entry)] = value(entry)
+  resistor(settings[`mpn], settings[`manufacturer], settings[`resistance], settings[`tolerance], settings[`max-power])
+
+pcb-component resistor (mpn:String, manufacturer:String, resistance:Double, tolerance:Double, max-power:Double) :
+  port p : pin[[1 2]]
+  emodel = Resistor(resistance, tolerance, max-power)
+  val sym = resistor-sym(ResistorStd)
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+  val land = dummy-landpattern(2, [1.0 1.0])
+  landpattern = land(p[1] => land.p[1], p[2] => land.p[2])
+  reference-prefix = "R"
+  manufacturer = manufacturer
+  mpn = mpn
+
