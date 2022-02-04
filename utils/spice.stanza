@@ -52,6 +52,19 @@ public defn import-spice-netlist (path:String, mappings:Tuple<des>) :
     if length(line) != 3 :
       fatal("Malformed netlist at line %_" % [i])
     val ref = line[0]
+    val line-length = 3
+    val net-input = Vector<String>()
+    ; add(net-input, "blah")
+    ; println(to-string(net-input[0]))
+    for n in 1 to line-length do :
+      println("n= %_ line[n]= %_" % [n line[n] ])
+      if all?(digit?, line[n]) :
+        val number-net = string-join(["_", line[n] ])
+        add(net-input, number-net )
+        add(raw-nets, number-net )
+      else:
+        add(net-input, line[n] )
+        add(raw-nets, line[n] )
     val [net1, net2] = [line[1], line[2]]
     val prefix = to-string(ref[0])
     add(raw-nets, net1)
@@ -59,7 +72,8 @@ public defn import-spice-netlist (path:String, mappings:Tuple<des>) :
     println(ref) ; DEBUG
     add(components, imported-spice-component(ref, ; reference:String
       prefix, ; element:String
-      to-list([net1, net2]), ; nets:List()
+      to-list(net-input), ; nets:List()
+      ; to-list([net1, net2]), ; nets:List()
       to-list([ "1","2" ]), ; pins:List()
       ; to-list([ "p[1]","p[2]" ]), ; pins:List()
       1.0, ;   comp-val:Double
@@ -73,7 +87,7 @@ public defn import-spice-netlist (path:String, mappings:Tuple<des>) :
   ; instantiate nets
     for n in nets* do:
       make-net(to-symbol(to-net-name(n)) [], true)
-      println(n) ; DEBUG
+      ; println(n) ; DEBUG
 
     defn get-net (name:String) :
       find!({ref(_) == Ref(to-net-name(name))}, nets(self))    
@@ -89,8 +103,8 @@ public defn import-spice-netlist (path:String, mappings:Tuple<des>) :
   ; instantiate components
     for c in components do :
       val inst* = find-instantiable(element(c), mappings)
-      println("in c") ; DEBUG
-      println(inst*) ; DEBUG
+      ; println("in c") ; DEBUG
+      ; println(inst*) ; DEBUG
       match(inst*:Instantiable) :  
         inst part : inst*
         println(part) ; DEBUG
@@ -99,19 +113,21 @@ public defn import-spice-netlist (path:String, mappings:Tuple<des>) :
         ; val pin-length = length(pins(c))
         ; from 0 to #pins, net pin to net
         for (pin* in pins(c), net* in nets(c) ) do :
-          println("got here") ; DEBUG
+          ; println("got here") ; DEBUG
           println("net: %_ pin: %_" % [net* pin*]) ; DEBUG
           net (get-net(net*) part.(to-pin-name(pin*)))
-          ; net (net* part.to-pin-name(pin*) )
-          ; val pin-name* = to-pin-name(pin*)
-          ; net (net* part.pin-name* )
-          ; net (net* part.(to-pin-name(pin*)) )
+; view-schematic()
       ; else :
       ;   inst part : non-library-part(pins(c))
       ;   reference-designator(part) = reference(c)
       ;   for pin* in pins(c) do :
       ;     net (get-net(pin*[1]) part.(to-pin-name(pin*[0])))
   ; add component pins to nets - assume p1 and p2 for now
+
+
+
+; Show the Schematic and PCB for the design
+
 
 ; deftype Settings
 ; defmulti entries (s:Settings) -> Tuple<KeyValue<Symbol,?>>
