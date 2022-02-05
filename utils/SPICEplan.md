@@ -5,40 +5,46 @@ _# net .. net parameter=# .. parameter=#
 
 Assumptions: components and nets only, no parameters
 
-Generalize circuit imports by prefix
-Start with simple netlist - only component portion, only 2 pin components, no parameters
-Add multi-pin components and component type parameter (npm)
-Add parameters to ignore
-Add the commands and comments
+Done:
+- Generalize circuit imports by prefix
+- Start with simple netlist - only component portion, only 2 pin components, no parameters
+- Handled nets consisting of only numbers
+Doing:
+- Add multi-pin components and component type parameter (npm)
+- Add parameters to ignore
+- Add the commands and comments
 
 Netlist:
+```
 R3 vcc intc
 R1 vcc intb
 R2 intb 0
 Cout out intc
 Cin intb in
-
+```
 
 Netlist:
+```
 R3 vcc intc 10k
 R1 vcc intb 68k
 R2 intb 0 10k
 Cout out intc 10u
 Cin intb in 10u
-
+```
 Netlist:
-
+```
 R3 vcc intc 10k
 R1 vcc intb 68k
 R2 intb 0 10k
 Cout out intc 10u
 Cin intb in 10u
 mn0		drain gate gnd gnd 	nmos
-
+```
 Netlist:
+```
 Rmd 134 57 1.5 k noisy =0
 mn0		drain gate gnd gnd 	nmos	W=1u L=45n
-
+```
 
 
 First letter 	 Element description  
