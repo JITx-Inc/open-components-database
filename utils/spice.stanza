@@ -16,31 +16,84 @@ public pcb-struct ocdb/des :
 public pcb-struct ocdb/imported-spice-component :
   reference:String
   element:String
+  model:String
+  ; has-value:True|False
   nets:List
   pins:List
-  comp-val:Double
+  comp-val:Double|False
   parameters:List
   parameter-values:List
 
 public pcb-struct ocdb/spice-element-properties:
   nodes:List
   pins:Int
+  has-value:True|False
   parameters:List
 
 public defn get-spice-element-properties (prefix:String) :
   switch {prefix[0] == _} :
     'R' :
       val result = spice-element-properties(List("p", "n"),
-        2,
+        2, true,
         to-list(["ac","m","scale","temp","dtemp","tc1","tc2","noisy"]) )
       result
     else : ; C
       val result = spice-element-properties(List("p", "n"),
-        2,
+        2, true,
         to-list(["mname","m","scale","temp","dtemp","tc1","tc2","ic"]) )
       result
   
 
+
+
+
+public defn spice-to-double (spice:String) -> Double|False :
+  val lower-case-spice = lower-case(spice)
+  var multiplier:Double|False
+  val number = to-string{"%*", % [_]} $
+    for ch in lower-case-spice take-while : 
+      contains?("0123456789.", ch)
+    val suffix =
+      if length(number) != length(lower-case-spice) : 
+        lower-case-spice[length(number) to false]
+      else : 
+        ""
+  switch {suffix == _} :
+    "t":
+      multiplier = 1.0e12
+    "g":
+      multiplier = 1.0e9
+    "meg":
+      multiplier = 1.0e6
+    "k":
+      multiplier = 1.0e3
+    "mil":
+      multiplier = 25.4e-6
+    "m":
+      multiplier = 1.0e-3
+    "u":
+      multiplier = 1.0e-6
+    "n":
+      multiplier = 1.0e-9
+    "p":
+      multiplier = 1.0e-12
+    "f":
+      multiplier = 1.0e-15
+    "":
+      multiplier = 1.0
+    else:
+      multiplier = false
+  println("number %_ suffix: %_ multiplier %_" % [number suffix multiplier])
+  var return-val:Double|False = false
+  ; val return = to-double(number)
+  ; if (return is Double) and (multiplier is Double) :
+  match(to-double(number),multiplier ) :
+    (return:Double, multiplier:Double) :
+      return-val = return * multiplier
+    (return:False, multiplier) : return-val = false
+    (return, multiplier:False) : return-val = false
+  return-val
+    
 defn to-pin-name (raw:String) : 
   if to-int(raw) is Int:
     Ref("p")[to-int(raw) as Int]
@@ -56,55 +109,66 @@ defn to-net-name (raw:String) :
 public defn ListTable<K,V> () : HashTable<K,List<V>>(List())
 public defn add<?K,?V> (table:Table<?K,List<?V>>, k:K, v:V) : update(table, cons{v, _}, k)
 
-public defn import-spice-netlist (path:String, mappings:Tuple<des>) :
+public defn import-spice-netlist (path:String, use-part-database?:True|False, mappings:Tuple<des>) :
   val raw = (to-tuple $ split(slurp(path), "\n"))
-  val ref-to-pins = ListTable<String, [String, String, String]>()
+  ; val ref-to-pins = ListTable<String, [String, String, String]>()
 
   val raw-nets = Vector<String>()
   val components = Vector<imported-spice-component>()
 
-; read in each line, save it in form <refdes:String>, [<prefix:String>, net, net]
-; Example: Rload, [R, 1, GND]
-; refdes is key
-; add each net to raw-nets
   for (r in raw, i in 1 to false) do :
     val line = to-tuple(split(r, " "))
     var line-length = length(line)
-    ; if all?(matches?(" "), line[line-length - 1]) :
-    ;   line-length = line-length - 1
-    ; if length(line) != 3 :
-    ;   fatal("Malformed netlist at line %_" % [i])
     val ref = line[0]
     val element-props = get-spice-element-properties(ref)
     val net-input = Vector<String>()
-    ; println("props %_" % [parameters(element-props)] )
-    ; add(net-input, "blah")
-    ; println(to-string(net-input[0]))
-    for n in 1 through pins(element-props) do :
-      ; println("n= %_ line[n]= %_" % [n line[n] ]) ; DEBUG
-      println("line = %_" % [line[n]])
-      if digit?(line[n][0] ) : ; add underscore to nets starting with digits
-        val number-net = string-join(["_", line[n] ])
-        add(net-input, number-net )
-        add(raw-nets, number-net )
-      else:
-        add(net-input, line[n] )
-        add(raw-nets, line[n] )
-    val prefix = to-string(ref[0])
-    ; println(ref) ; DEBUG
-    add(components, imported-spice-component(ref, ; reference:String
-      prefix, ; element:String
-      to-list(net-input), ; nets:List()
-      ; to-list([net1, net2]), ; nets:List()
-      to-list([ "1","2" ]), ; pins:List()
-      ; to-list([ "p[1]","p[2]" ]), ; pins:List()
-      1.0, ;   comp-val:Double
-      to-list([]), ;   parameters:List()
-      to-list([]) ; parameter-values
-    ))
+    if line-length > pins(element-props) + 1: ; Line length >= _XXXX <nets> value model params
+      for n in 1 through pins(element-props) do :
+        ; println("n= %_ line[n]= %_" % [n line[n] ]) ; DEBUG
+        ; println("line = %_" % [line[n]])
+        if digit?(line[n][0] ) : ; add underscore to nets starting with digits
+          val number-net = string-join(["_", line[n] ])
+          add(net-input, number-net )
+          add(raw-nets, number-net )
+        else:
+          add(net-input, line[n] )
+          add(raw-nets, line[n] )
+      val prefix = to-string(ref[0])
+      var model-input = prefix
+      println("part 1 prefix: %_ model: %_" % [prefix model-input] )
+      ; println(ref) ; DEBUG
+      var line-position = 1 + pins(element-props)
+      println("linpos 1: %_" % [line-position])
+      ; get value, if component type has value
+      var comp-val:Double|False = false
+      if has-value(element-props) :
+        ; (match spice-to-double(line[line-position])
+        println("line[linepos]: %_ " % [(line[line-position]) ])  
+        comp-val = spice-to-double(line[line-position])
+        line-position = line-position + 1
+      println("linpos 1: %_ comp-val: %_" % [line-position comp-val])
+      ; get the model name, if there is one, or set the model name to the prefex
+      ; if line-length > 1 + pins(element-props) : 
+        ; if has-value(element-props) :
+        
+        ; model-input = line[pins(element-props) + 1]
+      println("part 2 prefix: %_ model: %_" % [prefix model-input] )
+      println("component prefix: %_ model: %_ nets %_ pins %_ value %_" % [prefix model-input to-list(net-input) to-list([ "1","2" ]) comp-val])
+      add(components, imported-spice-component(ref, ; reference:String
+        prefix, ; element:String
+        model-input,; model:String
+        to-list(net-input), ; nets:List()
+        ; to-list([net1, net2]), ; nets:List()
+        to-list([ "1","2" ]), ; pins:List()
+        ; to-list([ "p[1]","p[2]" ]), ; pins:List()
+        comp-val, ;   comp-val:Double
+        to-list([]), ;   parameters:List()
+        to-list([]) ; parameter-values
+      ))
   val nets* = unique(raw-nets)
   println("nets") ; DEBUG
   println(nets*) ; DEBUG
+  println("components %_" % [components]) ; DEBUG
 
   inside pcb-module:
   ; instantiate nets
@@ -125,9 +189,9 @@ public defn import-spice-netlist (path:String, mappings:Tuple<des>) :
         false
   ; instantiate components
     for c in components do :
-      val inst* = find-instantiable(element(c), mappings)
-      ; println("in c") ; DEBUG
-      ; println(inst*) ; DEBUG
+      val inst* = find-instantiable(model(c), mappings)
+      println("in c") ; DEBUG
+      println(inst*) ; DEBUG
       match(inst*:Instantiable) :  
         inst part : inst*
         println(part) ; DEBUG
@@ -139,7 +203,6 @@ public defn import-spice-netlist (path:String, mappings:Tuple<des>) :
           ; println("got here") ; DEBUG
           println("net: %_ pin: %_" % [net* pin*]) ; DEBUG
           net (get-net(net*) part.(to-pin-name(pin*)))
-; view-schematic()
       ; else :
       ;   inst part : non-library-part(pins(c))
       ;   reference-designator(part) = reference(c)
