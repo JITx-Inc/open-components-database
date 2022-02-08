@@ -1,0 +1,72 @@
+#use-added-syntax(jitx)
+defpackage ocdb/ftdi/FT234XD :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+public pcb-component component :
+  manufacturer = "FTDI"
+  mpn = "FT234XD"
+  description = "USB Bridge, USB to UART USB 2.0 UART Interface"
+
+  port uart : uart
+  port usb : usb-2-data
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir ]
+    [usb.N    | 1           | Left     ]
+    [nRESET   | 2           | Left     ]
+    [VOUT3V3  | 3           | Right    ]
+    [VCC      | 4           | Right    ]
+    [GND      | 5, 13       | Right    ]
+    [CBUS0    | 6           | Left     ]
+    [uart.tx  | 7           | Right    ]
+    [uart-rts | 8           | Right    ]
+    [VCCIO    | 9           | Right    ]
+    [uart.rx  | 10          | Left     ]
+    [uart-cts | 11          | Left     ]
+    [usb.P    | 12          | Left     ]
+
+
+  make-box-symbol()
+  assign-landpattern(dfn-landpattern(12, 0.45, [0.25, 0.65], -1.55, [3.0, 3.0], [1.7, 2.5]))
+
+public pcb-module module :
+  inst bridge : ocdb/ftdi/FT234XD/component
+  pin vcc
+  pin gnd
+  pin v-usb
+  pin reset
+  pin cts
+  pin rts
+  pin cbus0
+  
+  port uart-node : uart
+  port usb-data : usb-2-data
+
+  inst ferrite : ocdb/tdk/MPZ1608/component(470.0)
+
+  net (v-usb, ferrite.p[1])
+  net (ferrite.p[2], bridge.VCC)
+  net (vcc, bridge.VCCIO)
+  net (gnd, bridge.GND)
+  net (reset, bridge.nRESET)
+  net (rts, bridge.uart-rts)
+  net (cts, bridge.uart-cts)
+  net (cbus0, bridge.CBUS0)
+  net (usb-data, bridge.usb)
+  net (uart-node, bridge.uart)
+
+  bypass-cap-strap(bridge.VCC, gnd, 4.7e-6)
+  bypass-cap-strap(bridge.VCC, gnd, 100.0e-9)
+  bypass-cap-strap(bridge.VCC, gnd, 100.0e-9)
+  bypass-cap-strap(bridge.VOUT3V3, gnd, 100.0e-9)
