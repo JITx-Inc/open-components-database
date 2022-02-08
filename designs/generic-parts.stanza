@@ -1,0 +1,30 @@
+#use-added-syntax(jitx)
+defpackage ocdb/designs/single-resistor :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/bundles
+  import ocdb/design-vars
+  import ocdb/micro-controllers
+  import ocdb/generator-utils
+  import ocdb/checks
+  import ocdb/generic-components
+
+val board-shape = Rectangle(20.0, 15.0)
+
+pcb-module first-design :
+
+  inst r : chip-resistor(1.0e3)
+  inst c : ceramic-cap(["capacitance" => closest-std-val(11.0e-12, 5.0) "temperature-coefficient.code" => "C0G" ])
+  inst l : smd-inductor([ "inductance" => 2.7e-9 "min-self-resonant-frequency" => 7.0e6 "min-quality-factor" => 8.0])
+
+  inst mcu : micro-controller(["series" => "STM32L4" "min-flash" => 16.0e3])(([`debug-interface => jtag()]))
+
+enable-spy()
+make-default-board(first-design, 4, board-shape)
+
+view-board()
+view-schematic()
+export-bom()
