@@ -7,20 +7,24 @@ defpackage spice-import-test:
   import ocdb/defaults
   import ocdb/spice
   import ocdb/generic-components
+  
 
 val BOARD-SHAPE = RoundedRectangle(25.0, 25.0, 0.25)
 
-val test_mappings = [des(["R"], chip-resistor(["resistance" => 1.0e3]) )
-                des(["RESMOD"],            chip-resistor(["resistance" => 4.7e3]) )
-                des(["U"],           ocdb/st-microelectronics/STM32F031F4P6/component)
-                des(["C"], ceramic-cap(["capacitance" => 1.0e-6]))]
-  
+val test_mappings = [des(["r"],            ["case" => "0603"] )
+                des(["resmod"], chip-resistor(["case" => "1206"]) )
+                des(["u"],           ocdb/st-microelectronics/STM32F031F4P6/component)
+                des(["c"], ["case" => get-valid-pkg-list("0201")] )
+                des(["m"], ocdb/on-semiconductor/FDN352AP/component)
+                des(["pmos"], ocdb/on-semiconductor/FDN352AP/component)]
+
 val one-each-mappings = [ des(["C"], gen-cap-cmp(1.0e-6))
                           des(["R"], gen-res-cmp(1.0e3))
                           des(["U"], pin-header(16, 2)) ]
 
 pcb-module spice:
-  inst not-empty :  chip-resistor(["resistance" => 100.0e3])
+  inst not-empty :  chip-resistor(["case" => "1206"])
+  property(not-empty.resistance) = 100.0e3
   import-spice-netlist("open-components-database/utils/netdev.cir",true, test_mappings)
 
 ; DON'T FORGET TO REMOVE FROM ocdb/stanza.proj
