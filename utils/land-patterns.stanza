@@ -551,7 +551,7 @@ public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Dou
     val n-col  = to-int(ceil(to-double(n-pin) / to-double(n-row)))
     val origin = loc(offset-x, offset-y) * loc(
       (normalize(n-row) * row-pitch), ; x
-      (normalize(n-col) * pin-pitch)  ; y
+      (normalize(n-col * -1) * pin-pitch)  ; y
     )
 
     for i in 0 to n-col do :
@@ -1553,7 +1553,7 @@ public defn make-n-pin-soic-landpattern (num-pins:Int, ; the number of pins of t
                               terminal-width,
                               false)
 
-public defn make-dfn-landpattern (num-pins:Int,                 ; number of pins of the component
+public defn make-dfn-land-pattern (num-pins:Int,                 ; number of pins of the component
                                   pitch:Double,                 ; pitch of the pins of the component
                                   package-length:Toleranced,    ; the length of the package 
                                   package-width:Toleranced,     ; the width of the package
@@ -1671,6 +1671,28 @@ public defn make-dual-row-smd-landpattern (
                              terminal-length, terminal-width,
                              with-pol-marker?,
                              DENSITY-LEVEL, false)
+
+public defn make-dfn-landpattern (num-pins:    Int
+                                  pitch:   Double, ; the pitch of the pins on the primary side of the land pattern
+                                  package-length:  Toleranced, ; the length of the package
+                                  package-width:   Toleranced, ; the width of the package
+                                  terminal-length: Toleranced,          ; the length of the terminals of the land pattern
+                                  terminal-width:  Toleranced,          ; the width of the terminals of the land pattern
+                                  exposed-metal-heat-feature?:False|Shape) : ; optional thermal pad shape
+
+  make-dual-row-smd-landpattern(num-pins  ; the number of pins on the primary side of the land pattern
+                                num-pins   ; the number of pins on the other side of the land pattern
+                                pitch ; the pitch of the pins on the primary side of the land pattern
+                                pitch ; the pitch of pins on the other side of the land pattern
+                                package-length ; the lead span across the package
+                                package-length ; the length of the package
+                                package-width ; the width of the package
+                                QuadFlatNoLeads   ; optional lead/land protrusion type
+                                terminal-length   ; the length of the terminals of the land pattern
+                                terminal-width         ; the width of the terminals of the land pattern
+                                true         ; optional polarity marker 
+                                DENSITY-LEVEL        ; optional density level
+                                exposed-metal-heat-feature?) ; optional thermal pad shape
 
 public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vertical) dimension of the package
                                            width:Toleranced,  ; the width (horizontal) dimension of the package
