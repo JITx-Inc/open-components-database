@@ -14,6 +14,16 @@ public pcb-struct ocdb/des :
   references:Tuple<String>
   library-part:Instantiable|Tuple<KeyValue<String, ?>>
 
+defn find-component-from-list (name:String, mappings:Tuple<des>) -> Instantiable|False :
+  var part = None
+  for m in mappings do :
+    if contains?(references(m), name):
+      part = library-part(m)
+  if part is Instantiable :
+    part as Instantiable
+  else:
+    false
+
 defn remove-duplicate-keys (hs:Seqable<Seqable<KeyValue<String, ?>>>) -> Tuple<KeyValue<String, ?>> :
   to-tuple $ to-hashtable<String, ?>(cat-all(hs))
 public pcb-struct ocdb/imported-spice-component :
@@ -32,6 +42,35 @@ public pcb-struct ocdb/spice-element-properties:
   pins:Int
   has-value:True|False
   parameters:List
+
+; public defn get-pin-list (obj:JITXObject, pin-id:?) :
+;   val pin-name = to-string(pin-id)
+;   val result = to-tuple $ for p in pins(obj) filter :
+;     if substring?(to-string(ref(p)), pin-name) :
+;       match-pin?(ref(p), pin-name)
+;   result
+; JITXObject
+
+; pin-properties
+public defn introspect-pins (obj:Instantiable) : 
+  println("got here")
+  println("pins: %_" % [pins(obj)])
+  inside pcb-component :
+    println("got here 2")
+    ; pad is a keyword in landpattern contexts
+    println("pins list: %_" % [pins(self)])
+    for pin* in pins(self) do :
+      println("pin: %_:" % [pin*])
+
+    ; println("pins list: %_" % [pin-properties(self)])
+    ; for pin* in pin-properties(self) do :
+    ;   println("pin: %_:" % [pin*])
+
+; defn introspect () : 
+;   inside pcb-landpattern :
+;     ; pad is a keyword in landpattern contexts
+;     for pad* in pads(self) do :
+;       println(pose(pad*))
 
 public defn get-spice-element-properties (prefix:String) :
   switch {prefix[0] == _} :
@@ -55,7 +94,34 @@ public defn get-spice-element-properties (prefix:String) :
         4, false,
         to-list(["mname","area", "m","pj", "off", "ic", "temp", "dtemp", "lm", "wm", "lp" "wp"]) )
       result
-    else : ; C
+    'C' : ; C
+      val result = spice-element-properties(List("a", "c"),
+        2, true,
+        to-list(["mname","m","scale","temp","dtemp","tc1","tc2","ic"]) )
+      result
+
+
+    'Q' : ; Bipolar junction transistor (BJT)  
+      val result = spice-element-properties(List("c", "b", "e"),
+        3, true,
+        to-list(["mname","m","scale","temp","dtemp","tc1","tc2","ic"]) )
+      result
+    'J' : ; Junction field effect transistor (JFET) 
+      val result = spice-element-properties(List("a", "c"),
+        2, true,
+        to-list(["mname","m","scale","temp","dtemp","tc1","tc2","ic"]) )
+      result
+    'I' : ; Current source  
+      val result = spice-element-properties(List("a", "c"),
+        2, true,
+        to-list(["mname","m","scale","temp","dtemp","tc1","tc2","ic"]) )
+      result
+    'V' : ; Voltage source  
+      val result = spice-element-properties(List("a", "c"),
+        2, true,
+        to-list(["mname","m","scale","temp","dtemp","tc1","tc2","ic"]) )
+      result
+    else : ; ??? default to C
       val result = spice-element-properties(List("a", "c"),
         2, true,
         to-list(["mname","m","scale","temp","dtemp","tc1","tc2","ic"]) )
@@ -125,13 +191,17 @@ defn to-net-name (raw:String) :
 public defn ListTable<K,V> () : HashTable<K,List<V>>(List())
 public defn add<?K,?V> (table:Table<?K,List<?V>>, k:K, v:V) : update(table, cons{v, _}, k)
 
-
+defn clean-net-name (net-in:String) -> String:
+  var net-out = net-in
+  if digit?(net-in[0] ) : ; add underscore to nets starting with digits
+    net-out = string-join(["_", net-in ])
+  net-out
 ; Assumptions: 
 ; - generated spice has already been processed with a syntax checker
 ; - line continuation is not used '+'
 ; - ignore commands, items in models (user can specify the component at the top level)
 ; - there is no more than 1 space between each item
-public defn import-spice-netlist (path:String, use-part-database?:True|False, mappings:Tuple<des>) :
+public defn import-spice-netlist (path:String, use-part-database?:True|False, mappings:Tuple<des>,ground-nets:List<String>,power-nets:List<String>) :
   val raw = (to-tuple $ split(slurp(path), "\n"))
 
   val raw-nets = Vector<String>()
@@ -140,41 +210,54 @@ public defn import-spice-netlist (path:String, use-part-database?:True|False, ma
   for (r in raw, i in 1 to false) do :
   ; does line start with a component we support?
     var valid-line:True|False = false
+    var unique-part:True|False = false
     println("r: %_" % [r])
     
     if length(r) > 3 :
-      if contains?("rRcClLdDmM", r[0]) : ; line starts with: R C L D M
+      ; if contains?("rRcClLdDmM", r[0]) : ; line starts with: R C L D M
+      if contains?("rRcClLdD", r[0]) : ; line starts with: R C L D M
         valid-line = true
+      else if letter?(r[0]): ; if other letter, look up instance with reference designator and populate element props
+        valid-line = true
+        unique-part = true
+        println("other letter") 
       else: valid-line = false
       ; (match-r:False) :
       ;   valid-line = false
     ; println("contains: %_ valid? %_" % [contains?("rRcClLdDmM", r[0]) valid-line])
     if valid-line :
+      val input = to-tuple(split(lower-case(r), " "))
       val line = to-tuple(split(lower-case(r), " "))
       var line-length = length(line)
-      var ref:String = line[0]
-      val char:Char = upper-case(ref[0])
-      ref = string-join([char,ref[1 to false]])
-      ; ref[0] = 'R'
-      ; ref[0] = upper-case(ref[0])
-      println("ref %_" % [ref])
-      val element-props = get-spice-element-properties(ref)
+      var ref-des:String = line[0]
+      val char:Char = upper-case(ref-des[0])
+      ref-des = string-join([char,ref-des[1 to false]])
+      ; ref-des[0] = 'R'
+      ; ref-des[0] = upper-case(ref-des[0])
+      println("ref-des %_" % [ref-des])
+      var element-props = get-spice-element-properties("C")
+        if unique-part :
+          val component-from-list = find-component-from-list(input[line-length - 1], mappings)
+          match(component-from-list) : 
+            (obj:Instantiable) :
+              val pin-list = map(to-string, map(ref, pins(obj)))
+              element-props = spice-element-properties(to-list(pin-list ), length(pins(obj)), false,to-list([]))
+            (obj:False) :
+              fatal("SPICE line with reference designator %_ has no matching component." % [input[0]])
+        else:
+          element-props = get-spice-element-properties(ref-des)
       val net-input = Vector<String>()
       if line-length > pins(element-props) + 1: ; Line length >= _XXXX <nets> value model params
         for n in 1 through pins(element-props) do :
           ; println("n= %_ line[n]= %_" % [n line[n] ]) ; DEBUG
           ; println("line = %_" % [line[n]])
-          if digit?(line[n][0] ) : ; add underscore to nets starting with digits
-            val number-net = string-join(["_", line[n] ])
-            add(net-input, number-net )
-            add(raw-nets, number-net )
-          else:
-            add(net-input, line[n] )
-            add(raw-nets, line[n] )
-        val prefix = to-string(ref[0])
+          val name-net = clean-net-name(line[n]) ; add underscore to nets starting with digits
+          add(net-input, name-net )
+          add(raw-nets, name-net )
+        val prefix = to-string(ref-des[0])
         var model-input = prefix
         ; println("part 1 prefix: %_ model: %_" % [prefix model-input] )
-        ; println(ref) ; DEBUG
+        ; println(ref-des) ; DEBUG
         var line-position = 1 + pins(element-props)
         ; println("linpos 1: %_" % [line-position])
         ; get value, if component type has value
@@ -192,11 +275,13 @@ public defn import-spice-netlist (path:String, use-part-database?:True|False, ma
               model-input = line[line-position]
             (equal-index:Int) :
               println("parameter: %_" % [line] )
+        if unique-part :
+          model-input = input[line-length - 1]
           ; code for handling parameters (later)
         ; println("part 2 prefix: %_ model: %_" % [prefix model-input] )
-        println("component prefix: %_ model: %_ ref: %_ nets %_ pins %_ value %_" % [prefix ref model-input to-list(net-input) nodes(element-props) comp-val])
+        println("component prefix: %_ model: %_ ref-des: %_ nets %_ pins %_ value %_" % [prefix ref-des model-input to-list(net-input) nodes(element-props) comp-val])
         add(components, imported-spice-component(
-          ref, ; reference:String
+          ref-des, ; reference:String
           prefix, ; element:String
           model-input,; model:String
           to-list(net-input), ; nets:List()
@@ -238,10 +323,14 @@ public defn import-spice-netlist (path:String, use-part-database?:True|False, ma
               println("tuple")
               ; val params = remove-duplicate-keys $ [["type" => "ceramic" ]
               ;                           "resistance" => 1.0e3]
-              println("element(c) %_" % [element(c)])
-              switch {element(c)[0] == _} :
-                'R' : part = chip-resistor(to-tuple(cat-all([["resistance" => comp-val(c)], part-props])))
-                'C' : part = tantalum-cap(to-tuple(cat-all([["capacitance" => comp-val(c)], part-props])))
+              match(comp-val(c)) :
+                (comp-val-double:Double) :
+                  println("element(c) %_" % [element(c)])
+                  switch {element(c)[0] == _} :
+                    'R' : part = chip-resistor(to-tuple(cat-all([["resistance" => closest-std-val(comp-val-double,0.1)], part-props])))
+                    'C' : part = tantalum-cap(to-tuple(cat-all([["capacitance" => closest-std-val(comp-val-double,10.0)], part-props])))
+                (uh-oh:False) :
+                  fatal("You found an error I didn't anticipate. Likely caused by malformed SPICE input.")
                 ; 'r' : part = chip-resistor(params)
                 ; 'r' : part = chip-resistor(to-tuple(cat-all(["resistance" => 1.0e3, part-props])))
       if part is Instantiable :
@@ -264,6 +353,28 @@ public defn import-spice-netlist (path:String, use-part-database?:True|False, ma
           ; println("got here") ; DEBUG
           println("net: %_ pin: %_" % [net* pin*]) ; DEBUG
           net (get-net(net*) part.(to-pin-name(pin*)))
+    ; Add power and ground objects
+    val raw-ground-nets = Vector<String>()
+    for ground-net in ground-nets do :
+      add(raw-ground-nets, lower-case(clean-net-name(ground-net) ) )
+    val unique-ground-nets = unique(raw-ground-nets)
+    for ground-net in unique-ground-nets do :
+      symbol(get-net(ground-net)) = ocdb/symbols/ground-sym
+    val raw-power-nets = Vector<String>()
+    for power-net in power-nets do :
+      add(raw-power-nets, lower-case(clean-net-name(power-net) ) )
+    val unique-power-nets = unique(raw-power-nets)
+    for power-net in unique-power-nets do :
+      symbol(get-net(power-net)) = ocdb/symbols/supply-sym
+
+    ; for n in ground-nets* do:
+    ;   symbol(to-net-name(n) ) = ocdb/symbols/ground-sym
+    ; for ground-net in ground-nets do :
+    ; for i in 0 to length(ground-nets) do :
+    ;   symbol(lower-case(clean-net-name(ground-nets[i]) ) ) = ocdb/symbols/ground-sym
+    ; for i in 0 to length(power-nets) do :
+    ;   symbol(lower-case(clean-net-name(power-nets[i]) ) ) = ocdb/symbols/supply-sym
+
       ; else :
       ;   inst part : non-library-part(pins(c))
       ;   reference-designator(part) = reference(c)
