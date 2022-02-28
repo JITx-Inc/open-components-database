@@ -87,6 +87,10 @@ defn ioc-file-header () -> String :
   val header = "#MicroXplorer Configuration settings - do not modify\nFile.Version=6\nboard=custom\n"
   header
 
+defn default-nvic-settings () -> String :
+  val body = "NVIC.ForceEnableDMAVector=true\nNVIC.HardFault_IRQn=true\\:0\\:0\\:false\\:false\\:true\\:false\\:false\nNVIC.NonMaskableInt_IRQn=true\\:0\\:0\\:false\\:false\\:true\\:false\\:false\nNVIC.PendSV_IRQn=true\\:0\\:0\\:false\\:false\\:true\\:false\\:false\nNVIC.SVC_IRQn=true\\:0\\:0\\:false\\:false\\:true\\:false\\:false\nNVIC.SysTick_IRQn=true\\:0\\:0\\:false\\:false\\:true\\:false\\:true\n"
+  body
+
 defn valid-instance (i : JITXObject) :
   match(mpn?(i): String) :
     if prefix?(mpn?(i) as String, "STM32") :
@@ -190,6 +194,7 @@ defn compose-ioc-contents (i : JITXObject) :
       ip-content = append(ip-content, to-string("Mcu.IP%_=%_\n" % [i, stm32-ip-name(ip)]))
     ip-content = append(ip-content, to-string("Mcu.IPNb=%_\n" % [length(ip-names)]))
     content = append(content, ip-content)
+    content = append(content, default-nvic-settings())
     for p in pins(i) do :
       if not has-property?(p.power-pin) :
         if has-property?(p.stm32-pin-name) :
