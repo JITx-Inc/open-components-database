@@ -307,14 +307,17 @@ public defn assign-symbols (banks:Tuple<KeyValue<Int|Ref, UnitSymbol>>) :
           (box:BoxSymbol) : None()
           (symbol:SchematicSymbol) :
             val symbol-pins = to-hashset(ref, /pins(symbol))
-            val mismatched-pins =
+            val mismatched-pins = to-tuple $
               for (p in pins, b in pin-banks) seq? :
                 val pin-ref = ref(p)
                 if value!(b) == bank and not symbol-pins[pin-ref] :
                   One(pin-ref)
                 else :
                   None()
-            One(name(symbol) => to-tuple(mismatched-pins))
+            if not empty?(mismatched-pins) :
+              One(name(symbol) => to-tuple(mismatched-pins))
+            else :
+              None()
     if not empty?(bad-matches) :
       throw(MissingSymbolPins(bad-matches))
   ensure-non-empty-banks!()
@@ -483,8 +486,7 @@ public pcb-struct ocdb/box-symbol/MissingSymbolPins <: Exception :
 
 defmethod print (o:OutputStream, e:MissingSymbolPins) :
   defn format (kv:KeyValue<String, Tuple<Ref>>) -> Printable :
-    "Symbol %~ : Pins %," % [key(kv), value(kv)]
-  val error-str = \<S>`make-box-symbol` requires component pin names to match symbol pin names.
-The following symbols are missing pins:
+    "pcb-symbol %~ is missing pin(s) %," % [key(kv), value(kv)]
+  val error-str = \<S>`make-box-symbol` requires component pin names to match symbol pin names:
 %n<S> % [map(Indented{format(_)}, missing(e))]
   print(o, error-str)
