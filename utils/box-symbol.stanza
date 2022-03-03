@@ -271,15 +271,22 @@ public defn make-box-symbol () :
             else : None()
           BoxBank(to-tuple(entries))
       make-box-symbol(banks)
-    
-public defn assign-symbols (banks:Tuple<KeyValue<Int|Ref, SchematicSymbol|False>>) :
+
+public defstruct BoxSymbol
+
+public deftype UnitSymbol :
+  BoxSymbol <: UnitSymbol
+  SchematicSymbol <: UnitSymbol
+
+public defn assign-symbols (banks:Tuple<KeyValue<Int|Ref, UnitSymbol>>) :
   defn ensure-non-empty-banks! () :
     if empty?(banks) :
       throw(EmptyBanks(""))
   defn ensure-unique-bank-arguments! () :
     val seen-banks = HashSet<Int|Ref>()
     val duplicate-banks = Vector<Int|Ref>()
-    for [bank, symbol?] in kvs(banks) do :
+    for bank-kv in banks do :
+      val bank = key(bank-kv)
       if not add(seen-banks, bank) :
         add(duplicate-banks, bank)
     if not empty?(duplicate-banks) :
@@ -297,9 +304,9 @@ public defn assign-symbols (banks:Tuple<KeyValue<Int|Ref, SchematicSymbol|False>
     val bad-matches = to-tuple $
       for bank in banks seq? :
         match(value(bank)) :
-          (box:False) : None()
+          (box:BoxSymbol) : None()
           (symbol:SchematicSymbol) :
-            val symbol-pins = to-hashset<Ref> $ map(ref, /pins(symbol))
+            val symbol-pins = to-hashset(ref, /pins(symbol))
             val mismatched-pins =
               for (p in pins, b in pin-banks) seq? :
                 val pin-ref = ref(p)
@@ -308,8 +315,6 @@ public defn assign-symbols (banks:Tuple<KeyValue<Int|Ref, SchematicSymbol|False>
                 else :
                   None()
             One(name(symbol) => to-tuple(mismatched-pins))
-    ; [TODO] Once pin introspection is added to SchematicSymbol,
-    ;        ensure that the SchematicSymbol does not have extra pins.
     if not empty?(bad-matches) :
       throw(MissingSymbolPins(bad-matches))
   ensure-non-empty-banks!()
@@ -321,11 +326,11 @@ public defn assign-symbols (banks:Tuple<KeyValue<Int|Ref, SchematicSymbol|False>
     val pin-sides = ensure-good-sides!(pins, pin-sides0)
     ensure-good-banks!(pins, pin-banks, true)
     ensure-banks-exist!(pin-banks)
-    ; ensure-symbol-pins!(pins, pin-banks)
+    ensure-symbol-pins!(pins, pin-banks)
     val wrapped-banks =
       for [bank, symbol?] in kvs(banks) seq :
         match(symbol?) :
-          (box:False) : 
+          (box:BoxSymbol) :
             val entries = for (p in pins, s in pin-sides, b in pin-banks) seq? :
               if value!(b) == bank : One(s => p)
               else : None()
@@ -372,7 +377,7 @@ defn unique-banks (banks:Tuple<Maybe>) :
     if c == 0 : compare(x, y)
     else : c
   qsort!(banks*, compare-bank)
-  banks*    
+  banks*
 
 defn ensure-good-banks! (pins:Tuple<JITXObject>,
                          banks:Tuple<Maybe>,
@@ -423,17 +428,17 @@ defn flatten-pin-entries (es:Seqable<KeyValue<Dir,JITXObject|Seqable<JITXObject>
 public pcb-struct ocdb/box-symbol/IncorrectSideProperty <: Exception :
   pin: Ref
   actual-type: String
-  
+
 defmethod print (o:OutputStream, e:IncorrectSideProperty) :
   print(o, "Property %_.side is expected to be a Dir object but is instead of type %_." % [
     pin(e), actual-type(e)])
-  
+
 public pcb-struct ocdb/box-symbol/MissingSideProperty <: Exception :
   pins: Tuple<Ref>
 
 defmethod print (o:OutputStream, e:MissingSideProperty) :
   print(o, "Pins %, do not have a .side property." % [pins(e)])
-  
+
 public pcb-struct ocdb/box-symbol/IncorrectBankProperty <: Exception :
   pin: Ref
   actual-type: String
@@ -441,7 +446,7 @@ public pcb-struct ocdb/box-symbol/IncorrectBankProperty <: Exception :
 defmethod print (o:OutputStream, e:IncorrectBankProperty) :
   print(o, "Property %_.bank is expected to be a Int|Ref object but is instead of type %_." % [
     pin(e), actual-type(e)])
-  
+
 public pcb-struct ocdb/box-symbol/MissingBankProperty <: Exception :
   pins: Tuple<Ref>
 
