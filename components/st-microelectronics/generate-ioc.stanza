@@ -84,8 +84,19 @@ public pcb-enum ocdb/st-microelectronics/generate-ioc/STM32IPs :
   STMDACIP    ; DAC
 
 defn ioc-file-header () -> String :
-  val header = "#MicroXplorer Configuration settings - do not modify\nFile.Version=6\nboard=custom\n"
-  header
+  \<header-body>#MicroXplorer Configuration settings - do not modify
+File.Version=6
+board=custom
+<header-body>
+
+defn default-nvic-settings () -> String :
+  \<nvic-body>NVIC.ForceEnableDMAVector=true
+NVIC.HardFault_IRQn=true\:0\:0\:false\:false\:true\:false\:false
+NVIC.NonMaskableInt_IRQn=true\:0\:0\:false\:false\:true\:false\:false
+NVIC.PendSV_IRQn=true\:0\:0\:false\:false\:true\:false\:false
+NVIC.SVC_IRQn=true\:0\:0\:false\:false\:true\:false\:false
+NVIC.SysTick_IRQn=true\:0\:0\:false\:false\:true\:false\:true
+<nvic-body>
 
 defn valid-instance (i : JITXObject) :
   match(mpn?(i): String) :
@@ -190,6 +201,7 @@ defn compose-ioc-contents (i : JITXObject) :
       ip-content = append(ip-content, to-string("Mcu.IP%_=%_\n" % [i, stm32-ip-name(ip)]))
     ip-content = append(ip-content, to-string("Mcu.IPNb=%_\n" % [length(ip-names)]))
     content = append(content, ip-content)
+    content = append(content, default-nvic-settings())
     for p in pins(i) do :
       if not has-property?(p.power-pin) :
         if has-property?(p.stm32-pin-name) :
@@ -286,7 +298,7 @@ public defn generate-ioc-file (filename : String):
         close(fos)
 
 public defn generate-ioc-file ():
-  generate-ioc-file("project-output.ioc")
+  generate-ioc-file("default-project-output.ioc")
 
 
 ; PG15.GPIOParameters=GPIO_PuPd
