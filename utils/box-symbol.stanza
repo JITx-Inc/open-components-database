@@ -2,6 +2,8 @@
 defpackage ocdb/box-symbol :
   import core
   import collections
+  import algorithm/utils
+  import lang-utils
   import jitx
   import jitx/commands
   import jitx/fonts
@@ -217,11 +219,18 @@ public defn make-box-symbol (entries:Seqable<KeyValue<Dir, JITXObject|Seqable<JI
 public defstruct BoxBank :
   entries: Collection<KeyValue<Dir,JITXObject|Seqable<JITXObject>>>
 
-public defn make-box-symbol (banks:Seqable<BoxBank>) :
+public defstruct StandardBank :
+  symbol: SchematicSymbol
+  pin-mappings: Tuple<KeyValue<JITXObject, JITXObject>>
+
+public defn make-box-symbol (banks:Seqable<BoxBank|StandardBank>) :
   inside pcb-component :
     symbol :
       for (bank in banks, u in 0 to false) do :
-        val [sym, mapping] = generate-box-symbol-unit(flatten-pin-entries(entries(bank)))
+        val [sym, mapping] =
+          match(bank) :
+            (bank:BoxBank) : generate-box-symbol-unit(flatten-pin-entries(entries(bank)))
+            (bank:StandardBank) : [symbol(bank), pin-mappings(bank)]
         unit(u) = sym(
           for e in mapping do :
             key(e) => value(e))
@@ -244,70 +253,14 @@ public defn make-box-symbol (banks:Seqable<BoxBank>) :
 ;=======================================================<doc>
 
 public defn make-box-symbol () :
-  ;Sort the given pins by their .pin-properties-row-index field.
-  defn sort-by-row-index (pins:Tuple<JITXObject>) -> Tuple<JITXObject> :
-    ;Compare pin[i0] versus pin[i1].
-    ;Indices are used, instead of the pin directly, in order to perform a
-    ;stable sort.
-    ;All pins without a .pin-properties-row-index are put in the beginning.
-    defn compare-index (i0:Int, i1:Int) :
-      val ai = value?(property?(pins[i0].pin-properties-row-index))
-      val bi = value?(property?(pins[i1].pin-properties-row-index))
-      match(ai, bi) :
-        (ai:Int, bi:Int) : compare(ai, bi)
-        (ai:Int, bi) : 1
-        (ai, bi:Int) : -1
-        (ai, bi) : compare(i0,i1)
-    val indices = qsort(0 to length(pins), compare-index)
-    map({pins[_]}, indices)    
-  defn ensure-good-sides! (pins:Tuple<JITXObject>, sides:Tuple<Maybe>) -> Tuple<Dir> :
-    ;Check that all pins.side is either Dir or not given.
-    for (p in pins, s in sides) do :
-      if value?(s) is-not Dir|False :
-        throw(IncorrectSideProperty(ref(p), object-type(value?(s))))
-    ;Default side is Right
-    if all?(empty?, sides) :
-      map({Right}, pins)
-    else if none?(empty?, sides) :
-      map(value!, sides)
-    else :
-      val ps = for (p in pins, s in sides) seq? :
-        if empty?(s) : One(ref(p))
-        else : None()
-      throw(MissingSideProperty(to-tuple(ps)))      
-  defn ensure-good-banks! (pins:Tuple<JITXObject>, banks:Tuple<Maybe>) :
-    ;Check that all pins.banks is either Int|Ref or not given.
-    for (p in pins, b in banks) do :
-      if value?(b) is-not Int|Ref|False :
-        throw(IncorrectBankProperty(ref(p), object-type(value?(b))))
-    ;Check that either all banks given or no banks given.
-    if all?(empty?, banks) or none?(empty?, banks) :
-      false
-    else :
-      val ps = for (p in pins, b in banks) seq? :
-        if empty?(b) : One(ref(p))
-        else : None()
-      throw(MissingBankProperty(to-tuple(ps)))
   defn single-bank? (banks:Tuple<Maybe>) :
     length(unique(banks)) <= 1
-  defn unique-banks (banks:Tuple<Maybe>) :
-    val banks* = to-vector<Int|Ref> $ to-hashset<Int|Ref> $ seq(value!, banks)
-    defn compare-bank (x:Int|Ref, y:Int|Ref) -> Int :
-      defn rank (x:Int|Ref) :
-        match(x) :
-          (x:Int) : 0
-          (x:Ref) : 1
-      val c = compare(rank(x), rank(y))
-      if c == 0 : compare(x, y)
-      else : c
-    qsort!(banks*, compare-bank)
-    banks*    
   inside pcb-component :
     val pins = sort-by-row-index(pins(self))
     val pin-sides0 = map({property?(_.side)}, pins)
     val pin-banks = map({property?(_.bank)}, pins)
     val pin-sides = ensure-good-sides!(pins, pin-sides0)
-    ensure-good-banks!(pins, pin-banks)
+    ensure-good-banks!(pins, pin-banks, false)
     if single-bank?(pin-banks) :
       make-box-symbol(seq(KeyValue, pin-sides, pins))
     else :
@@ -319,9 +272,150 @@ public defn make-box-symbol () :
           BoxBank(to-tuple(entries))
       make-box-symbol(banks)
 
+public defstruct BoxSymbol
+
+public deftype UnitSymbol :
+  BoxSymbol <: UnitSymbol
+  SchematicSymbol <: UnitSymbol
+
+public defn assign-symbols (banks:Tuple<KeyValue<Int|Ref, UnitSymbol>>) :
+  defn ensure-non-empty-banks! () :
+    if empty?(banks) :
+      throw(EmptyBanks(""))
+  defn ensure-unique-bank-arguments! () :
+    val seen-banks = HashSet<Int|Ref>()
+    val duplicate-banks = Vector<Int|Ref>()
+    for bank-kv in banks do :
+      val bank = key(bank-kv)
+      if not add(seen-banks, bank) :
+        add(duplicate-banks, bank)
+    if not empty?(duplicate-banks) :
+      throw(DuplicateBanks(to-tuple(duplicate-banks)))
+  defn ensure-banks-exist! (pin-banks:Tuple<Maybe>) :
+    val banks* = map(key, banks)
+    val pin-banks* = unique-banks(pin-banks)
+    val extra-banks = difference(banks*, pin-banks*)
+    if not empty?(extra-banks) :
+      throw(MissingRequestedBanks(qsort(extra-banks)))
+    val missing-banks = difference(pin-banks*, banks*)
+    if not empty?(missing-banks) :
+      throw(MissingBankArguments(qsort(missing-banks)))
+  defn ensure-symbol-pins! (pins:Tuple<JITXObject>, pin-banks:Tuple<Maybe>) :
+    val bad-matches = to-tuple $
+      for bank in banks seq? :
+        match(value(bank)) :
+          (box:BoxSymbol) : None()
+          (symbol:SchematicSymbol) :
+            val symbol-pins = to-hashset(ref, /pins(symbol))
+            val mismatched-pins = to-tuple $
+              for (p in pins, b in pin-banks) seq? :
+                val pin-ref = ref(p)
+                if value!(b) == bank and not symbol-pins[pin-ref] :
+                  One(pin-ref)
+                else :
+                  None()
+            if not empty?(mismatched-pins) :
+              One(name(symbol) => to-tuple(mismatched-pins))
+            else :
+              None()
+    if not empty?(bad-matches) :
+      throw(MissingSymbolPins(bad-matches))
+  ensure-non-empty-banks!()
+  ensure-unique-bank-arguments!()
+  inside pcb-component :
+    val pins = sort-by-row-index(pins(self))
+    val pin-sides0 = map({property?(_.side)}, pins)
+    val pin-banks = map({property?(_.bank)}, pins)
+    val pin-sides = ensure-good-sides!(pins, pin-sides0)
+    ensure-good-banks!(pins, pin-banks, true)
+    ensure-banks-exist!(pin-banks)
+    ensure-symbol-pins!(pins, pin-banks)
+    val wrapped-banks =
+      for [bank, symbol?] in kvs(banks) seq :
+        match(symbol?) :
+          (box:BoxSymbol) :
+            val entries = for (p in pins, s in pin-sides, b in pin-banks) seq? :
+              if value!(b) == bank : One(s => p)
+              else : None()
+            BoxBank(to-tuple(entries))
+          (symbol:SchematicSymbol) :
+            val pin-mappings = for (p in pins, b in pin-banks) seq? :
+              if value!(b) == bank :
+                One(p => dot(symbol, ref(p)))
+              else :
+                None()
+            StandardBank(symbol, to-tuple(pin-mappings))
+    make-box-symbol(wrapped-banks)
+
 ;============================================================
 ;======================= Utilities ==========================
 ;============================================================
+
+;Sort the given pins by their .pin-properties-row-index field.
+defn sort-by-row-index (pins:Tuple<JITXObject>) -> Tuple<JITXObject> :
+  ;Compare pin[i0] versus pin[i1].
+  ;Indices are used, instead of the pin directly, in order to perform a
+  ;stable sort.
+  ;All pins without a .pin-properties-row-index are put in the beginning.
+  defn compare-index (i0:Int, i1:Int) :
+    val ai = value?(property?(pins[i0].pin-properties-row-index))
+    val bi = value?(property?(pins[i1].pin-properties-row-index))
+    match(ai, bi) :
+      (ai:Int, bi:Int) : compare(ai, bi)
+      (ai:Int, bi) : 1
+      (ai, bi:Int) : -1
+      (ai, bi) : compare(i0,i1)
+  val indices = qsort(0 to length(pins), compare-index)
+  map({pins[_]}, indices)
+
+
+defn unique-banks (banks:Tuple<Maybe>) :
+  val banks* = to-vector<Int|Ref> $ to-hashset<Int|Ref> $ seq(value!, banks)
+  defn compare-bank (x:Int|Ref, y:Int|Ref) -> Int :
+    defn rank (x:Int|Ref) :
+      match(x) :
+        (x:Int) : 0
+        (x:Ref) : 1
+    val c = compare(rank(x), rank(y))
+    if c == 0 : compare(x, y)
+    else : c
+  qsort!(banks*, compare-bank)
+  banks*
+
+defn ensure-good-banks! (pins:Tuple<JITXObject>,
+                         banks:Tuple<Maybe>,
+                         require-banks?:True|False) :
+  ;Check that all pins.banks are either Int|Ref or not given.
+  for (p in pins, b in banks) do :
+    ;[TODO] Why is `false` allowed?
+    if value?(b) is-not Int|Ref|False :
+      throw(IncorrectBankProperty(ref(p), object-type(value?(b))))
+  ;Check that all banks given or no banks given (if not required).
+  if none?(empty?, banks) :
+    false
+  else :
+    val ps = to-tuple $ for (p in pins, b in banks) seq? :
+      if empty?(b) : One(ref(p))
+      else : None()
+    if require-banks? and empty?(ps) :
+      throw(MissingBankProperty(ps))
+
+defn ensure-good-sides! (pins:Tuple<JITXObject>, sides:Tuple<Maybe>) -> Tuple<Dir> :
+  ;Check that all pins.side is either Dir or not given.
+  for (p in pins, s in sides) do :
+    ;[TODO] Why is `false` allowed?
+    if value?(s) is-not Dir|False :
+      throw(IncorrectSideProperty(ref(p), object-type(value?(s))))
+  ;Default side is Right
+  if all?(empty?, sides) :
+    map({Right}, pins)
+  else if none?(empty?, sides) :
+    map(value!, sides)
+  else :
+    val ps = for (p in pins, s in sides) seq? :
+      if empty?(s) : One(ref(p))
+      else : None()
+    throw(MissingSideProperty(to-tuple(ps)))
 
 defn flatten-pin-entries (es:Seqable<KeyValue<Dir,JITXObject|Seqable<JITXObject>>>) -> Vector<KeyValue<Dir,Pin>> :
   val entries = Vector<KeyValue<Dir,Pin>>()
@@ -337,17 +431,17 @@ defn flatten-pin-entries (es:Seqable<KeyValue<Dir,JITXObject|Seqable<JITXObject>
 public pcb-struct ocdb/box-symbol/IncorrectSideProperty <: Exception :
   pin: Ref
   actual-type: String
-  
+
 defmethod print (o:OutputStream, e:IncorrectSideProperty) :
   print(o, "Property %_.side is expected to be a Dir object but is instead of type %_." % [
     pin(e), actual-type(e)])
-  
+
 public pcb-struct ocdb/box-symbol/MissingSideProperty <: Exception :
   pins: Tuple<Ref>
 
 defmethod print (o:OutputStream, e:MissingSideProperty) :
   print(o, "Pins %, do not have a .side property." % [pins(e)])
-  
+
 public pcb-struct ocdb/box-symbol/IncorrectBankProperty <: Exception :
   pin: Ref
   actual-type: String
@@ -355,9 +449,44 @@ public pcb-struct ocdb/box-symbol/IncorrectBankProperty <: Exception :
 defmethod print (o:OutputStream, e:IncorrectBankProperty) :
   print(o, "Property %_.bank is expected to be a Int|Ref object but is instead of type %_." % [
     pin(e), actual-type(e)])
-  
+
 public pcb-struct ocdb/box-symbol/MissingBankProperty <: Exception :
   pins: Tuple<Ref>
 
 defmethod print (o:OutputStream, e:MissingBankProperty) :
   print(o, "Pins %, do not have a .bank property." % [pins(e)])
+
+public pcb-struct ocdb/box-symbol/MissingBankArguments <: Exception :
+  banks: Tuple<Int|Ref>
+
+defmethod print (o:OutputStream, e:MissingBankArguments) :
+  print(o, "Banks %, are not found in `make-box-symbol` arguments." % [banks(e)])
+
+public pcb-struct ocdb/box-symbol/MissingRequestedBanks <: Exception :
+  banks: Tuple<Int|Ref>
+
+defmethod print (o:OutputStream, e:MissingRequestedBanks) :
+  print(o, "Banks %, are not found in any .bank properties." % [banks(e)])
+
+;[TODO] Allow pcb-structs to have no fields.
+public pcb-struct ocdb/box-symbol/EmptyBanks <: Exception :
+  e: ?
+
+defmethod print (o:OutputStream, e:EmptyBanks) :
+  print(o, "`make-box-symbol` bank arguments cannot be empty.")
+
+public pcb-struct ocdb/box-symbol/DuplicateBanks <: Exception :
+  banks: Tuple<Int|Ref>
+
+defmethod print (o:OutputStream, e:DuplicateBanks) :
+  print(o, "Banks %, are duplicate in `make-box-symbol` arguments." % [banks(e)])
+
+public pcb-struct ocdb/box-symbol/MissingSymbolPins <: Exception :
+  missing: Tuple<KeyValue<String, Tuple<Ref>>>
+
+defmethod print (o:OutputStream, e:MissingSymbolPins) :
+  defn format (kv:KeyValue<String, Tuple<Ref>>) -> Printable :
+    "pcb-symbol %~ is missing pin(s) %," % [key(kv), value(kv)]
+  val error-str = \<S>`make-box-symbol` requires component pin names to match symbol pin names:
+%n<S> % [map(Indented{format(_)}, missing(e))]
+  print(o, error-str)
