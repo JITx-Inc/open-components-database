@@ -14,14 +14,32 @@ defpackage ocdb/passive-circuits:
   import ocdb/db-parts
   import ocdb/solvers/voltage-divider
   import ocdb/property-structs
+  import ocdb/tolerance
+
 
 
 ;======================================================
 ;================= Voltage Divider ====================
 ;======================================================
 
+pcb-module voltage-divider (input-voltage:Toleranced
+                            output-voltage:Toleranced
+                            current:Double) :
+  pin in
+  pin out
+  pin lo
+  val solution = voltage-divider-solver(input-voltage, output-voltage, current)
+  match(solution: VoltageDividerSolution) :
+    inst r-hi : to-jitx(r1(solution))
+    inst r-lo : to-jitx(r2(solution))
+    net (r-hi.p[1] in)
+    net (r-lo.p[1] r-hi.p[2] out)
+    net (r-lo.p[2] lo)
+  else :
+    fatal("No solution for voltage divider.")
+
 public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
-                                  v-out:[Double,Double,Double]) :
+                                  v-out:Toleranced) :
   ; Target current through divider is 10x input current (if known), otherwise set current to be 1ma
   val current =
     if has-property?(out.i-input) : property(out.i-input) * 10.0
@@ -29,28 +47,28 @@ public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
   make-voltage-divider(in, out, lo, v-out, current)
 
 public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
-                                  v-out:[Double,Double,Double],
+                                  v-out:Toleranced,
                                   current:Double) :
   println("Solving voltage divider [in=%_, out=%_, low=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A]"
-          % [ref(in), ref(out), ref(lo), v-out[0], v-out[1], v-out[2], current])
+          % [ref(in), ref(out), ref(lo), min-value(v-out), typ(v-out), max-value(v-out), current])
   ;Extract voltages from input pin
   val v-in = property(in.voltage)
 
-  val solution = voltage-divider(v-in, v-out, current)
+  val solution = voltage-divider-solver(v-in, v-out, current)
   match(solution: VoltageDividerSolution) :
     make-voltage-divider-module(in, out, lo, v-out, to-jitx(r1(solution)), to-jitx(r2(solution)), vo(solution))
   else :
     fatal("No solution for voltage divider.")
 
 public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
-                                  v-in:[Double,Double,Double],
-                                  v-out:[Double,Double,Double],
+                                  v-in:Toleranced,
+                                  v-out:Toleranced,
                                   current:Double) :
   ; println("Solving voltage divider [in=%_, out=%_, low=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A]"
   ;         % [ref(in), ref(out), ref(lo), v-out[0], v-out[1], v-out[2], current])
   ;Extract voltages from input pin
 
-  val solution = voltage-divider(v-in, v-out, current)
+  val solution = voltage-divider-solver(v-in, v-out, current)
   match(solution: VoltageDividerSolution) :
     make-voltage-divider-module(in, out, lo, v-out, to-jitx(r1(solution)), to-jitx(r2(solution)), vo(solution))
   else :
@@ -67,7 +85,7 @@ public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
 ; tol : desired tolerance of resistor (in %)
 ; returns true if fitting resistors were found else false
 public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
-                                  v-out:[Double,Double,Double],
+                                  v-out:Toleranced,
                                   current:Double,
                                   tol:Double) :
   val current-tol = 10.
@@ -75,17 +93,17 @@ public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
 
 ; current-tol : Tolerance on the output current (in %)
 public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
-                                  v-out:[Double,Double,Double],
+                                  v-out:Toleranced,
                                   current:Double,
                                   tol:Double,
                                   current-tol: Double) :
   println("Solving voltage divider [in=%_, out=%_, low=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A, resistor-tol=%_%%]"
-          % [ref(in), ref(out), ref(lo), v-out[0], v-out[1], v-out[2], current, tol])
+          % [ref(in), ref(out), ref(lo), min-value(v-out), typ(v-out), max-value(v-out), current])
   val tolerance = tol / 100.
   val current-tolerance = current-tol / 100.
   val v-in = property(in.voltage)
 
-  val solution = voltage-divider(v-in, v-out, current, tolerance, current-tolerance)
+  val solution = voltage-divider-solver(v-in, v-out, current, tolerance, current-tolerance)
   match(solution: VoltageDividerSolution) :
     make-voltage-divider-module(in, out, lo, v-out, to-jitx(r1(solution)), to-jitx(r2(solution)), vo(solution))
     solution
@@ -93,9 +111,9 @@ public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
     fatal("No solution for voltage divider.")
 
 defn make-voltage-divider-module (in: JITXObject, out: JITXObject, lo: JITXObject,
-                                  v-out: [Double, Double, Double],
+                                  v-out: Toleranced,
                                   r-hi-cmp: InstantiableType, r-lo-cmp: InstantiableType,
-                                  vo: [Double, Double, Double]) :
+                                  vo: Toleranced) :
 
   inside pcb-module :
     property(out.voltage) = vo
@@ -107,10 +125,10 @@ defn make-voltage-divider-module (in: JITXObject, out: JITXObject, lo: JITXObjec
     net (r-lo.p[1] r-hi.p[2] out)
     net (r-lo.p[2] lo)
 
-    val vin = vo[2] * (property(r-lo.resistance) + property(r-hi.resistance)) / property(r-lo.resistance)
-    property(r-lo.operating-point) = OperatingPoint(Interval(0.0, vo[2], false),       Interval(0.0, vo[2] / property(r-lo.resistance), false))
-    property(r-hi.operating-point) = OperatingPoint(Interval(0.0, vin - vo[2], false), Interval(0.0, (vin - vo[2])/ property(r-hi.resistance), false))
+    val vin = typ(vo) * (property(r-lo.resistance) + property(r-hi.resistance)) / property(r-lo.resistance)
+    property(r-lo.operating-point) = OperatingPoint(Interval(0.0, typ(vo), false),       Interval(0.0, typ(vo) / property(r-lo.resistance), false))
+    property(r-hi.operating-point) = OperatingPoint(Interval(0.0, vin - typ(vo), false), Interval(0.0, (vin - typ(vo))/ property(r-hi.resistance), false))
 
     ; [TODO] check. voltage-levels and other check.stanza functions already adapted for JITXObjects.
     ; Check true output against requirement
-    check voltage-levels(out, v-out)
+    ; check voltage-levels(out, v-out)

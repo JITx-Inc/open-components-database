@@ -1,3 +1,10 @@
+; This design uses the MAX16061ETP+ to monitor a set of four power rails on an FPGA.
+; The tree of power regulators for supplying loads is generated automatically.
+; support/require statements are used to connect IO between an FMC connector and an FPGA.
+; The LVDS bus is terminated using a parametric circuit generator.
+; The operating environment for this design is Earth orbit, so a set of derating checks
+; is run to verify component compatibility with that environment. Some of these components
+; are not compatible with spaceflight, so we expect these checks to fail.
 #use-added-syntax(jitx)
 defpackage ocdb/designs/power-monitor :
   import core
@@ -28,24 +35,25 @@ pcb-module power-monitor :
   inst fpga : ocdb/microsemi/A2F200M3F-FGG256I/module
 
 ; Rails to monitor
-  val power-rails = [ PowerRail(fmc.v12p0,         Interval(11.95, 12.05, 12.0))
-                      PowerRail(fpga.src-1V5.vdd,  Interval(1.45, 1.55, 1.50))
-                      PowerRail(fpga.src-3V3.vdd,  Interval(3.25, 3.35, 3.30))
-                      PowerRail(fpga.src-io.vdd,   Interval(1.77, 1.83, 1.80))]
+  val power-rails = [ PowerRail(fmc.v12p0,         ocdb/tolerance/min-typ-max(11.95, 12.05, 12.0))]
+  ; val power-rails = [ PowerRail(fmc.v12p0,         min-typ-max(11.95, 12.05, 12.0))
+  ;                     PowerRail(fpga.src-1V5.vdd,  min-typ-max(1.45, 1.55, 1.50))
+  ;                     PowerRail(fpga.src-3V3.vdd,  min-typ-max(3.25, 3.35, 3.30))
+  ;                     PowerRail(fpga.src-io.vdd,   min-typ-max(1.77, 1.83, 1.80))]
 
 
   inst mon : ocdb/maxim/MAX1606x/module(power-rails)
   net gnd (mon.power.gnd GND)
   net vdd (mon.power.vdd fmc.v3p3)
 
-  require POD:gpio[30] from fpga
-  require POD-ext:gpio[30] from fmc
-  net (POD, POD-ext)
+  ; require POD:gpio[30] from fpga
+  ; require POD-ext:gpio[30] from fmc
+  ; net (POD, POD-ext)
 
-  require comm-bus:lvds[16] from fpga
-  require comm-bus-ext:lvds[16] from fmc
-  for i in 0 to 16 do :
-    net (ocdb/terminations/terminate-lvds(comm-bus[i], gnd, vdd, ocdb/terminations/LVDSTerminationACSimple), comm-bus-ext[i])
+  ; require comm-bus:lvds[16] from fpga
+  ; require comm-bus-ext:lvds[16] from fmc
+  ; for i in 0 to 16 do :
+  ;   net (ocdb/terminations/terminate-lvds(comm-bus[i], gnd, vdd, ocdb/terminations/LVDSTerminationACSimple), comm-bus-ext[i])
 
   ; Mechanicals
   add-mounting-holes(board-shape, "M2", [2 3])

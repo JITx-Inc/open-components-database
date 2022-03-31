@@ -28,6 +28,12 @@ public defn tol% (typ:Double, tol+:Double, tol-:Double) -> Toleranced:
   val minus = tol- * typ
   Toleranced(typ, plus, minus)
 
+; Create a tolerance from percentage
+public defn tol% (typ:Double, tol:Double) -> Toleranced:
+  val check = min-typ-max(0.0, 0.5, 1.0)
+  fatal("tol must be in range 0.0 <= tol <= 1.0") when not in-range?(check, tol)
+  Toleranced(typ, typ * (1.0 + tol), typ * (1.0 - tol))
+
 ; Create a tolerance from differences higher and lower
 public defn tol (typ:Double, tol+:Double, tol-:Double) -> Toleranced:
   Toleranced(typ, tol+, tol-)
@@ -61,6 +67,10 @@ public defn center (t:Toleranced) -> Double:
 ; Check if a value is within the tolerance's range.
 public defn in-range? (t:Toleranced, value:Double) -> True|False:
   value >= min-value(t) and value <= max-value(t)
+
+; Check if a range is within the tolerance's range.
+public defn in-range? (t:Toleranced, value:Toleranced) -> True|False:
+  min-value(value) >= min-value(t) and max-value(value) <= max-value(t)
  
  ; Returns the difference between max and min of the toleranced values
 public defn tolerance-range (t:Toleranced) -> Double:
