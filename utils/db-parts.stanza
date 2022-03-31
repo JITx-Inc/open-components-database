@@ -60,83 +60,6 @@ defmethod print (o:OutputStream, s:SellerOfferPrice) :
 ;====================== Resistor ============================
 ;============================================================
 
-doc: \<>
-There are over 1,000,000 resistors in the JITX database but the same part can be referenced in different packagings (cut tape, reels...).
-
-Each resistor has a different Digi-Key Part Number but an mpn has typically 3 Digi-Key Part Numbers for 3 different packagings.
-
-For example the resistor of mpn "ERJ-XGNJ1R0Y" appears with the following Digi-Key Part Numbers and packagings:
-* 10-ERJ-XGNJ1R0YCT-ND: Cut Tape (CT)
-* 10-ERJ-XGNJ1R0YDKR-ND: Digi-Reel®
-* 10-ERJ-XGNJ1R0YTR-ND: Tape & Reel (TR)
-
-This information can be found in the attributes `metadata.digi-key-part-number` and `metadata.packaging` but cannot be queried on.
-You can check by yourselves doing:
-
-```stanza
-$ jitx repl
-stanza> import ocdb/db-parts
-stanza> do(println, Resistors(["mpn" => "ERJ-XGNJ1R0Y"], 25))
-```
-
-Check the [properties reference](../utilities/properties.md) for a description of supported attributes.
-
-Here are available attribute values with [default design requirements](#resistor-accessors) as of 10/14/2021. They can be queried anytime with:
-```stanza
-$ jitx repl
-stanza> import ocdb/db-parts
-stanza> for attribute in ["manufacturer", "mpn", "resistance", "trust", "dimensions", "mounting", "case", "stock", "price", "minimum_quantity", "type", "composition", "rated-power", "tcr", "metadata.datasheets", "metadata.image", "metadata.digi-key-part-number", "metadata.description", "metadata.packaging", "metadata.series", "metadata.features", "metadata.supplier-device-package", "metadata.number-of-terminations"] do :
-      >   val values = look-up-resistors(attribute)
-      >   if length(values) <= 150 :
-      >     println("| %_ | %@ |" % [attribute, values])
-      >   else :
-      >     println("| %_ | %_ values |" % [attribute, length(values)])
-stnaza> import json
-stanza> for attribute in ["rated-temperature", "tolerance"] do :
-      >   val values =  to-tuple $ filter({_ is JObject}, look-up-resistors(attribute))
-      >   if length(values) <= 150 :
-      >     println("| %_ (min, max) | %@ |" % [attribute, map({"(%_, %_)" % [_0["min"], _0["max"]]}, values)])
-      >   else :
-      >     println("| %_ | %_ values |" % [attribute, length(values)])
-stanza> for attribute in ["tcr"] do :
-      >   val values =  to-tuple $ filter({_ is JObject}, look-up-resistors(attribute))
-      >   if length(values) <= 150 :
-      >     println("| %_ (neg, pos) | %@ |" % [attribute, map({"(%_, %_)" % [_0["neg"], _0["pos"]]}, values)])
-      >   else :
-      >     println("| %_ | %_ values |" % [attribute, length(values)])
-```
-
-| Attribute | Values |
-|:-----|:-----|
-| manufacturer | "AVX Corporation" "Aillen" "American Technical Ceramics" "Anaren" "Bourns Inc." "CAL-CHIP ELECTRONICS, INC." "CTS Resistor Products" "Caddock Electronics Inc." "Delta Electronics/Cyntec" "KOA Speer Electronics, Inc." "Kamaya Inc." "Meritek" "Murata Power Solutions Inc." "NTE Electronics, Inc" "Ohmite" "Panasonic Electronic Components" "Riedon" "Rohm Semiconductor" "Samsung Electro-Mechanics" "Stackpole Electronics Inc" "Susumu" "TE Connectivity" "TE Connectivity AMP Connectors" "TE Connectivity Passive Product" "TT Electronics/IRC" "TT Electronics/Welwyn" "TubeDepot" "Venkel" "Viking Tech" "Vishay Beyschlag/Draloric/BC Components" "Vishay Dale" "Vishay Dale Thin Film" "Vishay Electro-Films" "Vishay Foil Resistors (Division of Vishay Precision Group)" "Vishay Huntington Electric Inc." "Vishay Sfernice" "Vishay Thin Film" "Walsin Technology Corporation" "Würth Elektronik" "Xicon" "YAGEO" "Yageo" |
-| mpn | More than 1000 values... |
-| resistance | 0.0 0.0001 0.0002 0.00025 0.0003 0.0004 0.0005 0.0007 0.00075 0.0008 0.001 0.0013 0.0015 0.002 0.0022 0.00225 0.0025 0.0028 0.003 0.0032 0.0033 0.0035 0.0036 0.00375 0.004 0.0045 0.0047 0.0048 0.005 0.006 0.0068 0.007 0.0075 0.008 0.009 0.0093 0.01 0.011 0.012 0.0125 0.013 0.0133 0.014 0.015 0.016 0.0162 0.0165 0.0169 0.017 0.0174 0.0178 0.018 0.0182 0.0187 0.019 0.0191 0.0196 0.02 0.0205 0.021 0.0215 0.022 0.0221 0.0226 0.023 0.0232 0.0237 0.024 0.0243 0.0249 0.025 0.0255 0.026 0.0261 0.0267 0.027 0.0274 0.028 0.0287 0.029 0.0294 0.03 0.0301 0.0309 0.0316 0.032 0.0324 0.033 0.0332 0.034 0.0348 0.035 0.0357 0.036 0.0365 0.0374 0.038 0.0383 0.039 0.0392 0.04 0.0402 0.0412 0.042 0.0422 0.043 0.0432 0.0442 0.045 0.0453 0.046 0.0464 0.047 0.0475 0.0487 0.049 0.0499 0.05 0.0502 0.051 0.0511 0.0523 0.0536 0.054 0.0549 0.055 0.056 0.0562 0.0576 0.059 0.06 0.0604 0.0619 0.062 0.0634 0.064 0.0649 0.065 0.066 0.0665 0.067 0.068 0.0681 0.0698 0.07 0.0715 0.0732 0.075 0.076 0.0768 0.077 0.078 0.0787 0.079 0.08 0.0806 0.081 0.082 0.0825 0.083 0.0845 0.085 0.0866 0.087 0.0887 0.089 0.09 0.0909 0.091 0.0931 0.095 0.0953 0.0976 0.1 0.101 0.102 0.105 0.107 0.11 0.113 0.115 0.118 0.12 0.121 0.124 0.125 0.127 0.13 0.132 0.133 0.135 0.137 0.14 0.142 0.143 0.145 0.147 0.149 0.15 0.151 0.152 0.154 0.156 0.158 0.16 0.162 0.165 0.166 0.167 0.169 0.17 0.174 0.176 0.178 0.18 0.182 0.187 0.191 0.196 0.2 0.205 0.21 0.215 0.22 0.221 0.226 0.229 0.23 0.232 0.234 0.237 0.24 0.243 0.249 0.25 0.252 0.255 0.258 0.26 0.261 0.264 0.267 0.27 0.271 0.274 0.28 0.287 0.294 0.3 0.301 0.309 0.31 0.316 0.32 0.322 0.324 0.33 0.332 0.333 0.34 0.348 0.35 0.357 0.36 0.365 0.37 0.374 0.375 0.38 0.383 0.39 0.391 0.392 0.397 0.4 0.402 0.407 0.41 0.412 0.42 0.422 0.427 0.43 0.432 0.44 0.442 0.449 0.45 0.453 0.46 0.464 0.466 0.47 0.475 0.481 0.487 0.49 0.499 0.5 0.5003 0.505 0.51 0.511 0.512 0.52 0.523 0.53 0.536 0.54 0.549 0.55 0.556 0.557 0.56 0.562 0.57 0.576 0.58 0.59 0.597 0.598 0.6 0.604 0.61 0.619 0.62 0.625 0.626 0.63 0.634 0.635 0.64 0.645 0.649 0.65 0.66 0.665 0.67 0.673 0.68 0.681 0.689 0.69 0.698 0.7 0.71 0.715 0.723 0.732 0.74 0.741 0.75 0.751 0.752 0.759 0.768 0.78 0.781 0.787 0.796 0.8 0.806 0.82 0.825 0.83 0.833 0.84 0.845 0.85 0.853 0.865 0.866 0.87 0.88 0.887 0.898 0.9 0.909 0.91 0.931 0.942 0.95 0.953 0.96 0.965 0.976 0.99 1.0 1.0009 1.001 1.0015 1.005 1.0055 1.01 1.02 1.024 1.03 1.04 1.05 1.07 1.09 1.1 1.125 1.13 1.1364 1.15 1.152 1.16 1.18 1.2 1.21 1.212 1.222 1.23 1.24 1.25 1.26 1.2626 1.27 1.29 1.3 1.32 1.33 1.35 1.37 1.4 1.42 1.43 1.44 1.47 1.5 1.505 1.52 1.53 1.54 1.56 1.58 1.592 1.6 1.62 1.64 1.65 1.6667 1.6696 1.67 1.68 1.69 1.7 1.74 1.78 1.79 1.8 1.82 1.85 1.87 1.9 1.91 1.93 1.954 1.96 1.98 2.0 2.0015 2.002 2.01 2.015 2.02 2.04 2.05 2.07 2.08 2.085 2.088 2.1 2.138 2.15 2.151 2.195 2.2 2.21 2.23 2.25 2.26 2.29 2.3 2.304 2.3047 2.32 2.341 2.35 2.37 2.4 2.43 2.46 2.47 2.49 2.5 2.5065 2.507 2.51 2.52 2.55 2.58 2.6 2.61 2.639 2.64 2.6435 2.656 2.66 2.67 2.7 2.71 2.74 2.75 2.77 2.8 2.82 2.87 2.88 2.92 2.94 2.98 3.0 3.01 3.03 3.05 3.06 3.09 3.1 3.11 3.135 3.15 3.16 3.18 3.2 3.24 3.28 3.3 3.32 3.329 3.3333 3.34 3.343 3.36 3.38 3.4 3.47 3.48 3.5 3.52 3.54 3.57 3.5728 3.6 3.61 3.65 3.7 3.72 3.74 3.75 3.79 3.8 3.83 3.84 3.88 3.9 3.907 3.92 3.97 3.999 4.0 4.008 4.01 4.02 4.022 4.07 4.1 4.12 4.16 4.17 4.18 4.185 4.19 4.2 4.22 4.3 4.32 4.42 4.444 4.48 4.49 4.5 4.53 4.54 4.57 4.64 4.651 4.6512 4.7 4.71 4.74 4.75 4.761 4.78 4.8 4.81 4.87 4.9 4.93 4.95 4.99 5.0 5.005 5.01 5.012 5.025 5.05 5.08 5.1 5.11 5.15 5.17 5.19 5.2 5.21 5.23 5.263 5.3 5.36 5.4 5.487 5.49 5.5 5.56 5.6 5.62 5.69 5.7 5.71 5.714 5.7143 5.75 5.76 5.8 5.83 5.85 5.9 5.92 5.97 6.0 6.02 6.04 6.06 6.12 6.19 6.2 6.23 6.25 6.3 6.34 6.3407 6.35 6.4 6.42 6.43 6.453 6.49 6.5 6.54 6.57 6.6 6.64 6.65 6.666 6.6666 6.6667 6.67 6.7 6.73 6.78 6.8 6.81 6.85 6.9 6.91 6.926 6.98 7.0 7.029 7.06 7.15 7.2 7.23 7.3 7.32 7.37 7.3785 7.41 7.43 7.5 7.51 7.59 7.6 7.68 7.77 7.8 7.87 7.96 8.0 8.045 8.06 8.09 8.1 8.16 8.2 8.21 8.22 8.25 8.3 8.333 8.3333 8.4 8.45 8.5 8.6 8.66 8.7 8.76 8.8 8.85 8.87 8.98 9.0 9.09 9.1 9.2 9.31 9.4 9.42 9.45 9.47 9.5 9.53 9.6 9.65 9.7 9.74 9.76 9.88 9.95 9.995 9.999 10.0 10.001 10.01 10.015 10.03 10.1 10.12 10.2 10.21 10.3 10.4 10.417 10.5 10.6 10.7 10.8 10.85 10.86 10.9 10.973 11.0 11.1 11.11 11.111 11.16 11.2 11.25 11.3 11.4 11.5 11.52 11.6534 11.66 11.7 11.8 11.9 12.0 12.1 12.106 12.2 12.3 12.4 12.5 12.584 12.6 12.7 12.8 12.9 12.944 13.0 13.2 13.28 13.3 13.333 13.4 13.5 13.6 13.7 13.8 13.851 13.889 14.0 14.1 14.142 14.16 14.2 14.204 14.285 14.3 14.4 14.42 14.5 14.53 14.55 14.59 14.7 14.9 15.0 15.05 15.1 15.17 15.2 15.3 15.4 15.446 15.491 15.6 15.7 15.8 15.92 16.0 16.032 16.09 16.18 16.2 16.32 16.4 16.48 16.5 16.65 16.667 16.7 16.8 16.83 16.9 16.95 17.0 17.2 17.238 17.4 17.48 17.5 17.6 17.8 17.857 17.9 18.0 18.1 18.2 18.3 18.4 18.5 18.7 18.75 18.8 18.9 19.0 19.1 19.17 19.2 19.3 19.42 19.5 19.53125 19.57 19.6 19.8 19.9 20.0 20.002 20.02 20.1 20.2 20.27 20.3 20.5 20.552 20.6 20.8 20.833 21.0 21.1 21.17 21.2 21.27 21.298 21.3 21.42 21.5 21.574 21.6 21.7 21.8 21.946 22.0 22.1 22.2 22.239 22.3 22.5 22.6 22.81 22.9 23.0 23.2 23.331 23.4 23.7 23.8 23.81 24.0 24.001 24.2 24.224 24.3 24.5 24.6 24.72 24.9 24.92 25.0 25.1 25.1252 25.2 25.3 25.4 25.5 25.7 25.8 26.0 26.1 26.2 26.4 26.5 26.5258 26.56 26.64 26.7 26.9 27.0 27.1 27.23 27.3 27.4 27.5 27.6 27.7 27.702 27.9 28.0 28.095 28.1 28.2 28.242 28.3 28.4 28.5 28.7 28.7708 28.771 28.8 28.904 28.948 29.0 29.1 29.2 29.247 29.4 29.7 29.8 30.0 30.001 30.1 30.2 30.3 30.303 30.5 |
-| trust | "low" |
-| dimensions (x, y, z, area) | More than 1000 values... |
-| mounting | "smd" "through-hole" |
-| case | "009005" "01005" "0201" "02016" "0202" "0302" "0402" "0404" "0505" "0603" "0612" "0805" "1206" "1210" "1218" "1812" "2-SMD, J-Lead" "2010" "2010 J-Lead" "2012 J-Lead" "2015" "2512" "2512 J-Lead" "2515 J-Lead" "2520" "2615" "2615 J-Lead" "2616" "2817" "3014 J-Lead" "3017 J-Lead" "3916 J-Lead" "3920" "4-ESIP" "4-SIP" "4122" "4122 J-Lead" "4124 J-Lead" "4318 J-Lead" "4324 J-Lead" "4524 J-Lead" "4525 J-Lead" "4527 J-Lead" "5025 J-Lead" "5322 J-Lead" "5329" "6030" "6227 J-Lead" "6327 J-Lead" "6927 J-Lead" "8035 J-Lead" "8127 J-Lead" "8230 J-Lead" "Axial" "Axial - 4 Leads" "Axial, Radial" "Axial, Radial Bend" "Axial, Radial Formed" "MELF, 0102" "MELF, 0204" "MELF, 0207" "MELF, 0309" "Non-Standard D-PAK" "Nonstandard" "PFC10" "Radial" "Radial - 2 Leads" "Radial - 4 Leads" "Radial, Tubular" "SMD, J-Bend" "SMD, L-Bend" "SR10" "SR20" "Strip, C Bend" "Strip, L Bend" "TO-126-2" "TO-204AA" "TO-220-2" "TO-220-2 Full Pack" "TO-220-4" "TO-220-4, SMD" "TO-247-2" "TO-247-2 Variant" "TO-252-3, DPak" "TO-263-3, D²Pak" "Wide 0402" "Wide 0603" "Wide 0604" "Wide 0805" "Wide 1206" "Wide 1508" "Wide 1612" "Wide 1812" "Wide 2010" "Wide 2412" "Wide 2512" "Wide 2516" "Wide 2827" "Wide 3008" "Wide 3015" "Wide 3518" "Wide 4320" "Wide 5929" |
-| stock | More than 1000 values... |
-| price | More than 1000 values... |
-| minimum_quantity | 312 values |
-| type | "chip" "through-hole" |
-| composition | "carbon-composition" "carbon-film" "ceramic" "metal-element" "metal-film" "metal-foil" "metal-oxide-film" "thick-film" "thin-film" "wirewound" |
-| rated-power | 0.0125 0.0189 0.02 0.025 0.03 0.0375 0.05 0.06 0.063 0.075 0.1 0.12 0.125 0.135 0.15 0.16 0.167 0.175 0.2 0.225 0.245 0.25 0.3 0.32 0.333 0.35 0.375 0.4 0.5 0.6 0.63 0.667 0.7 0.75 0.8 0.9 1.0 1.1 1.2 1.25 1.3 1.33 1.4 1.5 1.6 1.75 1.8 2.0 2.16 2.2 2.3 2.4 2.5 2.7 2.75 2.8 2.88 3.0 3.12 3.2 3.25 3.47 3.5 3.6 3.75 3.8 4.0 4.2 4.25 4.32 4.4 4.5 4.8 5.0 5.2 5.5 5.6 6.0 6.25 6.3 6.5 7.0 7.5 7.8 8.0 8.4 8.8 9.0 10.0 11.0 12.0 12.5 13.0 13.5 14.0 15.0 16.0 16.8 17.0 18.0 20.0 22.0 22.4 25.0 28.0 30.0 35.0 36.0 40.0 45.0 50.0 60.0 75.0 95.0 100.0 140.0 150.0 |
-| tcr (neg, pos) | (0.0039, -0.0039) (0.002, -0.002) (0.0018, -0.0018) (-0.0015, -0.0015) (-0.0009, -0.0015) (0.0015, -0.0015) (-0.0013, -0.0013) (0.0013, -0.0013) (-0.0006, -0.0012) (0.0012, -0.0012) (0.0011, -0.0011) (-0.0016, -0.001) (0.001, -0.001) (0.00095, -0.00095) (0.0009, -0.0009) (0.00085, -0.00085) (0.0008, -0.0008) (0.00075, -0.00075) (-0.0007, -0.0007) (0.0004, -0.0007) (0.0007, -0.0007) (0.00065, -0.00065) (0.0002, -0.0006) (0.0006, -0.0006) (0.0003, -0.0005) (0.00035, -0.0005) (0.0005, -0.0005) (0.00035, -0.00045) (0.00045, -0.00045) (0.00015, -0.0004) (0.0004, -0.0004) (0.00035, -0.00035) (0.0005, -0.00035) (0.000325, -0.000325) (5.0e-05, -0.0003) (0.0003, -0.0003) (0.0005, -0.0003) (0.00028, -0.00028) (0.000275, -0.000275) (0.00027, -0.00027) (0.00026, -0.00026) (0.00025, -0.00025) (0.0005, -0.00025) (0.000245, -0.000245) (0.00024, -0.00024) (0.00023, -0.00023) (0.000225, -0.000225) (0.0002, -0.0002) (0.00035, -0.0002) (0.0004, -0.0002) (0.0006, -0.0002) (0.00018, -0.00018) (0.000175, -0.000175) (0.00017, -0.00017) (-0.0004, -0.00015) (0.00015, -0.00015) (0.0004, -0.00015) (0.00014, -0.00014) (0.000125, -0.000125) (0.00012, -0.00012) (0.000115, -0.000115) (0.00011, -0.00011) (0.0001, -0.0001) (0.00035, -0.0001) (0.0004, -0.0001) (0.0005, -0.0001) (0.0006, -0.0001) (9.0e-05, -9.0e-05) (4.0e-05, -8.0e-05) (8.0e-05, -8.0e-05) (0.0005, -8.0e-05) (0.0009, -8.0e-05) (7.5e-05, -7.5e-05) (7.0e-05, -7.0e-05) (0.00017, -7.0e-05) (6.0e-05, -6.0e-05) (-0.00015, -5.0e-05) (5.0e-05, -5.0e-05) (0.0001, -5.0e-05) (4.0e-05, -4.0e-05) (3.5e-05, -3.5e-05) (3.0e-05, -3.0e-05) (2.5e-05, -2.5e-05) (2.0e-05, -2.0e-05) (5.0e-05, -2.0e-05) (8.0e-05, -2.0e-05) (1.5e-05, -1.5e-05) (1.2e-05, -1.2e-05) (-8.0e-05, -1.0e-05) (1.0e-05, -1.0e-05) (8.0e-06, -8.0e-06) (5.0e-06, -5.0e-06) (4.0e-06, -4.0e-06) (3.0e-06, -3.0e-06) (2.5e-06, -2.5e-06) (2.0e-06, -2.0e-06) (1.0e-06, -1.0e-06) (2.0e-07, -2.0e-07) (-0.0018, 0.0) (-0.0015, 0.0) (-0.0013, 0.0) (-0.001, 0.0) (-0.00085, 0.0) (-0.0008, 0.0) (-0.0007, 0.0) (-0.0006, 0.0) (-0.0005, 0.0) (-0.00045, 0.0) (-0.0004, 0.0) (-0.00035, 0.0) (-0.00015, 0.0) (0.0, 0.0) (2.5e-05, 0.0) (6.0e-05, 0.0) (0.0001, 0.0) (0.00015, 0.0) (0.0002, 0.0) (0.00025, 0.0) (0.0003, 0.0) (0.00035, 0.0) (0.0004, 0.0) (0.00042, 0.0) (0.0005, 0.0) (0.0007, 0.0) (0.0008, 0.0) (5.0e-06, 5.0e-06) (1.0e-05, 1.0e-05) (2.5e-05, 2.5e-05) (5.0e-05, 5.0e-05) (0.0001, 0.0001) (0.00018, 0.0001) (0.00015, 0.00015) (0.00018, 0.00018) (0.0002, 0.0002) (0.00025, 0.00025) (0.0003, 0.0003) (0.00035, 0.00035) (450.0, 450.0) |
-| rated-temperature (min, max) | (-80.0, 280.0) (-65.0, 125.0) (-65.0, 150.0) (-65.0, 155.0) (-65.0, 165.0) (-65.0, 170.0) (-65.0, 175.0) (-65.0, 200.0) (-65.0, 225.0) (-65.0, 230.0) (-65.0, 250.0) (-65.0, 275.0) (-65.0, 350.0) (-60.0, 150.0) (-55.0, 105.0) (-55.0, 110.0) (-55.0, 125.0) (-55.0, 145.0) (-55.0, 150.0) (-55.0, 155.0) (-55.0, 170.0) (-55.0, 175.0) (-55.0, 180.0) (-55.0, 195.0) (-55.0, 200.0) (-55.0, 210.0) (-55.0, 215.0) (-55.0, 220.0) (-55.0, 225.0) (-55.0, 230.0) (-55.0, 235.0) (-55.0, 250.0) (-55.0, 270.0) (-55.0, 275.0) (-55.0, 300.0) (-55.0, 350.0) (-55.0, 355.0) (-50.0, 125.0) (-50.0, 150.0) (-40.0, 85.0) (-40.0, 110.0) (-40.0, 125.0) (-40.0, 130.0) (-40.0, 150.0) (-40.0, 155.0) (-40.0, 175.0) (-40.0, 200.0) (-40.0, 220.0) (-40.0, 275.0) (-25.0, 100.0) (-25.0, 125.0) (-25.0, 150.0) (-25.0, 155.0) (-20.0, 125.0) (-15.0, 105.0) |
-| tolerance (min, max) | (-0.3, 0.0) (-0.3, 0.3) (-0.2, 0.2) (-0.15, 0.15) (-0.1, 0.0) (-0.1, 0.1) (-0.05, 0.05) (-0.03, 0.03) (-0.02, 0.02) (-0.01, 0.01) (-0.005, 0.005) (-0.0025, 0.0025) (-0.002, 0.002) (-0.001, 0.001) (-0.0005, 0.0005) (-0.0002, 0.0002) (-0.0001, 0.0001) (-5.0e-05, 5.0e-05) (-2.5e-05, 2.5e-05) (-2.0e-05, 2.0e-05) (-1.0e-05, 1.0e-05) |
-| metadata.datasheets | More than 1000 values... |
-| metadata.image | More than 1000 values... |
-| metadata.digi-key-part-number | More than 1000 values... |
-| metadata.description | More than 1000 values... |
-| metadata.packaging | "Bag" "Box" "Bulk" "Cut Tape (CT)" "Digi-Reel®" "Strip" "Tape & Box (TB)" "Tape & Reel (TR)" "Tray" "Tube" |
-| metadata.series | More than 1000 values... |
-| metadata.features | "Anti-Arc, Current Sense, Flame Proof, Non-Inductive, Pulse Withstanding, Safety" "Anti-Arc, Flame Proof, Moisture Resistant, Non-Inductive, Safety" "Anti-Arc, Flame Proof, Moisture Resistant, Safety" "Anti-Corrosive, Automotive AEC-Q200, Moisture Resistant" "Anti-Corrosive, Current Sense, Moisture Resistant" "Anti-Corrosive, Flame Proof, Moisture Resistant, Safety" "Anti-Sulfur" "Anti-Sulfur, Automotive" "Anti-Sulfur, Automotive AEC-Q200" "Anti-Sulfur, Automotive AEC-Q200, Current Sense" "Anti-Sulfur, Automotive AEC-Q200, Current Sense, Moisture Resistant" "Anti-Sulfur, Automotive AEC-Q200, Current Sense, Moisture Resistant, Pulse Withstanding" "Anti-Sulfur, Automotive AEC-Q200, High Voltage" "Anti-Sulfur, Automotive AEC-Q200, High Voltage, Moisture Resistant" "Anti-Sulfur, Automotive AEC-Q200, Moisture Resistant" "Anti-Sulfur, Automotive AEC-Q200, Moisture Resistant, Pulse Withstanding" "Anti-Sulfur, Automotive AEC-Q200, Pulse Withstanding" "Anti-Sulfur, Current Sense" "Anti-Sulfur, Current Sense, Moisture Resistant, Pulse Withstanding" "Anti-Sulfur, Flame Proof, High Voltage, Pulse Withstanding, Safety" "Anti-Sulfur, Moisture Resistant" "Anti-Sulfur, Moisture Resistant, Non-Inductive" "Anti-Sulfur, Moisture Resistant, Non-Inductive, Non-Magnetic" "Automotive AEC-Q200" "Automotive AEC-Q200, Current Sense" "Automotive AEC-Q200, Current Sense, Moisture Resistant" "Automotive AEC-Q200, Current Sense, Moisture Resistant, Pulse Withstanding" "Automotive AEC-Q200, Current Sense, Pulse Withstanding" "Automotive AEC-Q200, Flame Retardant Coating, Safety" "Automotive AEC-Q200, High Voltage" "Automotive AEC-Q200, High Voltage, Moisture Resistant" "Automotive AEC-Q200, High Voltage, Pulse Withstanding" "Automotive AEC-Q200, Moisture Resistant" "Automotive AEC-Q200, Moisture Resistant, Non-Inductive" "Automotive AEC-Q200, Moisture Resistant, Pulse Withstanding" "Automotive AEC-Q200, Non-Inductive" "Automotive AEC-Q200, Pulse Withstanding" "Bonding Mountable, Moisture Resistant" "Bonding Mountable, Moisture Resistant, RF, High Frequency" "Current Sense" "Current Sense, Flame Proof, Moisture Resistant, Pulse Withstanding, Safety" "Current Sense, Flame Proof, Moisture Resistant, Safety" "Current Sense, Flame Proof, Non-Inductive, Pulse Withstanding, Safety" "Current Sense, Flame Proof, Pulse Withstanding, Safety" "Current Sense, Flame Proof, Safety" "Current Sense, Flame Retardant Coating, Safety" "Current Sense, Moisture Resistant" "Current Sense, Moisture Resistant, Non-Inductive" "Current Sense, Moisture Resistant, Non-Inductive, Non-Magnetic" "Current Sense, Moisture Resistant, Non-Inductive, Pulse Withstanding" "Current Sense, Moisture Resistant, Pulse Withstanding" "Current Sense, Non-Inductive" "Current Sense, Pulse Withstanding" "Flame Proof, Fusible, Moisture Resistant, Safety" "Flame Proof, Fusible, Pulse Withstanding, Safety" "Flame Proof, Fusible, Safety" "Flame Proof, High Voltage, Moisture Resistant, Non-Inductive, Safety" "Flame Proof, High Voltage, Non-Inductive, Safety" "Flame Proof, High Voltage, Pulse Withstanding, Safety" "Flame Proof, High Voltage, Safety" "Flame Proof, Moisture Resistant, Non-Inductive, Safety" "Flame Proof, Moisture Resistant, Non-Magnetic, Safety" "Flame Proof, Moisture Resistant, Pulse Withstanding, Safety" "Flame Proof, Moisture Resistant, Safety" "Flame Proof, Non-Inductive, Pulse Withstanding, Safety" "Flame Proof, Non-Inductive, Safety" "Flame Proof, Pulse Withstanding, Safety" "Flame Proof, Safety" "Flame Retardant Coating, Fusible, Pulse Withstanding, Safety" "Flame Retardant Coating, High Voltage, Moisture Resistant, Pulse Withstanding, Safety" "Flame Retardant Coating, High Voltage, Moisture Resistant, Safety" "Flame Retardant Coating, High Voltage, Pulse Withstanding, Safety" "Flame Retardant Coating, High Voltage, Safety" "Flame Retardant Coating, Military, Moisture Resistant, Safety" "Flame Retardant Coating, Moisture Resistant, Non-Inductive, Pulse Withstanding, Safety" "Flame Retardant Coating, Moisture Resistant, Safety" "Flame Retardant Coating, Non-Inductive, Safety" "Flame Retardant Coating, Pulse Withstanding, Safety" "Flame Retardant Coating, RF, High Frequency, Safety" "Flame Retardant Coating, Safety" "Fusible, Moisture Resistant, Safety" "Fusible, Pulse Withstanding, Safety" "Fusible, Safety" "High Voltage" "High Voltage, Moisture Resistant" "High Voltage, Moisture Resistant, Non-Inductive" "High Voltage, Moisture Resistant, Non-Magnetic" "High Voltage, Moisture Resistant, Pulse Withstanding" "High Voltage, Non-Inductive" "High Voltage, Non-Magnetic" "High Voltage, Pulse Withstanding" "Military" "Military, Moisture Resistant" "Military, Moisture Resistant, Non-Inductive" "Military, Moisture Resistant, Weldable" "Military, Non-Inductive" "Moisture Resistant" "Moisture Resistant, Non-Inductive" "Moisture Resistant, Non-Inductive, Non-Magnetic" "Moisture Resistant, Non-Inductive, Pulse Withstanding" "Moisture Resistant, Pulse Withstanding" "Non-Inductive" "Non-Inductive, Pulse Withstanding" "Non-Magnetic" "Pulse Withstanding" "RF, High Frequency" |
-| metadata.supplier-device-package | 102.0 201.0 204.0 207.0 306.0 402.0 404.0 406.0 505.0 508.0 510.0 603.0 606.0 612.0 705.0 805.0 808.0 815.0 816.0 830.0 1005.0 1010.0 1020.0 1050.0 1206.0 1210.0 1216.0 1218.0 1220.0 1224.0 1225.0 1313.0 1506.0 1575.0 1608.0 1632.0 1812.0 2010.0 2012.0 2015.0 2016.0 2208.0 2412.0 2512.0 2515.0 2520.0 2615.0 2725.0 2726.0 2728.0 2816.0 2817.0 2818.0 3014.0 3216.0 3264.0 3512.0 3637.0 3920.0 3921.0 4020.0 4026.0 4124.0 4318.0 4527.0 5020.0 5322.0 5931.0 6227.0 6432.0 6927.0 7638.0 8035.0 9045.0 11050.0 15075.0 "2-SMD" "Axial" "D-Pak in TO-263 Housing" "D2PAK" "DPAK" "D²PAK" "Flex-2" "MELF" "Mini MELF" "PFC10" "Panasert" "Powerchip®" "Radial" "Radial Lead" "SM-5" "SM2" "SMD" "SMD J-Lead, Pedestal" "SMD J-Lead, Recessed" "SR10" "SR20" "TO-126" "TO-126 (D-Pak Style)" "TO-218 (TO-247)" "TO-220" "TO-220-2" "TO-220-4" "TO-247" "TO-247-2" "TO-252" "TO-252, (D-Pak)" "TO-263" "TO-263 (D²Pak)" |
-| metadata.number-of-terminations | 2.0 3.0 4.0 |
-
-Metadata values are not sanitized.
-<>
-
 public defstruct Resistor <: Component :
   ; Generic properties
   manufacturer: String
@@ -211,24 +134,6 @@ public defstruct TCR :
 ; ======================= to-jitx ========================
 ; ========================================================
 
-doc: \<>
-```stanza
-defmethod to-jitx (resistor: Resistor) -> Instantiable
-```
-
-Takes a `Resistor` struct and returns an instance.
-Example:
-```stanza
-#use-added-syntax(jitx)
-defpackage my-design :
-  import ocdb/db-parts
-
-val resistor = Resistor(["tolerance" => 0.05 "composition" => "thick-film"])
-
-pcb-module my-module :
-  inst res : to-jitx(resistor)
-```
-<>
 defmethod to-jitx (resistor: Resistor) -> Instantiable :
   pcb-component my-resistor :
     val manufacturer-string = manufacturer(resistor)
@@ -236,6 +141,7 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
       manufacturer = manufacturer-string
 
     mpn = mpn(resistor)
+    val height = z(resistor)
 
     val description-string = lookup?(metadata(resistor), "description")
     match(description-string: String) :
@@ -246,8 +152,8 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
     symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
     val case = case(resistor)
     match(case: String) :
-      if all?(digit?, to-seq(case)) :
-        val pkg = ipc-two-pin-landpattern(case)
+      if check-valid-rectangle-pkg-list(case) :
+        val pkg = ipc-two-pin-landpattern(case,height)
         landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
       else :  ; example: case = "Axial"
         val pkg = dummy-landpattern(2, [x(resistor) y(resistor)])
@@ -292,211 +198,6 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
 ; ================== Resistor Accessors ==================
 ; ========================================================
 
-doc: \<>
-One can query an actual resistor from the JITX database that you can be bought. This call requires internet access.
-`Resistor` calls the lower level [Part Query API](../../jitx-commands/dbquery.md) adding the list of attributes provided
- by the user on top of design settings.
-
-```stanza
-public defn Resistor (properties:Tuple<KeyValue>) -> Resistor
-```
-
-Fixed Requirements :
-* category: "resistor"
-
-Default design Requirements (set by global variables defined in `ocdb/design-vars`) :
-* _sort: \["area"]\
-* max-rated-temperature.min: 0.0
-* min-rated-temperature.max: 25.0
-
-Those design requirements can be changed, either by changing `ocdb/design-vars` or by importing `ocdb/design-vars` and
-setting new values for the global variables:
-* _sort: set by `OPTIMIZE-FOR`.
-* \[max-rated-temperature.min min-rated-temperature.max\] : rated-temperature range in degC set by `OPERATING-TEMPERATURE`.
-
-Here are accessors to override design requirements:
-```stanza
-public defn Resistor (properties:Tuple<KeyValue>,
-                      exist:Tuple<String>) -> Resistor
-public defn Resistor (properties:Tuple<KeyValue>,
-                      exist:Tuple<String>,
-                      sort:Tuple<String>,
-                      operating-temperature:[Double, Double]|False) -> Resistor
-```
-
-Arguments:
-* `exist`: one can require the resulting resistor to have an attribute that is otherwise optional (for example "tolerance").
-* `sort`: overrides the sorting arguments that would otherwise be `OPTIMIZE-FOR`.
-* `operating-temperature`: overrides the rated temperature range that would otherwise be `OPERATING-TEMPERATURE`.
-
-Example: query a resistor with real-time sourcing data
-```stanza
-$ jitx repl
-stanza> import ocdb/db-parts
-stanza> import jitx/commands
-stanza> val resistor = Resistor(["resistance" => 1.0, "_sellers" => bom-vendors(), "_stock" => 1000])
-stanza> println $ resistor
-Resistor(
-  mpn = ERJ-XGNJ1R0Y
-  trust = low
-  (x, y, z) = (0.4, 0.2, 0.15)
-  mounting = smd
-  rated-temperature = MinMaxRange(min=-55.0, max=125.0)
-  case = 01005
-  type = chip
-  tolerance = MinMaxRange(min=-0.05, max=0.05)
-  resistance = 1.0
-  composition = thick-film
-  rated-power = 0.03
-  TCR = TCR(positive=-0.0001, negative=0.0006)
-  sourcing = ESR(price=0.01932, minimum-quantity=20000, stock=0)
-  metadata =
-    "datasheets" => "https://b2b-api.panasonic.eu/file_stream/pids/fileversion/1242"
-    "image" => "//media.digikey.com/Photos/Panasonic Photos/MFG_ERJ-XGNJ1R0Y.jpg"
-    "digi-key-part-number" => "10-ERJ-XGNJ1R0YTR-ND"
-    "description" => "RES SMD 1.0 OHM 5% 1/32W 01005"
-    "factory-stock" => 0.0
-    "qty" => 0.0
-    "packaging" => "Tape & Reel (TR)"
-    "series" => "ERJ-XGN"
-    "supplier-device-package" => 1005.0
-    "number-of-terminations" => 2.0
-  sellers =
-    Seller(
-      company-name = Digi-Key
-      resolved-price = 0.02484
-      offers = (
-        SellerOffer(
-          inventory-level = 17314
-          prices = (
-            SellerOfferPrice(quantity = 1, converted-price = 0.18)
-            SellerOfferPrice(quantity = 10, converted-price = 0.152)
-            SellerOfferPrice(quantity = 100, converted-price = 0.0593)
-            SellerOfferPrice(quantity = 1000, converted-price = 0.02484)
-            SellerOfferPrice(quantity = 2500, converted-price = 0.02277)
-            SellerOfferPrice(quantity = 5000, converted-price = 0.0207)))
-        SellerOffer(
-          inventory-level = 17314
-          prices = (
-            SellerOfferPrice(quantity = 1, converted-price = 0.18)
-            SellerOfferPrice(quantity = 10, converted-price = 0.152)
-            SellerOfferPrice(quantity = 100, converted-price = 0.0593)
-            SellerOfferPrice(quantity = 1000, converted-price = 0.02484)
-            SellerOfferPrice(quantity = 2500, converted-price = 0.02277)
-            SellerOfferPrice(quantity = 5000, converted-price = 0.0207)))
-        SellerOffer(
-          inventory-level = 0
-          prices = (
-            SellerOfferPrice(quantity = 20000, converted-price = 0.01932)))))
-    Seller(
-      company-name = Newark
-      resolved-price = 0.074
-      offers = (
-        SellerOffer(
-          inventory-level = 19850
-          prices = (
-            SellerOfferPrice(quantity = 1, converted-price = 0.55)
-            SellerOfferPrice(quantity = 25, converted-price = 0.461)
-            SellerOfferPrice(quantity = 100, converted-price = 0.179)
-            SellerOfferPrice(quantity = 250, converted-price = 0.144)
-            SellerOfferPrice(quantity = 500, converted-price = 0.109)
-            SellerOfferPrice(quantity = 1000, converted-price = 0.074)))
-        SellerOffer(
-          inventory-level = 0
-          prices = (
-            SellerOfferPrice(quantity = 20000, converted-price = 0.041)))))
-    Seller(
-      company-name = Avnet
-      resolved-price = 0.074
-      offers = (
-        SellerOffer(
-          inventory-level = 19850
-          prices = (
-            SellerOfferPrice(quantity = 1, converted-price = 0.55)
-            SellerOfferPrice(quantity = 25, converted-price = 0.461)
-            SellerOfferPrice(quantity = 100, converted-price = 0.179)
-            SellerOfferPrice(quantity = 250, converted-price = 0.144)
-            SellerOfferPrice(quantity = 500, converted-price = 0.109)
-            SellerOfferPrice(quantity = 1000, converted-price = 0.074)))
-        SellerOffer(
-          inventory-level = 0
-          prices = (
-            SellerOfferPrice(quantity = 20000, converted-price = 0.04914)
-            SellerOfferPrice(quantity = 40000, converted-price = 0.04662)
-            SellerOfferPrice(quantity = 80000, converted-price = 0.0441)
-            SellerOfferPrice(quantity = 120000, converted-price = 0.04158)
-            SellerOfferPrice(quantity = 160000, converted-price = 0.03906)
-            SellerOfferPrice(quantity = 200000, converted-price = 0.03654)
-            SellerOfferPrice(quantity = 2000000, converted-price = 0.03402)))))
-    Seller(
-      company-name = Arrow Electronics
-      resolved-price = 0.0463
-      offers = (
-        SellerOffer(
-          inventory-level = 20000
-          prices = (
-            SellerOfferPrice(quantity = 1, converted-price = 0.3073)
-            SellerOfferPrice(quantity = 10, converted-price = 0.2577)
-            SellerOfferPrice(quantity = 25, converted-price = 0.2551)
-            SellerOfferPrice(quantity = 50, converted-price = 0.2526)
-            SellerOfferPrice(quantity = 100, converted-price = 0.1516)
-            SellerOfferPrice(quantity = 250, converted-price = 0.0993)
-            SellerOfferPrice(quantity = 500, converted-price = 0.0924)
-            SellerOfferPrice(quantity = 1000, converted-price = 0.0463)
-            SellerOfferPrice(quantity = 3000, converted-price = 0.0423)
-            SellerOfferPrice(quantity = 6000, converted-price = 0.0419)
-            SellerOfferPrice(quantity = 15000, converted-price = 0.0324)))))
-  resolved-price = 0.02484)
-```
-
-```stanza
-public defn Resistors (properties:Tuple<KeyValue>, limit: Int) -> Tuple<Resistor>
-```
-Similar to `Resistor` but querying up to 25 resistors.
-
-```stanza
-public defn Resistor (raw-json: JObject) -> Resistor
-```
-Creates a `Resistor` from a `JObject`.
-
-Example:
-```stanza
-$ jitx repl
-stanza> import jitx/commands
-stanza> import ocdb/db-parts
-stanza> import json
-stanza> val jobject = dbquery-first(["category" => "resistor" "resistance" => 2.0]) as JObject
-stanza> println(jobject)
-JObject(entries = ["_id" => "0f8e320e1bc955ff59439bfc" "trust" => "low" "category" => "resistor" "mpn" => "OK20G5E-R52" "mounting" => "through-hole" "manufacturer" => "Ohmite" "type" => "through-hole" "dimensions" => JObject(entries = ["x" => 6.8 "y" => 2.5 "area" => 17.0]) "stock" => 0.0 "minimum_quantity" => 50000.0 "metadata" => JObject(entries = ["datasheets" => "http://www.ohmite.com/assets/docs/res_little_rebel.pdf?r=false" "digi-key-part-number" => "OK20G5E-R52-ND" "description" => "RES 2 OHM 5% 1/4W AXIAL" "factory-stock" => 0.0 "qty" => 0.0 "packaging" => "Tape & Reel (TR)" "series" => "Little Rebel® OK" "supplier-device-package" => "Axial" "number-of-terminations" => 2.0]) "price" => 0.01197 "tolerance" => JObject(entries = ["min" => -0.05 "max" => 0.05]) "resistance" => 2.0 "rated-power" => 0.25 "composition" => "carbon-film" "tcr" => JObject(entries = ["pos" => -0.00035 "neg" => 0.00035]) "case" => "Axial" "update_date" => "2021-09-04T01:26:50.670000"])
-stanza> val resistor = Resistor(jobject)
-stanza> println(resistor)
-Resistor(
-  mpn = OK20G5E-R52
-  trust = low
-  (x, y, z) = (6.8, 2.5, false)
-  mounting = through-hole
-  rated-temperature = false
-  case = Axial
-  type = through-hole
-  tolerance = MinMaxRange(min=-0.05, max=0.05)
-  resistance = 2.0
-  composition = carbon-film
-  rated-power = 0.25
-  TCR = TCR(positive=-0.00035, negative=0.00035)
-  sourcing = ESR(price=0.01197, minimum-quantity=50000, stock=0)
-  metadata =
-    "datasheets" => "http://www.ohmite.com/assets/docs/res_little_rebel.pdf?r=false"
-    "digi-key-part-number" => "OK20G5E-R52-ND"
-    "description" => "RES 2 OHM 5% 1/4W AXIAL"
-    "factory-stock" => 0.0
-    "qty" => 0.0
-    "packaging" => "Tape & Reel (TR)"
-    "series" => "Little Rebel® OK"
-    "supplier-device-package" => "Axial"
-    "number-of-terminations" => 2.0)
-```
-<>
-
 public defn Resistor (user-properties:Tuple<KeyValue>) -> Resistor :
   Resistor(user-properties, [])
 
@@ -529,24 +230,6 @@ defn resistor-query-properties (user-properties:Tuple<KeyValue>,
 ;======================== Look-ups ==========================
 ;============================================================
 
-doc: \<>
-```stanza
-public defn look-up-resistors (attribute: String) -> Tuple
-public defn look-up-resistors (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple
-```
-
-Looks up the list of available values (at most 1000 returned) for `attribute` amongst resistors in the JITX database.
-This call filters on the same properties as [Resistor](#resistor-accessors). Additional properties `filter-properties` can
-be given in argument to restrict further criteria on the considered resistors.
-
-Example:
-```stanza
-$ jitx repl
-stanza> import ocdb/db-parts
-stanza> println $ look-up-resistors("mounting", ["resistance" => 1.0, "min-rated-power" => 1.0])
-["smd" "through-hole"]
-```
-<>
 public defn look-up-resistors (attribute: String) -> Tuple :
   look-up-resistors(attribute, [])
 
@@ -570,112 +253,12 @@ public defn look-up-resistors (attribute: String,
 ; ========== query-available-resistance-values ===========
 ; ========================================================
 
-doc: \<>
-```stanza
-public defn query-available-resistance-values (properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Double> :
-```
-
-One can query the list of available resistance values available using the same design requirements as `Resistor`, filtering on a list of query parameters `properties` and requiring the
-attributes in `exist` to exist on the resistors.
-
-Example:
-```stanza
-$ jitx repl
-stanza> import ocdb/db-parts
-stanza> println $ query-available-resistance-values(["composition" => "thick-film" "case" => "Axial"], ["tolerance"])
-[100.0 150.0 270.0 470.0 511.0 560.0 680.0 750.0 1000.0 1010.0 1500.0 2000.0 2700.0 3300.0 4300.0 4700.0 4990.0 5100.0 6800.0 7500.0 10000.0 15000.0 18000.0 20000.0 24000.0 27000.0 33000.0 40000.0 47000.0 49900.0 50000.0 51000.0 60000.0 66000.0 75000.0 95300.0 100000.0 120000.0 150000.0 196000.0 200000.0 220000.0 250000.0 270000.0 300000.0 330000.0 350000.0 390000.0 400000.0 500000.0 680000.0 820000.0 1000000.0 1050000.0 1100000.0 1240000.0 1470000.0 1800000.0 2000000.0 2200000.0 2400000.0 2700000.0 3000000.0 3300000.0 4000000.0 4700000.0 5000000.0 5100000.0 6000000.0 6650000.0 7000000.0 7500000.0 8000000.0 8450000.0 9000000.0 10000000.0 11000000.0 12000000.0 12500000.0 14700000.0 15000000.0 16000000.0 20000000.0 22000000.0 22100000.0 25000000.0 27000000.0 30000000.0 30100000.0 33000000.0 39000000.0 40000000.0 47000000.0 50000000.0 60000000.0 68000000.0 70000000.0 75000000.0 80000000.0 82000000.0 100000000.0 120000000.0 130000000.0 140000000.0 150000000.0 180000000.0 195000000.0 200000000.0 222000000.0 250000000.0 300000000.0 330000000.0 400000000.0 430000000.0 470000000.0 500000000.0 750000000.0 900000000.0 1000000000.0 1200000000.0 1240000000.0 1320000000.0 2000000000.0 3000000000.0 4700000000.0 5000000000.0 9000000000.0 10000000000.0 15000000000.0 20000000000.0 50000000000.0 60000000000.0 100000000000.0 120000000000.0 200000000000.0 300000000000.0 500000000000.0]
-```
-<>
-
 public defn query-available-resistance-values (filter-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Double> :
   look-up-resistors("resistance", filter-properties, exist) as Tuple<Double>
 
 ;============================================================
 ;===================== Capacitor ============================
 ;============================================================
-
-doc: \<>
-There are almost 1,000,000 capacitors in the JITX database but the same part can be referenced in different packagings (cut tape, reels...).
-
-Each capacitor has a different Digi-Key Part Number but an mpn can have up to 3 Digi-Key Part Numbers for 3 different packagings.
-
-For example the capacitor of mpn "JMK021BJ103KK5W" appears with the following Digi-Key Part Numbers and packagings:
-* 587-4850-1-ND: Cut Tape (CT)
-* 587-4850-2-ND: Tape & Reel (TR)
-
-This information can be found in the attributes `metadata.digi-key-part-number` and `metadata.packaging` but cannot be queried on.
-You can check by yourselves doing:
-
-```stanza
-$ jitx repl
-stanza> import ocdb/db-parts
-stanza> do(println, Capacitors(["mpn" => "BFC237934205"], 25))
-```
-
-Check the [properties reference](../utilities/properties.md) for a description of supported attributes.
-
-Here are available attribute values with [default design requirements](#capacitor-accessors) as of 10/14/2021. They can be queried anytime with:
-```stanza
-$ jitx repl
-stanza> import ocdb/db-parts
-stanza> for attribute in ["manufacturer", "mpn", "capacitance", "trust", "dimensions", "mounting", "case", "stock", "price", "minimum_quantity", "type", "anode", "electrolyte", "esr", "esr_frequency", "rated-voltage", "rated-voltage-ac", "rated-current-pk", "rated-current-rms", "temperature-coefficient.code", "temperature-coefficient.lower-temperature", "temperature-coefficient.raw_data", "temperature-coefficient.tolerance", "temperature-coefficient.upper-temperature", "temperature-coefficient.value", "metadata.datasheets", "metadata.image", "metadata.digi-key-part-number", "metadata.description", "metadata.packaging", "metadata.lifetime-temp", "metadata.applications", "metadata.ripple-current-low-frequency", "metadata.ripple-current-high-frequency", "metadata.lead-spacing"] do :
-      >   val values = look-up-capacitors(attribute)
-      >   if length(values) <= 200 :
-      >     println("| %_ | %@ |" % [attribute, values])
-      >   else :
-      >     println("| %_ | %_ values |" % [attribute, length(values)])
-stnaza> import json
-stanza> for attribute in ["rated-temperature", "tolerance", "temperature-coefficient.change"] do :
-      >   val values =  to-tuple $ filter({_ is JObject}, look-up-capacitors(attribute))
-      >   if length(values) <= 100 :
-      >     println("| %_ (min, max) | %@ |" % [attribute, map({"(%_, %_)" % [_0["min"], _0["max"]]}, values)])
-      >   else :
-      >     println("| %_ | %_ values |" % [attribute, length(values)])
-```
-
-| Attribute | Values |
-|:-----|:-----|
-| manufacturer | "AHS Micro" "ASC Capacitors" "AVX Corporation" "Abracon LLC" "Aillen" "American Technical Ceramics" "CAL-CHIP ELECTRONICS, INC." "Cornell Dubilier Electronics (CDE)" "EPCOS - TDK Electronics" "EXXELIA" "EXXELIA Sic Safco" "Electronic Concepts Inc." "Elna America" "F&T" "Frontier Electronics" "Holy Stone Enterprise Co., Ltd." "IDT, Integrated Device Technology Inc" "Illinois Capacitor" "JJ Electronics" "Johanson Dielectrics Inc." "Johanson Technology Inc." "KEMET" "Knowles Dielectric Labs" "Knowles Novacap" "Knowles Syfer" "Kyocera International Inc. Electronic Components" "Meritek" "Murata Electronics" "NTE Electronics, Inc" "Nemco" "Nichicon" "Out of Bounds" "Paktron" "Panasonic Electronic Components" "PulseLarsen Antennas" "Rohm Semiconductor" "Rubycon" "SURGE" "Samsung Electro-Mechanics" "Semtech Corporation" "Songtian Electronics Co., Ltd" "Stackpole Electronics Inc" "TDK Corporation" "TE Connectivity Passive Product" "Taiyo Yuden" "Trigon Components" "Tusonix a Subsidiary of CTS Electronic Components" "United Chemi-Con" "Venkel" "Vicor Corporation" "Viking Tech" "Vishay Beyschlag/Draloric/BC Components" "Vishay Cera-Mite" "Vishay Dale" "Vishay Polytech" "Vishay Sprague" "Vishay Vitramon" "WIMA" "Walsin Technology Corporation" "Würth Elektronik" "XiangJiang" "Xicon" "YAGEO" "Yageo" |
-| mpn | More than 1000 values... |
-| capacitance | 705 values |
-| trust | "low" |
-| dimensions | More than 1000 values... |
-| mounting | "smd" "through-hole" |
-| case | "008004" "01005" "015008" "0201" "0202" "0204" "0301" "0303" "0306" "0402" "0502" "0504" "0505" "0508" "0602" "0603" "0612" "0709" "0803" "0805" "0905" "10-DIP" "10-SMD, Gull Wing" "1005" "1106" "1111" "12-DIP" "1206" "1210" "1218" "1305" "14-DIP" "14-SMD, Gull Wing" "1410" "1411" "1505" "1507" "1510" "16-DIP" "16-SMD, Gull Wing" "1611" "1706" "1708" "18-DIP" "18-SMD, Gull Wing" "1805" "1808" "1810" "1812" "1825" "1905" "1913" "2-DIP" "2-SMD" "2005" "2008" "2010" "2013" "2208" "2211" "2214" "2215" "2220" "2225" "2311" "2312" "2325" "2410" "2414" "2416" "2420" "2520" "2525" "2711" "2721" "2810" "2812" "2820" "2824" "2825" "2910" "2915" "2917" "2924" "3010" "3015" "3017" "3022" "3024" "3025" "3040" "3115" "3226" "3640" "3838" "3925" "3931" "40-DIP" "4030" "5040" "5829" "6-DIP" "6-SMD, Gull Wing" "6-Stacked SMD, J-Lead" "6-Stacked SMD, L-Lead" "6030" "6031" "6039" "6054" "6560" "8-DIP" "8-SMD, Gull Wing" "Axial" "Axial, Can" "Axial, Can - 4 Leads" "FlatPack" "FlatPack, Tabbed" "Nonstandard" "Nonstandard SMD" "Radial" "Radial - 12 Leads" "Radial - 3 Leads" "Radial - 4 Leads" "Radial - 5 Leads" "Radial - 6 Leads" "Radial, Can" "Radial, Can - 3 Lead" "Radial, Can - 4 Lead" "Radial, Can - 5 Lead" "Radial, Can - Mounting Ring - 4 Lead" "Radial, Can - QC Terminals" "Radial, Can - SMD" "Radial, Can - Snap-In" "Radial, Can - Snap-In - 3 Lead" "Radial, Can - Snap-In - 4 Lead" "Radial, Can - Snap-In - 5 Lead" "Radial, Can - Solder Lug" "Radial, Can - Solder Lug - 4 Lead" "Radial, Can - Solder Lug - 5 Lead" "Radial, Disc" "SMD, J-Lead" "Stacked DIP, 10 Lead" "Stacked DIP, 20 Lead" "Stacked DIP, 4 Lead" "Stacked DIP, 6 Lead" "Stacked DIP, 8 Lead" "Stacked SMD, 10 J-Lead" "Stacked SMD, 10 L-Lead" "Stacked SMD, 2 J-Lead" "Stacked SMD, 2 L-Lead" "Stacked SMD, 20 J-Lead" "Stacked SMD, 20 L-Lead" "Stacked SMD, 3 J-Lead" "Stacked SMD, 3 L-Lead" "Stacked SMD, 4 J-Lead" "Stacked SMD, 4 L-Lead" "Stacked SMD, 5 L-Lead" "Stacked SMD, 6 J-Lead" "Stacked SMD, 6 L-Lead" "Stacked SMD, 8 J-Lead" |
-| stock | More than 1000 values... |
-| price | More than 1000 values... |
-| minimum_quantity | More than 712 values... |
-| type | "Conformal Coated" "Hermetically Sealed" "Hybrid" "Molded" "Polymer" "ceramic" "electrolytic" "film" |
-| anode | "aluminium" "aluminum" "tantalum" |
-| electrolyte | "hybrid" "manganese-dioxide" "non-solid" "polymer" |
-| esr | More than 1000 values... |
-| esr_frequency | 20.0 100.0 120.0 1000.0 10000.0 20000.0 100000.0 300000.0 400000.0 |
-| rated-voltage | 2.0 2.5 3.0 4.0 5.0 6.0 6.3 7.0 7.5 8.0 8.2 10.0 12.0 12.5 15.0 16.0 20.0 21.0 25.0 30.0 32.0 35.0 40.0 42.0 50.0 55.0 56.0 60.0 63.0 70.0 71.0 75.0 80.0 100.0 125.0 150.0 160.0 180.0 200.0 201.0 210.0 220.0 225.0 230.0 250.0 251.0 275.0 280.0 300.0 305.0 315.0 330.0 350.0 360.0 385.0 400.0 420.0 440.0 450.0 475.0 500.0 520.0 525.0 550.0 560.0 575.0 580.0 600.0 630.0 650.0 700.0 720.0 750.0 760.0 800.0 840.0 850.0 875.0 900.0 920.0 1000.0 1100.0 1200.0 1250.0 1300.0 1400.0 1500.0 1600.0 1700.0 1800.0 2000.0 2500.0 3000.0 3150.0 3500.0 3600.0 4000.0 5000.0 6000.0 7200.0 7500.0 8000.0 9000.0 10000.0 15000.0 20000.0 25000.0 30000.0 |
-| rated-voltage-ac | 8.0 10.0 11.0 12.0 16.0 25.0 30.0 32.0 35.0 40.0 45.0 50.0 60.0 63.0 65.0 70.0 75.0 80.0 84.0 90.0 100.0 105.0 110.0 120.0 125.0 140.0 141.0 150.0 155.0 157.0 160.0 175.0 180.0 200.0 220.0 223.0 230.0 240.0 250.0 253.0 275.0 277.0 280.0 283.0 285.0 300.0 305.0 310.0 315.0 330.0 350.0 354.0 360.0 375.0 380.0 400.0 420.0 424.0 425.0 430.0 440.0 450.0 460.0 475.0 480.0 500.0 520.0 525.0 530.0 550.0 575.0 600.0 630.0 650.0 660.0 700.0 725.0 750.0 760.0 800.0 850.0 900.0 1000.0 1060.0 1500.0 |
-| rated-current-pk | No value |
-| rated-current-rms | No value |
-| temperature-coefficient.code | "A" "B" "BD" "BG" "BJ" "BL" "BN" "BP" "BR" "BV" "BX" "C" "C0G" "C0H" "C0J" "C0K" "CCG" "CD" "CF" "CH" "CL" "E" "F" "GBBL" "JB" "L" "M" "N" "N1500" "N2000" "N2200" "N2500" "N2800" "N4700" "N750" "NP0" "NS" "P3K" "P90" "R" "R3L" "S3N" "SL" "SL/GP" "T" "U2J" "U2K" "U2M" "UNJ" "UX" "X0U" "X5F" "X5R" "X5S" "X5U" "X6S" "X6T" "X7R" "X7S" "X7T" "X7U" "X8G" "X8L" "X8M" "X8R" "XAN" "Y" "Y5F" "Y5P" "Y5R" "Y5S" "Y5T" "Y5U" "Y5V" "Y6P" "YSP" "Z5U" "Z5V" "ZLM" |
-| temperature-coefficient.lower-temperature | -55.0 -30.0 10.0 |
-| temperature-coefficient.raw_data | "A" "B" "BD" "BG" "BJ" "BL" "BN" "BP" "BR" "BV" "BX" "C" "C0G, NP0" "C0G, NP0 (1B)" "C0H" "C0J" "C0K" "CCG" "CD" "CF" "CH" "CL" "E" "F" "GBBL" "JB" "L" "M" "N" "N1500" "N2000" "N2200" "N2500" "N2800" "N4700" "N750" "NP0" "NS" "P3K" "P90" "R" "R3L" "S3N" "SL" "SL/GP" "T" "U2J" "U2K" "U2M" "UNJ" "UX" "X0U" "X5F" "X5R" "X5S" "X5U" "X6S" "X6T" "X7R" "X7R (2R1)" "X7R (VHT)" "X7S" "X7T" "X7U" "X8G" "X8L" "X8M" "X8R" "XAN" "Y" "Y5F" "Y5P" "Y5P (B)" "Y5R" "Y5S" "Y5T" "Y5U" "Y5U (E)" "Y5V (F)" "Y6P" "YSP" "Z5U" "Z5V" "ZLM" |
-| temperature-coefficient.tolerance | 3.0e-05 6.0e-05 0.00012 0.00025 0.0005 0.001 0.0025 |
-| temperature-coefficient.upper-temperature | 85.0 105.0 125.0 150.0 |
-| temperature-coefficient.value | -0.0033 -0.0022 -0.0015 -0.00075 -0.0 |
-| rated-temperature (min, max) | (-55.0, 85.0) (-55.0, 90.0) (-55.0, 100.0) (-55.0, 105.0) (-55.0, 110.0) (-55.0, 125.0) (-55.0, 135.0) (-55.0, 140.0) (-55.0, 145.0) (-55.0, 150.0) (-55.0, 160.0) (-55.0, 175.0) (-55.0, 200.0) (-55.0, 230.0) (-55.0, 250.0) (-55.0, 260.0) (-50.0, 105.0) (-45.0, 85.0) (-40.0, 60.0) (-40.0, 85.0) (-40.0, 100.0) (-40.0, 105.0) (-40.0, 110.0) (-40.0, 115.0) (-40.0, 125.0) (-40.0, 130.0) (-40.0, 135.0) (-40.0, 145.0) (-40.0, 150.0) (-40.0, 175.0) (-30.0, 85.0) (-30.0, 105.0) (-30.0, 125.0) (-25.0, 60.0) (-25.0, 70.0) (-25.0, 85.0) (-25.0, 105.0) (-25.0, 125.0) (-25.0, 130.0) (-25.0, 150.0) (-20.0, 85.0) (-10.0, 85.0) |
-| tolerance | 355 values |
-| temperature-coefficient.change (min, max) | (-82.0, 22.0) (-56.0, 22.0) (-33.0, 22.0) (-22.0, 22.0) (-15.0, 15.0) (-10.0, 10.0) |
-| metadata.datasheets | More than 1000 values... |
-| metadata.image | More than 1000 values... |
-| metadata.digi-key-part-number | More than 1000 values... |
-| metadata.description | No value |
-| metadata.packaging | "Bag" "Box" "Bulk" "Cut Tape (CT)" "Digi-Reel®" "Strip" "Tape & Box (TB)" "Tape & Reel (TR)" "Tray" "Tube" |
-| metadata.lifetime-temp | "1000 Hrs @ 105°C" "1000 Hrs @ 125°C" "1000 Hrs @ 130°C" "1000 Hrs @ 135°C" "1000 Hrs @ 150°C" "1000 Hrs @ 200°C" "1000 Hrs @ 70°C" "1000 Hrs @ 85°C" "10000 Hrs @ 105°C" "10000 Hrs @ 125°C" "10000 Hrs @ 85°C" "100000 Hrs @ 60°C" "12000 Hrs @ 105°C" "12000 Hrs @ 85°C" "1250 Hrs @ 150°C" "13000 Hrs @ 85°C" "1500 Hrs @ 105°C" "1500 Hrs @ 125°C" "1500 Hrs @ 150°C" "1500 Hrs @ 85°C" "15000 Hrs @ 105°C" "15000 Hrs @ 85°C" "1600 Hrs @ 150°C" "18000 Hrs @ 85°C" "2000 Hrs @ 105°C" "2000 Hrs @ 125°C" "2000 Hrs @ 130°C" "2000 Hrs @ 135°C" "2000 Hrs @ 145°C" "2000 Hrs @ 150°C" "2000 Hrs @ 175°C" "2000 Hrs @ 200°C" "2000 Hrs @ 85°C" "20000 Hrs @ 105°C" "20000 Hrs @ 85°C" "22000 Hrs @ 105°C" "2500 Hrs @ 105°C" "2500 Hrs @ 125°C" "2500 Hrs @ 85°C" "26000 Hrs @ 85°C" "300 Hrs @ 200°C" "3000 Hrs @ 105°C" "3000 Hrs @ 125°C" "3000 Hrs @ 130°C" "3000 Hrs @ 135°C" "3000 Hrs @ 85°C" "3500 Hrs @ 125°C" "3500 Hrs @ 85°C" "37000 Hrs @ 105°C" "4000 Hrs @ 105°C" "4000 Hrs @ 125°C" "4000 Hrs @ 130°C" "4000 Hrs @ 135°C" "4000 Hrs @ 145°C" "4000 Hrs @ 85°C" "4600 Hrs @ 105°C" "500 Hrs @ 200°C" "500 Hrs @ 85°C" "5000 Hrs @ 105°C" "5000 Hrs @ 125°C" "5000 Hrs @ 85°C" "6000 Hrs @ 105°C" "6000 Hrs @ 125°C" "6300 Hrs @ 125°C" "7000 Hrs @ 105°C" "7000 Hrs @ 125°C" "8000 Hrs @ 105°C" "8000 Hrs @ 125°C" "8000 Hrs @ 85°C" "9000 Hrs @ 105°C" |
-| metadata.applications | "Acoustic Noise Reduction" "Audio" "Audio, Automotive" "Audio; DC Link, DC Filtering" "Audio; High Frequency, Switching; High Pulse, DV/DT" "Audio; High Frequency, Switching; High Pulse, DV/DT; Snubber" "Audio; High Pulse, DV/DT" "Automotive" "Automotive, Boardflex Sensitive" "Automotive, Boardflex Sensitive, ESD Protection" "Automotive, Bypass, Decoupling" "Automotive, Bypass, Decoupling, Boardflex Sensitive" "Automotive, Bypass, Decoupling, Boardflex Sensitive, ESD Protection" "Automotive, Bypass, Decoupling, ESD Protection" "Automotive, EMI, RFI Suppression" "Automotive, ESD Protection" "Automotive, High Temperature Reflow" "Automotive, SMPS Filtering" "Automotive, SMPS Filtering, Boardflex Sensitive" "Automotive, SMPS Filtering, Bypass, Decoupling" "Automotive; DC Link, DC Filtering" "Automotive; DC Link, DC Filtering; High Frequency, Switching; High Pulse, DV/DT" "Automotive; DC Link, DC Filtering; High Pulse, DV/DT; Snubber" "Automotive; EMI, RFI Suppression" "Automotive; High Frequency, Switching" "Automotive; High Frequency, Switching; High Pulse, DV/DT" "Automotive; High Frequency, Switching; High Pulse, DV/DT; Snubber" "Automotive; Power Factor Correction (PFC)" "Boardflex Sensitive" "Boardflex Sensitive, ESD Protection" "Bypass, Decoupling" "Bypass, Decoupling, Boardflex Sensitive" "Bypass, Decoupling, Boardflex Sensitive, ESD Protection" "Commutation; High Pulse, DV/DT; Snubber" "DC Link, DC Filtering" "DC Link, DC Filtering; EMI, RFI Suppression; High Pulse, DV/DT" "DC Link, DC Filtering; High Frequency, Switching" "DC Link, DC Filtering; High Frequency, Switching; High Pulse, DV/DT" "DC Link, DC Filtering; High Frequency, Switching; Snubber" "DC Link, DC Filtering; High Pulse, DV/DT" "DC Link, DC Filtering; High Pulse, DV/DT; Snubber" "DC Link, DC Filtering; Snubber" "Decoupling" "Downhole" "EMI, RFI Suppression" "EMI, RFI Suppression; 3 Phase" "EMI, RFI Suppression; High Frequency, Switching" "EMI, RFI Suppression; High Frequency, Switching; High Pulse, DV/DT" "EMI, RFI Suppression; High Pulse, DV/DT" "ESD Protection" "General Purpose" "Hermetically Sealed" "High Frequency, Switching" "High Frequency, Switching; High Pulse, DV/DT" "High Frequency, Switching; High Pulse, DV/DT; EMI, RFI Suppression" "High Frequency, Switching; High Pulse, DV/DT; Power Factor Correction (PFC)" "High Frequency, Switching; High Pulse, DV/DT; Snubber" "High Frequency; High Pulse, DV/DT; Power Factor Correction (PFC)" "High Pulse, DV/DT" "High Pulse, DV/DT; Snubber" "High Reliability" "High Reliability, Automotive" "High Reliability, Automotive, Boardflex Sensitive" "High Reliability, Boardflex Sensitive" "High Reliability, Bypass, Decoupling" "High Temperature Reflow" "Medical, Non-Critical" "Motor Run" "Motor Start" "Power Factor Correction (PFC)" "RF, Microwave, High Frequency" "RF, Microwave, High Frequency, Automotive" "RF, Microwave, High Frequency, Boardflex Sensitive" "RF, Microwave, High Frequency, Bypass, Decoupling" "SMPS Filtering" "SMPS Filtering, Boardflex Sensitive" "SMPS Filtering, Bypass, Decoupling" "Safety" "Safety, Automotive" "Safety, Automotive, Boardflex Sensitive" "Safety, Boardflex Sensitive" "Snubber" |
-| metadata.ripple-current-low-frequency | More than 1000 values... |
-| metadata.ripple-current-high-frequency | More than 1000 values... |
-| metadata.lead-spacing | "0.013\" (0.33mm)" "0.039\" (1.00mm)" "0.059\" (1.50mm)" "0.079\" (2.00mm)" "0.098\" (2.50mm)" "0.100\" (2.54mm)" "0.125\" (3.18mm)" "0.138\" (3.50mm)" "0.150\" (3.80mm)" "0.150\" (3.81mm)" "0.170\" (4.32mm)" "0.180\" (4.57mm)" "0.197\" (5.00mm)" "0.200\" (5.08mm)" "0.201\" (5.10mm)" "0.220\" (5.59mm)" "0.236\" (6.00mm)" "0.246\" (6.25mm)" "0.250\" (6.35mm)" "0.252\" (6.40mm)" "0.275\" (6.98mm)" "0.275\" (6.99mm)" "0.276\" (7.00mm)" "0.295\" (7.50mm)" "0.299\" (7.60mm)" "0.300\" (7.62mm)" "0.315\" (8.00mm)" "0.325\" (8.25mm)" "0.330\" (8.38mm)" "0.331\" (8.40mm)" "0.335\" (8.50mm)" "0.354\" (9.00mm)" "0.364\" (9.25mm)" "0.374\" (9.50mm)" "0.375\" (9.52mm)" "0.375\" (9.53mm)" "0.380\" (9.65mm)" "0.394\" (10.00mm)" "0.400\" (10.15mm)" "0.400\" (10.16mm)" "0.402\" (10.20mm)" "0.413\" (10.50mm)" "0.421\" (10.70mm)" "0.423\" (10.75mm)" "0.450\" (11.43mm)" "0.475\" (12.06mm)" "0.476\" (12.10mm)" "0.480\" (12.20mm)" "0.492\" (12.50mm)" "0.500\" (12.70mm)" "0.531\" (13.50mm)" "0.543\" (13.80mm)" "0.544\" (13.84mm)" "0.551\" (14.00mm)" "0.559\" (14.20mm)" "0.563\" (14.30mm)" "0.575\" (14.60mm)" "0.580\" (14.73mm)" "0.591\" (15.00mm)" "0.598\" (15.20mm)" "0.600\" (15.24mm)" "0.602\" (15.30mm)" "0.614\" (15.60mm)" "0.630\" (16.00mm)" "0.650\" (16.50mm)" "0.657\" (16.70mm)" "0.669\" (17.00mm)" "0.673\" (17.10mm)" "0.675\" (17.14mm)" "0.681\" (17.30mm)" "0.688\" (17.48mm)" "0.689\" (17.50mm)" "0.700\" (17.78mm)" "0.709\" (18.00mm)" "0.720\" (18.30mm)" "0.728\" (18.50mm)" "0.732\" (18.60mm)" "0.752\" (19.10mm)" "0.768\" (19.50mm)" "0.780\" (19.80mm)" "0.787\" (20.00mm)" "0.791\" (20.10mm)" "0.795\" (20.20mm)" "0.799\" (20.30mm)" "0.827\" (21.00mm)" "0.846\" (21.50mm)" "0.866\" (22.00mm)" "0.886\" (22.50mm)" "0.921\" (23.40mm)" "0.965\" (24.50mm)" "0.969\" (24.60mm)" "0.975\" (24.76mm)" "0.980\" (24.90mm)" "0.984\" (25.00mm)" "1.000\" (25.40mm)" "1.031\" (26.20mm)" "1.043\" (26.50mm)" "1.063\" (27.00mm)" "1.083\" (27.50mm)" "1.091\" (27.70mm)" "1.094\" (27.79mm)" "1.094\" (27.80mm)" "1.094\" (28.80mm)" "1.098\" (27.90mm)" "1.169\" (29.70mm)" "1.175\" (29.84mm)" "1.220\" (31.00mm)" "1.240\" (31.50mm)" "1.252\" (31.80mm)" "1.280\" (32.50mm)" "1.299\" (33.00mm)" "1.339\" (34.00mm)" "1.343\" (34.10mm)" "1.346\" (34.20mm)" "1.375\" (34.92mm)" "1.378\" (35.00mm)" "1.406\" (35.70mm)" "1.476\" (37.50mm)" "1.496\" (38.00mm)" "1.575\" (40.00mm)" "1.614\" (41.00mm)" "1.654\" (42.00mm)" "1.795\" (45.60mm)" "1.831\" (46.50mm)" "1.969\" (50.00mm)" "2.067\" (52.50mm)" "2.953\" (75.00mm)" |
-
-Metadata values are not sanitized.
-<>
 
 defstruct Capacitor <: Component :
   ; Generic properties
@@ -753,25 +336,6 @@ defn capacitor-temperature-coefficient (json: JObject) -> String|False :
 ; ======================= to-jitx ========================
 ; ========================================================
 
-doc: \<>
-```stanza
-defmethod to-jitx (capacitor: Capacitor) -> Instantiable
-```
-
-Takes a `Capacitor` struct and returns an instance.
-Example:
-```stanza
-#use-added-syntax(jitx)
-defpackage my-design :
-  import ocdb/db-parts
-
-val capacitor = Capacitor(["tolerance" => 0.05 "min-rated-voltage" => 100.0])
-
-pcb-module my-module :
-  inst cap : to-jitx(capacitor)
-```
-<>
-
 defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
   pcb-component my-capacitor :
     val manufacturer-string = manufacturer(capacitor)
@@ -788,6 +352,9 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
     val pol? = not (type-string == "ceramic" or type-string == "film")
     val esr = esr(capacitor)
     val case = case(capacitor)
+    val height = match(z(capacitor)):
+      (d:Double) : d
+      (f:False) : 0.4
     if pol? :
       pin a
       pin c
@@ -795,8 +362,8 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
       symbol = sym(a => sym.p[1], c => sym.p[2])
 
       match(case: String) :
-        if all?(digit?, to-seq(case)) :
-          val pkg = ipc-two-pin-landpattern(case, pol?)
+        if check-valid-rectangle-pkg-list(case) :
+          val pkg = ipc-two-pin-landpattern(case, height, pol?)
           landpattern = pkg(a => pkg.a, c => pkg.c)
         else :
           val pkg = dummy-landpattern(2, [x(capacitor) y(capacitor)])
@@ -821,8 +388,8 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
       symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
 
       match(case: String) :
-        if all?(digit?, to-seq(case)) :
-          val pkg = ipc-two-pin-landpattern(case)
+        if check-valid-rectangle-pkg-list(case) :
+          val pkg = ipc-two-pin-landpattern(case,height)
           landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
         else :
           val pkg = dummy-landpattern(2, [x(capacitor) y(capacitor)])
@@ -877,98 +444,6 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
 ; ================ Capacitor Accessors ===================
 ; ========================================================
 
-doc: \<>
-One can query an actual capacitor from the JITX database that you can be bought. This call requires internet access.
-`Capacitor` calls the lower level [Part Query API](../../jitx-commands/dbquery.md) adding the list of attributes provided
- by the user on top of design settings.
-
-```stanza
-public defn Capacitor (properties:Tuple<KeyValue>) -> Capacitor
-```
-
-Fixed Requirements :
-* category: "capacitor"
-
-Default design Requirements (set by global variables defined in `ocdb/design-vars`) :
-* _sort: \["area"]\
-* max-rated-temperature.min: 0.0
-* min-rated-temperature.max: 25.0
-
-Those design requirements can be changed, either by changing `ocdb/design-vars` or by importing `ocdb/design-vars` and
-setting new values for the global variables:
-* _sort: set by `OPTIMIZE-FOR`.
-* \[max-rated-temperature.min min-rated-temperature.max\] : rated-temperature range in degC set by `OPERATING-TEMPERATURE`.
-
-Here are accessors to override design requirements:
-```stanza
-public defn Capacitor (properties:Tuple<KeyValue>,
-                       exist:Tuple<String>) -> Capacitor
-public defn Capacitor (properties:Tuple<KeyValue>,
-                       exist:Tuple<String>,
-                       sort:Tuple<String>,
-                       operating-temperature:[Double, Double]|False) -> Capacitor
-```
-
-Arguments:
-* `exist`: one can require the resulting capacitor to have an attribute that is otherwise optional (for example "tolerance").
-* `sort`: overrides the sorting arguments that would otherwise be `OPTIMIZE-FOR`.
-* `operating-temperature`: overrides the rated temperature range that would otherwise be `OPERATING-TEMPERATURE`.
-
-```stanza
-public defn Capacitors (properties:Tuple<KeyValue>, limit: Int) -> Tuple<Capacitor>
-```
-Similar to `Capacitor` but querying up to 25 capacitors.
-
-```stanza
-public defn Capacitor (raw-json: JObject) -> Capacitor
-```
-Creates a `Capacitor` from a `JObject`.
-
-Example:
-```stanza
-$ jitx repl
-stanza> import jitx/commands
-stanza> import ocdb/db-parts
-stanza> import json
-stanza> val jobject = dbquery-first(["category" => "capacitor" "capacitance" => 2.0e-6]) as JObject
-stanza> println(jobject)
-JObject(entries = ["_id" => "b733080d04beb31d7d340940" "trust" => "low" "category" => "capacitor" "mpn" => "BFC237934205" "mounting" => "through-hole" "manufacturer" => "Vishay Beyschlag/Draloric/BC Components" "type" => "film" "dimensions" => JObject(entries = ["x" => 31.5 "y" => 9.0 "z" => 19.0 "area" => 283.5]) "stock" => 0.0 "minimum_quantity" => 100.0 "metadata" => JObject(entries = ["datasheets" => "https://www.vishay.com/docs/28135/mkp379.pdf" "digi-key-part-number" => "BFC237934205-ND" "factory-stock" => 0.0 "qty" => 0.0 "packaging" => "Bulk" "series" => "MKP379" "dielectric-material" => "Polypropylene (PP), Metallized" "termination" => "PC Pins" "lead-spacing" => "1.083\" (27.50mm)" "applications" => "High Pulse, DV/DT" "features" => "Long Life"]) "price" => 7.5776 "tolerance" => JObject(entries = ["min" => -0.05 "max" => 0.05]) "capacitance" => 2.0e-06 "rated-voltage-ac" => 100.0 "rated-voltage" => 160.0 "rated-temperature" => JObject(entries = ["min" => -55.0 "max" => 85.0]) "case" => "Radial" "update_date" => "2021-09-04T01:26:09.754000"])
-stanza> val capacitor = Capacitor(jobject)
-stanza> println(capacitor)
-Capacitor(
-  mpn = BFC237934205
-  trust = low
-  (x, y, z) = (31.5, 9.0, 19.0)
-  mounting = through-hole
-  rated-temperature = MinMaxRange(min=-55.0, max=85.0)
-  case = Radial
-  type = film
-  tolerance = MinMaxRange(min=-0.05, max=0.05)
-  capacitance = 2.0e-06
-  anode = false
-  electrolyte = false
-  temperature-coefficient = false
-  esr = false
-  rated-voltage = 160.0
-  rated-voltage-ac = 100.0
-  rated-current-pk = false
-  rated-current-rms = false
-  sourcing = ESR(price=7.5776, minimum-quantity=100, stock=0)
-  metadata =
-    "datasheets" => "https://www.vishay.com/docs/28135/mkp379.pdf"
-    "digi-key-part-number" => "BFC237934205-ND"
-    "factory-stock" => 0.0
-    "qty" => 0.0
-    "packaging" => "Bulk"
-    "series" => "MKP379"
-    "dielectric-material" => "Polypropylene (PP), Metallized"
-    "termination" => "PC Pins"
-    "lead-spacing" => "1.083\" (27.50mm)"
-    "applications" => "High Pulse, DV/DT"
-    "features" => "Long Life")
-```
-<>
-
 public defn Capacitor (user-properties:Tuple<KeyValue>) -> Capacitor :
   Capacitor(user-properties, [])
 
@@ -1000,25 +475,6 @@ defn capacitor-query-properties (user-properties:Tuple<KeyValue>,
 ;======================== Look-ups ==========================
 ;============================================================
 
-doc: \<>
-```stanza
-public defn look-up-capacitors (attribute: String) -> Tuple
-public defn look-up-capacitors (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple
-```
-
-Looks up the list of available values (at most 1000 returned) for `attribute` amongst capacitors in the JITX database.
-This call filters on the same properties as [Capacitor](#capacitor-accessors). Additional properties `filter-properties` can
-be given in argument to restrict further criteria on the considered capacitors.
-
-Example:
-```stanza
-$ jitx repl
-stanza> import ocdb/db-parts
-stanza> println $ look-up-capacitors("mounting", ["capacitance" => 1.0e-6, "min-rated-voltage" => 1000.0])
-["smd" "through-hole"]
-```
-<>
-
 public defn look-up-capacitors (attribute: String) -> Tuple :
   look-up-capacitors(attribute, [])
 
@@ -1042,100 +498,12 @@ public defn look-up-capacitors (attribute: String,
 ; ======= query-available-capacitance-values =============
 ; ========================================================
 
-doc: \<>
-```stanza
-public defn query-available-capacitance-values (properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Double> :
-```
-
-One can query the list of available capacitance values available using the same design requirements as `Capacitor`, filtering on a list of query parameters `properties` and requiring the
-attributes in `exist` to exist on the capacitors.
-
-Example:
-```stanza
-$ jitx repl
-stanza> import ocdb/db-parts
-println $ query-available-capacitance-values(["case" => "Axial" "min-rated-voltage" => 10.0e3], ["tolerance"])
-[3.9e-10 4.7e-10 6.8e-10 1.0e-09 1.5e-09 1.8e-09 2.0e-09 2.2e-09 2.5e-09 2.7e-09 3.0e-09 3.3e-09 3.9e-09 4.7e-09 5.0e-09 6.8e-09 1.0e-08 4.7e-08]
-```
-<>
-
 public defn query-available-capacitance-values (filter-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Double> :
   look-up-capacitors("capacitance", filter-properties, exist) as Tuple<Double>
 
 ;============================================================
 ;====================== Inductor ============================
 ;============================================================
-
-doc: \<>
-There are about 100,000 inductors in the JITX database but the same part can be referenced in different packagings (cut tape, reels...).
-
-Each inductor has a different Digi-Key Part Number but an mpn has typically 3 Digi-Key Part Numbers for 3 different packagings.
-
-For example the inductor of mpn "LQP02TN10NH02D" appears with the following Digi-Key Part Numbers and packagings:
-* 490-14699-1-ND: Cut Tape (CT)
-* 490-14699-6-ND: Digi-Reel®
-* 490-14699-2-ND: Tape & Reel (TR)
-
-This information can be found in the attributes `metadata.digi-key-part-number` and `metadata.packaging` but cannot be queried on.
-You can check by yourselves doing:
-
-```stanza
-$ jitx repl
-stanza> import ocdb/db-parts
-stanza> do(println, Inductors(["mpn" => "LQP02TN10NH02D"], 25))
-```
-
-Check the [properties reference](../utilities/properties.md) for a description of supported attributes.
-
-Here are available attribute values with [default design requirements](#inductor-accessors) as of 10/14/2021. They can be queried anytime with:
-```stanza
-$ jitx repl
-stanza> import ocdb/db-parts
-stanza> for attribute in ["manufacturer", "mpn", "inductance", "trust", "dimensions", "mounting", "case", "stock", "price", "minimum_quantity", "type", "material-core", "shielding", "current-rating", "saturation-current", "dc-resistance", "quality-factor", "self-resonant-frequency", "metadata.datasheets", "metadata.image", "metadata.digi-key-part-number", "metadata.description", "metadata.packaging"] do :
-      >   val values = look-up-inductors(attribute)
-      >   if length(values) <= 250 :
-      >     println("| %_ | %@ |" % [attribute, values])
-      >   else :
-      >     println("| %_ | %_ values |" % [attribute, length(values)])
-stnaza> import json
-stanza> for attribute in ["rated-temperature", "tolerance"] do :
-      >   val values =  to-tuple $ filter({_ is JObject}, look-up-resistors(attribute))
-      >   if length(values) <= 100 :
-      >     println("| %_ (min, max) | %@ |" % [attribute, map({"(%_, %_)" % [_0["min"], _0["max"]]}, values)])
-      >   else :
-      >     println("| %_ | %_ values |" % [attribute, length(values)])
-```
-
-| Attribute | Values |
-|:-----|:-----|
-| manufacturer | "API Delevan Inc." "AVX Corporation" "Abracon LLC" "Allied Components International" "American Technical Ceramics" "Amgis, LLC" "BluaTec" "Bourns Inc." "COILCRAFT" "Chilisin Electronics" "Coilmx" "Delta Electronics/Components" "Delta Electronics/Cyntec" "ECS Inc." "EPCOS - TDK Electronics" "East Electronics" "Eaton - Electronics Division" "ITG Electronics, Inc." "Johanson Technology Inc." "KEMET" "Laird-Signal Integrity Products" "Littelfuse Inc." "Mag Layers" "Mentech Technology USA Inc." "Mini-Circuits" "Monolithic Power Systems Inc." "Murata Electronics" "Murata Power Solutions Inc." "Newava Technology Inc." "Panasonic Electronic Components" "Pulse Electronics Network" "Pulse Electronics Power" "Recom Power" "Samsung Electro-Mechanics" "Schaffner EMC Inc." "Schurter Inc." "Shenzhen Sunlord Electronics Co., Ltd." "Signal Transformer" "Standex-Meder Electronics" "Sumida America Components Inc." "TDK Corporation" "TE Connectivity" "TE Connectivity Passive Product" "Taiyo Yuden" "Talema Group LLC" "Traco Power" "Triad Magnetics" "Venkel" "Viking Tech" "Vishay Dale" "Vishay Electro-Films" "Walsin Technology Corporation" "Würth Elektronik" "XFMRS" "iNRCORE, LLC" |
-| mpn | More than 1000 values... |
-| inductance | 766 values |
-| trust | "low" |
-| dimensions | More than 1000 values... |
-| mounting | "smd" "through-hole" |
-| case | "01005" "0201" "0302" "0402" "0504" "0603" "0805" "0806" "1007" "1008" "11-DIP Module" "1206" "1207" "1210" "1212" "1812" "1919" "2-SMD" "2-SMD, J-Lead" "2005" "2020" "2220" "2304" "2323" "2512" "2727" "4-SMD" "8-DIP Module" "8-SMD, Gull Wing" "Axial" "Horizontal, 4 PC Pad" "Nonstandard" "Nonstandard, 2 Lead" "Nonstandard, 3 Lead" "Nonstandard, 4 Lead" "Nonstandard, Corner Terminals" "Radial" "Radial, Horizontal" "Radial, Horizontal - Corner Terminals" "Radial, Horizontal Cylinder" "Radial, Horizontal, 4 Leads" "Radial, Vertical" "Radial, Vertical - Corner Terminals" "Radial, Vertical Cylinder" "Radial, Vertical Cylinder, 3 Leads" "Radial, Vertical Cylinder, 4 Leads" "Radial, Vertical, 10 Leads" "Radial, Vertical, 4 Leads" "Radial, Vertical, 6 Leads" |
-| stock | More than 1000 values... |
-| price | More than 1000 values... |
-| minimum_quantity | 291 values |
-| type | "Ceramic" "Ceramic Core, Wirewound" "Molded" "Multilayer" "Planar" "Thick Film" "Thin Film" "Toroidal" "Wirewound" "fixed" |
-| material-core | "air" "alloy" "alloy-powder" "alumina" "carbonyl-powder" "ceramic" "ceramic-ferrite" "ceramic-non-magnetic" "ferrite" "iron" "iron-alloy" "iron-powder" "manganese-zinc-ferrite" "metal" "metal-composite" "molybdenum-permalloy" "nickel-zinc-ferrite" "non-magnetic" "phenolic" "sendust" |
-| shielding | "semi-shielded" "shielded" "unshielded" |
-| current-rating | More than 1000 values... |
-| saturation-current | More than 1000 values... |
-| dc-resistance | More than 1000 values... |
-| quality-factor | 0.3 0.5 0.64 0.7 0.8 0.85 0.9 1.0 1.1 1.2 1.3 1.4 1.6 1.8 2.0 2.3 2.6 2.8 2.9 3.0 3.1 3.2 3.3 3.4 3.5 3.8 3.9 4.0 4.2 5.0 5.8 6.0 6.3 6.7 6.8 7.0 7.2 7.3 7.4 7.5 7.6 7.7 7.72 7.9 8.0 8.12 8.2 8.24 8.26 8.3 8.42 8.5 8.58 8.6 8.64 8.7 8.78 8.8 8.9 9.0 9.1 9.18 9.2 9.24 9.34 9.4 9.5 9.56 9.624 9.66 9.7 9.74 9.8 9.9 10.0 10.2 10.5 10.6 10.76 10.88 10.9 11.0 11.26 11.3 11.64 11.72 11.8 12.0 12.7 12.9 13.0 13.1 13.18 13.26 13.32 13.6 13.86 14.0 14.7 15.0 15.5 16.0 16.46 16.48 17.0 17.46 18.0 18.5 19.0 20.0 21.0 22.0 23.0 24.0 25.0 26.0 27.0 28.0 29.0 30.0 31.0 32.0 33.0 34.0 35.0 36.0 37.0 38.0 39.0 40.0 41.0 42.0 43.0 44.0 45.0 46.0 47.0 48.0 49.0 50.0 51.0 52.0 53.0 54.0 55.0 56.0 57.0 58.0 59.0 60.0 61.0 62.0 63.0 64.0 65.0 66.0 67.0 68.0 69.0 70.0 71.0 72.0 73.0 74.0 75.0 76.0 77.0 78.0 79.0 80.0 81.0 82.0 84.0 85.0 86.0 87.0 88.0 89.0 90.0 92.0 93.0 94.0 95.0 96.0 97.0 98.0 100.0 102.0 104.0 105.0 106.0 107.0 109.0 110.0 112.0 115.0 120.0 126.0 127.0 128.0 130.0 131.0 132.0 133.0 135.0 137.0 139.0 140.0 142.0 143.0 145.0 150.0 151.0 155.0 163.0 184.0 186.0 191.0 211.0 223.0 226.0 230.0 240.0 245.0 280.0 |
-| self-resonant-frequency | More than 1000 values... |
-| rated-temperature (min, max) | (-80.0, 280.0) (-65.0, 125.0) (-65.0, 150.0) (-65.0, 155.0) (-65.0, 165.0) (-65.0, 170.0) (-65.0, 175.0) (-65.0, 200.0) (-65.0, 225.0) (-65.0, 230.0) (-65.0, 250.0) (-65.0, 275.0) (-65.0, 350.0) (-60.0, 150.0) (-55.0, 105.0) (-55.0, 110.0) (-55.0, 125.0) (-55.0, 145.0) (-55.0, 150.0) (-55.0, 155.0) (-55.0, 170.0) (-55.0, 175.0) (-55.0, 180.0) (-55.0, 195.0) (-55.0, 200.0) (-55.0, 210.0) (-55.0, 215.0) (-55.0, 220.0) (-55.0, 225.0) (-55.0, 230.0) (-55.0, 235.0) (-55.0, 250.0) (-55.0, 270.0) (-55.0, 275.0) (-55.0, 300.0) (-55.0, 350.0) (-55.0, 355.0) (-50.0, 125.0) (-50.0, 150.0) (-40.0, 85.0) (-40.0, 110.0) (-40.0, 125.0) (-40.0, 130.0) (-40.0, 150.0) (-40.0, 155.0) (-40.0, 175.0) (-40.0, 200.0) (-40.0, 220.0) (-40.0, 275.0) (-25.0, 100.0) (-25.0, 125.0) (-25.0, 150.0) (-25.0, 155.0) (-20.0, 125.0) (-15.0, 105.0) |
-| tolerance (min, max) | (-0.3, 0.0) (-0.3, 0.3) (-0.2, 0.2) (-0.15, 0.15) (-0.1, 0.0) (-0.1, 0.1) (-0.05, 0.05) (-0.03, 0.03) (-0.02, 0.02) (-0.01, 0.01) (-0.005, 0.005) (-0.0025, 0.0025) (-0.002, 0.002) (-0.001, 0.001) (-0.0005, 0.0005) (-0.0002, 0.0002) (-0.0001, 0.0001) (-5.0e-05, 5.0e-05) (-2.5e-05, 2.5e-05) (-2.0e-05, 2.0e-05) (-1.0e-05, 1.0e-05) |
-| metadata.datasheets | More than 1000 values... |
-| metadata.image | 1000 values |
-| metadata.digi-key-part-number | More than 1000 values... |
-| metadata.description | More than 1000 values... |
-| metadata.packaging | "Bag" "Box" "Bulk" "Cut Tape (CT)" "Digi-Reel®" "Strip" "Tape & Box (TB)" "Tape & Reel (TR)" "Tray" "Tube" |
-
-Metadata values are not sanitized.
-<>
 
 defstruct Inductor <: Component :
   ; Generic properties
@@ -1196,25 +564,6 @@ public defn Inductor (raw-json: JObject) -> Inductor :
 ; ========================================================
 ; ======================== to-jitx =======================
 ; ========================================================
-
-doc: \<>
-```stanza
-defmethod to-jitx (inductor: Inductor) -> Instantiable
-```
-
-Takes a `Inductor` struct and returns an instance.
-Example:
-```stanza
-#use-added-syntax(jitx)
-defpackage my-design :
-  import ocdb/db-parts
-
-val inductor = Inductor(["tolerance" => 0.05 "type" => "Wirewound"])
-
-pcb-module my-module :
-  inst ind : to-jitx(inductor)
-```
-<>
 
 defmethod to-jitx (inductor: Inductor) -> Instantiable :
   pcb-component my-inductor :
@@ -1278,95 +627,6 @@ defmethod to-jitx (inductor: Inductor) -> Instantiable :
 ; ================= Inductor Accessors ===================
 ; ========================================================
 
-doc: \<>
-One can query an actual inductor from the JITX database that you can be bought. This call requires internet access.
-`Inductor` calls the lower level [Part Query API](../../jitx-commands/dbquery.md) adding the list of attributes provided
- by the user on top of design settings.
-
-```stanza
-public defn Inductor (properties:Tuple<KeyValue>) -> Inductor
-```
-
-Fixed Requirements :
-* category: "inductor"
-
-Default design Requirements (set by global variables defined in `ocdb/design-vars`) :
-* _sort: \["area"]\
-* max-rated-temperature.min: 0.0
-* min-rated-temperature.max: 25.0
-
-Those design requirements can be changed, either by changing `ocdb/design-vars` or by importing `ocdb/design-vars` and
-setting new values for the global variables:
-* _sort: set by `OPTIMIZE-FOR`.
-* \[max-rated-temperature.min min-rated-temperature.max\] : rated-temperature range in degC set by `OPERATING-TEMPERATURE`.
-
-Here are accessors to override design requirements:
-```stanza
-public defn Inductor (properties:Tuple<KeyValue>,
-                      exist:Tuple<String>) -> Inductor
-public defn Inductor (properties:Tuple<KeyValue>,
-                      exist:Tuple<String>,
-                      sort:Tuple<String>,
-                      operating-temperature:[Double, Double]|False) -> Inductor
-```
-
-Arguments:
-* `exist`: one can require the resulting inductor to have an attribute that is otherwise optional (for example "tolerance").
-* `sort`: overrides the sorting arguments that would otherwise be `OPTIMIZE-FOR`.
-* `operating-temperature`: overrides the rated temperature range that would otherwise be `OPERATING-TEMPERATURE`.
-
-```stanza
-public defn Inductors (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Inductor>
-```
-Similar to `Inductor` but querying up to 25 inductors.
-
-```stanza
-public defn Inductor (raw-json: JObject) -> Inductor
-```
-Creates a `Inductor` from a `JObject`.
-
-Example:
-```stanza
-$ jitx repl
-stanza> import jitx/commands
-stanza> import ocdb/db-parts
-stanza> import json
-stanza> val jobject = dbquery-first(["category" => "inductor" "inductance" => 2.0e-6]) as JObject
-stanza> println(jobject)
-JObject(entries = ["_id" => "57079a8ac5097973f3964018" "trust" => "low" "category" => "inductor" "mpn" => "#A915AY-2R0M=P3" "mounting" => "smd" "manufacturer" => "Murata Electronics" "type" => "fixed" "dimensions" => JObject(entries = ["x" => 5.0 "y" => 5.0 "z" => 3.0 "area" => 25.0]) "stock" => 1308.0 "minimum_quantity" => 1.0 "metadata" => JObject(entries = ["datasheets" => "https://search.murata.co.jp/Ceramy/image/img/P02/J(E)TE243B-0046_D53LC_reference.pdf" "digi-key-part-number" => "490-#A915AY-2R0M=P3CT-ND" "description" => "FIXED IND 2UH 2.64A 27 MOHM SMD" "factory-stock" => 0.0 "qty" => 0.0 "packaging" => "Cut Tape (CT)" "series" => "D53LC" "inductance-frequency-test" => 100000.0]) "price" => 0.79 "tolerance" => JObject(entries = ["min" => -0.2 "max" => 0.2]) "inductance" => 2.0e-06 "current-rating" => 2.64 "saturation-current" => 2.92 "shielding" => "shielded" "dc-resistance" => 0.027 "case" => "Nonstandard" "update_date" => "2021-09-04T01:26:38.065000"])
-stanza> val inductor = Inductor(jobject)
-stanza> println(inductor)
-Inductor(
-  mpn = #A915AY-2R0M=P3
-  trust = low
-  (x, y, z) = (5.0, 5.0, 3.0)
-  mounting = smd
-  rated-temperature = false
-  case = Nonstandard
-  type = fixed
-  tolerance = MinMaxRange(min=-0.2, max=0.2)
-  inductance = 2.0e-06
-  material-core = false
-  shielding = shielded
-  current-rating = 2.64
-  saturation-current = 2.92
-  dc-resistance = 0.027
-  quality-factor = false
-  self-resonant-frequency = false
-  sourcing = ESR(price=0.79, minimum-quantity=1, stock=1308)
-  metadata =
-    "datasheets" => "https://search.murata.co.jp/Ceramy/image/img/P02/J(E)TE243B-0046_D53LC_reference.pdf"
-    "digi-key-part-number" => "490-#A915AY-2R0M=P3CT-ND"
-    "description" => "FIXED IND 2UH 2.64A 27 MOHM SMD"
-    "factory-stock" => 0.0
-    "qty" => 0.0
-    "packaging" => "Cut Tape (CT)"
-    "series" => "D53LC"
-    "inductance-frequency-test" => 100000.0)
-```
-
-<>
-
 public defn Inductor (user-properties:Tuple<KeyValue>) -> Inductor :
   Inductor(user-properties, [])
 
@@ -1387,23 +647,6 @@ public defn Inductors (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Ind
 ; =============== inductor-query-properties ==============
 ; ========================================================
 
-doc: \<>
-```stanza
-public defn query-available-inductance-values (properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple<Double> :
-```
-
-One can query the list of available inductance values available using the same design requirements as `Inductor`,
-filtering on a list of query parameters `properties` and requiring the attributes in `exist` to exist on the indcutors.
-
-Example:
-```stanza
-$ jitx repl
-stanza> import ocdb/db-parts
-stanza> println $ query-available-inductance-values(["min-current-rating" => 100.0], ["tolerance"])
-[1.2e-07 4.7e-07 6.8e-07 8.2e-07 1.5e-06 2.2e-06 3.3e-06]
-```
-<>
-
 defn inductor-query-properties (user-properties:Tuple<KeyValue>,
                                 exist:Tuple<String>,
                                 sort:Tuple<String>,
@@ -1418,25 +661,6 @@ defn inductor-query-properties (user-properties:Tuple<KeyValue>,
 ;============================================================
 ;======================== Look-ups ==========================
 ;============================================================
-
-doc: \<>
-```stanza
-public defn look-up-inductors (attribute: String) -> Tuple
-public defn look-up-inductors (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple
-```
-
-Looks up the list of available values (at most 1000 returned) for `attribute` amongst inductors in the JITX database.
-This call filters on the same properties as [Inductor](#inductor-accessors). Additional properties `filter-properties` can
-be given in argument to restrict further criteria on the considered inductors.
-
-Example:
-```stanza
-$ jitx repl
-stanza> import ocdb/db-parts
-stanza> println $ look-up-inductors("saturation-current", ["inductance" => 1.0e-6 "case" => "0402"])
-[0.1 1.0]
-```
-<>
 
 public defn look-up-inductors (attribute: String) -> Tuple :
   look-up-inductors(attribute, [])
