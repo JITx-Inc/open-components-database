@@ -35,25 +35,23 @@ pcb-module power-monitor :
   inst fpga : ocdb/microsemi/A2F200M3F-FGG256I/module
 
 ; Rails to monitor
-  val power-rails = [ PowerRail(fmc.v12p0,         ocdb/tolerance/min-typ-max(11.95, 12.05, 12.0))]
-  ; val power-rails = [ PowerRail(fmc.v12p0,         min-typ-max(11.95, 12.05, 12.0))
-  ;                     PowerRail(fpga.src-1V5.vdd,  min-typ-max(1.45, 1.55, 1.50))
-  ;                     PowerRail(fpga.src-3V3.vdd,  min-typ-max(3.25, 3.35, 3.30))
-  ;                     PowerRail(fpga.src-io.vdd,   min-typ-max(1.77, 1.83, 1.80))]
-
+  val power-rails = [ PowerRail(fmc.v12p0,         ocdb/tolerance/tol%(12.0, 0.02))
+                      PowerRail(fpga.src-1V5.vdd,  ocdb/tolerance/tol%(1.50, 0.02))
+                      PowerRail(fpga.src-3V3.vdd,  ocdb/tolerance/tol%(3.30, 0.02))
+                      PowerRail(fpga.src-io.vdd,   ocdb/tolerance/tol%(1.80, 0.02))]
 
   inst mon : ocdb/maxim/MAX1606x/module(power-rails)
   net gnd (mon.power.gnd GND)
   net vdd (mon.power.vdd fmc.v3p3)
 
-  ; require POD:gpio[30] from fpga
-  ; require POD-ext:gpio[30] from fmc
-  ; net (POD, POD-ext)
+  require POD:gpio[30] from fpga
+  require POD-ext:gpio[30] from fmc
+  net (POD, POD-ext)
 
-  ; require comm-bus:lvds[16] from fpga
-  ; require comm-bus-ext:lvds[16] from fmc
-  ; for i in 0 to 16 do :
-  ;   net (ocdb/terminations/terminate-lvds(comm-bus[i], gnd, vdd, ocdb/terminations/LVDSTerminationACSimple), comm-bus-ext[i])
+  require comm-bus:lvds[16] from fpga
+  require comm-bus-ext:lvds[16] from fmc
+  for i in 0 to 16 do :
+    net (ocdb/terminations/terminate-lvds(comm-bus[i], gnd, vdd, ocdb/terminations/LVDSTerminationACSimple), comm-bus-ext[i])
 
   ; Mechanicals
   add-mounting-holes(board-shape, "M2", [2 3])
