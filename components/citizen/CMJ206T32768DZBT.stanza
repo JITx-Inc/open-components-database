@@ -1,0 +1,51 @@
+#use-added-syntax(jitx)
+defpackage ocdb/citizen/CMJ206T32768DZBT :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+
+  import ocdb/land-patterns 
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/generator-utils
+  import ocdb/generic-components
+
+pcb-landpattern CMJ206T32768DZBT-landpattern :
+  ; grid-locs(# rows, # cols, row pitch, col pitch)
+  ; for (l in grid-locs(1, 2, 2.5, 0.0), i in [1 2]) do :
+  ;   pad p[i] : smd-pad(1.0, 1.8) at l
+  val offset-x-pad = 2.500 / 2.0 + 5.200 + 1.500 / 2.0
+  pad p[1] : smd-pad(1.5, 1.0) at loc(0.000,   (2.540 / 2.0))
+  pad p[2] : smd-pad(1.5, 1.0) at loc(0.000, (- 2.540 / 2.0))
+  pad p[3] : smd-pad(2.5, 3.4) at loc((- offset-x-pad), 0.000)
+; Ensure any pads don't breach the courtyard
+  layer(Courtyard(Top)) = Rectangle(9.5, 3.8, loc((- offset-x-pad / 2.0), 0.000))
+  ref-label()
+
+public pcb-component component :
+  name = "32.768kHz Crystal CMJ206T32768DZBT"
+  description = "32768Hz 圆柱体晶振 ±20ppm 50kΩ 6pF Plugin Crystals ROHS"
+  manufacturer = "Citizen"
+  mpn = "CMJ206T32768DZBT"
+  
+  port p : pin[[1 2]]
+  pin gnd
+
+  val sym = crystal-sym(1)
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2], gnd => sym.gnd)
+  val lp = CMJ206T32768DZBT-landpattern
+  landpattern = lp(p[1] => lp.p[1], p[2] => lp.p[2], gnd => lp.p[3])
+
+  property(self.crystal-resonator) = ocdb/property-structs/CrystalResonator(
+                                        6.0e-12, ;   load-capacitance:Double     ; Load capacitance in Farads           
+                                        1.0e-12, ;   shunt-capacitance:Double    ; Shunt capacitance in Farads          
+                                        3.4e-15, ;   motional-capacitance:Double ; Motional capacitance in Farads       
+                                        50.0e3,  ;   ESR:Double                  ; Series resistance of crystal in Ohms 
+                                        32.768e3,;   frequency:Double            ; Fundamental frequency in Hz        
+                                        20.0e-6, ;   frequency-tolerance:Double  ; Frequency tolerance in Hz            
+                                        1.0e-6)  ;   max-drive-level:Double      ; Max drive level in W           
+
