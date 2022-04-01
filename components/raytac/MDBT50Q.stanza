@@ -16,12 +16,12 @@ defpackage ocdb/raytac/MDBT50Q :
 
 
 public pcb-enum ocdb/raytac/MDBT50Q/RaytacAntennaType:
-  RaytacChipAntena
+  RaytacChipAntenna
   RaytacPcbAntenna
 
 public pcb-component component (antenna-type:RaytacAntennaType):
   mpn = to-string $ "MDBT50Q-%_512K" % 
-    ["P" when antenna-type == RayTacPcbAntenna else ""]
+    ["P" when antenna-type == RaytacPcbAntenna else ""]
   manufacturer = "Raytac"
   description = "nRF52833 based module, with chip or PCB antenna"
 
@@ -155,11 +155,10 @@ public pcb-module module (antenna-type:RaytacAntennaType):
   pin vcc
   pin vbus
   pin reset
-  pin swdio
-  pin swdck
 
-  port spi-master : spi
-  port i2c-master : i2c
+  port swd:swd()
+  port spi-controller : spi-controller()
+  port i2c-controller : i2c
   port uart-nrf : uart()
   port P0 : pin[32]
   port P1 : pin[10]
@@ -178,18 +177,18 @@ public pcb-module module (antenna-type:RaytacAntennaType):
   net (P1 ble-module.P1)
 
   ; swd
-  net (swdio, ble-module.SWDIO)
-  net (swdck, ble-module.SWDCK)
+  net (swd.swdio, ble-module.SWDIO)
+  net (swd.swdclk, ble-module.SWDCK)
 
   ; spi
-  net (spi-master.mosi, ble-module.P0[28])
-  net (spi-master.miso, ble-module.P0[30])
-  net (spi-master.sck, ble-module.P0[31])
-  net (spi-master.ss, ble-module.P0[02])
+  net (spi-controller.copi, ble-module.P0[28])
+  net (spi-controller.cipo, ble-module.P0[30])
+  net (spi-controller.sck, ble-module.P0[31])
+  net (spi-controller.cs, ble-module.P0[02])
 
   ; i2c
-  net (i2c-master.sda, ble-module.P0[11])
-  net (i2c-master.scl, ble-module.P0[12])
+  net (i2c-controller.sda, ble-module.P0[11])
+  net (i2c-controller.scl, ble-module.P0[12])
 
   ; uart
   net (uart-nrf.rx, ble-module.P0[08])
