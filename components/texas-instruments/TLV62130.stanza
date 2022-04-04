@@ -40,7 +40,8 @@ public pcb-component component :
   make-box-symbol()
 
   property(self.PVIN.power-pin) = PowerPin(Interval(3.0, 17.0, false))
-
+  property(self.rated-temperature) = RatedTemperature(Interval(-40.0 85.0, false))
+  
   eval-when has-property?(self.PVIN.rail-voltage) :
     val vin = property(self.PVIN.rail-voltage)
     property(self.PVIN.generic-pin) = GenericPin(Interval(-0.3, 20.0, false), 2000.0)
@@ -68,8 +69,8 @@ public pcb-module module (v-out:Double) :
 
   net (gnd buck.AGND buck.PGND buck.PAD buck.DEF buck.FSW)
   net (vin buck.AVIN buck.PVIN)
-  cap-strap(buck.PVIN, gnd, 10.0e-6)
-  cap-strap(buck.PVIN, gnd, 1.0e-6)
+  cap-strap(buck.PVIN, gnd, ["capacitance" => 10.0e-6 "min-rated-voltage" => 30.0])
+  cap-strap(buck.PVIN, gnd, ["capacitance" => 0.1e-6 "min-rated-voltage" => 30.0])
 
   net (ss buck.SS)
   cap-strap(buck.SS, gnd, 3.3e-9)
@@ -80,10 +81,10 @@ public pcb-module module (v-out:Double) :
   net (en buck.EN)
   res-strap(l.p[2], buck.PG, 100.0e3)
 
-  property(l.p[2].voltage) = [(v-out * 0.99) v-out ( v-out * 1.01)]
+  property(l.p[2].voltage) = ocdb/tolerance/tol%(v-out, 0.01)
 
   ; Create a voltage divider to output 0.8V. Target current : 5uA
-  make-voltage-divider(l.p[2], buck.FB, gnd, [0.78 0.8 0.82] 5.0e-6)
+  make-voltage-divider(l.p[2], buck.FB, gnd, ocdb/tolerance/min-typ-max(0.78 0.8 0.82) 5.0e-6)
 
   cap-strap(vout, gnd, 22.0e-6)
 

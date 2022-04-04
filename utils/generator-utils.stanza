@@ -128,6 +128,24 @@ public defn propagate-rail-voltage ():
               ; println("Supply %_ from %_ to %_" % [property(p2.rail-voltage) ref(p1) ref(p2)])
               ; println(property(p2.rail-voltage))
 
+public defn calculate-operating-points ():
+  defn get-other-pin (comp:JITXObject,  p:JITXObject) :
+    for ps in pins(comp) find! :
+      ps != p
+
+  inside pcb-module :
+    for i in component-instances(self) do :
+      if has-property?(i.resistance) or has-property?(i.capacitance) :
+        for p in pins(i) do :
+          if has-property?(p.rail-voltage) : ;and connected?([get-other-pin(i,p), property(self.gnd)])
+            if has-property?(self.gnd) :
+              if connected?([get-other-pin(i,p), property(self.gnd)]):
+                val voltage = property(p.rail-voltage)
+                if has-property?(i.resistance) :
+                  property(i.operating-point) = OperatingPoint(Interval(0.0, voltage, false), Interval(0.0, voltage / property(i.resistance), false))
+                else if has-property?(i.capacitance) :
+                  property(i.operating-point) = OperatingPoint(Interval(0.0, voltage, false), Interval(0.0, 0.0, false))
+
 ; =======================================
 ; Attach the power generator to designs and loads.
 ; =======================================
@@ -165,5 +183,6 @@ public defn run-final-passes (module:Instantiable) :
   intermediate-design = transform-module(propagate-rail-voltage, intermediate-design)
   intermediate-design = run-evals(intermediate-design)
   val assigned-pins = assign-pins()
-  val final = run-evals(assigned-pins)
+  var final = run-evals(assigned-pins)
+  final = transform-module(calculate-operating-points, final)
   final

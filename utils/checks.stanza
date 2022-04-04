@@ -6,10 +6,10 @@ defpackage ocdb/checks:
   import jitx
   import jitx/commands
   import ocdb/defaults
-  import ocdb/design-vars
   import ocdb/space-derating
   import ocdb/generator-utils
   import ocdb/property-structs
+  import ocdb/design-vars
 
 ; ==== Check convenience functions ===
 ; ====================================
@@ -17,24 +17,34 @@ defpackage ocdb/checks:
 public defn check-design (module:JITXObject):
   inside pcb-module:
     for i in component-instances(module) do :
+      check rated-temperature(i)
+      if has-property?(i.capacitance) :
+        check capacitor-component(i)
+      if has-property?(i.resistance) :
+        check resistor-component(i)
+
       for p in pins(i) do :
-        ; Check more pins once we get more voltage information from SPICE
         if has-property?(p.generic-pin) :
           check generic-pin(p)
         if has-property?(p.power-pin) :
           check power-pin(p)
         if has-property?(p.reset-pin) :
           check reset-pin(p)
+
     check io(module)
     check-all-landpatterns(module)
 
 defn get-other-pin (comp:JITXObject,  p:JITXObject) :
-  val pins = pins(comp)
-  var op
-  for ps in pins do :
-    if ps != p :
-      op  = ps
-  op
+  for ps in pins(comp) find! :
+    ps != p
+
+public pcb-check rated-temperature (component:JITXObject):
+  ; println("%_ check temp-rating" % [ref(component)])
+  #CHECK(has-property?(component.rated-temperature))
+  val temp = operating-temperature(property(component.rated-temperature))
+  ; println("Rating %_" % [temp])
+  #CHECK(contains?(temp, OPERATING-TEMPERATURE[0]))
+  #CHECK(contains?(temp, OPERATING-TEMPERATURE[1]))
 
 public pcb-check io (module:JITXObject) :
   val pins = to-tuple(seq-cat(pins, component-instances(module)))
@@ -176,25 +186,29 @@ public pcb-check voltage-levels (p:JITXObject, range:[Double,Double,Double]) :
 ; ====================================
 
 ; Checks resistors against operating point and environment
-public pcb-check resistor-check (r:JITXObject) :
+public pcb-check resistor-component (r:JITXObject) :
   #CHECK(has-property?(r.resistor))
   #CHECK(has-property?(r.operating-point))
-  val [vpk i temp] = [lookup(property(r.operating-point), `voltage-pk) lookup(property(r.operating-point), `current-rms) property(r.temperature)]
+  val [vpk i temp] = [[min(peak-voltage(property(r.operating-point))) max(peak-voltage(property(r.operating-point)))] max(peak-current(property(r.operating-point))) OPERATING-TEMPERATURE[1]]
+
   val power = property(r.resistance) * pow(i, 2.0)
-  #CHECK(abs(vpk[0]) <= property(r.rated-voltage))
-  #CHECK(abs(vpk[1]) <= property(r.rated-voltage))
   if has-property?(r.derating) :
     ; Derate the power based on the piecewise linear curve from MFG
     val derating = PWL(property(r.derating))[temp]
     val pwr = derating * property(r.rated-power)
     #CHECK(pwr * DERATE-RESISTOR-POWER > power)
   else :
-    #CHECK(property(r.rated-power) * DERATE-RESISTOR-POWER > power)
+    ; Derate the power if MFG derating is missing
+    val derating = PWL([[0.0 1.0] [70.0 1.0] [125.0 0.0]])[temp]
+    val pwr = derating * property(r.rated-power)
+    #CHECK(pwr * DERATE-RESISTOR-POWER > power)
 
-public pcb-check capacitor-check (c:JITXObject) :
+public pcb-check capacitor-component (c:JITXObject) :
   #CHECK(has-property?(c.capacitor))
   #CHECK(has-property?(c.operating-point))
-  val [vpk temp] = [lookup(property(c.operating-point), `voltage-pk) property(c.temperature)]
+
+  val [vpk temp] = [[min(peak-voltage(property(c.operating-point))) max(peak-voltage(property(c.operating-point)))] OPERATING-TEMPERATURE[1]]
+  val max-temp = max(operating-temperature(property(c.rated-temperature)))
   switch(property(c.type)) :
 
     "ceramic" :
@@ -204,7 +218,7 @@ public pcb-check capacitor-check (c:JITXObject) :
       val vpk-derate-nom = PWL(DERATE-CAPACITOR-MLCC-VPK-NOM)[temp]
       #CHECK(vpk[0] <= (vpk-derate-nom * property(c.rated-voltage)))
       #CHECK(vpk[1] <= (vpk-derate-nom * property(c.rated-voltage)))
-      #CHECK(temp <= min(DERATE-CAPACITOR-MLCC-TEMP, property(c.rated-temperature)[1]))
+      #CHECK(temp <= min(DERATE-CAPACITOR-MLCC-TEMP, max-temp))
 
     "electrolytic" :
       #CHECK(has-property?(c.anode))
@@ -213,7 +227,7 @@ public pcb-check capacitor-check (c:JITXObject) :
 
       if (property(c.anode) == "tantalum" and property(c.electrolyte) == "polymer") :
         #CHECK(vpk[1]   <= (DERATE-CAPACITOR-ETANTPOLY-VPK * property(c.rated-voltage)))
-        #CHECK(temp  <= min(DERATE-CAPACITOR-ETANTPOLY-TEMP, property(c.rated-temperature)[1]))
+        #CHECK(temp  <= min(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp))
         #CHECK(i-pk  <= property(c.rated-current-pk))
         #CHECK(i-rms <= PWL(property(c.rated-current-rms))[temp])
         #CHECK(vpk[0]  >= 0.0)
@@ -227,11 +241,11 @@ public pcb-check capacitor-check (c:JITXObject) :
           val vpk-derate-nom = PWL(DERATE-CAPACITOR-ETANTMNO2-VPK-NOM)[temp]
           #CHECK(vpk[1]  <= (vpk-derate-wc * property(c.rated-voltage)))
           #CHECK(vpk[1]  <= (vpk-derate-nom * property(c.rated-voltage)))
-          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, property(c.rated-temperature)[1]))
-          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, property(c.rated-temperature)[1]))
+          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp))
+          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp))
         else if i-pk > 2.0 :
           #CHECK(vpk[1]  <= (DERATE-CAPACITOR-ETANTMNO2-VPK * property(c.rated-voltage)))
-          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, property(c.rated-temperature)[1]))
+          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp))
 
       else :
         println("Unhandled electrolytic type for capacitor check on %_" % [c])
@@ -239,11 +253,11 @@ public pcb-check capacitor-check (c:JITXObject) :
     "mica" :
       #CHECK(vpk[0] <= (DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage)))
       #CHECK(vpk[1] <= (DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage)))
-      #CHECK(temp <= min(DERATE-CAPACITOR-MICA-TEMP, property(c.rated-temperature)[1]))
+      #CHECK(temp <= min(DERATE-CAPACITOR-MICA-TEMP, max-temp))
 
     else : println("Unhandled type for capacitor check on %_" % [c])
 
-  #CHECK(temp >= property(c.rated-temperature)[0])
+  #CHECK(OPERATING-TEMPERATURE[0] >= min(operating-temperature(property(c.rated-temperature))))
 
 ; Checks the frequency of an oscillator (o) against an interface on an IC (intf)
 public pcb-check oscillator-check-frequency (o:JITXObject, intf:CrystalOscillator) :
