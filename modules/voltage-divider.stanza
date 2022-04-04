@@ -30,8 +30,8 @@ public defn voltage-divider-solver (v-in: Toleranced,
                              current: Double) -> VoltageDividerSolution|False:
   ; Look for highest acceptable tolerance in EIA standard values: [20% 10% 5% 2% 1% 0.5% 0.25% 0.1%]
   val current-tolerance = 0.1
-  val goal-r-hi = (typ(v-in) - typ(v-out)) / current
-  val goal-r-lo = typ(v-out) / current
+  val goal-r-hi = (typ-value(v-in) - typ-value(v-out)) / current
+  val goal-r-lo = typ-value(v-out) / current
   label<VoltageDividerSolution|False> return :
     for tol in std-tols do :
       ; std-tols are in % instead of being unitless
@@ -52,8 +52,9 @@ public defn voltage-divider-solver (v-in: Toleranced,
                                     current: Double,
                                     tolerance: Double,
                                     current-tolerance: Double) -> VoltageDividerSolution|False :
-  val goal-r-hi = (typ(v-in) - typ(v-out)) / current
-  val goal-r-lo = typ(v-out) / current
+  fatal("Current specified to the voltage-divider-solver cannot be 0.0") when current == 0.0
+  val goal-r-hi = (typ-value(v-in) - typ-value(v-out)) / current
+  val goal-r-lo = typ-value(v-out) / current
   ; Find best resistors matching output requirement
   val hi-res = get-resistance-values(goal-r-hi, tolerance, current-tolerance)
   val lo-res = get-resistance-values(goal-r-lo, tolerance, current-tolerance)
@@ -71,7 +72,7 @@ public defn voltage-divider-solver (v-in: Toleranced,
 
         if in-range?(v-out, vo) :
           println("      Solved: mpn1=%_, mpn2=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A"
-                  % [mpn(r-hi-cmp), mpn(r-lo-cmp), min-value(v-out), typ(v-out), max-value(v-out), typ(v-out) / low(ratio)])
+                  % [mpn(r-hi-cmp), mpn(r-lo-cmp), min-value(v-out), typ-value(v-out), max-value(v-out), typ-value(v-out) / low(ratio)])
           return(VoltageDividerSolution(r-hi-cmp, r-lo-cmp, vo))
         else :
           println("      Ignoring: not a solution when taking into account TCRs.")
@@ -103,7 +104,7 @@ defn determine-and-sort-fitting-resistance-pairs (v-in: Toleranced,
                                               (- tol), tol, (- tol), tol,
                                               0., 0., 0., 0.)
         if in-range?(v-out, vo) :
-          val loss = abs(typ(v-out) - typ(vo))
+          val loss = abs(typ-value(v-out) - typ-value(vo))
           One(Ratio(rh, rl, loss))
         else :
           None()
@@ -118,7 +119,7 @@ public defn compute-output-voltage-range (v-in: Toleranced,
   val vo-max = max-value(v-in) * (r-lo-val * (1.0 + max-lo-dr)) * (1.0 + max-lo-tol)
                      / ( (r-lo-val * (1.0 + max-lo-dr)) * (1.0 + max-lo-tol)
                      + (r-hi-val  * (1.0 + min-hi-dr)) * (1.0 + min-hi-tol))
-  val vo-nom = typ(v-in) * (r-lo-val) / ( (r-lo-val) + (r-hi-val) )
+  val vo-nom = typ-value(v-in) * (r-lo-val) / ( (r-lo-val) + (r-hi-val) )
 
   min-typ-max(vo-min, vo-nom, vo-max)
 
