@@ -1,0 +1,57 @@
+#use-added-syntax(tests, jitx)
+defpackage ocdb/test/test-checks :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/checks
+  import ocdb/generator-utils
+
+  import ocdb/generic-components
+  import ocdb/stackups
+  import ocdb/rules
+  import ocdb/symbols
+
+pcb-module checks :
+  ; Design goes here
+  inst c1 : ceramic-cap(1.0e-6)
+  inst c2 : tantalum-cap(1.0e-6)
+  inst c3 : gen-cap-cmp(1.0e-6)
+  inst c4 : gen-tant-cap-cmp(1.0e-6)
+
+  inst r1 : chip-resistor(1.0e3)
+  inst r2 : gen-res-cmp(1.0e3)
+
+  inst i1 : smd-inductor(4.7e-6)
+  inst i2 : gen-ind-cmp(4.7e-6)
+  inst d1 : gen-led-cmp("0603")
+
+  net gnd ()
+  net single-pin1 ()
+  net single-pin2 ()
+  net single-pin3 ()
+  res-strap(gnd, single-pin1,10.0e3)
+  cap-strap(gnd, single-pin2,10.0e-9)
+  ind-strap(gnd, single-pin3,2.2e-6)
+
+  net (gnd c1.p[1] c2.c c3.p[1] c4.c r1.p[1] r2.p[1] d1.c)
+
+  #EXPECT(connected?([c1.p[1] c2.c c3.p[1] c4.c r1.p[1] r2.p[1] d1.c]))
+  #EXPECT(connected?(c1.p[2]) == false)
+  #EXPECT(connected?(c2.a) == false)
+  #EXPECT(connected?(c3.p[2]) == false)
+  #EXPECT(connected?(c4.a) == false)
+  #EXPECT(connected?(r1.p[2]) == false)
+  #EXPECT(connected?(r2.p[2]) == false)
+  #EXPECT(connected?(d1.a) == false)
+
+val brd-outline = Rectangle(50.0, 50.0)
+pcb-board B :
+  stackup = sierra-circuits-6-layer-62-mil
+  boundary = brd-outline
+  signal-boundary = brd-outline
+set-main-module(checks)
+set-board(B)
+set-rules(sierra-adv-rules)

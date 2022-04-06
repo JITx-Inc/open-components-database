@@ -19,7 +19,6 @@ defpackage ocdb/db-parts :
   import ocdb/symbols
   import ocdb/design-vars
 
-
 public deftype Component
 public defmulti x (component: Component) -> Double
 public defmulti y (component: Component) -> Double
@@ -191,7 +190,8 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
     match(TCR: TCR): property(self.TCR) = [positive(TCR), negative(TCR)]
     spice :
       "[R] {p[1]} {p[2]} {resistance}"
-
+    check ocdb/checks/connected(self.p[1])
+    check ocdb/checks/connected(self.p[2])
   my-resistor
 
 ; ========================================================
@@ -380,6 +380,8 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
       else :
         spice :
           "[C] {a} {c} {capacitance(capacitor)}"
+      check ocdb/checks/connected(self.a)
+      check ocdb/checks/connected(self.c)
 
     else :
       port p : pin[1 through 2]
@@ -406,6 +408,8 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
       else :
         spice :
           "[C] {p[1]} {p[2]} {capacitance(capacitor)}"
+      check ocdb/checks/connected(self.p[1])
+      check ocdb/checks/connected(self.p[2])
 
     emodel = EModel-Capacitor(capacitance(capacitor),
                              emodel-pourcentage-tolerance(tolerance(capacitor)),
@@ -620,7 +624,8 @@ defmethod to-jitx (inductor: Inductor) -> Instantiable :
     property(self.self-resonant-frequency) = self-resonant-frequency(inductor)
     spice :
       "[L] {p[1]} {p[2]} {inductance}"
-
+    check ocdb/checks/connected(self.p[1])
+    check ocdb/checks/connected(self.p[2])
   my-inductor
 
 ; ========================================================
