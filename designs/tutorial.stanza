@@ -8,69 +8,88 @@ defpackage ocdb/designs/tutorial :
   import ocdb/generic-components
   import ocdb/bundles
   import ocdb/design-vars
-  import ocdb/micro-controllers
   import ocdb/generator-utils
+  import ocdb/tolerance
   import ocdb/checks
-  import ocdb/terminations
 
-val board-shape = RoundedRectangle(30.0, 25.0, 3.0)
+val board-shape = RoundedRectangle(35.0, 30.0, 0.5)
 
-DESIGN-QUANTITY = 0
+pcb-module simple-lm317a-regulator (v-out:Double) :
 
-; Our off-board connector with 5V power and CAN
-pcb-module can-connector :
-  port power:power
-  port can:can
-  public inst connector : ocdb/phoenix/combicon-mc/component(4)
-  net (connector.p[1], power.gnd)
-  net VIN (connector.p[2], power.vdd)
-  net (connector.p[3], can.canh)
-  net (connector.p[4], can.canl)
+  inst ldo : ocdb/unisonic/LM317A/component
+  inst feedback : ocdb/passive-circuits/voltage-divider(v-out, 1.25, 1.0, 5.0e-3)
 
-  ocdb/terminations/terminate-can(can, power.gnd, CANTerminationParallel)
-  set-power-source(connector.p[2], connector.p[1], 5.0)
+  net (feedback.in ldo.output)
+  net (feedback.out ldo.adj)
+  net gnd (feedback.lo)
+  symbol(gnd) = ocdb/symbols/ground-sym
 
-pcb-module first-design :
-  inst connector : can-connector
+  cap-strap(ldo.input, gnd, 0.1e-6)
+  cap-strap(ldo.output, gnd, 1.0e-6)
 
-  ; Choose the smallest 3.3V F0 mcu that will work for this design. Spec 30ppm for the main clock.
-  inst stm : micro-controller(["mpn" => "STM32F103RBH6"])([`HSE-ppm => 30.0e-6 `boot-from => "flash"])
+pcb-module lm317a-regulator (v-out:Toleranced) :
+  pin vin 
+  pin vout 
+  pin adj 
+  pin gnd 
 
-  ; Add a CAN transceiver
-  inst xr : ocdb/texas-instruments/TCAN1051/module
-  require can-out:can-interface from stm.mcu
-  net (can-out, xr.can-interface)
-  net CAN (xr.can, connector.can)
+  inst ldo : ocdb/unisonic/LM317A/component
 
-  ; Add an accelerometer
-  inst xl : ocdb/st-microelectronics/LIS3DH/module
-  require acc-i2c:i2c from stm.mcu
-  net (acc-i2c, xl.i2c)
-  add-open-drain-pullups(acc-i2c, stm.power.vdd)
-  require tap-detect:gpio from stm.mcu
-  net WAKE (tap-detect.gpio, xl.int[1])
+  net (ldo.input vin)
+  net (ldo.output vout)
+  net (ldo.adj adj)
 
-  ; Connect power, apply symbols
-  net (xr.power, connector.power)
-  net (xl.power, stm.power)
-  net P3V3 (xl.vio, xr.vio, stm.power.vdd)
-  net GND (stm.power.gnd)
-  symbol(P3V3) = ocdb/symbols/supply-sym
-  symbol(GND) = ocdb/symbols/ground-sym
+  cap-strap(vin, gnd, 0.1e-6)
+  cap-strap(vout, gnd, 1.0e-6)
 
-  property(self.gnd) = GND
+  val inherent-variance = tol+%(property(ldo.reference-voltage))
+  if inherent-variance > tol+%(v-out):
+    fatal("Target regulator accuracy infeasible with LM317A")
+  val target-variance = tol+%(v-out) - inherent-variance
+  val divider-current = 5.0e-3
+  val est-adj-offset = (typ(v-out) - typ(property(ldo.reference-voltage))) / divider-current * property(ldo.adj-current)
+  inst feedback : ocdb/passive-circuits/voltage-divider(tol%(center(v-out) - est-adj-offset, 0.0),
+                                                        tol%(typ(property(ldo.reference-voltage)), target-variance)
+                                                        divider-current)
 
-  ; Mechanicals
-  add-mounting-holes(board-shape, "M2", [2 3])
-  place(connector.connector) at loc(-4.0, -12.5) on Top
+  net (feedback.in vout)
+  net (feedback.out ldo.adj)
+  net (feedback.lo gnd)
 
-  ; Run the schematic review
-  check-design(self)
+  val true-adj-offset = property(ldo.adj-current) * (property(feedback.r-lo.resistance) as Double)
 
-val powered-design = run-final-passes(transform-module(generate-power, first-design))
-make-default-board(powered-design, 4, board-shape)
+  val out = min-typ-max(min-value(property(ldo.reference-voltage)) * typ(v-out) / max-value(property(feedback.output-voltage)) + true-adj-offset,
+                        typ(property(ldo.reference-voltage))       * typ(v-out) / typ(property(feedback.output-voltage))       + true-adj-offset,
+                        max-value(property(ldo.reference-voltage)) * typ(v-out) / min-value(property(feedback.output-voltage)) + true-adj-offset)
+  
+  check within?(v-out, out)
 
-view-board()
-view-schematic()
+pcb-module regulator-fixture :
+  val target-current = 1000.0e-3
+  val target-voltage = 3.3
+  val target-load = closest-std-val(target-voltage / target-current, 5.0)
+  inst load : chip-resistor(["resistance" => target-load "min-rated-power" => target-voltage * target-current * 2.0 ])
+  
+  inst reg : lm317a-regulator(tol%(target-voltage, 0.05))
+  inst source : banana-plug-power
 
-export-cad()
+  net gnd (reg.gnd source.power.gnd)
+  symbol(gnd) = ocdb/symbols/ground-sym
+  net vin (reg.vin source.power.vdd)
+
+  net (load.p[1] reg.vout)
+  net (load.p[2] gnd)
+
+  inst measure : sma-connector()
+  net (reg.vout measure.sig)
+  net (gnd measure.gnd)
+
+  add-testpoint([reg.adj gnd])
+
+defn run-design (circuit:Instantiable) :
+  make-default-board(circuit, 2, board-shape)
+
+  view-board()
+  view-schematic()
+
+run-design(simple-lm317a-regulator(10.0))
