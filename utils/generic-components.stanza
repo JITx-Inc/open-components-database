@@ -588,9 +588,20 @@ public defn block-cap (in:JITXObject, out:JITXObject) :
 ; ========================================================
 
 public defn banana-plug (color:String) :
-  inside pcb-module :
-    public inst b : ocdb/pomona/1581/component(color)
-    b
+  ocdb/pomona/1581/component(color)
+
+public pcb-module banana-plug-power :
+  port power : power
+  inst vdd-plug : ocdb/pomona/1581/component("red")
+  inst gnd-plug : ocdb/pomona/1581/component("black")
+  net (power.vdd vdd-plug.p)
+  net (power.gnd gnd-plug.p)
+  val pitch = 0.75 / 2.0 * 25.4
+  place(vdd-plug) at loc(pitch * -1.0, 0.0) on Top
+  place(gnd-plug) at loc(pitch, 0.0) on Top
+  layer(Silkscreen("Pol", Top)) = Text("VIN", 1.5, C, loc(pitch * -1.0, -8.0))
+  layer(Silkscreen("Pol", Top)) = Text("GND", 1.5, C, loc(pitch, -8.0))
+
 
 public pcb-component pin-header (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
   description = "Generic pin-header"
@@ -624,34 +635,14 @@ public defn pin-header (n-pin: Int, pin-pitch:Double) :
 public defn pin-header (n-pin: Int, n-row: Int, pin-pitch:Double) :
   pin-header(n-pin, n-row, pin-pitch, pin-pitch)
 
-; [TODO] is gnd from self? Yes, it is from self. Add in when this area is uncommented.
-;<gnd>
-public defn sma-connector (sig:JITXObject, launch:String) :
-  inside pcb-module :
-    if launch == "end-launch":
-      public inst c : ocdb/johnson/142-0761-881/component
-      net (c.sig, sig)
-      net (c.gnd, gnd)
-      c
-    else :
-      fatal("Unsupported SMA Connector type")
+public defn sma-connector ():
+  ocdb/johnson/142-0761-881/component
 
-public defn bnc-connector (sig:JITXObject, launch:String) :
-  inside pcb-module :
-    if launch == "end-launch":
-      public inst c : ocdb/amphenol/112640/component
-      net (c.sig, sig)
-      net (c.gnd, gnd)
-      c
-    else :
-      fatal("Unsupported SMA Connector type")
+public defn bnc-connector () :
+  ocdb/amphenol/112640/component
 
 public defn ethernet-jack ():
-  inside pcb-module :
-    public inst c : ocdb/pulse-electronics/J0G-0009NL/component
-    net (c.shield, gnd)
-    c
-;<gnd>
+  ocdb/pulse-electronics/J0G-0009NL/component
 
 ; USB2 device connection via USBA MicroB
 public pcb-module micro-usb-connector :
@@ -761,19 +752,6 @@ public pcb-component smd-testpoint-cmp (d:Double) :
 
 public defn smd-testpoint-cmp () :
   smd-testpoint-cmp(2.0)
-
-;<gnd>
-public defn filter (in:JITXObject, out:JITXObject, type:String, params:Tuple<Double>) :
-  inside pcb-module:
-    if type == "rc-lowpass" :
-      public inst r : chip-resistor(params[0], 0.01)
-      public inst c : ceramic-cap(params[1])
-      net (in r.p[1])
-      net (out r.p[2] c.p[1])
-      net (gnd c.p[2])
-    else :
-      fatal("Unsupported add-testpoint method.")
-;<gnd>
 
 public defn dip-pull (pins:Tuple<JITXObject>, power-pin:JITXObject, gnd-pin:JITXObject) :
   inside pcb-module :

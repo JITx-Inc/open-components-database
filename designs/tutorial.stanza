@@ -12,17 +12,19 @@ defpackage ocdb/designs/tutorial :
   import ocdb/tolerance
   import ocdb/checks
 
-val board-shape = RoundedRectangle(10.0, 25.0, 0.5)
+val board-shape = RoundedRectangle(35.0, 30.0, 0.5)
 
 pcb-module lm317a-regulator (v-out:Toleranced) :
   pin vin 
   pin vout 
+  pin adj 
   pin gnd 
 
   inst ldo : ocdb/unisonic/LM317A/component
 
   net (ldo.input vin)
   net (ldo.output vout)
+  net (ldo.adj adj)
 
   cap-strap(vin, gnd, 0.1e-6)
   cap-strap(vout, gnd, 1.0e-6)
@@ -31,11 +33,11 @@ pcb-module lm317a-regulator (v-out:Toleranced) :
   if inherent-variance > tol+%(v-out):
     fatal("Target regulator accuracy infeasible with LM317A")
   val target-variance = tol+%(v-out) - inherent-variance
-  val i1 = 10.0e-3
-  val adj-offset = (typ(v-out) - typ(property(ldo.reference-voltage))) / i1 * property(ldo.adj-current)
-  inst feedback : ocdb/passive-circuits/voltage-divider(tol%(center(v-out) - adj-offset, 0.0),
+  val divider-current = 10.0e-3
+  val est-adj-offset = (typ(v-out) - typ(property(ldo.reference-voltage))) / divider-current * property(ldo.adj-current)
+  inst feedback : ocdb/passive-circuits/voltage-divider(tol%(center(v-out) - est-adj-offset, 0.0),
                                                         tol%(typ(property(ldo.reference-voltage)), target-variance)
-                                                        i1)
+                                                        divider-current)
 
   net (feedback.in vout)
   net (feedback.out ldo.adj)
@@ -44,17 +46,37 @@ pcb-module lm317a-regulator (v-out:Toleranced) :
   val true-adj-offset = property(ldo.adj-current) * (property(feedback.r-lo.resistance) as Double)
 
   val out = min-typ-max(min-value(property(ldo.reference-voltage)) * typ(v-out) / max-value(property(feedback.output-voltage)) + true-adj-offset,
-                        typ(property(ldo.reference-voltage)) * typ(v-out) / typ(property(feedback.output-voltage)) + true-adj-offset,
+                        typ(property(ldo.reference-voltage))       * typ(v-out) / typ(property(feedback.output-voltage))       + true-adj-offset,
                         max-value(property(ldo.reference-voltage)) * typ(v-out) / min-value(property(feedback.output-voltage)) + true-adj-offset)
+  
   check within?(v-out, out)
 
-  println(v-out)
-  println(out)
+pcb-module regulator-fixture :
+  val target-current = 500.0e-3
+  val target-voltage = 3.3
+  val target-load = closest-std-val(target-voltage / target-current, 5.0)
+  inst load : chip-resistor(["resistance" => target-load "max-rated-power" => target-voltage * target-current * 2.0 ])
+  
+  inst reg : lm317a-regulator(tol%(target-voltage, 0.05))
+  inst source : banana-plug-power
+
+  net gnd (reg.gnd source.power.gnd)
+  symbol(gnd) = ocdb/symbols/ground-sym
+  net vin (reg.vin source.power.vdd)
+
+  net (load.p[1] reg.vout)
+  net (load.p[2] gnd)
+
+  inst measure : sma-connector()
+  net (reg.vout measure.sig)
+  net (gnd measure.gnd)
+
+  add-testpoint([reg.adj gnd])
 
 defn run-design (circuit:Instantiable) :
-  make-default-board(circuit, 4, board-shape)
+  make-default-board(circuit, 2, board-shape)
 
   view-board()
   view-schematic()
 
-run-design(lm317a-regulator(tol%(3.3, 0.05)))
+run-design(regulator-fixture)
