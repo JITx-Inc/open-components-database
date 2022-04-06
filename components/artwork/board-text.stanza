@@ -1,0 +1,46 @@
+#use-added-syntax(jitx)
+defpackage ocdb/board-text :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/generic-components
+  import ocdb/symbols
+; PCB Title
+
+pcb-landpattern text-lp (text:String, size:Double, outline-size:Double) :
+  var outline-extend = 0.0
+  layer(Silkscreen("title", Top)) = Text(text, size, C, loc(0.0, 0.0))
+  outline-extend = outline-size + clearance(current-rules(), MinSolderMaskBridge) ; this needs to be silkscreen to silkscreen
+  val text-dims = dims( Text(text, size, C, loc(0.0, 0.0)) )
+  ; val width = clearance(current-rules(), MinSilkscreenWidth) + x(text-dims)
+  var width = x(text-dims)
+  var height = y(text-dims)
+  val outline-width = (width + outline-extend) / 2.0
+  val outline-height = (height + outline-extend)/ 2.0
+  if outline-size > 0.0 :
+    layer(Silkscreen("title", Top)) = Line(outline-size, [ Point(-1.0 * outline-width, -1.0 * outline-height), Point(-1.0 * outline-width, outline-height), 
+      Point(outline-width, outline-height), Point(outline-width, -1.0 * outline-height), Point(-1.0 * outline-width, -1.0 * outline-height) ])
+  layer(Courtyard(Top))  = Rectangle(2.0 * outline-width, 2.0 * outline-height, loc(0.0, 0.0))
+
+pcb-symbol generic-symbol :
+  layer("foreground") = Rectangle(5.08, 5.08, loc(0.0, 0.0))
+  layer("foreground") = Text(">VALUE", 0.762, SW, loc(-2.54, 2.84))
+  layer("foreground") = Text(">REF", 0.762, SW, loc(-2.54, 3.902))
+
+public pcb-component title (title:String, size:Double, outline-size:Double) :
+  name = title
+  description = title
+  manufacturer = "non-BOM"
+  mpn = "non-BOM"
+  assign-landpattern(text-lp(title, size, outline-size) )
+  val sym = generic-symbol
+  symbol = sym()
+  reference-prefix = "TXT"
+
+; Internal Part number, version, revision
+
+; Engineer
