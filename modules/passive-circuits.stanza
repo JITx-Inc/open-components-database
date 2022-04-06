@@ -39,6 +39,24 @@ public pcb-module voltage-divider ( input-voltage:Toleranced
   else :
     fatal("No solution for voltage divider.")
 
+public pcb-module voltage-divider ( input-voltage:Double
+                                    output-voltage:Double
+                                    tolerance:Double
+                                    current:Double) :
+  pin in
+  pin out
+  pin lo
+  val solution = voltage-divider-solver(tol%(input-voltage,0.0), tol%(output-voltage, 0.1), current, tolerance / 100.0, 0.15)
+  match(solution: VoltageDividerSolution) :
+    public inst r-hi : to-jitx(r1(solution))
+    public inst r-lo : to-jitx(r2(solution))
+    net (r-hi.p[1] in)
+    net (r-lo.p[1] r-hi.p[2] out)
+    net (r-lo.p[2] lo)
+    property(self.output-voltage) = vo(solution)
+  else :
+    fatal("No solution for voltage divider.")
+
 public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
                                   v-out:Toleranced) :
   ; Target current through divider is 10x input current (if known), otherwise set current to be 1ma
