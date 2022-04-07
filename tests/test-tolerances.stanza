@@ -11,7 +11,7 @@ deftest constructors:
     #EXPECT(min-value(tolerance) == 0.5)
     #EXPECT(max-value(tolerance) == 1.25)
   let:
-    val tolerance = tol%(2.0, 0.5, 0.25)
+    val tolerance = tol%(2.0, 50.0, 25.0)
     println(tolerance)
     #EXPECT(min-value(tolerance) == 1.5)
     #EXPECT(max-value(tolerance) == 3.0)
@@ -20,12 +20,12 @@ deftest constructors:
     println(tolerance)
     #EXPECT(min-value(tolerance) == 0.25)
     #EXPECT(max-value(tolerance) == 1.00)
-    #EXPECT(typ(tolerance) == 0.5)
+    #EXPECT(typ-value(tolerance) == 0.5)
   let:
     val tolerance = tol(1.0, 0.5)
     #EXPECT(min-value(tolerance) == 0.5)
     #EXPECT(max-value(tolerance) == 1.5)
-    #EXPECT(center(tolerance) == 1.0)
+    #EXPECT(center-value(tolerance) == 1.0)
 
 defn expect-fatal (body:() -> ?):
   var caught? = false
@@ -46,7 +46,25 @@ deftest percentages:
       tol+%(tolerance)
     within expect-fatal():
       tol-%(tolerance)
-    
+
+deftest small-tol-sym-warning:
+  let:
+    val tolerance = tol%(1.0, 0.25)
+    val tol-expected = Toleranced(0.005, 0.0051, 0.0049)
+    println(tolerance)
+    #EXPECT(in-range?(tol-expected, tolerance-range(tolerance)))
+    #EXPECT(in-range?(tolerance, 1.0025))
+    #EXPECT(not in-range?(tolerance, 3.0))
+
+deftest small-tol-warning:
+  let:
+    val tolerance = tol%(1.0, 0.25, 0.25)
+    val tol-expected = Toleranced(0.005, 0.0051, 0.0049)
+    println(tolerance)
+    #EXPECT(in-range?(tol-expected, tolerance-range(tolerance)))
+    #EXPECT(in-range?(tolerance, 1.0025))
+    #EXPECT(not in-range?(tolerance, 3.0))
+
 deftest range:
   let:
     val tolerance = tol(1.0, 0.25)

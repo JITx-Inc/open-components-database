@@ -46,7 +46,7 @@ public pcb-module voltage-divider ( input-voltage:Double
   pin in
   pin out
   pin lo
-  val solution = voltage-divider-solver(tol%(input-voltage,0.0), tol%(output-voltage, 0.1), current, tolerance / 100.0, 0.15)
+  val solution = voltage-divider-solver(tol%(input-voltage,0.0), tol%(output-voltage, 10.0), current, tolerance / 100.0, 0.15)
   match(solution: VoltageDividerSolution) :
     public inst r-hi : to-jitx(r1(solution))
     public inst r-lo : to-jitx(r2(solution))
@@ -69,7 +69,7 @@ public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
                                   v-out:Toleranced,
                                   current:Double) :
   println("Solving voltage divider [in=%_, out=%_, low=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A]"
-          % [ref(in), ref(out), ref(lo), min-value(v-out), typ(v-out), max-value(v-out), current])
+          % [ref(in), ref(out), ref(lo), min-value(v-out), typ-value(v-out), max-value(v-out), current])
   ;Extract voltages from input pin
   val v-in = property(in.voltage)
 
@@ -116,7 +116,7 @@ public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
                                   tol:Double,
                                   current-tol: Double) :
   println("Solving voltage divider [in=%_, out=%_, low=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A, resistor-tol=%_%%]"
-          % [ref(in), ref(out), ref(lo), min-value(v-out), typ(v-out), max-value(v-out), current, tol])
+          % [ref(in), ref(out), ref(lo), min-value(v-out), typ-value(v-out), max-value(v-out), current, tol])
   val tolerance = tol / 100.
   val current-tolerance = current-tol / 100.
   val v-in = property(in.voltage)
@@ -143,9 +143,9 @@ defn make-voltage-divider-module (in: JITXObject, out: JITXObject, lo: JITXObjec
     net (r-lo.p[1] r-hi.p[2] out)
     net (r-lo.p[2] lo)
 
-    val vin = typ(vo) * (property(r-lo.resistance) + property(r-hi.resistance)) / property(r-lo.resistance)
-    property(r-lo.operating-point) = OperatingPoint(Interval(0.0, typ(vo), false),       Interval(0.0, typ(vo) / property(r-lo.resistance), false))
-    property(r-hi.operating-point) = OperatingPoint(Interval(0.0, vin - typ(vo), false), Interval(0.0, (vin - typ(vo))/ property(r-hi.resistance), false))
+    val vin = typ-value(vo) * (property(r-lo.resistance) + property(r-hi.resistance)) / property(r-lo.resistance)
+    property(r-lo.operating-point) = OperatingPoint(Interval(0.0, typ-value(vo), false),       Interval(0.0, typ-value(vo) / property(r-lo.resistance), false))
+    property(r-hi.operating-point) = OperatingPoint(Interval(0.0, vin - typ-value(vo), false), Interval(0.0, (vin - typ-value(vo))/ property(r-hi.resistance), false))
 
     ; [TODO] check. voltage-levels and other check.stanza functions already adapted for JITXObjects.
     ; Check true output against requirement
