@@ -1,4 +1,13 @@
 #use-added-syntax(jitx)
+;usa (layer:LayerSpecifier|LayerIndex,showflag:True|False, side:Side|False)
+; show flag = true will show a small flag in the schematic, false will show a box in the schematic
+; Useage:
+; inst flag1: ocdb/flag/usa() ; creates a top silkscreen flag, flag in schematic, top courtyard
+; inst flag2: ocdb/flag/usa(Silkscreen("artwork", Bottom),false,false) ; creates a bottom silkscreen flag, box in schematic, no courtyard
+; inst flag3: ocdb/flag/usa(LayerIndex(0),false); creates a top copper flag, box in schematic, top courtyard
+; inst flag4: ocdb/flag/usa(SolderMask(Top),true, Top) ; creates a top SolderMask flag, flag in schematic, top courtyard
+; Recommendation:
+; Create everything on the top layers and then use `place(<instname>) at loc() on Bottom` for bottom layer placement
 defpackage ocdb/flag :
   import core
   import collections
@@ -10,41 +19,39 @@ defpackage ocdb/flag :
   import ocdb/generic-components
   import ocdb/symbols
 
-pcb-landpattern US-flag-lp (lyr:LayerSpecifier|LayerIndex) :
-  layer(Courtyard(Top)) = Rectangle(19.0, 9.996, loc(0.89755, -0.18867))
+pcb-landpattern US-flag-lp (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
+  if side is Side :
+    layer(Courtyard(side as Side)) = Rectangle(19.0, 9.996, loc(0.89755, -0.18867))
   match(lyr) :
     (lyr:LayerSpecifier) : layer(lyr) = US-flag-artwork
     (lyr:LayerIndex) : copper(lyr) = US-flag-artwork
-pcb-landpattern US-flag :
-  layer(Courtyard(Top)) = Rectangle(19.0, 9.996, loc(0.89755, -0.18867))
-  copper(LayerIndex(0)) = US-flag-artwork
-pcb-landpattern US-flag-silkscreen :
-  layer(Courtyard(Top))  = Rectangle(19.0, 9.996, loc(0.89755, -0.18867))
-  layer(Silkscreen("artwork", Top)) = US-flag-artwork
 pcb-symbol flag-symbol (showflag:True|False) :
   if showflag :
     layer("background") = Rectangle(19.0, 9.996, loc(0.89755, -0.18867)) ; main box
     layer("background") = Rectangle(7.6, 5.3844, loc(-4.80245, 2.11903)) ; star box
     layer("foreground") = US-flag-artwork
-
   else :
     layer("foreground") = Rectangle(5.08, 5.08, loc(0.0, 0.0))
   layer("foreground") = Text(">VALUE", 0.762, SW, loc(-2.54, 2.84))
   layer("foreground") = Text(">REF", 0.762, SW, loc(-2.54, 3.902))
 
-public pcb-component usa (layer:String,showflag:True|False) :
+public pcb-component usa (layer:LayerSpecifier|LayerIndex,showflag:True|False, side:Side|False) :
   name = "US flag"
   description = "US flag"
   manufacturer = "non-BOM"
   mpn = "non-BOM"
-  ; if lower-case(layer) == "copper":
-  ;   assign-landpattern(US-flag)
-  ; else :
-    ; assign-landpattern(US-flag-lp(copper(LayerIndex(0))) )
+  assign-landpattern(US-flag-lp(layer, side) )
   val sym = flag-symbol(showflag)
   symbol = sym()
   reference-prefix = "FLAG"
 
+; Defaults
+public defn usa () :
+  usa(Silkscreen("artwork", Top),true, Top)
+public defn usa (layer:LayerSpecifier|LayerIndex) :
+  usa(layer,true, Top)
+public defn usa (layer:LayerSpecifier|LayerIndex,showflag:True|False) :
+  usa(layer,showflag, Top)
 ; ================== US Flag Artwork ==================
 val US-flag-artwork = Union([
   ; main box
