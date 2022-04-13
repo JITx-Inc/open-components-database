@@ -19,21 +19,20 @@ defpackage ocdb/jitx-logo :
   import ocdb/generic-components
   import ocdb/symbols
 
-pcb-landpattern jitx-sm :
-  layer(Courtyard(Top))  = Rectangle(10.7696, 7.112, loc(0.508, 0.7112))
-  copper(LayerIndex(0)) = jitx-sm-artwork
+pcb-landpattern jitx-sm-lp (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
+  if side is Side :
+    layer(Courtyard(side as Side)) = Rectangle(10.7696, 7.112, loc(0.508, 0.7112))
+  match(lyr) :
+    (lyr:LayerSpecifier) : layer(lyr) = jitx-sm-artwork
+    (lyr:LayerIndex) : copper(lyr) = jitx-sm-artwork
 
-pcb-landpattern jitx-large :
-  layer(Courtyard(Top))  = Rectangle(47.1424, 30.8864, loc(23.0124, 15.1384))
-  copper(LayerIndex(0)) = jitx-lg-artwork
 
-pcb-landpattern jitx-silkscreen-sm :
-  layer(Courtyard(Top))  = Rectangle(10.7696, 7.112, loc(0.508, 0.7112))
-  layer(Silkscreen("artwork", Top)) = jitx-sm-artwork
-
-pcb-landpattern jitx-silkscreen-large :
-  layer(Courtyard(Top))  = Rectangle(47.1424, 30.8864, loc(23.0124, 15.1384))
-  layer(Silkscreen("artwork", Top)) = jitx-lg-artwork
+pcb-landpattern jitx-large (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
+  if side is Side :
+    layer(Courtyard(side as Side)) = Rectangle(47.1424, 30.8864, loc(23.0124, 15.1384))
+  match(lyr) :
+    (lyr:LayerSpecifier) : layer(lyr) = jitx-lg-artwork
+    (lyr:LayerIndex) : copper(lyr) = jitx-lg-artwork
 
 pcb-symbol JITX-symbol (show-symbol:True|False) :
   if show-symbol :
@@ -43,32 +42,43 @@ pcb-symbol JITX-symbol (show-symbol:True|False) :
   layer("foreground") = Text(">VALUE", 0.762, SW, loc(-2.54, 2.84))
   layer("foreground") = Text(">REF", 0.762, SW, loc(-2.54, 3.902))
 
-public pcb-component small (layer:String,show-symbol:True|False) :
+public pcb-component small (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
   name = "JITX"
   description = "JITX Logo"
   manufacturer = "non-BOM"
   mpn = "non-BOM"
-  if lower-case(layer) == "copper":
-    assign-landpattern(jitx-sm)
-  else:
-    assign-landpattern(jitx-silkscreen-sm)
+  assign-landpattern(jitx-sm-lp(layer, side))
   val sym = JITX-symbol(show-symbol)
   symbol = sym()
   reference-prefix = "JITX"
 
-public pcb-component large (layer:String,show-symbol:True|False) :
+; Defaults
+public defn small () :
+  small(Silkscreen("artwork", Top),true, Top)
+public defn small (layer:LayerSpecifier|LayerIndex) :
+  small(layer,true, Top)
+public defn small (layer:LayerSpecifier|LayerIndex,show-symbol:True|False) :
+  small(layer,show-symbol, Top)
+
+public pcb-component large (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
   name = "JITX"
   description = "JITX Logo"
   manufacturer = "non-BOM"
   mpn = "non-BOM"
-  if lower-case(layer) == "copper":
-    assign-landpattern(jitx-large)
-  else:
-    assign-landpattern(jitx-silkscreen-large)
+  assign-landpattern(jitx-large(layer, side))
   val sym = JITX-symbol(show-symbol)
   symbol = sym()
   reference-prefix = "JITX"
 
+; Defaults
+public defn large () :
+  large(Silkscreen("artwork", Top),true, Top)
+public defn large (layer:LayerSpecifier|LayerIndex) :
+  large(layer,true, Top)
+public defn large (layer:LayerSpecifier|LayerIndex,show-symbol:True|False) :
+  large(layer,show-symbol, Top)
+
+; ========================  Artwork ========================
 val jitx-sm-artwork = Union([Polygon([    
     Point(-1.016, 3.6576), 
     Point(-1.016, 3.4544), 

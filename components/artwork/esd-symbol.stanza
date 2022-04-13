@@ -19,13 +19,12 @@ defpackage ocdb/esd-symbol :
   import ocdb/generic-components
   import ocdb/symbols
 
-pcb-landpattern esd :
-  layer(Courtyard(Top))  = Rectangle(23.368, 20.9296, loc(-2.2098, 2.6416))
-  copper(LayerIndex(0)) = esd-artwork
-;=============================================================================
-pcb-landpattern esd-silkscreen :
-  layer(Courtyard(Top))  = Rectangle(23.368, 20.9296, loc(-2.2098, 2.6416))
-  layer(Silkscreen("artwork", Top)) = esd-artwork
+pcb-landpattern esd-lp (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
+  if side is Side :
+    layer(Courtyard(side as Side)) = Rectangle(23.368, 20.9296, loc(-2.2098, 2.6416))
+  match(lyr) :
+    (lyr:LayerSpecifier) : layer(lyr) = esd-artwork
+    (lyr:LayerIndex) : copper(lyr) = esd-artwork
 ;=============================================================================
 pcb-symbol ESD-symbol (show-symbol:True|False):
   if show-symbol :
@@ -35,43 +34,54 @@ pcb-symbol ESD-symbol (show-symbol:True|False):
   layer("foreground") = Text(">VALUE", 0.762, SW, loc(-2.54, 2.84))
   layer("foreground") = Text(">REF", 0.762, SW, loc(-2.54, 3.902))
 
-public pcb-component regular (layer:String,show-symbol:True|False) :
+public pcb-component regular (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
   name = "ESD Symbol"
   description = "ESD Symbol"
   manufacturer = "non-BOM"
   mpn = "non-BOM"
-  if lower-case(layer) == "copper":
-    assign-landpattern(esd)
-  else:
-    assign-landpattern(esd-silkscreen)
+  assign-landpattern(esd-lp(layer, side))
   val sym = ESD-symbol(show-symbol)
   symbol = sym()
   reference-prefix = "ESD"
 
+; Defaults
+public defn regular () :
+  regular(Silkscreen("artwork", Top),true, Top)
+public defn regular (layer:LayerSpecifier|LayerIndex) :
+  regular(layer,true, Top)
+public defn regular (layer:LayerSpecifier|LayerIndex,show-symbol:True|False) :
+  regular(layer,show-symbol, Top)
+  
   ; ===========================================================================
   ; ======================Large================================================
   ; ===========================================================================
 
-pcb-landpattern esd-large :
-  layer(Courtyard(Top))  = Rectangle(62.1792, 55.88, loc(1.1176, 11.8618))
-  copper(LayerIndex(0)) = esd-artwork-large
+pcb-landpattern esd-large (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
+  if side is Side :
+    layer(Courtyard(side as Side)) = Rectangle(62.1792, 55.88, loc(1.1176, 11.8618))
+  match(lyr) :
+    (lyr:LayerSpecifier) : layer(lyr) = esd-artwork-large
+    (lyr:LayerIndex) : copper(lyr) = esd-artwork-large
 
-pcb-landpattern esd-silkscreen-large :
-  layer(Courtyard(Top))  = Rectangle(62.1792, 55.88, loc(1.1176, 11.8618))
-  layer(Silkscreen("artwork", Top)) = esd-artwork-large
-  
-public pcb-component large (layer:String,show-symbol:True|False) :
+public pcb-component large (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
   name = "Large ESD Symbol"
   description = "Large ESD Symbol"
   manufacturer = "non-BOM"
   mpn = "non-BOM"
-  if lower-case(layer) == "copper":
-    assign-landpattern(esd-large)
-  else:
-    assign-landpattern(esd-silkscreen-large)
+  assign-landpattern(esd-large(layer, side))
   val sym = ESD-symbol(show-symbol)
   symbol = sym()
   reference-prefix = "ESD"
+
+; Defaults
+public defn large () :
+  large(Silkscreen("artwork", Top),true, Top)
+public defn large (layer:LayerSpecifier|LayerIndex) :
+  large(layer,true, Top)
+public defn large (layer:LayerSpecifier|LayerIndex,show-symbol:True|False) :
+  large(layer,show-symbol, Top)
+
+; ========================  Artwork ========================
 
 val esd-artwork = Union([
   Polygon([    

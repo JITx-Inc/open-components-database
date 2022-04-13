@@ -10,319 +10,342 @@ defpackage ocdb/voltage-symbol :
   import ocdb/generic-components
   import ocdb/symbols
 
-pcb-landpattern voltage-silk-small :
-  layer(Courtyard(Top))  = Rectangle(5.0747,4.497, loc(2.99,2.63))
-  layer(Silkscreen("artwork", Top)) = voltage-small-artwork
+pcb-landpattern voltage-small-lp (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
+  if side is Side :
+    layer(Courtyard(side as Side)) = Rectangle(5.0747,4.497, loc(2.99,2.63))
+  match(lyr) :
+    (lyr:LayerSpecifier) : layer(lyr) = voltage-small-artwork(get-min-width(lyr))
+    (lyr:LayerIndex) : copper(lyr) = voltage-small-artwork(get-min-width(lyr))
 
-pcb-landpattern voltage-small :
-  layer(Courtyard(Top))  = Rectangle(5.0747,4.497, loc(2.99,2.63))
-  copper(LayerIndex(0)) = voltage-small-artwork
+pcb-landpattern voltage-medium-lp (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
+  if side is Side :
+    layer(Courtyard(side as Side)) = Rectangle(16.92, 14.99, loc(8.61, 7.67))
+  match(lyr) :
+    (lyr:LayerSpecifier) : layer(lyr) = voltage-medium-artwork(get-min-width(lyr))
+    (lyr:LayerIndex) : copper(lyr) = voltage-medium-artwork(get-min-width(lyr))
 
-pcb-landpattern voltage-silk-medium :
-  layer(Courtyard(Top))  = Rectangle(16.92, 14.99, loc(8.61, 7.67))
-  layer(Silkscreen("artwork", Top)) = voltage-medium-artwork
+pcb-landpattern voltage-large-lp (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
+  if side is Side :
+    layer(Courtyard(side as Side)) = Rectangle(169.16, 149.9, loc(-0.2,14.1565))
+  match(lyr) :
+    (lyr:LayerSpecifier) : layer(lyr) = voltage-large-artwork(get-min-width(lyr))
+    (lyr:LayerIndex) : copper(lyr) = voltage-large-artwork(get-min-width(lyr))
 
-pcb-landpattern voltage-medium :
-  layer(Courtyard(Top))  = Rectangle(16.92, 14.99, loc(8.61, 7.67))
-  copper(LayerIndex(0)) = voltage-medium-artwork
-
-pcb-landpattern voltage-silk-large :
-  layer(Courtyard(Top))  = Rectangle(146.48,129.58, loc(-0.28,11.71))
-  layer(Silkscreen("artwork", Top)) = voltage-large-artwork
-
-pcb-landpattern voltage-large :
-  layer(Courtyard(Top))  = Rectangle(169.16, 149.9, loc(-0.2,14.1565))
-  copper(LayerIndex(0)) = voltage-large-artwork
 pcb-symbol voltage-symbol (show-symbol:True|False) :
   if show-symbol :
-    layer("foreground") = voltage-small-artwork
+    layer("foreground") = voltage-small-artwork(0.1)
   else :
     layer("foreground") = Rectangle(5.08, 5.08, loc(0.0, 0.0))
   layer("foreground") = Text(">VALUE", 0.762, SW, loc(-2.54, 2.84))
   layer("foreground") = Text(">REF", 0.762, SW, loc(-2.54, 3.902))
 
-public pcb-component large (layer:String,show-symbol:True|False) :
+public pcb-component large (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
   name = "Voltage Symbol"
   description = "Voltage Symbol"
   manufacturer = "non-BOM"
   mpn = "non-BOM"
-  if lower-case(layer) == "copper":
-    assign-landpattern(voltage-large)
-  else:
-    assign-landpattern(voltage-silk-large)
+  assign-landpattern(voltage-large-lp(layer, side))
   val sym = voltage-symbol(show-symbol)
   symbol = sym()
   reference-prefix = "VOLT"
 
-public pcb-component medium (layer:String,show-symbol:True|False) :
+; Defaults
+public defn large () :
+  large(Silkscreen("artwork", Top),true, Top)
+public defn large (layer:LayerSpecifier|LayerIndex) :
+  large(layer,true, Top)
+public defn large (layer:LayerSpecifier|LayerIndex,show-symbol:True|False) :
+  large(layer,show-symbol, Top)
+
+public pcb-component medium (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
   name = "Voltage Symbol"
   description = "Voltage Symbol"
   manufacturer = "non-BOM"
   mpn = "non-BOM"
-  if lower-case(layer) == "copper":
-    assign-landpattern(voltage-medium)
-  else:
-    assign-landpattern(voltage-silk-medium)
+  assign-landpattern(voltage-medium-lp(layer, side))
   val sym = voltage-symbol(show-symbol)
   symbol = sym()
   reference-prefix = "VOLT"
 
-public pcb-component small (layer:String,show-symbol:True|False) :
+; Defaults
+public defn medium () :
+  medium(Silkscreen("artwork", Top),true, Top)
+public defn medium (layer:LayerSpecifier|LayerIndex) :
+  medium(layer,true, Top)
+public defn medium (layer:LayerSpecifier|LayerIndex,show-symbol:True|False) :
+  medium(layer,show-symbol, Top)
+
+
+public pcb-component small (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
   name = "Voltage Symbol"
   description = "Voltage Symbol"
   manufacturer = "non-BOM"
   mpn = "non-BOM"
-  if lower-case(layer) == "copper":
-    assign-landpattern(voltage-small)
-  else:
-    assign-landpattern(voltage-silk-small)
+  assign-landpattern(voltage-small-lp(layer, side))
   val sym = voltage-symbol(show-symbol)
   symbol = sym()
   reference-prefix = "VOLT"
 
-val voltage-small-artwork = Union([Polygon([    
-    Point(2.54, 3.81), 
-    Point(3.302, 3.81), 
-    Point(3.048, 2.54), 
-    Point(3.556, 2.794), 
-    Point(3.302, 1.524), 
-    Point(3.556, 1.524), 
-    Point(3.048, 0.762), 
-    Point(2.794, 1.524), 
-    Point(3.048, 1.524), 
-    Point(3.048, 2.286), 
-    Point(2.54, 2.032)])
-  Line(1.0, [    
-    Point(5.14518, 0.38389), 
-    Point(5.19491047923584, 0.387149507816578), 
-    Point(5.24379005618406, 0.396872260183865), 
-    Point(5.2909823877311, 0.4128918981132), 
-    Point(5.33568, 0.434934321158129), 
-    Point(5.37711810445232, 0.462622377349039), 
-    Point(5.41458768363207, 0.495482316367925), 
-    Point(5.44744762265096, 0.532951895547677), 
-    Point(5.47513567884187, 0.57439), 
-    Point(5.4971781018868, 0.619087612268901), 
-    Point(5.51319773981614, 0.66627994381594), 
-    Point(5.52292049218342, 0.71515952076416), 
-    Point(5.52618, 0.76489), 
-    Point(5.52292049218342, 0.814620479235839), 
-    Point(5.51319773981614, 0.86350005618406), 
-    Point(5.4971781018868, 0.910692387731099), 
-    Point(5.47513567884187, 0.95539)])
-  Line(1.0, [    
-    Point(3.31877567884187, 4.69033), 
-    Point(3.29108762265096, 4.73176810445232), 
-    Point(3.25822768363207, 4.76923768363207), 
-    Point(3.22075810445232, 4.80209762265096), 
-    Point(3.17932, 4.82978567884187), 
-    Point(3.1346223877311, 4.8518281018868), 
-    Point(3.08743005618406, 4.86784773981613), 
-    Point(3.03855047923584, 4.87757049218342), 
-    Point(2.98882, 4.88083), 
-    Point(2.93908952076416, 4.87757049218342), 
-    Point(2.89020994381594, 4.86784773981613), 
-    Point(2.8430176122689, 4.8518281018868), 
-    Point(2.79832, 4.82978567884187), 
-    Point(2.75688189554768, 4.80209762265096), 
-    Point(2.71941231636793, 4.76923768363207), 
-    Point(2.68655237734904, 4.73176810445232), 
-    Point(2.65886432115813, 4.69033)])
-  Line(1.0, [    
-    Point(0.502494321158129, 0.95539), 
-    Point(0.4804518981132, 0.910692387731099), 
-    Point(0.464432260183865, 0.86350005618406), 
-    Point(0.454709507816578, 0.81462047923584), 
-    Point(0.45145, 0.76489), 
-    Point(0.454709507816578, 0.71515952076416), 
-    Point(0.464432260183865, 0.66627994381594), 
-    Point(0.4804518981132, 0.619087612268901), 
-    Point(0.502494321158129, 0.57439), 
-    Point(0.53018237734904, 0.532951895547677), 
-    Point(0.563042316367925, 0.495482316367925), 
-    Point(0.600511895547677, 0.462622377349039), 
-    Point(0.64195, 0.434934321158129), 
-    Point(0.686647612268901, 0.4128918981132), 
-    Point(0.73383994381594, 0.396872260183865), 
-    Point(0.78271952076416, 0.387149507816578), 
-    Point(0.83245, 0.38389)])
-  Line(1.0, [Point(5.47514, 0.95539), Point(3.31877, 4.69033)])
-  Line(1.0, [Point(2.65886, 4.69033), Point(0.5025, 0.95539)])
-  Line(1.0, [Point(0.83245, 0.38389), Point(5.14518, 0.38389)])
-  Line(1.0, [Point(3.01006, 1.57138), Point(3.0055, 1.54553)])
-  Line(1.0, [Point(3.29023, 1.45339), Point(3.64788, 2.78816)])
-  Line(1.0, [Point(3.64788, 2.78816), Point(2.95489, 2.60247)])
-  Line(1.0, [Point(2.95489, 2.60247), Point(3.2754, 3.79865)])
-  Line(1.0, [Point(3.2754, 3.79865), Point(2.59792, 3.79865)])
-  Line(1.0, [Point(2.59792, 3.79865), Point(2.59792, 2.23882)])
-  Line(1.0, [Point(2.59792, 2.23882), Point(3.14475, 2.33524)])
-  Line(1.0, [Point(3.14475, 2.33524), Point(3.00058, 1.51762)])
-  Line(1.0, [Point(3.00058, 1.51762), Point(2.81212, 1.55942)])
-  Line(1.0, [Point(2.81212, 1.55942), Point(3.00344, 0.8454)])
-  Line(1.0, [Point(3.00344, 0.8454), Point(3.47869, 1.41159)])
-  Line(1.0, [Point(3.47869, 1.41159), Point(3.29023, 1.45339)])
-])
-val voltage-medium-artwork = Union([Polygon([    
-    Point(7.366, 11.684), 
-    Point(9.652, 11.684), 
-    Point(8.636, 7.62), 
-    Point(10.922, 8.128), 
-    Point(9.652, 3.81), 
-    Point(10.414, 3.556), 
-    Point(8.636, 1.778), 
-    Point(7.874, 4.318), 
-    Point(8.636, 4.064), 
-    Point(9.144, 6.604), 
-    Point(7.366, 6.35)])
-  Line(1.0, [    
-    Point(15.79595, 0.17897), 
-    Point(15.9617182641195, 0.189835026055261), 
-    Point(16.1246501872802, 0.222244200612884), 
-    Point(16.2819579591037, 0.275642993710666), 
-    Point(16.43095, 0.349117737193763), 
-    Point(16.5690770148411, 0.441411257830131), 
-    Point(16.6939756121069, 0.550944387893085), 
-    Point(16.8035087421699, 0.675842985158925), 
-    Point(16.8958022628062, 0.81397), 
-    Point(16.9692770062893, 0.962962040896336), 
-    Point(17.0226757993871, 1.1202698127198), 
-    Point(17.0550849739447, 1.28320173588053), 
-    Point(17.06595, 1.44897), 
-    Point(17.0550849739447, 1.61473826411947), 
-    Point(17.0226757993871, 1.7776701872802), 
-    Point(16.9692770062893, 1.93497795910366), 
-    Point(16.8958022628062, 2.08397)])
-  Line(1.0, [    
-    Point(9.70791226280624, 14.53376), 
-    Point(9.61561874216987, 14.6718870148411), 
-    Point(9.50608561210692, 14.7967856121069), 
-    Point(9.38118701484107, 14.9063187421699), 
-    Point(9.24306, 14.9986122628062), 
-    Point(9.09406795910366, 15.0720870062893), 
-    Point(8.9367601872802, 15.1254857993871), 
-    Point(8.77382826411947, 15.1578949739447), 
-    Point(8.60806, 15.16876), 
-    Point(8.44229173588053, 15.1578949739447), 
-    Point(8.2793598127198, 15.1254857993871), 
-    Point(8.12205204089634, 15.0720870062893), 
-    Point(7.97306, 14.9986122628062), 
-    Point(7.83493298515892, 14.9063187421699), 
-    Point(7.71003438789309, 14.7967856121069), 
-    Point(7.60050125783013, 14.6718870148411), 
-    Point(7.50820773719376, 14.53376)])
-  Line(1.0, [    
-    Point(0.320307737193763, 2.08397), 
-    Point(0.246832993710666, 1.93497795910366), 
-    Point(0.193434200612884, 1.7776701872802), 
-    Point(0.161025026055261, 1.61473826411947), 
-    Point(0.15016, 1.44897), 
-    Point(0.161025026055261, 1.28320173588054), 
-    Point(0.193434200612883, 1.1202698127198), 
-    Point(0.246832993710666, 0.962962040896337), 
-    Point(0.320307737193763, 0.81397), 
-    Point(0.412601257830131, 0.675842985158925), 
-    Point(0.522134387893085, 0.550944387893085), 
-    Point(0.647032985158925, 0.441411257830132), 
-    Point(0.78516, 0.349117737193763), 
-    Point(0.934152040896336, 0.275642993710666), 
-    Point(1.0914598127198, 0.222244200612883), 
-    Point(1.25439173588053, 0.189835026055261), 
-    Point(1.42016, 0.17897)])
-  Line(1.0, [Point(16.8958, 2.08397), Point(9.70791, 14.53376)])
-  Line(1.0, [Point(7.5082, 14.53376), Point(0.32031, 2.08397)])
-  Line(1.0, [Point(1.42017, 0.17897), Point(15.79595, 0.17897)])
-  Line(1.0, [Point(8.67886, 4.13727), Point(8.66367, 4.0511)])
-  Line(1.0, [Point(9.61276, 3.74394), Point(10.80494, 8.19321)])
-  Line(1.0, [Point(10.80494, 8.19321), Point(8.49495, 7.57425)])
-  Line(1.0, [Point(8.49495, 7.57425), Point(9.56333, 11.56149)])
-  Line(1.0, [Point(9.56333, 11.56149), Point(7.30508, 11.56149)])
-  Line(1.0, [Point(7.30508, 11.56149), Point(7.30508, 6.36207)])
-  Line(1.0, [Point(7.30508, 6.36207), Point(9.12783, 6.68347)])
-  Line(1.0, [Point(9.12783, 6.68347), Point(8.64726, 3.95807)])
-  Line(1.0, [Point(8.64726, 3.95807), Point(8.01906, 4.0974)])
-  Line(1.0, [Point(8.01906, 4.0974), Point(8.6568, 1.71732)])
-  Line(1.0, [Point(8.6568, 1.71732), Point(10.24097, 3.60462)])
-  Line(1.0, [Point(10.24097, 3.60462), Point(9.61276, 3.74394)])
-])
-val voltage-large-artwork = Union([Polygon([    
-    Point(-13.208, 53.086), 
-    Point(9.398, 53.086), 
-    Point(-1.524, 13.208), 
-    Point(21.59, 19.558), 
-    Point(9.652, -25.146), 
-    Point(16.002, -26.416), 
-    Point(0.254, -45.212), 
-    Point(-6.096, -21.59), 
-    Point(0.254, -22.86), 
-    Point(4.826, 4.318), 
-    Point(-13.208, 1.27)])
-  Line(1.0, [    
-    Point(62.80065, -53.07434), 
-    Point(64.1267961129557, -52.9874197915579), 
-    Point(65.4302514982416, -52.7281463950969), 
-    Point(66.6887136728293, -52.3009560503147), 
-    Point(67.88065, -51.7131581024499), 
-    Point(68.9856661187286, -50.974809937359), 
-    Point(69.9848548968553, -50.0985448968553), 
-    Point(70.861119937359, -49.0993561187286), 
-    Point(71.5994681024499, -47.99434), 
-    Point(72.1872660503147, -46.8024036728293), 
-    Point(72.6144563950969, -45.5439414982416), 
-    Point(72.8737297915579, -44.2404861129557), 
-    Point(72.96065, -42.91434), 
-    Point(72.8737297915579, -41.5881938870443), 
-    Point(72.6144563950969, -40.2847385017584), 
-    Point(72.1872660503147, -39.0262763271707), 
-    Point(71.5994681024499, -37.83434)])
-  Line(1.0, [    
-    Point(8.5193781024499, 71.42357), 
-    Point(7.78102993735895, 72.5285861187286), 
-    Point(6.90476489685532, 73.5277748968553), 
-    Point(5.9055761187286, 74.4040399373589), 
-    Point(4.80056, 75.1423881024499), 
-    Point(3.60862367282931, 75.7301860503147), 
-    Point(2.35016149824161, 76.1573763950969), 
-    Point(1.04670611295573, 76.4166497915579), 
-    Point(-0.279439999999999, 76.50357), 
-    Point(-1.60558611295572, 76.4166497915579), 
-    Point(-2.90904149824161, 76.1573763950969), 
-    Point(-4.16750367282931, 75.7301860503147), 
-    Point(-5.35944, 75.1423881024499), 
-    Point(-6.4644561187286, 74.4040399373589), 
-    Point(-7.46364489685532, 73.5277748968553), 
-    Point(-8.33990993735895, 72.5285861187286), 
-    Point(-9.0782581024499, 71.42357)])
-  Line(1.0, [    
-    Point(-72.1583381024499, -37.83434), 
-    Point(-72.7461360503147, -39.0262763271707), 
-    Point(-73.1733263950969, -40.2847385017584), 
-    Point(-73.4325997915579, -41.5881938870443), 
-    Point(-73.51952, -42.91434), 
-    Point(-73.4325997915579, -44.2404861129557), 
-    Point(-73.1733263950969, -45.5439414982416), 
-    Point(-72.7461360503147, -46.8024036728293), 
-    Point(-72.1583381024499, -47.99434), 
-    Point(-71.4199899373589, -49.0993561187286), 
-    Point(-70.5437248968553, -50.0985448968553), 
-    Point(-69.5445361187286, -50.9748099373589), 
-    Point(-68.43952, -51.7131581024499), 
-    Point(-67.2475836728293, -52.3009560503147), 
-    Point(-65.9891214982416, -52.7281463950969), 
-    Point(-64.6856661129557, -52.9874197915579), 
-    Point(-63.35952, -53.07434)])
-  Line(1.0, [Point(71.59947, -37.83434), Point(8.51938, 71.42357)])
-  Line(1.0, [Point(-9.07825, 71.42357), Point(-72.15834, -37.83434)])
-  Line(1.0, [Point(-63.35952, -53.07434), Point(62.80065, -53.07434)])
-  Line(1.0, [Point(0.42861, -21.1113), Point(0.27668, -21.97295)])
-  Line(1.0, [Point(9.76764, -25.04455), Point(21.68941, 19.44808)])
-  Line(1.0, [Point(21.68941, 19.44808), Point(-1.41053, 13.25847)])
-  Line(1.0, [Point(-1.41053, 13.25847), Point(9.27325, 53.13088)])
-  Line(1.0, [Point(9.27325, 53.13088), Point(-13.30922, 53.13088)])
-  Line(1.0, [Point(-13.30922, 53.13088), Point(-13.30922, 1.13668)])
-  Line(1.0, [Point(-13.30922, 1.13668), Point(4.91825, 4.35067)])
-  Line(1.0, [Point(4.91825, 4.35067), Point(0.11264, -22.90324)])
-  Line(1.0, [Point(0.11264, -22.90324), Point(-6.1694, -21.51)])
-  Line(1.0, [Point(-6.1694, -21.51), Point(0.208, -45.3108)])
-  Line(1.0, [Point(0.208, -45.3108), Point(16.04969, -26.43779)])
-  Line(1.0, [Point(16.04969, -26.43779), Point(9.76764, -25.04455)])
-])
+; Defaults
+public defn small () :
+  small(Silkscreen("artwork", Top),true, Top)
+public defn small (layer:LayerSpecifier|LayerIndex) :
+  small(layer,true, Top)
+public defn small (layer:LayerSpecifier|LayerIndex,show-symbol:True|False) :
+  small(layer,show-symbol, Top)
+
+
+defn voltage-small-artwork (line-width:Double) :
+  val artwork = Union([Polygon([    
+      Point(2.54, 3.81), 
+      Point(3.302, 3.81), 
+      Point(3.048, 2.54), 
+      Point(3.556, 2.794), 
+      Point(3.302, 1.524), 
+      Point(3.556, 1.524), 
+      Point(3.048, 0.762), 
+      Point(2.794, 1.524), 
+      Point(3.048, 1.524), 
+      Point(3.048, 2.286), 
+      Point(2.54, 2.032)])
+    Line(line-width, [    
+      Point(5.14518, 0.38389), 
+      Point(5.19491047923584, 0.387149507816578), 
+      Point(5.24379005618406, 0.396872260183865), 
+      Point(5.2909823877311, 0.4128918981132), 
+      Point(5.33568, 0.434934321158129), 
+      Point(5.37711810445232, 0.462622377349039), 
+      Point(5.41458768363207, 0.495482316367925), 
+      Point(5.44744762265096, 0.532951895547677), 
+      Point(5.47513567884187, 0.57439), 
+      Point(5.4971781018868, 0.619087612268901), 
+      Point(5.51319773981614, 0.66627994381594), 
+      Point(5.52292049218342, 0.71515952076416), 
+      Point(5.52618, 0.76489), 
+      Point(5.52292049218342, 0.814620479235839), 
+      Point(5.51319773981614, 0.86350005618406), 
+      Point(5.4971781018868, 0.910692387731099), 
+      Point(5.47513567884187, 0.95539)])
+    Line(line-width, [    
+      Point(3.31877567884187, 4.69033), 
+      Point(3.29108762265096, 4.73176810445232), 
+      Point(3.25822768363207, 4.76923768363207), 
+      Point(3.22075810445232, 4.80209762265096), 
+      Point(3.17932, 4.82978567884187), 
+      Point(3.1346223877311, 4.8518281018868), 
+      Point(3.08743005618406, 4.86784773981613), 
+      Point(3.03855047923584, 4.87757049218342), 
+      Point(2.98882, 4.88083), 
+      Point(2.93908952076416, 4.87757049218342), 
+      Point(2.89020994381594, 4.86784773981613), 
+      Point(2.8430176122689, 4.8518281018868), 
+      Point(2.79832, 4.82978567884187), 
+      Point(2.75688189554768, 4.80209762265096), 
+      Point(2.71941231636793, 4.76923768363207), 
+      Point(2.68655237734904, 4.73176810445232), 
+      Point(2.65886432115813, 4.69033)])
+    Line(line-width, [    
+      Point(0.502494321158129, 0.95539), 
+      Point(0.4804518981132, 0.910692387731099), 
+      Point(0.464432260183865, 0.86350005618406), 
+      Point(0.454709507816578, 0.81462047923584), 
+      Point(0.45145, 0.76489), 
+      Point(0.454709507816578, 0.71515952076416), 
+      Point(0.464432260183865, 0.66627994381594), 
+      Point(0.4804518981132, 0.619087612268901), 
+      Point(0.502494321158129, 0.57439), 
+      Point(0.53018237734904, 0.532951895547677), 
+      Point(0.563042316367925, 0.495482316367925), 
+      Point(0.600511895547677, 0.462622377349039), 
+      Point(0.64195, 0.434934321158129), 
+      Point(0.686647612268901, 0.4128918981132), 
+      Point(0.73383994381594, 0.396872260183865), 
+      Point(0.78271952076416, 0.387149507816578), 
+      Point(0.83245, 0.38389)])
+    Line(line-width, [Point(5.47514, 0.95539), Point(3.31877, 4.69033)])
+    Line(line-width, [Point(2.65886, 4.69033), Point(0.5025, 0.95539)])
+    Line(line-width, [Point(0.83245, 0.38389), Point(5.14518, 0.38389)])
+    Line(line-width, [Point(3.01006, 1.57138), Point(3.0055, 1.54553)])
+    Line(line-width, [Point(3.29023, 1.45339), Point(3.64788, 2.78816)])
+    Line(line-width, [Point(3.64788, 2.78816), Point(2.95489, 2.60247)])
+    Line(line-width, [Point(2.95489, 2.60247), Point(3.2754, 3.79865)])
+    Line(line-width, [Point(3.2754, 3.79865), Point(2.59792, 3.79865)])
+    Line(line-width, [Point(2.59792, 3.79865), Point(2.59792, 2.23882)])
+    Line(line-width, [Point(2.59792, 2.23882), Point(3.14475, 2.33524)])
+    Line(line-width, [Point(3.14475, 2.33524), Point(3.00058, 1.51762)])
+    Line(line-width, [Point(3.00058, 1.51762), Point(2.81212, 1.55942)])
+    Line(line-width, [Point(2.81212, 1.55942), Point(3.00344, 0.8454)])
+    Line(line-width, [Point(3.00344, 0.8454), Point(3.47869, 1.41159)])
+    Line(line-width, [Point(3.47869, 1.41159), Point(3.29023, 1.45339)])
+  ])
+  artwork
+
+defn voltage-medium-artwork (line-width:Double) :
+  val artwork = Union([Polygon([    
+      Point(7.366, 11.684), 
+      Point(9.652, 11.684), 
+      Point(8.636, 7.62), 
+      Point(10.922, 8.128), 
+      Point(9.652, 3.81), 
+      Point(10.414, 3.556), 
+      Point(8.636, 1.778), 
+      Point(7.874, 4.318), 
+      Point(8.636, 4.064), 
+      Point(9.144, 6.604), 
+      Point(7.366, 6.35)])
+    Line(line-width, [    
+      Point(15.79595, 0.17897), 
+      Point(15.9617182641195, 0.189835026055261), 
+      Point(16.1246501872802, 0.222244200612884), 
+      Point(16.2819579591037, 0.275642993710666), 
+      Point(16.43095, 0.349117737193763), 
+      Point(16.5690770148411, 0.441411257830131), 
+      Point(16.6939756121069, 0.550944387893085), 
+      Point(16.8035087421699, 0.675842985158925), 
+      Point(16.8958022628062, 0.81397), 
+      Point(16.9692770062893, 0.962962040896336), 
+      Point(17.0226757993871, 1.1202698127198), 
+      Point(17.0550849739447, 1.28320173588053), 
+      Point(17.06595, 1.44897), 
+      Point(17.0550849739447, 1.61473826411947), 
+      Point(17.0226757993871, 1.7776701872802), 
+      Point(16.9692770062893, 1.93497795910366), 
+      Point(16.8958022628062, 2.08397)])
+    Line(line-width, [    
+      Point(9.70791226280624, 14.53376), 
+      Point(9.61561874216987, 14.6718870148411), 
+      Point(9.50608561210692, 14.7967856121069), 
+      Point(9.38118701484107, 14.9063187421699), 
+      Point(9.24306, 14.9986122628062), 
+      Point(9.09406795910366, 15.0720870062893), 
+      Point(8.9367601872802, 15.1254857993871), 
+      Point(8.77382826411947, 15.1578949739447), 
+      Point(8.60806, 15.16876), 
+      Point(8.44229173588053, 15.1578949739447), 
+      Point(8.2793598127198, 15.1254857993871), 
+      Point(8.12205204089634, 15.0720870062893), 
+      Point(7.97306, 14.9986122628062), 
+      Point(7.83493298515892, 14.9063187421699), 
+      Point(7.71003438789309, 14.7967856121069), 
+      Point(7.60050125783013, 14.6718870148411), 
+      Point(7.50820773719376, 14.53376)])
+    Line(line-width, [    
+      Point(0.320307737193763, 2.08397), 
+      Point(0.246832993710666, 1.93497795910366), 
+      Point(0.193434200612884, 1.7776701872802), 
+      Point(0.161025026055261, 1.61473826411947), 
+      Point(0.15016, 1.44897), 
+      Point(0.161025026055261, 1.28320173588054), 
+      Point(0.193434200612883, 1.1202698127198), 
+      Point(0.246832993710666, 0.962962040896337), 
+      Point(0.320307737193763, 0.81397), 
+      Point(0.412601257830131, 0.675842985158925), 
+      Point(0.522134387893085, 0.550944387893085), 
+      Point(0.647032985158925, 0.441411257830132), 
+      Point(0.78516, 0.349117737193763), 
+      Point(0.934152040896336, 0.275642993710666), 
+      Point(1.0914598127198, 0.222244200612883), 
+      Point(1.25439173588053, 0.189835026055261), 
+      Point(1.42016, 0.17897)])
+    Line(line-width, [Point(16.8958, 2.08397), Point(9.70791, 14.53376)])
+    Line(line-width, [Point(7.5082, 14.53376), Point(0.32031, 2.08397)])
+    Line(line-width, [Point(1.42017, 0.17897), Point(15.79595, 0.17897)])
+    Line(line-width, [Point(8.67886, 4.13727), Point(8.66367, 4.0511)])
+    Line(line-width, [Point(9.61276, 3.74394), Point(10.80494, 8.19321)])
+    Line(line-width, [Point(10.80494, 8.19321), Point(8.49495, 7.57425)])
+    Line(line-width, [Point(8.49495, 7.57425), Point(9.56333, 11.56149)])
+    Line(line-width, [Point(9.56333, 11.56149), Point(7.30508, 11.56149)])
+    Line(line-width, [Point(7.30508, 11.56149), Point(7.30508, 6.36207)])
+    Line(line-width, [Point(7.30508, 6.36207), Point(9.12783, 6.68347)])
+    Line(line-width, [Point(9.12783, 6.68347), Point(8.64726, 3.95807)])
+    Line(line-width, [Point(8.64726, 3.95807), Point(8.01906, 4.0974)])
+    Line(line-width, [Point(8.01906, 4.0974), Point(8.6568, 1.71732)])
+    Line(line-width, [Point(8.6568, 1.71732), Point(10.24097, 3.60462)])
+    Line(line-width, [Point(10.24097, 3.60462), Point(9.61276, 3.74394)])
+  ])
+  artwork
+  
+defn voltage-large-artwork  (line-width:Double) :
+  val artwork = Union([Polygon([    
+      Point(-13.208, 53.086), 
+      Point(9.398, 53.086), 
+      Point(-1.524, 13.208), 
+      Point(21.59, 19.558), 
+      Point(9.652, -25.146), 
+      Point(16.002, -26.416), 
+      Point(0.254, -45.212), 
+      Point(-6.096, -21.59), 
+      Point(0.254, -22.86), 
+      Point(4.826, 4.318), 
+      Point(-13.208, 1.27)])
+    Line(line-width, [    
+      Point(62.80065, -53.07434), 
+      Point(64.1267961129557, -52.9874197915579), 
+      Point(65.4302514982416, -52.7281463950969), 
+      Point(66.6887136728293, -52.3009560503147), 
+      Point(67.88065, -51.7131581024499), 
+      Point(68.9856661187286, -50.974809937359), 
+      Point(69.9848548968553, -50.0985448968553), 
+      Point(70.861119937359, -49.0993561187286), 
+      Point(71.5994681024499, -47.99434), 
+      Point(72.1872660503147, -46.8024036728293), 
+      Point(72.6144563950969, -45.5439414982416), 
+      Point(72.8737297915579, -44.2404861129557), 
+      Point(72.96065, -42.91434), 
+      Point(72.8737297915579, -41.5881938870443), 
+      Point(72.6144563950969, -40.2847385017584), 
+      Point(72.1872660503147, -39.0262763271707), 
+      Point(71.5994681024499, -37.83434)])
+    Line(line-width, [    
+      Point(8.5193781024499, 71.42357), 
+      Point(7.78102993735895, 72.5285861187286), 
+      Point(6.90476489685532, 73.5277748968553), 
+      Point(5.9055761187286, 74.4040399373589), 
+      Point(4.80056, 75.1423881024499), 
+      Point(3.60862367282931, 75.7301860503147), 
+      Point(2.35016149824161, 76.1573763950969), 
+      Point(1.04670611295573, 76.4166497915579), 
+      Point(-0.279439999999999, 76.50357), 
+      Point(-1.60558611295572, 76.4166497915579), 
+      Point(-2.90904149824161, 76.1573763950969), 
+      Point(-4.16750367282931, 75.7301860503147), 
+      Point(-5.35944, 75.1423881024499), 
+      Point(-6.4644561187286, 74.4040399373589), 
+      Point(-7.46364489685532, 73.5277748968553), 
+      Point(-8.33990993735895, 72.5285861187286), 
+      Point(-9.0782581024499, 71.42357)])
+    Line(line-width, [    
+      Point(-72.1583381024499, -37.83434), 
+      Point(-72.7461360503147, -39.0262763271707), 
+      Point(-73.1733263950969, -40.2847385017584), 
+      Point(-73.4325997915579, -41.5881938870443), 
+      Point(-73.51952, -42.91434), 
+      Point(-73.4325997915579, -44.2404861129557), 
+      Point(-73.1733263950969, -45.5439414982416), 
+      Point(-72.7461360503147, -46.8024036728293), 
+      Point(-72.1583381024499, -47.99434), 
+      Point(-71.4199899373589, -49.0993561187286), 
+      Point(-70.5437248968553, -50.0985448968553), 
+      Point(-69.5445361187286, -50.9748099373589), 
+      Point(-68.43952, -51.7131581024499), 
+      Point(-67.2475836728293, -52.3009560503147), 
+      Point(-65.9891214982416, -52.7281463950969), 
+      Point(-64.6856661129557, -52.9874197915579), 
+      Point(-63.35952, -53.07434)])
+    Line(line-width, [Point(71.59947, -37.83434), Point(8.51938, 71.42357)])
+    Line(line-width, [Point(-9.07825, 71.42357), Point(-72.15834, -37.83434)])
+    Line(line-width, [Point(-63.35952, -53.07434), Point(62.80065, -53.07434)])
+    Line(line-width, [Point(0.42861, -21.1113), Point(0.27668, -21.97295)])
+    Line(line-width, [Point(9.76764, -25.04455), Point(21.68941, 19.44808)])
+    Line(line-width, [Point(21.68941, 19.44808), Point(-1.41053, 13.25847)])
+    Line(line-width, [Point(-1.41053, 13.25847), Point(9.27325, 53.13088)])
+    Line(line-width, [Point(9.27325, 53.13088), Point(-13.30922, 53.13088)])
+    Line(line-width, [Point(-13.30922, 53.13088), Point(-13.30922, 1.13668)])
+    Line(line-width, [Point(-13.30922, 1.13668), Point(4.91825, 4.35067)])
+    Line(line-width, [Point(4.91825, 4.35067), Point(0.11264, -22.90324)])
+    Line(line-width, [Point(0.11264, -22.90324), Point(-6.1694, -21.51)])
+    Line(line-width, [Point(-6.1694, -21.51), Point(0.208, -45.3108)])
+    Line(line-width, [Point(0.208, -45.3108), Point(16.04969, -26.43779)])
+    Line(line-width, [Point(16.04969, -26.43779), Point(9.76764, -25.04455)])
+  ])
+  artwork
