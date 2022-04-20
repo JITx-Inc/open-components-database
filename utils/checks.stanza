@@ -12,6 +12,15 @@ defpackage ocdb/checks:
   import ocdb/design-vars
   import ocdb/tolerance
 
+;
+; #CHECK() macro arguments
+; 1. A boolean check                     (True|False)                (required)
+; 2. The name of the check               (Printable)                 (optional)
+; 2. The description of the check        (Printable)                 (optional)
+; 3. What is printed if the check passes (Printable)                 (optional)
+; 4. What is printed if the check fails  (Printable)                 (optional)
+; 5. Locators                            (Tuple<JITXObject|JITXDef>) (optional)
+
 ; ==== Check convenience functions ===
 ; ====================================
 
@@ -44,16 +53,43 @@ public pcb-check within? (t:Toleranced, value:Toleranced) :
 
 public pcb-check rated-temperature (component:JITXObject):
   ; println("%_ check temp-rating" % [ref(component)])
-  #CHECK(has-property?(component.rated-temperature))
+  #CHECK(has-property?(component.rated-temperature),
+    "rated-temperature",
+    "Check rated temperature of component versus design constraints",
+    "%_ has a property for rated-temperature,%_" % [ref(component)],
+    "%_ does not have a property for rated-temperature,%_" % [ref(component)],
+    ref(component)]
+  )
   val temp = operating-temperature(property(component.rated-temperature))
   ; println("Rating %_" % [temp])
-  #CHECK(contains?(temp, OPERATING-TEMPERATURE[0]))
-  #CHECK(contains?(temp, OPERATING-TEMPERATURE[1]))
+  #CHECK(contains?(temp, OPERATING-TEMPERATURE[0]),
+    "rated-temperature",
+    "Check rated temperature of component versus design constraints",
+    "%_ has an acceptable lower operating temperature versus design target(%_C <= %_C)" % [ref(component), OPERATING-TEMPERATURE[0], temp],
+    "%_ does not have an acceptable lower operating temperature versus design target (%_C > %_C)" % [ref(component), OPERATING-TEMPERATURE[0], temp],
+    ref(component)]
+  )
+  #CHECK(contains?(temp, OPERATING-TEMPERATURE[1]),
+    "rated-temperature",
+    "Check rated temperature of component versus design constraints",
+    "%_ has an acceptable higher operating temperature versus design target(%_C <= %_C)" % [ref(component), OPERATING-TEMPERATURE[1], temp],
+    "%_ does not have an acceptable higher operating temperature versus design target (%_C < %_C)" % [ref(component), OPERATING-TEMPERATURE[1], temp],
+    ref(component)]  
+  )
 
 public pcb-check io (module:JITXObject) :
   val pins = to-tuple(seq-cat(pins, component-instances(module)))
   var net-pins = []
   for p1 in pins do :
+    if (has-property?(p1.no-connect)) :
+      net-pins = to-tuple(filter({connected?([p1, _])}, pins))
+      #CHECK(length(net-pins) > 1,
+        "pin-check",
+        "Check that no-connect pads are actually not connected",
+        "Pad %_ is marked no-connect and is correctly not connected" % [ref(p1)],
+        "Pad %_ is marked no-connect and is incorrectly connected to other pins" % [ref(p1)],
+        ref(p1)
+      )
     ; Look for Digital inputs\
     if (has-property?(p1.digital-output) or has-property?(p1.digital-io)) :
       ; Get all pins on the net
@@ -63,10 +99,17 @@ public pcb-check io (module:JITXObject) :
       ; val in-pins  = to-tuple(filter({has-property?(_.digital-input)}, net-pins))
       ; Check outputs against every pin
       for out-p in cat(out-pins, io-pins) do :
+        #CHECK((has-property?(out-p.digital-output) or has-property?(out-p.digital-io)),
+          "pin-check",
+          "Verify output or i-o pins have the correct digital-output or digital-io property",
+          "Output or I/O pin %_ has the correct digital-output or digital-io property attached" % [ref(out-p)],
+          "Output or I/O pin %_ does not have the correct digital-output or digital-io property attached" % [ref(out-p)],
+          ref(out-p)
+        )
         val o = 
           if has-property?(out-p.digital-output) : driver(property(out-p.digital-output))
           else if has-property?(out-p.digital-io) : driver(property(out-p.digital-io))
-          else : fatal("Unhandled case.")
+          else : false
 
         ; println("Out %_ is %_" % [ref(out-p) o])
         ; for n in net-pins do: println(ref(n))
@@ -79,65 +122,185 @@ public pcb-check io (module:JITXObject) :
 
         if o is OpenCollector :
           ; println("checking %_ as OpenCollector" % [ref(out-p)])
-          var is-net-ok? = false
+          var is-open-collector-ok? = false
           for p in net-pins do :
             val myinst = containing-instance(p) as JITXObject
             if has-property?(myinst.resistance) :
               val high-pin = get-other-pin(myinst, p)
               if has-property?(high-pin.rail-voltage):
                 val rail-voltage = property(high-pin.rail-voltage)
-                ; Valid opencollector nets have pull up resistors
-                is-net-ok? = true
+                ; Valid open-collector nets have pull up resistors
+                is-open-collector-ok? = true
                 val i = rail-voltage / property(myinst.resistance)
-                #CHECK( i < iol(o))
+                #CHECK(i < iol(o),
+                  "pin-check",
+                  "Check open collector pin sink current requirement versus resistance specification",
+                  "Open collector pin %_ current sink specification %_A satisfies the design requirement %_A" % [ref(p),iol(p),i],
+                  "Open collector pin %_ current specification %_A does not satisfy the design requirement %_A" % [ref(p),iol(p),i],
+                  ref(p)
+                )
                 for p in net-pins do :
                   if has-property?(p.digital-input) or has-property?(p.digital-io) :
                     val vih-v = 
                       if has-property?(p.digital-input) : vih(property(p.digital-input))
                       else if has-property?(p.digital-io) : vih(property(p.digital-io))
-                    #CHECK(rail-voltage > vih-v)
+                    #CHECK(rail-voltage > vih-v,
+                      "pin-check",
+                      "Check power supply rail is higher than the vih pin specification",
+                      "Input pin %_ vih specification %_V is correctly lower than the power supply rail %_V" % [ref(p),vih-v(p),rail-voltage],
+                      "Input pin %_ vih specification %_V is incorrectly higher than the power supply rail %_V" % [ref(p),vih-v(p),rail-voltage],
+                      ref(p)
+                    )
                   if has-property?(p.generic-pin):
-                    #CHECK(contains?(max-voltage(property(p.generic-pin)), rail-voltage))
-          #CHECK(is-net-ok?)
+                    #CHECK(contains?(max-voltage(property(p.generic-pin)), rail-voltage),
+                      "pin-check",
+                      "Check pin maximum voltage is within the design specification",
+                      "Generic pin %_ maximum voltage %_V is correctly within the power supply specification %_V" % [ref(p),max-voltage(property(p.generic-pin)),rail-voltage],
+                      "Generic pin %_ maximum voltage %_V is incorrectly outside the power supply specification %_V" % [ref(p),max-voltage(property(p.generic-pin)),rail-voltage],
+                      ref(p)
+                    )
+          
+          #CHECK(is-open-collector-ok?,
+            "pin-check",
+            "Verify open-collector pin is connected to a pull-up resistor and a power supply",
+            "Open-collector pin %_ is correctly connected to a pull-up resistor and a power supply rail" % [ref(p)],
+            "Open-collector pin %_ is not correctly connected to a pull-up resistor and a power supply rail" % [ref(p)],
+            ref(p)
+          )
 
 
 ; Checks two push-pull digital logic pins, at least one of which can output
 public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
   ; if has-property?(in-p.digital-input): println(ref(gnd-pin(property(in-p.digital-input))))
+  #CHECK(has-property?(out-p.digital-output) or has-property?(out-p.digital-io),
+    "pin-check",
+    "Verify output or i-o pin has the correct digital-output or digital-io property",
+    "Output or I/O pin %_ has the correct digital-output or digital-io property attached" % [ref(out-p)],
+    "Output or I/O pin %_ does not have the correct digital-output or digital-io property attached" % [ref(out-p)],
+    ref(out-p)
+  )
   val o = 
     if has-property?(out-p.digital-output) : property(out-p.digital-output)
     else if has-property?(out-p.digital-io) : property(out-p.digital-io)
-    else : fatal("Unhandled case.")
+    else : false
+  #CHECK((driver(o) is CMOSOutput) or (driver(o) is TTLOutput),
+    "pin-check",
+    "Verify output driver is either CMOS or TTL",
+    "Output pin %_ has the correct driver property property attached" % [ref(out-p)],
+    "Output pin %_ does not have the correct driver property property attached" % [ref(out-p)],
+    ref(out-p)
+  )
 
-  #CHECK((driver(o) is CMOSOutput) or (driver(o) is TTLOutput))
   ; If in-p is just an input, check output against input
   if has-property?(in-p.digital-input) :
     val [vih vil] = [vih(property(in-p.digital-input)) vil(property(in-p.digital-input))]
-    #CHECK(connected?([gnd-pin(o) gnd-pin(property(in-p.digital-input))]))
-    #CHECK(min(voh(driver(o))) > vih)
-    #CHECK(max(vol(driver(o))) < vil)
+    #CHECK(connected?([gnd-pin(o) gnd-pin(property(in-p.digital-input))]),
+      "pin-check",
+      "Verify input pin is referenced to ground of the output driver",
+      "Gnd of the input pin %_ is correctly referenced to the ground net of the driver pin %_" % [ref(in-p), ref(out-p)],
+      "Gnd of the input pin %_ is not correctly referenced to the ground net of the driver pin %_" % [ref(in-p), ref(out-p)],
+      ref(in-p)
+    )
+    #CHECK(min(voh(driver(o))) > vih,
+      "pin-check",
+      "Verify min voh of output driver is higher than the vih of the input pin",
+      "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-p), min(voh(driver(o))), ref(in-p), vih],
+      "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-p), min(voh(driver(o))), ref(in-p), vih],
+      ref(in-p)
+    )
+    #CHECK(max(vol(driver(o))) < vil,
+      "pin-check",
+      "Verify max vol of output driver is compatible with the vil of the input pin",
+      "Output pin %_ max vol %_ is compatible with the input pin %_ vil %_" % [ref(out-p), max(vol(driver(o))), ref(in-p), vil],
+      "Output pin %_ max vol %_ is not compatible with the input pin %_ vil %_" % [ref(out-p), max(vol(driver(o))), ref(in-p), vil],
+      ref(in-p)
+    )
     if has-property?(in-p.generic-pin):
-      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(driver(o))))
+      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(driver(o))),
+        "pin-check",
+        "Verify voh of output driver is compatible with voltage range of a generic pin",
+        "Output pin %_ max voh %_ is compatible with the voltage range of the generic pin %_ of %_" % [ref(out-p), voh(driver(o)), ref(in-p), max-voltage(property(in-p.generic-pin))],
+        "Output pin %_ max voh %_ is not compatible with the voltage range of the generic pin %_ of %_" % [ref(out-p), voh(driver(o)), ref(in-p), max-voltage(property(in-p.generic-pin))],
+        ref(in-p)
+      )
   else if has-property?(in-p.digital-io):
-    #CHECK(connected?([gnd-pin(o) gnd-pin(property(in-p.digital-io))]))
+    #CHECK(connected?([gnd-pin(o) gnd-pin(property(in-p.digital-io))]),
+      "pin-check",
+      "Verify the digital io pin is referenced to the ground of the output driver",
+      "Gnd of the io pin %_ is correctly referenced to the ground net of the driver pin %_" % [ref(in-p), ref(out-p)],
+      "Gnd of the io pin %_ is not correctly referenced to the ground net of the driver pin %_" % [ref(in-p), ref(out-p)],
+      ref(in-p)
+    )
     val i = driver(property(in-p.digital-io))
-    #CHECK((i is CMOSOutput) or (i is TTLOutput))
+    #CHECK(((i is CMOSOutput) or (i is TTLOutput)),
+      "pin-check",
+      "Verify io driver is either CMOS or TTL",
+      "IO pin %_ has the correct driver property property attached" % [ref(out-p)],
+      "IO pin %_ does not have the correct driver property property attached" % [ref(out-p)],
+      ref(in-p)
+    )
     val [vih-v vil-v] = [vih(property(in-p.digital-io)) vil(property(in-p.digital-io))]
-    #CHECK(min(voh(driver(o))) > vih-v)
-    #CHECK(max(vol(driver(o))) < vil-v)
+    #CHECK(min(voh(driver(o))) > vih-v,
+      "pin-check",
+      "Verify min voh of output driver is higher than the vih of the input pin",
+      "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-p), min(voh(driver(o))), ref(in-p), vih-v],
+      "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-p), min(voh(driver(o))), ref(in-p), vih-v],
+      ref(in-p)
+    )
+    #CHECK(max(vol(driver(o))) < vil-v,
+      "pin-check",
+      "Verify max vol of output driver is compatible with the vil of the input pin",
+      "Output pin %_ max vol %_ is compatible with the input pin %_ vil %_" % [ref(out-p), max(vol(driver(o))), ref(in-p), vil-v],
+      "Output pin %_ max vol %_ is not compatible with the input pin %_ vil %_" % [ref(out-p), max(vol(driver(o))), ref(in-p), vil-v],
+      ref(in-p)
+    )
     if has-property?(out-p.digital-io):
-      #CHECK(min(voh(i)) > vih(o))
-      #CHECK(min(voh(i)) > vih(o))
-      #CHECK(max(vol(i)) < vil(o))
+      #CHECK(min(voh(i)) > vih(o),
+        "pin-check",
+        "Verify min voh of io driver is higher than the vih of the io pin",
+        "IO pin %_ min voh %_ is compatible with the io pin %_ vih %_" % [ref(in-p), min(voh(i)), ref(out-p), vih(o)],
+        "IO pin %_ min voh %_ is not compatible with the io pin %_ vih %_" % [ref(in-p), min(voh(i)), ref(out-p), vih(o)],
+        ref(in-p)
+      )
+      #CHECK(max(vol(i)) < vil(o),
+        "pin-check",
+        "Verify max vol of io driver is compatible with the vil of the io pin",
+        "IO pin %_ max vol %_ is compatible with the io pin %_ vil %_" % [ref(in-p), max(vol(i), ref(out-p), vil(o)],
+        "IO pin %_ max vol %_ is not compatible with the io pin %_ vil %_" % [ref(in-p), max(vol(i)), ref(out-p), vil(o)],
+        ref(in-p)
+      )
     if has-property?(in-p.generic-pin):
-      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(driver(o))))
+      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(driver(o))),
+        "pin-check",
+        "Verify voh of output driver is compatible with voltage range of a generic pin",
+        "Output pin %_ max voh %_ is compatible with the voltage range of the generic pin %_ of %_" % [ref(out-p), voh(driver(o)), ref(in-p), max-voltage(property(in-p.generic-pin))],
+        "Output pin %_ max voh %_ is not compatible with the voltage range of the generic pin %_ of %_" % [ref(out-p), voh(driver(o)), ref(in-p), max-voltage(property(in-p.generic-pin))],
+        ref(in-p)
+      )
     if has-property?(out-p.generic-pin):
-      #CHECK(contains?(max-voltage(property(out-p.generic-pin)), voh(i)))
+      #CHECK(contains?(max-voltage(property(out-p.generic-pin)), voh(i)),
+        "pin-check",
+        "Verify voh of output driver is compatible with voltage range of a generic pin",
+        "IO pin %_ max voh %_ is compatible with the voltage range of the generic pin %_ of %_" % [ref(in-p), voh(i), ref(out-p), max-voltage(property(out-p.generic-pin))],
+        "IO pin %_ max voh %_ is not compatible with the voltage range of the generic pin %_ of %_" % [ref(in-p), voh(i), ref(out-p), max-voltage(property(out-p.generic-pin))],
+        ref(out-p)
+      )
   else if has-property?(in-p.digital-output) and o is DigitalOutput:
-    
-    #CHECK(tristateable(o))
-    #CHECK(tristateable(property(in-p.digital-output)))
+    #CHECK(tristateable(o),
+      "pin-check",
+      "Verify output driver is tri-stateable to be compatible with input pin type",
+      "IO pin %_ is tri-stateable and is compatible with the input pin %_" % [ref(out-p), ref(in-p)],
+      "IO pin %_ is not tri-stateable and is not compatible with the input pin %_" % [ref(out-p), ref(in-p)],
+      ref(out-p)
+    )
 
+    #CHECK(tristateable(property(in-p.digital-output)),
+      "pin-check",
+      "Verify input pin is tri-stateable to be compatible with output pin type",
+      "Input pin %_ is tri-stateable and is compatible with the output pin %_" % [ref(in-p), ref(out-p)],
+      "Input pin %_ is not tri-stateable and is not compatible with the output pin %_" % [ref(in-p), ref(out-p)],
+      ref(in-p)
+    )
 
 public pcb-check connected (p:JITXObject|Tuple<JITXObject>) :
   #CHECK(connected?(p))
@@ -147,52 +310,171 @@ public pcb-check generic-pin (p:JITXObject):
   if (has-property?(p.rail-voltage)) :
     val p-props = property(p.generic-pin)
     ; Check that the maxima are never crossed
-    #CHECK(p-props is GenericPin)
-    #CHECK(contains?(max-voltage(p-props), property(p.rail-voltage)))
+    #CHECK(p-props is GenericPin,
+      "pin-check",
+      "Verify pin has the generic pin property expected",
+      "Pin %_ is marked correctly as a generic pin" % [ref(p)],
+      "Pin %_ is not marked as a generic pin" % [ref(p)],
+      ref(p)
+    )
+    #CHECK(contains?(max-voltage(p-props), property(p.rail-voltage)),
+      "pin-check",
+      "Verify generic pin is compatible with the design supply voltage range",
+      "Generic pin %_ max-voltage %_ is compatible with the supply voltage range %_" % [ref(p), max-voltage(p-props), property(p.rail-voltage)],
+      "Generic pin %_ max-voltage %_ is not compatible with the supply voltage range %_" % [ref(p), max-voltage(p-props), property(p.rail-voltage)],
+      ref(p)
+    )
 
 ; Checks a power pin located on an active component
 public pcb-check power-pin (p:JITXObject) :
-  #CHECK(has-property?(p.power-pin))
+  #CHECK(has-property?(p.power-pin),
+    "pin-check",
+    "Verify power pins have the correct power-pin property",
+    "Pin %_ has the correct power-pin property attached" % [ref(p)],
+    "Pin %_ does not have the correct power-pin property attached" % [ref(p)],
+    ref(p)
+  )
+
   val p-props = property(p.power-pin)
-  #CHECK(p-props is PowerPin)
+  #CHECK(p-props is PowerPin,
+    "pin-check",
+    "Verify power pins have the correct power-pin type property",
+    "Pin %_ has the correct power-pin type property attached" % [ref(p)],
+    "Pin %_ does not have the correct power-pin type property attached" % [ref(p)],
+    ref(p)
+  )
   ; println("%_ has power" % [ref(p)])
-  #CHECK(has-property?(p.rail-voltage))
+  #CHECK(has-property?(p.rail-voltage),
+    "pin-check",
+    "Verify power pins have the correct rail-voltage property",
+    "Pin %_ has the correct rail-voltage property attached of %_V" % [ref(p), property(p.rail-voltage)],
+    "Pin %_ does not have the correct rail-voltage property attached" % [ref(p)],
+    ref(p)
+  )
   ; println("%_ has %_" % [ref(p) property(p.rail-voltage)])
-  #CHECK(contains?(recommended-voltage(p-props), property(p.rail-voltage)))
+  #CHECK(contains?(recommended-voltage(p-props), property(p.rail-voltage)),
+    "pin-check",
+    "Check power pin rail-voltage property is within the design specification",
+    "Power pin %_ rail voltage %_V is correctly within the design specification %_V" % [ref(p),property(p.rail-voltage),recommended-voltage(p-props)],
+    "Power pin %_ rail voltage %_V is not correctly within the design specification %_V" % [ref(p),property(p.rail-voltage),recommended-voltage(p-props)],
+    ref(p)
+  )
+
 
 public pcb-check reset-pin (p:JITXObject) :
-  #CHECK(has-property?(p.reset-pin))
+  #CHECK(has-property?(p.reset-pin),
+    "pin-check",
+    "Verify reset pins have the correct reset-pin property",
+    "Reset pin %_ has the correct reset-pin property attached" % [ref(p)],
+    "Reset pin %_ does not have the correct reset-pin property attached" % [ref(p)],
+    ref(p)
+  )
+
   val p-props = property(p.reset-pin)
-  #CHECK(p-props is ResetPin)
+  #CHECK(p-props is ResetPin,
+    "pin-check",
+    "Verify reset pins have the correct reset-pin type property",
+    "Reset pin %_ has the correct reset-pin type property attached" % [ref(p)],
+    "Reset pin %_ does not have the correct reset-pin type property attached" % [ref(p)],
+    ref(p)
+  )
   ; Improve this to check togglability
-  #CHECK(connected?(p))
+  #CHECK(connected?(p),
+    "pin-check",
+    "Verify reset pins have the correct connectivity",
+    "Reset pin %_ has the correct connectivity" % [ref(p)],
+    "Reset pin %_ does not have the correct connectivity" % [ref(p)],
+    ref(p)
+  )
+
 
 defn check-rated-voltage (p:JITXObject) :
   val rating = property(p.rated-voltage)
   val v = property(p.voltage)
   match(rating, v):
-    (r:Double, v:Double) : #CHECK(property(p.rated-voltage) >= v)
+    (r:Double, v:Double) : #CHECK(property(p.rated-voltage) >= v,
+                              "pin-check",
+                              "Check pin rated voltage is within the design voltage specification",
+                              "Pin %_ rated voltage %_V is correctly within the design supply specification %_V" % [ref(p),property(p.rated-voltage),v],
+                              "Pin %_ rated voltage %_V is incorrectly outside the design supply specification %_V" % [ref(p),property(p.rated-voltage),v],
+                              ref(p)
+                            )
     (r:[Double,Double], v:Double) : 
-      #CHECK(property(p.rated-voltage)[1] >= v)
-      #CHECK(property(p.rated-voltage)[0] <= v)
+      #CHECK(property(p.rated-voltage)[1] >= v.
+        "pin-check",
+        "Check pin rated voltage is within the design voltage specification",
+        "Pin %_ rated voltage %_V high is correctly within the design supply specification %_V" % [ref(p),property(p.rated-voltage)[1],v],
+        "Pin %_ rated voltage %_V high is incorrectly outside the design supply specification %_V" % [ref(p),property(p.rated-voltage)[1],v],
+        ref(p)
+      )
+      #CHECK(property(p.rated-voltage)[0] <= v,
+        "pin-check",
+        "Check pin rated voltage is within the design voltage specification",
+        "Pin %_ rated voltage %_V low is correctly within the design supply specification %_V" % [ref(p),property(p.rated-voltage)[0],v],
+        "Pin %_ rated voltage %_V low is incorrectly outside the design supply specification %_V" % [ref(p),property(p.rated-voltage)[0],v],
+        ref(p)
+      )
     (r:[Double,Double], v:[Double|Double|Double]) : 
-      #CHECK(property(p.rated-voltage)[1] >= v[2])
-      #CHECK(property(p.rated-voltage)[0] <= v[0])
+      #CHECK(property(p.rated-voltage)[1] >= v[2],
+        "pin-check",
+        "Check pin rated voltage is within the design voltage specification",
+        "Pin %_ rated voltage %_V high is correctly within the design supply specification %_V" % [ref(p),property(p.rated-voltage)[1],v[2]],
+        "Pin %_ rated voltage %_V high is incorrectly outside the design supply specification %_V" % [ref(p),property(p.rated-voltage)[1],v[2]],
+        ref(p)
+      )
+      #CHECK(property(p.rated-voltage)[0] <= v[0],
+        "pin-check",
+        "Check pin rated voltage is within the design voltage specification",
+        "Pin %_ rated voltage %_V low is correctly within the design supply specification %_V" % [ref(p),property(p.rated-voltage)[0],v[0]],
+        "Pin %_ rated voltage %_V low is incorrectly outside the design supply specification %_V" % [ref(p),property(p.rated-voltage)[0],v[0]],
+        ref(p)
+      )
     (r, v) : false
 
 ; Checks if voltage on a pin is within acceptable limits
 public pcb-check voltage-levels (p:JITXObject, range:[Double,Double,Double]) :
-  #CHECK(has-property?(p.voltage))
-  #CHECK(property(p.voltage)[0] >= range[0])
-  #CHECK(property(p.voltage)[2] <= range[2])
+  #CHECK(has-property?(p.voltage),
+    "pin-check",
+    "Check pin has voltage property",
+    "Pin %_ has a property for voltage" % [ref(p)],
+    "Pin %_ does not have a property for voltage" % [ref(p)],
+    ref(p)
+  )
+  #CHECK(property(p.voltage)[0] >= range[0],
+    "pin-check",
+    "Check pin voltage is within the design voltage specification",
+    "Pin %_ rated voltage %_V low is correctly within the design range specification %_V" % [ref(p),property(p.voltage)[0],range[0]],
+    "Pin %_ rated voltage %_V low is incorrectly outside the design range specification %_V" % [ref(p),property(p.voltage)[0],range[0]],
+    ref(p)
+  )
+  #CHECK(property(p.voltage)[2] <= range[2],
+    "pin-check",
+    "Check pin rated voltage is within the design voltage specification",
+    "Pin %_ rated voltage %_V high is correctly within the design range specification %_V" % [ref(p),property(p.voltage)[2],range[2]],
+    "Pin %_ rated voltage %_V high is incorrectly outside the design range specification %_V" % [ref(p),property(p.voltage)[2],range[2]],
+    ref(p)
+  )
 
 ; ====== Component-level checks ======
 ; ====================================
 
 ; Checks resistors against operating point and environment
 public pcb-check resistor-component (r:JITXObject) :
-  #CHECK(has-property?(r.resistor))
-  #CHECK(has-property?(r.operating-point))
+  #CHECK(has-property?(r.resistor),
+    "component-check",
+    "Check resistor component has the correct resistor property",
+    "Component %_ has the correct property for resistor" % [ref(r)],
+    "Component %_ does not have the correct property for a resistor" % [ref(r)],
+    ref(r)
+  )
+  #CHECK(has-property?(r.operating-point),
+    "component-check",
+    "Check resistor component has the correct operating-point property",
+    "Component %_ has the correct property for operating-point" % [ref(r)],
+    "Component %_ does not have the correct property for the operating-point" % [ref(r)],
+    ref(r)
+  )
+
   val [vpk i temp] = [[min(peak-voltage(property(r.operating-point))) max(peak-voltage(property(r.operating-point)))] max(peak-current(property(r.operating-point))) OPERATING-TEMPERATURE[1]]
 
   val power = property(r.resistance) * pow(i, 2.0)
@@ -200,102 +482,361 @@ public pcb-check resistor-component (r:JITXObject) :
     ; Derate the power based on the piecewise linear curve from MFG
     val derating = PWL(property(r.derating))[temp]
     val pwr = derating * property(r.rated-power)
-    #CHECK(pwr * DERATE-RESISTOR-POWER > power)
+    #CHECK(pwr * DERATE-RESISTOR-POWER > power,
+      "component-check",
+      "Check resistor power derating meets the design requirements",
+      "Component %_ power derating %_W meets the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
+      "Component %_ power derating %_W does not meet the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
+      ref(r)
+    )
   else :
     ; Derate the power if MFG derating is missing
     val derating = PWL([[0.0 1.0] [70.0 1.0] [125.0 0.0]])[temp]
     val pwr = derating * property(r.rated-power)
-    #CHECK(pwr * DERATE-RESISTOR-POWER > power)
+    #CHECK(pwr * DERATE-RESISTOR-POWER > power,
+      "component-check",
+      "Check resistor default power derating meets the design requirements",
+      "Component %_ default power derating %_W meets the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
+      "Component %_ default power derating %_W does not meet the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
+      ref(r)
+    )
 
 public pcb-check capacitor-component (c:JITXObject) :
-  #CHECK(has-property?(c.capacitor))
-  #CHECK(has-property?(c.operating-point))
-
+  #CHECK(has-property?(c.capacitor),
+    "component-check",
+    "Check capacitor component has the correct capacitor property",
+    "Component %_ has the correct property for a capacitor" % [ref(c)],
+    "Component %_ does not have the correct property for a capacitor" % [ref(c)],
+    ref(c)
+  )
+  #CHECK(has-property?(c.operating-point),
+    "component-check",
+    "Check capacitor component has the correct operating-point property",
+    "Component %_ has the correct property for operating-point" % [ref(c)],
+    "Component %_ does not have the correct property for the operating-point" % [ref(c)],
+    ref(c)
+  )
   val [vpk temp] = [[min(peak-voltage(property(c.operating-point))) max(peak-voltage(property(c.operating-point)))] OPERATING-TEMPERATURE[1]]
   val max-temp = max(operating-temperature(property(c.rated-temperature)))
   switch(property(c.type)) :
 
     "ceramic" :
       val vpk-derate-wc = PWL(DERATE-CAPACITOR-MLCC-VPK-WC)[temp]
-      #CHECK(vpk[0] <= (vpk-derate-wc * property(c.rated-voltage)))
-      #CHECK(vpk[1] <= (vpk-derate-wc * property(c.rated-voltage)))
+      #CHECK(vpk[0] <= (vpk-derate-wc * property(c.rated-voltage)),
+        "component-check",
+        "Check capacitor voltage derating matches the operating-point voltage",
+        "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[0],(vpk-derate-wc * property(c.rated-voltage))],
+        "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[0],(vpk-derate-wc * property(c.rated-voltage))],
+        ref(c)
+      )
+
+      #CHECK(vpk[1] <= (vpk-derate-wc * property(c.rated-voltage)),
+        "component-check",
+        "Check capacitor voltage derating matches the operating-point voltage",
+        "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
+        "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
+        ref(c)
+      )
+
       val vpk-derate-nom = PWL(DERATE-CAPACITOR-MLCC-VPK-NOM)[temp]
-      #CHECK(vpk[0] <= (vpk-derate-nom * property(c.rated-voltage)))
-      #CHECK(vpk[1] <= (vpk-derate-nom * property(c.rated-voltage)))
-      #CHECK(temp <= min(DERATE-CAPACITOR-MLCC-TEMP, max-temp))
+      #CHECK(vpk[0] <= (vpk-derate-nom * property(c.rated-voltage)),
+        "component-check",
+        "Check capacitor voltage derating matches the operating-point voltage",
+        "Capacitor %_ voltage derating %_V is compatible with the nominal design constraint %_V" % [ref(c),vpk[0],(vpk-derate-nom * property(c.rated-voltage))],
+        "Capacitor %_ voltage derating %_V is not compatible with the nominal design constraint %_V" % [ref(c),vpk[0],(vpk-derate-nom * property(c.rated-voltage))],
+        ref(c)
+      )
+
+      #CHECK(vpk[1] <= (vpk-derate-nom * property(c.rated-voltage)),
+        "component-check",
+        "Check capacitor voltage derating matches the operating-point voltage",
+        "Capacitor %_ voltage derating %_V is compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
+        "Capacitor %_ voltage derating %_V is not compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
+        ref(c)
+      )
+
+      #CHECK(temp <= min(DERATE-CAPACITOR-MLCC-TEMP, max-temp),
+        "component-check",
+        "Check capacitor de-rated temperature operating point versus design constraints",
+        "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(component),temp,min(DERATE-CAPACITOR-MLCC-TEMP, max-temp)],
+        "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(component),temp,min(DERATE-CAPACITOR-MLCC-TEMP, max-temp)],
+        ref(c)]
+      )
 
     "electrolytic" :
-      #CHECK(has-property?(c.anode))
-      #CHECK(has-property?(c.electrolyte))
+      #CHECK(has-property?(c.anode),
+        "component-check",
+        "Check electrolytic capacitor component has the anode property",
+        "Electrolytic capacitor %_ has the correct anode property" % [ref(c)],
+        "Electrolytic capacitor %_ does not have the correct anode property" % [ref(c)],
+        ref(c)
+      )
+
+      #CHECK(has-property?(c.electrolyte),
+        "component-check",
+        "Check electrolytic capacitor component has the electrolyte property",
+        "Electrolytic capacitor %_ has the correct electrolyte property" % [ref(c)],
+        "Electrolytic capacitor %_ does not have the correct electrolyte property" % [ref(c)],
+        ref(c)
+      )
+
       val [i-pk i-rms] = [lookup(property(c.operating-point), `current-pk) lookup(property(c.operating-point), `current-rms)]
 
       if (property(c.anode) == "tantalum" and property(c.electrolyte) == "polymer") :
-        #CHECK(vpk[1]   <= (DERATE-CAPACITOR-ETANTPOLY-VPK * property(c.rated-voltage)))
-        #CHECK(temp  <= min(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp))
-        #CHECK(i-pk  <= property(c.rated-current-pk))
-        #CHECK(i-rms <= PWL(property(c.rated-current-rms))[temp])
-        #CHECK(vpk[0]  >= 0.0)
+        #CHECK(vpk[1]   <= (DERATE-CAPACITOR-ETANTPOLY-VPK * property(c.rated-voltage)),
+          "component-check",
+          "Check polymer tantalum capacitor voltage derating matches the operating-point voltage",
+          "Capacitor %_ voltage operating point %_V is compatible with the constraint %_V" % [ref(c),vpk[1],(DERATE-CAPACITOR-ETANTPOLY-VPK * property(c.rated-voltage))],
+          "Capacitor %_ voltage operating point %_V is not compatible with the constraint %_V" % [ref(c),vpk[1],(DERATE-CAPACITOR-ETANTPOLY-VPK * property(c.rated-voltage))],
+          ref(c)
+        )
+
+        #CHECK(temp  <= min(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp),
+          "component-check",
+          "Check capacitor de-rated temperature operating point versus design constraints",
+          "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(component),temp,min(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp)],
+          "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(component),temp,min(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp)],
+          ref(component)]
+        )
+
+        #CHECK(i-pk  <= property(c.rated-current-pk),
+          "component-check",
+          "Check capacitor peak current matches the rated peak current",
+          "Capacitor %_ peak current %_A is compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
+          "Capacitor %_ peak current %_A is not compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
+          ref(c)
+        )
+
+        #CHECK(i-rms <= PWL(property(c.rated-current-rms))[temp],
+          "component-check",
+          "Check capacitor rms current matches the rated rms current",
+          "Capacitor %_ rms current %_A is compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
+          "Capacitor %_ rms current %_A is not compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
+          ref(c)
+        )
+
+        #CHECK(vpk[0]  >= 0.0,
+          "component-check",
+          "Check capacitor has min peak voltage greater than 0V",
+          "Capacitor %_ min peak voltage %_V is greater than or equal to 0V" % [ref(c),vpk[0]],
+          "Capacitor %_ min peak voltage %_V is less than 0V" % [ref(c),vpk[0]],
+          ref(c)
+        )
 
       else if (property(c.anode) == "tantalum" and property(c.electrolyte) == "manganese-dioxide") :
-        #CHECK(i-pk <= property(c.rated-current-pk))
-        #CHECK(i-rms <= PWL(property(c.rated-current-rms))[temp])
-        #CHECK(vpk[0]  >= 0.0)
+        #CHECK(i-pk <= property(c.rated-current-pk),
+          "component-check",
+          "Check manganese-dioxide tantalum capacitor peak current matches the rated peak current",
+          "Capacitor %_ peak current %_A is compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
+          "Capacitor %_ peak current %_A is not compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
+          ref(c)
+        )
+
+        #CHECK(i-rms <= PWL(property(c.rated-current-rms))[temp],
+          "component-check",
+          "Check manganese-dioxide tantalum capacitor rms current matches the rated rms current",
+          "Capacitor %_ rms current %_A is compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
+          "Capacitor %_ rms current %_A is not compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
+          ref(c)
+        )
+
+        #CHECK(vpk[0]  >= 0.0,
+          "component-check",
+          "Check manganese-dioxide tantalum capacitor has min peak voltage greater than 0V",
+          "Capacitor %_ min peak voltage %_V is greater than or equal to 0V" % [ref(c),vpk[0]],
+          "Capacitor %_ min peak voltage %_V is less than 0V" % [ref(c),vpk[0]],
+          ref(c)
+        )
+
         if i-pk <= 2.0 :
           val vpk-derate-wc = PWL(DERATE-CAPACITOR-ETANTMNO2-VPK-WC)[temp]
           val vpk-derate-nom = PWL(DERATE-CAPACITOR-ETANTMNO2-VPK-NOM)[temp]
-          #CHECK(vpk[1]  <= (vpk-derate-wc * property(c.rated-voltage)))
-          #CHECK(vpk[1]  <= (vpk-derate-nom * property(c.rated-voltage)))
-          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp))
-          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp))
+          #CHECK(vpk[1]  <= (vpk-derate-wc * property(c.rated-voltage)),
+            "component-check",
+            "Check capacitor voltage derating matches the wc operating-point voltage",
+            "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
+            "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
+            ref(c)
+          )
+
+          #CHECK(vpk[1]  <= (vpk-derate-nom * property(c.rated-voltage)),
+            "component-check",
+            "Check capacitor voltage derating matches the operating-point voltage",
+            "Capacitor %_ voltage derating %_V is compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
+            "Capacitor %_ voltage derating %_V is not compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
+            ref(c)
+          )
+
+          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp),
+            "component-check",
+            "Check capacitor de-rated nominal temperature operating point versus design constraints",
+            "Capacitor %_ operating temp %_C satisfies the nominal temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
+            "Capacitor %_ operating temp %_C does not satisfy the nominal temperature derating spec of %_C" % [ref(c),temp,min(DDERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
+            ref(c)]
+          )
+
+          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp),
+            "component-check",
+            "Check capacitor de-rated wc temperature operating point versus design constraints",
+            "Capacitor %_ operating temp %_C satisfies the wc temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp)],
+            "Capacitor %_ operating temp %_C does not satisfy the wc temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp)],
+            ref(c)]
+          )
+
         else if i-pk > 2.0 :
-          #CHECK(vpk[1]  <= (DERATE-CAPACITOR-ETANTMNO2-VPK * property(c.rated-voltage)))
-          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp))
+          #CHECK(vpk[1]  <= (DERATE-CAPACITOR-ETANTMNO2-VPK * property(c.rated-voltage)),
+            "component-check",
+            "Check capacitor voltage derating matches the wc operating-point voltage",
+            "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
+            "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
+            ref(c)
+          )
+
+
+          #CHECK(temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp),
+            "component-check",
+            "Check capacitor de-rated nominal temperature operating point versus design constraints",
+            "Capacitor %_ operating temp %_C satisfies the nominal temperature derating spec of %_C" % [ref(component),temp,min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
+            "Capacitor %_ operating temp %_C does not satisfy the nominal temperature derating spec of %_C" % [ref(component),temp,min(DDERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
+            ref(c)]
+          )
 
       else :
         println("Unhandled electrolytic type for capacitor check on %_" % [c])
 
     "mica" :
-      #CHECK(vpk[0] <= (DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage)))
-      #CHECK(vpk[1] <= (DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage)))
-      #CHECK(temp <= min(DERATE-CAPACITOR-MICA-TEMP, max-temp))
+      #CHECK(vpk[0] <= (DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage)),
+        "component-check",
+        "Check mica capacitor voltage derating matches the operating-point voltage",
+        "Capacitor %_ voltage operating point %_V is compatible with the constraint %_V" % [ref(c),vpk[0],(DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage))],
+        "Capacitor %_ voltage operating point %_V is not compatible with the constraint %_V" % [ref(c),vpk[0],(DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage))],
+        ref(c)
+      )
+
+      #CHECK(vpk[1] <= (DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage)),
+        "component-check",
+        "Check mica capacitor voltage derating matches the operating-point voltage",
+        "Capacitor %_ voltage operating point %_V is compatible with the constraint %_V" % [ref(c),vpk[1],(DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage))],
+        "Capacitor %_ voltage operating point %_V is not compatible with the constraint %_V" % [ref(c),vpk[1],(DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage))],
+        ref(c)
+      )
+
+      #CHECK(temp <= min(DERATE-CAPACITOR-MICA-TEMP, max-temp),
+          "component-check",
+          "Check capacitor de-rated temperature operating point versus design constraints",
+          "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-MICA-TEMP, max-temp)],
+          "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-MICA-TEMP, max-temp)],
+          ref(c)]
+        )
 
     else : println("Unhandled type for capacitor check on %_" % [c])
 
-  #CHECK(OPERATING-TEMPERATURE[0] >= min(operating-temperature(property(c.rated-temperature))))
+  #CHECK(OPERATING-TEMPERATURE[0] >= min(operating-temperature(property(c.rated-temperature))),
+    "component-check",
+    "Check capacitor operating temperature versus design constraints",
+    "Capacitor %_ has an acceptable operating temperature %_C versus design target %_C" % [ref(component), min(operating-temperature(property(c.rated-temperature))), OPERATING-TEMPERATURE[0]],
+    "Capacitor %_ does not have an acceptable operating temperature %_C versus design target %_C" % [ref(component), min(operating-temperature(property(c.rated-temperature))), OPERATING-TEMPERATURE[0]],
+    ref(c)]  
+  )
+
+
 
 ; Checks the frequency of an oscillator (o) against an interface on an IC (intf)
 public pcb-check oscillator-check-frequency (o:JITXObject, intf:CrystalOscillator) :
   ; Check critical gain point to ensure oscillation
-  #CHECK(has-property?(o.crystal-resonator))
+  #CHECK(has-property?(o.crystal-resonator),
+    "oscillator-check",
+    "Check crystal component has the correct crystal-resonator property",
+    "Component %_ has the correct property for a crystal-resonator" % [ref(o)],
+    "Component %_ does not have the correct property for a crystal-resonator" % [ref(o)],
+    ref(o)
+  )
+
   ; #CHECK(has-property?(intf.crystal-oscillator))
-  #CHECK(frequency(property(o.crystal-resonator)) == frequency(intf))
+  #CHECK(frequency(property(o.crystal-resonator)) == frequency(intf),
+    "oscillator-check",
+    "Check crystal has the correct frequency meeting design specs",
+    "Crystal %_ does have the correct frequency %_ to meet design specs %_" % [ref(o),frequency(property(o.crystal-resonator)),frequency(intf)],
+    "Crystal %_ does not have the correct frequency %_ to meet design specs %_" % [ref(o),frequency(property(o.crystal-resonator)),frequency(intf)],
+    ref(o)
+  )
 
 ; Checks the critical gain of an oscillator (o) against an interface on an IC (intf)
 public pcb-check oscillator-check-gain (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
   ; Check critical gain point to ensure oscillation
-  #CHECK(has-property?(o.crystal-resonator))
+  #CHECK(has-property?(o.crystal-resonator),
+    "oscillator-check",
+    "Check crystal component has the correct crystal-resonator property",
+    "Component %_ has the correct property for a crystal-resonator" % [ref(o)],
+    "Component %_ does not have the correct property for a crystal-resonator" % [ref(o)],
+    ref(o)
+  )
+
   ; #CHECK(has-property?(intf.crystal-oscillator))
   val op = property(o.crystal-resonator)
   val gain = 4.0 * ESR(op) * pow(2.0 * PI * frequency(op), 2.0) * pow(shunt-capacitance(op) + load-capacitance(op), 2.0)
-  #CHECK(gain < max-critical-gain(intf))
+  #CHECK(gain < max-critical-gain(intf),
+    "oscillator-check",
+    "Check crystal circuit gain meets the design criteria for max-critical-gain",
+    "Crystal %_ gain %_ meets the design criteria for max-critical-gain" % [ref(o), gain, max-critical-gain(intf)],
+    "Crystal %_ gain %_ does not meet the design criteria for max-critical-gain" % [ref(o), gain, max-critical-gain(intf)],
+    ref(o)
+  )
 
 ; Checks the drive level of an oscillator (o) against an interface on an IC (intf)
 public pcb-check oscillator-check-drive (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
   ; Check drive level against crystal maximum
-  #CHECK(has-property?(o.crystal-resonator))
+  #CHECK(has-property?(o.crystal-resonator),
+    "oscillator-check",
+    "Check crystal component has the correct crystal-resonator property",
+    "Component %_ has the correct property for a crystal-resonator" % [ref(o)],
+    "Component %_ does not have the correct property for a crystal-resonator" % [ref(o)],
+    ref(o)
+  )
   ; #CHECK(has-property?(intf.crystal-oscillator))
-  #CHECK(drive-level(intf) <= max-drive-level(property(o.crystal-resonator)))
+  #CHECK(drive-level(intf) <= max-drive-level(property(o.crystal-resonator)),
+    "oscillator-check",
+    "Check crystal oscillator circuit has the correct drive-level property to match crystal",
+    "Crystal circuit %_ has the correct drive-level property %_ that matches the crystal spec %_" % [ref(o),drive-level(intf),max-drive-level(property(o.crystal-resonator))],
+    "Crystal circuit %_ does not have the correct drive-level property %_ that matches the crystal spec %_" % [ref(o),drive-level(intf),max-drive-level(property(o.crystal-resonator))],
+    ref(o)
+  )
 
 ; Check pullability of crystal to ensure accuracy
 public pcb-check oscillator-check-pullability (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
-  #CHECK(has-property?(o.crystal-resonator))
+  #CHECK(has-property?(o.crystal-resonator),
+    "oscillator-check",
+    "Check crystal component has the correct crystal-resonator property",
+    "Component %_ has the correct property for a crystal-resonator" % [ref(o)],
+    "Component %_ does not have the correct property for a crystal-resonator" % [ref(o)],
+    ref(o)
+  )
   val op = property(o.crystal-resonator)
   val pullability = motional-capacitance(op) / (2.0 * pow(shunt-capacitance(op) + load-capacitance(op), 2.0))
-  #CHECK(has-property?(load-cap.tolerance))
-  #CHECK(has-property?(load-cap.capacitance))
+  #CHECK(has-property?(load-cap.tolerance),
+    "oscillator-check",
+    "Check crystal tuning capacitor has the correct tolerance property",
+    "Capacitor %_ has the correct tolerance property for crystal tuning" % [ref(load-cap)],
+    "Capacitor %_ does not have the correct tolerance property for crystal tuning" % [ref(load-cap)],
+    ref(load-cap)
+  )
+  #CHECK(has-property?(load-cap.capacitance),
+    "oscillator-check",
+    "Check crystal tuning capacitor has the correct capacitance property",
+    "Capacitor %_ has the correct capacitance property for crystal tuning" % [ref(load-cap)],
+    "Capacitor %_ does not have the correct capacitance property for crystal tuning" % [ref(load-cap)],
+    ref(load-cap)
+  )
+
   val dC = (property(load-cap.capacitance) as Double) * (property(load-cap.tolerance)[1] as Double)
   val freq-error = (pullability as Double) * (dC as Double) * frequency(op)
-  #CHECK(frequency-tolerance(op) + freq-error < frequency-tolerance(intf))
+  #CHECK(frequency-tolerance(op) + freq-error < frequency-tolerance(intf),
+    "oscillator-check",
+    "Check crystal frequency tolerance with pullability meets the design specification",
+    "Crystal %_ has the correct frequency tolerance %_ that meets the design spec %_" % [ref(load-cap),frequency-tolerance(op) + freq-error,frequency-tolerance(intf)],
+    "Crystal %_ does not have the correct frequency tolerance %_ that meets the design spec %_" % [ref(load-cap),frequency-tolerance(op) + freq-error,frequency-tolerance(intf)],
+    [ref(load-cap) ref(op)]
+  )
 
 public defn check-oscillator (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
   inside pcb-module:
@@ -327,7 +868,13 @@ public pcb-check check-min-copper-copper-space (landpattern:LandPattern, side:Si
   val copper = to-seq(copper(landpattern, side))
   if not empty?(copper) :
     val min-copper-copper-space = clearance(current-rules(), MinCopperCopperSpace)
-    #CHECK(min-space(copper) >= min-copper-copper-space)
+    #CHECK(min-space(copper) >= min-copper-copper-space,
+      "landpattern-check",
+      "Check landpattern copper minimum spacing",
+      "Landpattern %_ min spacing %_ does not violate min spacing rules %_" % [ref(landpattern),min-space(copper),min-copper-copper-space],
+      "Landpattern %_ min spacing %_ violates min spacing rules %_" % [ref(landpattern),min-space(copper),min-copper-copper-space],
+      ref(landpattern)]
+    )
 
 ; Checks that the copper layers on both sides of a ladnpattern dont' violate 
 ; the minimum copper width rule
@@ -335,24 +882,48 @@ public pcb-check check-min-copper-width (landpattern:LandPattern, side:Side) :
   val copper = to-seq(copper(landpattern, side))
   if not empty?(copper) :
     val min-copper-width = clearance(current-rules(), MinCopperCopperSpace)
-    #CHECK(min-width(copper) >= min-copper-width)
+    #CHECK(min-width(copper) >= min-copper-width,
+      "landpattern-check",
+      "Check landpattern copper minimum width",
+      "Landpattern %_ min width %_ does not violate min width rules %_" % [ref(landpattern),min-width(copper),min-copper-width],
+      "Landpattern %_ min width %_ violates min width rules %_" % [ref(landpattern),min-width(copper),min-copper-width],
+      ref(landpattern)]
+    )
 
 ; Checks that a BGA landpattern does not violate the min-pitch-bga design rule
 public pcb-check check-bga-pitch (lp:LandPattern) :
   val min-pitch-bga = clearance(current-rules(), MinPitchBGA)
-  #CHECK(min-pitch(lp) >= min-pitch-bga)
+  #CHECK(min-pitch(lp) >= min-pitch-bga,
+    "landpattern-check",
+    "Check landpattern bga minimum pitch",
+    "Landpattern %_ min bga pitch %_ does not violate min bga pitch rules %_" % [ref(landpattern),min-pitch(lp),min-pitch-bga],
+    "Landpattern %_ min bga pitch %_ violates min bga pitch rules %_" % [ref(landpattern),min-pitch(lp),min-pitch-bga],
+    ref(landpattern)]
+  )
 
 ; Checks that a leaded component does not violate the min-leaded-pitc  design rule
 public pcb-check check-leaded-pitch (lp:LandPattern) :
   val min-pitch-leaded = clearance(current-rules(), MinPitchLeaded)
-  #CHECK(min-pitch(lp) >= min-pitch-leaded)
+  #CHECK(min-pitch(lp) >= min-pitch-leaded,
+    "landpattern-check",
+    "Check landpattern leaded minimum pitch",
+    "Landpattern %_ min leaded pitch %_ does not violate min leaded pitch rules %_" % [ref(landpattern),min-pitch(lp),min-pitch-leaded],
+    "Landpattern %_ min leaded pitch %_ violates min leaded pitch rules %_" % [ref(landpattern),min-pitch(lp),min-pitch-leaded],
+    ref(landpattern)]
+  )
 
 ; Checks that the solder mask layers of a land pattern do not violate the minimum
 ; solder mask sliver
 public pcb-check check-min-solder-mask-sliver (shapes:Seqable<Shape>) :
   val s = to-seq(shapes)
   if not empty?(s):
-    #CHECK(min-space(s) >= clearance(current-rules(), MinSolderMaskBridge))
+    #CHECK(min-space(s) >= clearance(current-rules(), MinSolderMaskBridge),
+      "landpattern-check",
+      "Check landpattern minimum soldermask bridge spacing",
+      "Landpattern %_ min soldermask spacing %_ does not violate min rules %_" % [ref(landpattern),min-space(s),clearance(current-rules(), MinSolderMaskBridge)],
+      "Landpattern %_ min soldermask spacing %_ violates min rules %_" % [ref(landpattern),min-space(s),clearance(current-rules(), MinSolderMaskBridge)],
+      ref(landpattern)]
+    )
 
 ; Runs all the land pattern checks on either an instance or definition. 
 public defn check-landpattern (component:JITXObject|JITXDef) :
