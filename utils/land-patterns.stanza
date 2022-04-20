@@ -1449,6 +1449,9 @@ public defn make-qfp-landpattern (num-pins:Int,
 ; - the leads are oriented on the left and right sides of the land pattern
 ; - p[1] is the top left pin
 ;
+public pcb-enum ocdb/land-patterns/PinNumbering : 
+  SoicNumbering
+  RowMajorNumbering
 public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number of pins of the component
                                          pitch:Double,                 ; pitch of the pins of the component
                                          lead-span:Toleranced,  ; the overall length of the component, from terminal-edge to terminal-edge
@@ -1458,7 +1461,8 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number 
                                          terminal-length:Toleranced,   ; the length of the terminals
                                          terminal-width:Toleranced,    ; the width of the terminals
                                          density-level:DensityLevel,   ; the density level of the design
-                                         exposed-metal-heat-feature?:False|Shape):    ; an optional shape of a thermal pad
+                                         exposed-metal-heat-feature?:False|Shape,    ; an optional shape of a thermal pad
+                                         pin-numbering:PinNumbering):
   fatal("n must be even") when (num-pins % 2) != 0
   val lead-fillets = lead-fillets(lead-type, density-level)
 
@@ -1477,13 +1481,16 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number 
     ;----------------------------------------------------
     ; place the pads
     val grid-sz = Dims(Gmin(ipc) + x(pad-sz), pitch)
-    val locs    = to-tuple(grid-locs(num-pins / 2, 2, x(grid-sz), y(grid-sz), false))
+    var pin-position:True|False = (pin-numbering is RowMajorNumbering)
+    val locs    = to-tuple(grid-locs(num-pins / 2, 2, x(grid-sz), y(grid-sz), pin-position))
     for (i in 0 to false, l in locs) do:
       val r = i % (num-pins / 2)
       val c = i / (num-pins / 2)
-      val idx = (i + 1) when c == 0 else num-pins - r
+      val idx = 
+        if pin-position or c == 0 : (i + 1)
+        else : num-pins - r
       pad p[idx] : smd-pad(Rectangle(pad-sz)) at l
-    
+
     ;----------------------------------------------------
     ; compute the courtyard
     val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
@@ -1515,6 +1522,52 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number 
     ; place the thermal pad
     make-thermal-pad(exposed-metal-heat-feature?, num-pins)
 
+; Create an SOIC landpattern default pin numbering - SOIC
+public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number of pins of the component
+                                         pitch:Double,                 ; pitch of the pins of the component
+                                         lead-span:Toleranced,  ; the overall length of the component, from terminal-edge to terminal-edge
+                                         package-length:Toleranced,    ; the length of the package 
+                                         package-width:Toleranced,     ; the width of the package
+                                         lead-type:LandProtrusionType, ; the lead/land protrusion type of the part
+                                         terminal-length:Toleranced,   ; the length of the terminals
+                                         terminal-width:Toleranced,    ; the width of the terminals
+                                         density-level:DensityLevel,   ; the density level of the design
+                                         exposed-metal-heat-feature?:False|Shape):    ; an optional shape of a thermal pad
+  make-n-pin-soic-landpattern(num-pins,
+                              pitch
+                              lead-span,
+                              package-length,
+                              package-width,
+                              lead-type,
+                              terminal-length,
+                              terminal-width,
+                              density-level, 
+                              exposed-metal-heat-feature?,
+                              SoicNumbering)
+; Create an SOIC landpattern with default density level and optional pin numbering
+public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number of pins of the component
+                                         pitch:Double,                 ; pitch of the pins of the component
+                                         lead-span:Toleranced,  ; the overall length of the component, from terminal-edge to terminal-edge
+                                         package-length:Toleranced,    ; the length of the package 
+                                         package-width:Toleranced,     ; the width of the package
+                                        ;  lead-type:LandProtrusionType, ; the lead/land protrusion type of the part
+                                         terminal-length:Toleranced,   ; the length of the terminals
+                                         terminal-width:Toleranced,    ; the width of the terminals
+                                        ;  density-level:DensityLevel,   ; the density level of the design
+                                        ;  exposed-metal-heat-feature?:False|Shape,    ; an optional shape of a thermal pad
+                                         pin-numbering:PinNumbering):
+  val lead-type = BigGullWingLeads when pitch > 0.0625 else SmallGullWingLeads
+  make-n-pin-soic-landpattern(num-pins,
+                              pitch
+                              lead-span,
+                              package-length,
+                              package-width,
+                              lead-type,
+                              terminal-length,
+                              terminal-width,
+                              DENSITY-LEVEL, 
+                              false,
+                              pin-numbering)
 ; Create an SOIC landpattern with default density level and optional thermal pad
 public defn make-n-pin-soic-landpattern (num-pins:Int, ; the number of pins of the component
                                          pitch:Double, ; the pitch of the pins
