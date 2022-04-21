@@ -1,14 +1,20 @@
-#use-added-syntax(jitx)
+; Add a flag. Currently the American flag is modeled.
 ; usa (layer:LayerSpecifier|LayerIndex,showflag:True|False, side:Side|False)
 ; showflag = true will show a small flag in the schematic, false will show a box in the schematic
 ; side = sets courtyard side to Top, Bottom, or false for no courtyard
 ; Useage:
-; inst flag1: ocdb/flag/usa() ; creates a top silkscreen flag, flag in schematic, top courtyard
-; inst flag2: ocdb/flag/usa(Silkscreen("artwork", Bottom),false,false) ; creates a bottom silkscreen flag, box in schematic, no courtyard
-; inst flag3: ocdb/flag/usa(LayerIndex(0),false); creates a top copper flag, box in schematic, top courtyard
-; inst flag4: ocdb/flag/usa(SolderMask(Top),true, Top) ; creates a top SolderMask flag, flag in schematic, top courtyard
+; creates a top silkscreen flag, flag in schematic, top courtyard
+;   inst flag1: ocdb/flag/usa() 
+; creates a bottom silkscreen flag, box in schematic, no courtyard
+;   inst flag2: ocdb/flag/usa(Silkscreen("artwork", Bottom),false,false) 
+; creates a top copper flag, box in schematic, top courtyard
+;   inst flag3: ocdb/flag/usa(LayerIndex(0),false)
+; creates a top SolderMask flag, flag in schematic, top courtyard
+;   inst flag4: ocdb/flag/usa(SolderMask(Top),true, Top) 
 ; Recommendation:
 ; Create everything on the top layers and then use `place(<instname>) at loc() on Bottom` for bottom layer placement
+; place(<name>) at loc(0.0, 0.0, 0.0) on Bottom
+#use-added-syntax(jitx)
 defpackage ocdb/flag :
   import core
   import collections
@@ -19,6 +25,24 @@ defpackage ocdb/flag :
   import ocdb/land-patterns
   import ocdb/generic-components
   import ocdb/symbols
+
+; Defaults
+public defn usa () :
+  usa(Silkscreen("artwork", Top),true, Top)
+public defn usa (layer:LayerSpecifier|LayerIndex) :
+  usa(layer,true, Top)
+public defn usa (layer:LayerSpecifier|LayerIndex,showflag:True|False) :
+  usa(layer,showflag, Top)
+
+public pcb-component usa (layer:LayerSpecifier|LayerIndex,showflag:True|False, side:Side|False) :
+  name = "US flag"
+  description = "US flag"
+  manufacturer = "non-BOM"
+  mpn = "non-BOM"
+  assign-landpattern(US-flag-lp(layer, side) )
+  val sym = flag-symbol(showflag)
+  symbol = sym()
+  reference-prefix = "FLAG"
 
 pcb-landpattern US-flag-lp (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
   if side is Side :
@@ -34,24 +58,6 @@ pcb-symbol flag-symbol (showflag:True|False) :
     layer("foreground") = Rectangle(5.08, 5.08, loc(0.0, 0.0))
   layer("foreground") = Text(">VALUE", 0.762, SW, loc(-2.54, 2.84))
   layer("foreground") = Text(">REF", 0.762, SW, loc(-2.54, 3.902))
-
-public pcb-component usa (layer:LayerSpecifier|LayerIndex,showflag:True|False, side:Side|False) :
-  name = "US flag"
-  description = "US flag"
-  manufacturer = "non-BOM"
-  mpn = "non-BOM"
-  assign-landpattern(US-flag-lp(layer, side) )
-  val sym = flag-symbol(showflag)
-  symbol = sym()
-  reference-prefix = "FLAG"
-
-; Defaults
-public defn usa () :
-  usa(Silkscreen("artwork", Top),true, Top)
-public defn usa (layer:LayerSpecifier|LayerIndex) :
-  usa(layer,true, Top)
-public defn usa (layer:LayerSpecifier|LayerIndex,showflag:True|False) :
-  usa(layer,showflag, Top)
   
 ; ================== US Flag Artwork ==================
 defn US-flag-artwork (line-width:Double) :

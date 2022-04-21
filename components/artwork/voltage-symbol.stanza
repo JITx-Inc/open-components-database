@@ -1,3 +1,17 @@
+; Symbols: small, medium, large
+; Options to pass: (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
+;                   Layer                  Show Symbol or box on schematic,   Courtyard
+; How to use:
+; size small, Top copper, box on schematic, no courtyard
+  ; inst volt1 : ocdb/voltage-symbol/small(LayerIndex(0),false,false)
+; size small, Top copper, symbol on schematic, courtyard on Top
+  ; inst volt2 : ocdb/voltage-symbol/small(LayerIndex(0),true)
+; size medium, Top soldermask layer, symbol on schematic, courtyard on Top
+  ; inst volt3 : ocdb/voltage-symbol/medium(SolderMask(Top),true, Top)
+; size large, Top silkscreen layer, symbol on schematic, top courtyard
+  ; inst volt4 : ocdb/voltage-symbol/large()
+; use place function to control position, orientation, and top/bottom layer
+; place(<name>) at loc(0.0, 0.0, 0.0) on Bottom
 #use-added-syntax(jitx)
 defpackage ocdb/voltage-symbol :
   import core
@@ -10,27 +24,6 @@ defpackage ocdb/voltage-symbol :
   import ocdb/generic-components
   import ocdb/symbols
 
-pcb-landpattern voltage-small-lp (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
-  if side is Side :
-    layer(Courtyard(side as Side)) = Rectangle(5.0747,4.497, loc(2.99,2.63))
-  match(lyr) :
-    (lyr:LayerSpecifier) : layer(lyr) = voltage-small-artwork(get-min-width(lyr))
-    (lyr:LayerIndex) : copper(lyr) = voltage-small-artwork(get-min-width(lyr))
-
-pcb-landpattern voltage-medium-lp (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
-  if side is Side :
-    layer(Courtyard(side as Side)) = Rectangle(16.92, 14.99, loc(8.61, 7.67))
-  match(lyr) :
-    (lyr:LayerSpecifier) : layer(lyr) = voltage-medium-artwork(get-min-width(lyr))
-    (lyr:LayerIndex) : copper(lyr) = voltage-medium-artwork(get-min-width(lyr))
-
-pcb-landpattern voltage-large-lp (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
-  if side is Side :
-    layer(Courtyard(side as Side)) = Rectangle(169.16, 149.9, loc(-0.2,14.1565))
-  match(lyr) :
-    (lyr:LayerSpecifier) : layer(lyr) = voltage-large-artwork(get-min-width(lyr))
-    (lyr:LayerIndex) : copper(lyr) = voltage-large-artwork(get-min-width(lyr))
-
 pcb-symbol voltage-symbol (show-symbol:True|False) :
   if show-symbol :
     layer("foreground") = voltage-small-artwork(0.1)
@@ -39,42 +32,16 @@ pcb-symbol voltage-symbol (show-symbol:True|False) :
   layer("foreground") = Text(">VALUE", 0.762, SW, loc(-2.54, 2.84))
   layer("foreground") = Text(">REF", 0.762, SW, loc(-2.54, 3.902))
 
-public pcb-component large (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
-  name = "Voltage Symbol"
-  description = "Voltage Symbol"
-  manufacturer = "non-BOM"
-  mpn = "non-BOM"
-  assign-landpattern(voltage-large-lp(layer, side))
-  val sym = voltage-symbol(show-symbol)
-  symbol = sym()
-  reference-prefix = "VOLT"
-
+  ; ===========================================================================
+  ; ===================== Small ===============================================
+  ; ===========================================================================
 ; Defaults
-public defn large () :
-  large(Silkscreen("artwork", Top),true, Top)
-public defn large (layer:LayerSpecifier|LayerIndex) :
-  large(layer,true, Top)
-public defn large (layer:LayerSpecifier|LayerIndex,show-symbol:True|False) :
-  large(layer,show-symbol, Top)
-
-public pcb-component medium (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
-  name = "Voltage Symbol"
-  description = "Voltage Symbol"
-  manufacturer = "non-BOM"
-  mpn = "non-BOM"
-  assign-landpattern(voltage-medium-lp(layer, side))
-  val sym = voltage-symbol(show-symbol)
-  symbol = sym()
-  reference-prefix = "VOLT"
-
-; Defaults
-public defn medium () :
-  medium(Silkscreen("artwork", Top),true, Top)
-public defn medium (layer:LayerSpecifier|LayerIndex) :
-  medium(layer,true, Top)
-public defn medium (layer:LayerSpecifier|LayerIndex,show-symbol:True|False) :
-  medium(layer,show-symbol, Top)
-
+public defn small () :
+  small(Silkscreen("artwork", Top),true, Top)
+public defn small (layer:LayerSpecifier|LayerIndex) :
+  small(layer,true, Top)
+public defn small (layer:LayerSpecifier|LayerIndex,show-symbol:True|False) :
+  small(layer,show-symbol, Top)
 
 public pcb-component small (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
   name = "Voltage Symbol"
@@ -86,15 +53,69 @@ public pcb-component small (layer:LayerSpecifier|LayerIndex,show-symbol:True|Fal
   symbol = sym()
   reference-prefix = "VOLT"
 
+pcb-landpattern voltage-small-lp (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
+  if side is Side :
+    layer(Courtyard(side as Side)) = Rectangle(5.0747,4.497, loc(2.99,2.63))
+  match(lyr) :
+    (lyr:LayerSpecifier) : layer(lyr) = voltage-small-artwork(get-min-width(lyr))
+    (lyr:LayerIndex) : copper(lyr) = voltage-small-artwork(get-min-width(lyr))
+  ; ===========================================================================
+  ; ===================== Medium ==============================================
+  ; ===========================================================================
 ; Defaults
-public defn small () :
-  small(Silkscreen("artwork", Top),true, Top)
-public defn small (layer:LayerSpecifier|LayerIndex) :
-  small(layer,true, Top)
-public defn small (layer:LayerSpecifier|LayerIndex,show-symbol:True|False) :
-  small(layer,show-symbol, Top)
+public defn medium () :
+  medium(Silkscreen("artwork", Top),true, Top)
+public defn medium (layer:LayerSpecifier|LayerIndex) :
+  medium(layer,true, Top)
+public defn medium (layer:LayerSpecifier|LayerIndex,show-symbol:True|False) :
+  medium(layer,show-symbol, Top)
 
+public pcb-component medium (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
+  name = "Voltage Symbol"
+  description = "Voltage Symbol"
+  manufacturer = "non-BOM"
+  mpn = "non-BOM"
+  assign-landpattern(voltage-medium-lp(layer, side))
+  val sym = voltage-symbol(show-symbol)
+  symbol = sym()
+  reference-prefix = "VOLT"
 
+pcb-landpattern voltage-medium-lp (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
+  if side is Side :
+    layer(Courtyard(side as Side)) = Rectangle(16.92, 14.99, loc(8.61, 7.67))
+  match(lyr) :
+    (lyr:LayerSpecifier) : layer(lyr) = voltage-medium-artwork(get-min-width(lyr))
+    (lyr:LayerIndex) : copper(lyr) = voltage-medium-artwork(get-min-width(lyr))
+
+  ; ===========================================================================
+  ; ===================== Large ===============================================
+  ; ===========================================================================
+; Defaults
+public defn large () :
+  large(Silkscreen("artwork", Top),true, Top)
+public defn large (layer:LayerSpecifier|LayerIndex) :
+  large(layer,true, Top)
+public defn large (layer:LayerSpecifier|LayerIndex,show-symbol:True|False) :
+  large(layer,show-symbol, Top)
+
+public pcb-component large (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
+  name = "Voltage Symbol"
+  description = "Voltage Symbol"
+  manufacturer = "non-BOM"
+  mpn = "non-BOM"
+  assign-landpattern(voltage-large-lp(layer, side))
+  val sym = voltage-symbol(show-symbol)
+  symbol = sym()
+  reference-prefix = "VOLT"
+
+pcb-landpattern voltage-large-lp (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
+  if side is Side :
+    layer(Courtyard(side as Side)) = Rectangle(169.16, 149.9, loc(-0.2,14.1565))
+  match(lyr) :
+    (lyr:LayerSpecifier) : layer(lyr) = voltage-large-artwork(get-min-width(lyr))
+    (lyr:LayerIndex) : copper(lyr) = voltage-large-artwork(get-min-width(lyr))
+
+; ========================  Artwork ========================
 defn voltage-small-artwork (line-width:Double) :
   val artwork = Union([Polygon([    
       Point(2.54, 3.81), 
