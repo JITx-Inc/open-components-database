@@ -14,19 +14,31 @@ defpackage ocdb/designs/tutorial :
 
 val board-shape = RoundedRectangle(35.0, 30.0, 0.5)
 
+; this is a simple usage of the LM317A LDO where the component is instantiated with a simple
+; resistor divider feedback 
 pcb-module simple-lm317a-regulator (v-out:Double) :
+  port pwr-in : power 
+  port pwr-out : power
 
   inst ldo : ocdb/unisonic/LM317A/component
-  inst feedback : ocdb/passive-circuits/voltage-divider(v-out, 1.25, 1.0, 5.0e-3)
 
-  net (feedback.in ldo.output)
-  net (feedback.out ldo.adj)
-  net gnd (feedback.lo)
+  ; from passive-circuits.stanza, the voltage-divider() function has the following arguments:
+  ; (input-voltage:Double, output-voltage:Double, tolerance:Double, current:Double)
+  inst output-voltage-divider : ocdb/passive-circuits/voltage-divider(v-out, 1.25, 1.0, 5.0e-3)
+
+  ; connect input, output and ground nets
+  net (pwr-in.vdd ldo.input)
+  net (pwr-out.vdd output-voltage-divider.in ldo.output) ; input to voltage divider is the output of the LDO
+  net (output-voltage-divider.out ldo.adj) ; output of voltage divider feeds back to LDO adj pin
+  net gnd (pwr-in.gnd pwr-out.gnd output-voltage-divider.lo)
   symbol(gnd) = ocdb/symbols/ground-sym
 
+  ; add bypass capacitors to input and output
   cap-strap(ldo.input, gnd, 0.1e-6)
   cap-strap(ldo.output, gnd, 1.0e-6)
 
+; more sophisticated use of resistor divider solver taking into account variability
+; using the same LM317A LDO component
 pcb-module lm317a-regulator (v-out:Toleranced) :
   pin vin 
   pin vout 
@@ -35,33 +47,41 @@ pcb-module lm317a-regulator (v-out:Toleranced) :
 
   inst ldo : ocdb/unisonic/LM317A/component
 
+  ; connect input and output nets
   net (ldo.input vin)
   net (ldo.output vout)
   net (ldo.adj adj)
 
+  ; add bypass capacitors to input and output
   cap-strap(vin, gnd, 0.1e-6)
   cap-strap(vout, gnd, 1.0e-6)
 
   val inherent-variance = tol+%(property(ldo.reference-voltage))
+  println("Inherent variance of the LDO reference voltage is %_%%" % [inherent-variance])
   if inherent-variance > tol+%(v-out):
-    fatal("Target regulator accuracy infeasible with LM317A")
+    fatal("Target regulator accuracy infeasible with LM317A %_ > %_" % [inherent-variance tol+%(v-out)])
   val target-variance = tol+%(v-out) - inherent-variance
   val divider-current = 5.0e-3
-  val est-adj-offset = (typ(v-out) - typ(property(ldo.reference-voltage))) / divider-current * property(ldo.adj-current)
-  inst feedback : ocdb/passive-circuits/voltage-divider(tol%(center-value(v-out) - est-adj-offset, 0.0),
-                                                        tol%(typ(property(ldo.reference-voltage)), target-variance)
+  val est-v-adj-offset = (typ-value(v-out) - typ-value(property(ldo.reference-voltage))) / divider-current * property(ldo.adj-current)
+  ; from passive-circuits.stanza, the voltage-divider() function has the following arguments:
+  ; (input-voltage:Toleranced, output-voltage:Toleranced, current:Double)
+  inst output-voltage-divider : ocdb/passive-circuits/voltage-divider(tol%(center-value(v-out) - est-v-adj-offset, 0.0),
+                                                        tol%(typ-value(property(ldo.reference-voltage)),target-variance),
                                                         divider-current)
 
-  net (feedback.in vout)
-  net (feedback.out ldo.adj)
-  net (feedback.lo gnd)
+  ; connect input, output and ground nets
+  net (output-voltage-divider.in vout)
+  net (output-voltage-divider.out ldo.adj)
+  net (output-voltage-divider.lo gnd)
 
-  val true-adj-offset = property(ldo.adj-current) * (property(feedback.r-lo.resistance) as Double)
+  ; calculate the actual offset now that we know the optimized value of the resistors
+  val true-adj-offset = property(ldo.adj-current) * (property(output-voltage-divider.r-lo.resistance) as Double)
 
-  val out = min-typ-max(min-value(property(ldo.reference-voltage)) * typ(v-out) / max-value(property(feedback.output-voltage)) + true-adj-offset,
-                        typ(property(ldo.reference-voltage))       * typ(v-out) / typ(property(feedback.output-voltage))       + true-adj-offset,
-                        max-value(property(ldo.reference-voltage)) * typ(v-out) / min-value(property(feedback.output-voltage)) + true-adj-offset)
-  
+  ; calculate the possible min and max values for the output voltage
+  val out = min-typ-max(min-value(property(ldo.reference-voltage)) * typ-value(v-out) / max-value(property(output-voltage-divider.output-voltage)) + true-adj-offset,
+                        typ-value(property(ldo.reference-voltage)) * typ-value(v-out) / typ-value(property(output-voltage-divider.output-voltage)) + true-adj-offset,
+                        max-value(property(ldo.reference-voltage)) * typ-value(v-out) / min-value(property(output-voltage-divider.output-voltage)) + true-adj-offset)
+  ; make sure that the voltage specification is met
   check within?(v-out, out)
 
 pcb-module regulator-fixture :
@@ -70,7 +90,7 @@ pcb-module regulator-fixture :
   val target-load = closest-std-val(target-voltage / target-current, 5.0)
   inst load : chip-resistor(["resistance" => target-load "min-rated-power" => target-voltage * target-current * 2.0 ])
   
-  inst reg : lm317a-regulator(tol%(target-voltage, 5.0))
+  inst reg : lm317a-regulator(tol%(target-voltage, 10.0))
   inst source : banana-plug-power
 
   net gnd (reg.gnd source.power.gnd)
@@ -92,4 +112,5 @@ defn run-design (circuit:Instantiable) :
   view-board()
   view-schematic()
 
-run-design(simple-lm317a-regulator(10.0))
+; run-design(simple-lm317a-regulator(10.0))
+run-design(regulator-fixture)
