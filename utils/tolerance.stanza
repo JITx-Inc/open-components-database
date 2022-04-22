@@ -18,7 +18,7 @@ defmethod print (o:OutputStream, t:Toleranced):
 public defn min-typ-max (min:Double, typ:Double|False, max:Double) -> Toleranced:
   val typ-r = match(typ) :
     (t:Double) : t
-    (f) : min + 0.5 * (max - min)
+    (f) : min + 0.500 * (max - min)
   val tol- = typ-r - min
   val tol+ = max - typ-r
   tol(typ-r, tol+, tol-)
@@ -36,8 +36,8 @@ public defn tol% (typ:Double, tol+:Double, tol-:Double) -> Toleranced:
   val check1 = min-typ-max(0.0, false, 1.0)
   fatal("tol+ must be in range 0.0 <= tol+ <= 100.0") when not in-range?(check100, tol+)
   fatal("tol- must be in range 0.0 <= tol- <= 100.0") when not in-range?(check100, tol-)
-  println("tol%%(%_, %_, %_) second argument (tol+) might be mis-specified (%_ < 1.0), expecting 0.0 <= tol+ <= 100.0" % [typ, tol+, tol-, tol+]) when in-range?(check1, tol+)
-  println("tol%%(%_, %_, %_) third argument (tol-) might be mis-specified (%_ < 1.0), expecting 0.0 <= tol- <= 100.0" % [typ, tol+, tol-, tol-]) when in-range?(check1, tol-)
+  println("tol%%(%_, %_, %_) 2nd argument (tol+ = %_%%) might be mis-specified, expecting 0.0 <= tol+%% <= 100.0" % [typ, tol+, tol-, tol+]) when in-range?(check1, tol+)
+  println("tol%%(%_, %_, %_) 3rd argument (tol- = %_%%) might be mis-specified, expecting 0.0 <= tol-%% <= 100.0" % [typ, tol+, tol-, tol-]) when in-range?(check1, tol-)
   val plus  = typ * tol+ / 100.0
   val minus = typ * tol- / 100.0
   Toleranced(typ, plus, minus)
@@ -48,7 +48,7 @@ public defn tol% (typ:Double, tol:Double) -> Toleranced:
   val check100 = min-typ-max(0.0, false, 100.0)
   val check1 = min-typ-max(0.0, false, 1.0)
   fatal("tol must be in range 0.0 <= tol <= 100.0") when not in-range?(check100, tol)
-  println("tol%%(%_, %_) percentage (2nd) argument might be mis-specified (%_ < 1.0), expecting 0.0 <= tol <= 100.0" % [typ, tol, tol]) when in-range?(check1, tol)
+  println("tol%%(%_, %_) 2nd argument (tol = %_%%) might be mis-specified, expecting 0.0 <= tol%% <= 100.0" % [typ, tol, tol]) when in-range?(check1, tol)
   val delta  = typ * tol / 100.0
   Toleranced(typ, delta, delta)
 
@@ -62,13 +62,13 @@ public defn tol (typ:Double, tol+-:Double) -> Toleranced:
 
 ; Returns the upper tolerance, as a percentage
 public defn tol+% (t:Toleranced) -> Double:
-  fatal("typ(Toleranced) must be nonzero to compute tol+%.") when typ(t) == 0.0
-  tol+(t) / typ(t)
+  fatal("typ(Toleranced) must be nonzero to compute tol+%.") when typ(t) <= 0.0
+  100.0 * tol+(t) / typ(t)
 
 ; Returns the lower tolerance, as a percentage
 public defn tol-% (t:Toleranced) -> Double:
-  fatal("typ(Toleranced) must be nonzero to compute tol-%.") when typ(t) == 0.0
-  tol-(t) / typ(t)
+  fatal("typ(Toleranced) must be nonzero to compute tol-%.") when typ(t) <= 0.0
+  100.0 * tol-(t) / typ(t)
 
 ; Returns the typ value
 public defn typ-value (t:Toleranced) -> Double:
