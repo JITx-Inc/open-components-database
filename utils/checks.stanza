@@ -47,8 +47,8 @@ public pcb-check rated-temperature (component:JITXObject):
   #CHECK(has-property?(component.rated-temperature))
   val temp = operating-temperature(property(component.rated-temperature))
   ; println("Rating %_" % [temp])
-  #CHECK(contains?(temp, OPERATING-TEMPERATURE[0]))
-  #CHECK(contains?(temp, OPERATING-TEMPERATURE[1]))
+  #CHECK(in-range?(temp, OPERATING-TEMPERATURE[0]))
+  #CHECK(in-range?(temp, OPERATING-TEMPERATURE[1]))
 
 public pcb-check io (module:JITXObject) :
   val pins = to-tuple(seq-cat(pins, component-instances(module)))
@@ -114,25 +114,25 @@ public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
   if has-property?(in-p.digital-input) :
     val [vih vil] = [vih(property(in-p.digital-input)) vil(property(in-p.digital-input))]
     #CHECK(connected?([gnd-pin(o) gnd-pin(property(in-p.digital-input))]))
-    #CHECK(min(voh(driver(o))) > vih)
-    #CHECK(max(vol(driver(o))) < vil)
+    #CHECK(min-value(voh(driver(o))) > vih)
+    #CHECK(max-value(vol(driver(o))) < vil)
     if has-property?(in-p.generic-pin):
-      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(driver(o))))
+      #CHECK(in-range?(max-voltage(property(in-p.generic-pin)), voh(driver(o))))
   else if has-property?(in-p.digital-io):
     #CHECK(connected?([gnd-pin(o) gnd-pin(property(in-p.digital-io))]))
     val i = driver(property(in-p.digital-io))
     #CHECK((i is CMOSOutput) or (i is TTLOutput))
     val [vih-v vil-v] = [vih(property(in-p.digital-io)) vil(property(in-p.digital-io))]
-    #CHECK(min(voh(driver(o))) > vih-v)
-    #CHECK(max(vol(driver(o))) < vil-v)
+    #CHECK(min-value(voh(driver(o))) > vih-v)
+    #CHECK(max-value(vol(driver(o))) < vil-v)
     if has-property?(out-p.digital-io):
-      #CHECK(min(voh(i)) > vih(o))
-      #CHECK(min(voh(i)) > vih(o))
-      #CHECK(max(vol(i)) < vil(o))
+      #CHECK(min-value(voh(i)) > vih(o))
+      #CHECK(min-value(voh(i)) > vih(o))
+      #CHECK(max-value(vol(i)) < vil(o))
     if has-property?(in-p.generic-pin):
-      #CHECK(contains?(max-voltage(property(in-p.generic-pin)), voh(driver(o))))
+      #CHECK(in-range?(max-voltage(property(in-p.generic-pin)), voh(driver(o))))
     if has-property?(out-p.generic-pin):
-      #CHECK(contains?(max-voltage(property(out-p.generic-pin)), voh(i)))
+      #CHECK(in-range?(max-voltage(property(out-p.generic-pin)), voh(i)))
   else if has-property?(in-p.digital-output) and o is DigitalOutput:
     
     #CHECK(tristateable(o))
@@ -158,7 +158,7 @@ public pcb-check power-pin (p:JITXObject) :
   ; println("%_ has power" % [ref(p)])
   #CHECK(has-property?(p.rail-voltage))
   ; println("%_ has %_" % [ref(p) property(p.rail-voltage)])
-  #CHECK(contains?(recommended-voltage(p-props), property(p.rail-voltage)))
+  #CHECK(in-range?(recommended-voltage(p-props), property(p.rail-voltage)))
 
 public pcb-check reset-pin (p:JITXObject) :
   #CHECK(has-property?(p.reset-pin))
@@ -193,7 +193,7 @@ public pcb-check voltage-levels (p:JITXObject, range:[Double,Double,Double]) :
 public pcb-check resistor-component (r:JITXObject) :
   #CHECK(has-property?(r.resistor))
   #CHECK(has-property?(r.operating-point))
-  val [vpk i temp] = [[min(peak-voltage(property(r.operating-point))) max(peak-voltage(property(r.operating-point)))] max(peak-current(property(r.operating-point))) OPERATING-TEMPERATURE[1]]
+  val [vpk i temp] = [[min-value(peak-voltage(property(r.operating-point))) max-value(peak-voltage(property(r.operating-point)))] max-value(peak-current(property(r.operating-point))) OPERATING-TEMPERATURE[1]]
 
   val power = property(r.resistance) * pow(i, 2.0)
   if has-property?(r.derating) :
@@ -211,8 +211,8 @@ public pcb-check capacitor-component (c:JITXObject) :
   #CHECK(has-property?(c.capacitor))
   #CHECK(has-property?(c.operating-point))
 
-  val [vpk temp] = [[min(peak-voltage(property(c.operating-point))) max(peak-voltage(property(c.operating-point)))] OPERATING-TEMPERATURE[1]]
-  val max-temp = max(operating-temperature(property(c.rated-temperature)))
+  val [vpk temp] = [[min-value(peak-voltage(property(c.operating-point))) max-value(peak-voltage(property(c.operating-point)))] OPERATING-TEMPERATURE[1]]
+  val max-temp = max-value(operating-temperature(property(c.rated-temperature)))
   switch(property(c.type)) :
 
     "ceramic" :
@@ -261,7 +261,7 @@ public pcb-check capacitor-component (c:JITXObject) :
 
     else : println("Unhandled type for capacitor check on %_" % [c])
 
-  #CHECK(OPERATING-TEMPERATURE[0] >= min(operating-temperature(property(c.rated-temperature))))
+  #CHECK(OPERATING-TEMPERATURE[0] >= min-value(operating-temperature(property(c.rated-temperature))))
 
 ; Checks the frequency of an oscillator (o) against an interface on an IC (intf)
 public pcb-check oscillator-check-frequency (o:JITXObject, intf:CrystalOscillator) :
