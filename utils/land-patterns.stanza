@@ -217,12 +217,19 @@ public defn soldermask-defined (lp:LandPattern):
 
   SMD-l
 
-public pcb-pad smd-pad (s:Shape):
+public pcb-pad smd-pad (copper-layer:Shape,solder-mask-layer:Shape|False,paste-layer:Shape):
   name  = "SMD Pad"
   type  = SMD
-  shape = s
-  apply-soldermask()
-  layer(Paste(Top)) = s
+  shape = copper-layer
+  layer(Paste(Top)) = paste-layer
+  match(solder-mask-layer):
+    (mask:False) : 
+      apply-soldermask()
+    (mask:Shape) :
+      layer(SolderMask(Top)) = mask
+
+public defn smd-pad (s:Shape):
+  smd-pad(s, false, s)
 
 ; Create an rectangular SMD pad 
 public defn smd-pad (anchor:Anchor, width:Double, height:Double):
