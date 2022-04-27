@@ -270,12 +270,22 @@ public pcb-pad testpoint-pad (testpoint-shape:Shape):
 public defn testpoint-pad (diameter:Double) :
   testpoint-pad(Circle(0.5 * diameter))
 
-public pcb-pad pth-pad (pad-shape:Shape, hole-shape:Shape):
+public pcb-pad pth-pad (pad-shape:Shape, solder-mask-layer:Shape|False, paste-layer:Shape|False, hole-shape:Shape):
   name = "PTH Pad"
   shape = pad-shape
   type = TH
-  apply-soldermask()
+  if paste-layer is Shape: ; Enables paste-in-pad
+    layer(Paste(Top)) = paste-layer as Shape
+  match(solder-mask-layer):
+    (mask:False) : 
+      apply-soldermask()
+    (mask:Shape) :
+      layer(SolderMask(Top)) = mask
+      layer(SolderMask(Bottom)) = mask
   layer(Cutout()) = hole-shape
+
+public defn pth-pad (pad-shape:Shape, hole-shape:Shape):
+  pth-pad(pad-shape, false, false, hole-shape)
 
 public defn pth-pad (drill-r:Double, pad-r:Double):
   pth-pad(Circle(pad-r), Circle(drill-r))
