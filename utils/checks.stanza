@@ -56,9 +56,6 @@ public pcb-check within? (t:Toleranced, value:Toleranced) :
   val name = "Within Check"
   val description = "Check that a value is within a given range"
   val category = "value-check"
-  ; #CHECK(
-  ;   condition =            in-range?(t, value),
-  ;   name =                 "Within Check")
   #CHECK(
     condition =            in-range?(t, value),
     name =                 "Within Check",
@@ -1178,17 +1175,18 @@ public pcb-check check-min-copper-copper-space (landpattern:LandPattern, side:Si
   val description = "Check min copper spacing"
   val category = "landpattern-check"
 
-  val copper = to-tuple(copper(landpattern, side))
+  val copper = to-seq(copper(landpattern, side))
   if not empty?(copper) :
     val min-copper-copper-space = clearance(current-rules(), MinCopperCopperSpace)
+    val min-space = min-space(copper)
     #CHECK(
-      condition =            min-space(copper) >= min-copper-copper-space,
+      condition =            min-space >= min-copper-copper-space,
       name =                 "Layout checks"
       description =          "Check min copper spacing"
       category =             "landpattern-check"
       subcheck-description = "Check landpattern copper minimum spacing",
-      pass-message =         "Landpattern %_ min spacing %_ does not violate min spacing rules %_" % [/name(landpattern),min-space(copper),min-copper-copper-space],
-      fail-message =         "Landpattern %_ min spacing %_ violates min spacing rules %_" % [/name(landpattern),min-space(copper),min-copper-copper-space],
+      pass-message =         "Landpattern %_ min spacing %_ does not violate min spacing rules %_" % [/name(landpattern),min-space,min-copper-copper-space],
+      fail-message =         "Landpattern %_ min spacing %_ violates min spacing rules %_" % [/name(landpattern),min-space,min-copper-copper-space],
     )
       ; locators =             [landpattern]
 
@@ -1198,17 +1196,18 @@ public pcb-check check-min-copper-width (landpattern:LandPattern, side:Side) :
   val name = "Layout checks"
   val description = "Check min copper width"
   val category = "landpattern-check"
-  val copper = to-tuple(copper(landpattern, side))
+  val copper = to-seq(copper(landpattern, side))
   if not empty?(copper) :
     val min-copper-width = clearance(current-rules(), MinCopperCopperSpace)
+    val min-width = min-width(copper)
     #CHECK(
-      condition =            min-width(copper) >= min-copper-width,
+      condition =            min-width >= min-copper-width,
       name =                 "Layout checks"
       description =          "Check min copper width"
       category =             "landpattern-check"
       subcheck-description = "Check landpattern copper minimum width",
-      pass-message =         "Landpattern %_ min width %_ does not violate min width rules %_" % [/name(landpattern),min-width(copper),min-copper-width],
-      fail-message =         "Landpattern %_ min width %_ violates min width rules %_" % [/name(landpattern),min-width(copper),min-copper-width],
+      pass-message =         "Landpattern %_ min width %_ does not violate min width rules %_" % [/name(landpattern),min-width,min-copper-width],
+      fail-message =         "Landpattern %_ min width %_ violates min width rules %_" % [/name(landpattern),min-width,min-copper-width],
     )
       ; locators =             [landpattern]
 
@@ -1252,16 +1251,17 @@ public pcb-check check-min-solder-mask-sliver (lp:LandPattern, shapes:Seqable<Sh
   val name = "Layout checks"
   val description = "Check min soldermask size"
   val category = "layout-check"
-  val s = to-tuple(shapes)
-  if not empty?(s):
+  val s = to-seq(shapes)
+  if not empty?(s) :
+    val min-space = min-space(s)
     #CHECK(
-      condition =            min-space(s) >= clearance(current-rules(), MinSolderMaskBridge),
+      condition =            min-space >= clearance(current-rules(), MinSolderMaskBridge),
       name =                 "Layout checks"
       description =          "Check min soldermask size"
       category =             "landpattern-check"
       subcheck-description = "Check landpattern minimum soldermask bridge spacing",
-      pass-message =         "Landpattern %_ min soldermask spacing %_ does not violate min rules %_" % [/name(lp),min-space(s),clearance(current-rules(), MinSolderMaskBridge)],
-      fail-message =         "Landpattern %_ min soldermask spacing %_ violates min rules %_" % [/name(lp),min-space(s),clearance(current-rules(), MinSolderMaskBridge)],
+      pass-message =         "Landpattern %_ min soldermask spacing %_ does not violate min rules %_" % [/name(lp),min-space,clearance(current-rules(), MinSolderMaskBridge)],
+      fail-message =         "Landpattern %_ min soldermask spacing %_ violates min rules %_" % [/name(lp),min-space,clearance(current-rules(), MinSolderMaskBridge)],
     )
       ; locators =             [landpattern]
 
