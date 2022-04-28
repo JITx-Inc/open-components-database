@@ -272,7 +272,7 @@ public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
       ; locators =             [in-p]
     )
     #CHECK(
-      condition =            min(voh(driver(o))) > vih,
+      condition =            min-value(voh(driver(o))) > vih,
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "pin-check"
@@ -282,7 +282,7 @@ public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
       ; locators =             [in-p]
     )
     #CHECK(
-      condition =            max(vol(driver(o))) < vil,
+      condition =            max-value(vol(driver(o))) < vil,
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "pin-check"
@@ -326,7 +326,7 @@ public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
     )
     val [vih-v vil-v] = [vih(property(in-p.digital-io)) vil(property(in-p.digital-io))]
     #CHECK(
-      condition =            min(voh(driver(o))) > vih-v,
+      condition =            min-value(voh(driver(o))) > vih-v,
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "pin-check"
@@ -336,7 +336,7 @@ public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
       ; locators =             ref(in-p)
     )
     #CHECK(
-      condition =            max(vol(driver(o))) < vil-v,
+      condition =            max-value(vol(driver(o))) < vil-v,
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "pin-check"
@@ -347,7 +347,7 @@ public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
     )
     if has-property?(out-p.digital-io):
       #CHECK(
-        condition =            min(voh(i)) > vih(o),
+        condition =            min-value(voh(i)) > vih(o),
         name =                 "IO pin checks"
         description =          "Check io pin properties"
         category =             "pin-check"
@@ -357,7 +357,7 @@ public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
         ; locators =             [in-p]
       )
       #CHECK(
-        condition =            max(vol(i)) < vil(o),
+        condition =            max-value(vol(i)) < vil(o),
         name =                 "IO pin checks"
         description =          "Check io pin properties"
         category =             "pin-check"
@@ -676,7 +676,7 @@ public pcb-check resistor-component (r:JITXObject) :
     ; locators =             [r]
   )
 
-  val [vpk i temp] = [[min(peak-voltage(property(r.operating-point))) max(peak-voltage(property(r.operating-point)))] max(peak-current(property(r.operating-point))) OPERATING-TEMPERATURE[1]]
+  val [vpk i temp] = [[min-value(peak-voltage(property(r.operating-point))) max-value(peak-voltage(property(r.operating-point)))] max-value(peak-current(property(r.operating-point))) OPERATING-TEMPERATURE[1]]
 
   val power = property(r.resistance) * pow(i, 2.0)
   if has-property?(r.derating) :
@@ -732,8 +732,8 @@ public pcb-check capacitor-component (c:JITXObject) :
     fail-message =         "Component %_ does not have the correct property for the operating-point" % [ref(c)],
     ; locators =             [c]
   )
-  val [vpk temp] = [[min(peak-voltage(property(c.operating-point))) max(peak-voltage(property(c.operating-point)))] OPERATING-TEMPERATURE[1]]
-  val max-temp = max(operating-temperature(property(c.rated-temperature)))
+  val [vpk temp] = [[min-value(peak-voltage(property(c.operating-point))) max-value(peak-voltage(property(c.operating-point)))] OPERATING-TEMPERATURE[1]]
+  val max-temp = max-value(operating-temperature(property(c.rated-temperature)))
   switch(property(c.type)) :
 
     "ceramic" :
@@ -970,7 +970,7 @@ public pcb-check capacitor-component (c:JITXObject) :
 
 
           #CHECK(
-            condition =            temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp),
+            condition =            temp <= min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp),
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "component-check"
@@ -1007,7 +1007,7 @@ public pcb-check capacitor-component (c:JITXObject) :
       )
 
       #CHECK(
-          condition =            temp <= min(DERATE-CAPACITOR-MICA-TEMP, max-temp),
+          condition =            temp <= min-value(DERATE-CAPACITOR-MICA-TEMP, max-temp),
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "component-check"
@@ -1020,7 +1020,7 @@ public pcb-check capacitor-component (c:JITXObject) :
     else : println("Unhandled type for capacitor check on %_" % [c])
 
   #CHECK(
-    condition =            OPERATING-TEMPERATURE[0] >= min(operating-temperature(property(c.rated-temperature))),
+    condition =            OPERATING-TEMPERATURE[0] >= min-value(operating-temperature(property(c.rated-temperature))),
     name =                 "Capacitor checks"
     description =          "Check capacitor component properties"
     category =             "component-check"

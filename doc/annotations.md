@@ -36,7 +36,7 @@ temperature:Double
 - Temperature of the component (degC)
 theta-ja:Double
 - Thermal resistance from junction to ambient
-rated-temperature:[Double,Double] [min max] (degC) 
+rated-temperature:[Toleranced] (degC) 
 - Manufacturer rated temperature of component
 model-trust:String
 - How much do we trust this model?

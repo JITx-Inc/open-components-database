@@ -14,6 +14,7 @@ defpackage ocdb/espressif/ESP32-PICO-D4 :
   import ocdb/bundles
   import ocdb/box-symbol
   import ocdb/property-structs
+  import ocdb/tolerance
 
 
 public pcb-component component :
@@ -39,7 +40,7 @@ public pcb-component component :
   pin SENSOR-CAPP 
   port nc : pin[4]
 
-  val generic-props = GenericPin(Interval(-0.3, 3.6, false), 1500.0)
+  val generic-props = GenericPin(min-max(-0.3, 3.6), 1500.0)
 
   pin-properties :
     [pin:Ref     | pads:Int ... | side:Dir| generic-pin:GenericPin]
@@ -93,13 +94,13 @@ public pcb-component component :
   make-box-symbol()
   assign-landpattern(pqfn50p700x700x104-49n)
 
-  property(VDDA.power-pin)       = PowerPin(Interval(2.3, 3.6, false))
-  property(VDDA3P3.power-pin)    = PowerPin(Interval(2.3, 3.6, false))
-  property(VDD3P3-CPU.power-pin) = PowerPin(Interval(2.3, 3.6, 3.3))
-  property(VDD3P3-RTC.power-pin) = PowerPin(Interval(2.3, 3.6, 3.3))
+  property(VDDA.power-pin)       = PowerPin(min-max(2.3, 3.6))
+  property(VDDA3P3.power-pin)    = PowerPin(min-max(2.3, 3.6))
+  property(VDD3P3-CPU.power-pin) = PowerPin(min-typ-max(2.3, 3.3, 3.6))
+  property(VDD3P3-RTC.power-pin) = PowerPin(min-typ-max(2.3, 3.3, 3.6))
   eval-when has-property?(VDD3P3-CPU.rail-voltage):
     val vdd = property(VDD3P3-CPU.rail-voltage)
-    val drive-props = DigitalOutput(CMOSOutput(Interval(0.0, 0.1 * vdd, false), Interval(0.8 * vdd, vdd, false)), false, VDD3P3-CPU, GND)
+    val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.1 * vdd), min-max(0.8 * vdd, vdd)), false, VDD3P3-CPU, GND)
     val input-props = DigitalInput(0.25 * vdd, 0.75 * vdd, VDD3P3-CPU, GND, 50.0e-9)
     property(U0TXD.digital-output) = drive-props
     property(U0RXD.digital-input) = input-props
@@ -150,25 +151,25 @@ public pcb-module module :
     supports gpio:
       require io:io-pin from mcu
       gpio.gpio => io.p
-      property(io.p.digital-io) = DigitalIO(CMOSOutput(Interval(0.0, 0.1 * 3.3, false), Interval(0.8 * 3.3, 3.3, false)), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
+      property(io.p.digital-io) = DigitalIO(CMOSOutput(min-max(0.0, 0.1 * 3.3), min-max(0.8 * 3.3, 3.3)), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
   for i in 0 to 16 do:
     supports timer:
       require io:io-pin from mcu
       timer.timer => io.p
-      property(io.p.digital-io) = DigitalIO(CMOSOutput(Interval(0.0, 0.1 * 3.3, false), Interval(0.8 * 3.3, 3.3, false)), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
+      property(io.p.digital-io) = DigitalIO(CMOSOutput(min-max(0.0, 0.1 * 3.3), min-max(0.8 * 3.3, 3.3)), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
   for i in 0 to 2 do:
     supports i2c:
       require io:io-pin[2] from mcu
       i2c.sda => io[0].p
       i2c.scl => io[1].p
-      property(io[0].p.digital-io) = DigitalIO(OpenCollector(Interval(0.0, 0.1 * 3.3, false), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
-      property(io[1].p.digital-io) = DigitalIO(OpenCollector(Interval(0.0, 0.1 * 3.3, false), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
+      property(io[0].p.digital-io) = DigitalIO(OpenCollector(min-max(0.0, 0.1 * 3.3), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
+      property(io[1].p.digital-io) = DigitalIO(OpenCollector(min-max(0.0, 0.1 * 3.3), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)
   for i in 0 to 2 do:
     val ocdb-uart = /uart()
     supports ocdb-uart:
       require io:io-pin[2] from mcu
       ocdb-uart.tx => io[0].p
-      property(io[0].p.digital-output) = DigitalOutput(CMOSOutput(Interval(0.0, 0.1 * 3.3, false), Interval(0.8 * 3.3, 3.3, false)), false, mcu.VDD3P3-CPU, mcu.GND)
+      property(io[0].p.digital-output) = DigitalOutput(CMOSOutput(min-max(0.0, 0.1 * 3.3), min-max(0.8 * 3.3, 3.3)), false, mcu.VDD3P3-CPU, mcu.GND)
       ocdb-uart.rx => io[1].p
       property(io[1].p.digital-input) = DigitalInput(0.25 * 3.3, 0.75 * 3.3, mcu.VDD3P3-CPU, mcu.GND, 50.0e-9)  
 
