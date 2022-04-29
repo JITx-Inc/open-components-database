@@ -93,7 +93,7 @@ public pcb-check rated-temperature (component:JITXObject):
   val temp = operating-temperature(property(component.rated-temperature))
   ; println("Rating %_" % [temp])
   #CHECK(
-    condition =            contains?(temp, OPERATING-TEMPERATURE[0]),
+    condition =            in-range?(temp, OPERATING-TEMPERATURE[0]),
     name =                 "Rated temperature check"
     description =          "Check rated temperatures for components versus design constraints"
     category =             "rated-temperature"
@@ -103,7 +103,7 @@ public pcb-check rated-temperature (component:JITXObject):
     locators =             [component]
   )
   #CHECK(
-    condition =            contains?(temp, OPERATING-TEMPERATURE[1]),
+    condition =            in-range?(temp, OPERATING-TEMPERATURE[1]),
     name =                 "Rated temperature check"
     description =          "Check rated temperatures for components versus design constraints"
     category =             "rated-temperature"
@@ -330,8 +330,8 @@ public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
       description =          "Check io pin properties"
       category =             "pin-check"
       subcheck-description = "Verify min voh of output driver is higher than the vih of the input pin",
-      pass-message =         "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-p), min(voh(driver(o))), ref(in-p), vih-v],
-      fail-message =         "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-p), min(voh(driver(o))), ref(in-p), vih-v],
+      pass-message =         "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-p), min-value(voh(driver(o))), ref(in-p), vih-v],
+      fail-message =         "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-p), min-value(voh(driver(o))), ref(in-p), vih-v],
       locators =             [in-p]
     )
     #CHECK(
@@ -361,8 +361,8 @@ public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
         description =          "Check io pin properties"
         category =             "pin-check"
         subcheck-description = "Verify max vol of io driver is compatible with the vil of the io pin",
-        pass-message =         "IO pin %_ max vol %_ is compatible with the io pin %_ vil %_" % [ref(in-p), max(vol(i)), ref(out-p), vil(o)],
-        fail-message =         "IO pin %_ max vol %_ is not compatible with the io pin %_ vil %_" % [ref(in-p), max(vol(i)), ref(out-p), vil(o)],
+        pass-message =         "IO pin %_ max vol %_ is compatible with the io pin %_ vil %_" % [ref(in-p), max-value(vol(i)), ref(out-p), vil(o)],
+        fail-message =         "IO pin %_ max vol %_ is not compatible with the io pin %_ vil %_" % [ref(in-p), max-value(vol(i)), ref(out-p), vil(o)],
         locators =             [in-p]
       )
     if has-property?(in-p.generic-pin):
@@ -468,7 +468,7 @@ public pcb-check generic-pin (p:JITXObject):
       locators =             [p]
     )
     #CHECK(
-      condition =            contains?(max-voltage(p-props), property(p.rail-voltage)),
+      condition =            in-range?(max-voltage(p-props), property(p.rail-voltage)),
       name =                 "Generic pin checks"
       description =          "Check generic pin properties"
       category =             "pin-check"
@@ -518,7 +518,7 @@ public pcb-check power-pin (p:JITXObject) :
   )
   ; println("%_ has %_" % [ref(p) property(p.rail-voltage)])
   #CHECK(
-    condition =            contains?(recommended-voltage(p-props), property(p.rail-voltage)),
+    condition =            in-range?(recommended-voltage(p-props), property(p.rail-voltage)),
     name =                 "Power pin checks"
     description =          "Check power pin properties"
     category =             "pin-check"
@@ -727,9 +727,8 @@ public pcb-check capacitor-component (c:JITXObject) :
   val name = "Capacitor checks"
   val description = "Check capacitor component properties"
   val category = "component-check"
-  println("HERE")
   #CHECK(
-    condition =            (println("COND") has-property?(c.capacitor)),
+    condition =            has-property?(c.capacitor),
     name =                 "Capacitor checks"
     description =          "Check capacitor component properties"
     category =             "component-check"
@@ -1041,8 +1040,8 @@ public pcb-check capacitor-component (c:JITXObject) :
     description =          "Check capacitor component properties"
     category =             "component-check"
     subcheck-description = "Check capacitor operating temperature versus design constraints",
-    pass-message =         "Capacitor %_ has an acceptable operating temperature %_C versus design target %_C" % [ref(c), min(operating-temperature(property(c.rated-temperature))), OPERATING-TEMPERATURE[0]],
-    fail-message =         "Capacitor %_ does not have an acceptable operating temperature %_C versus design target %_C" % [ref(c), min(operating-temperature(property(c.rated-temperature))), OPERATING-TEMPERATURE[0]],
+    pass-message =         "Capacitor %_ has an acceptable operating temperature %_C versus design target %_C" % [ref(c), min-value(operating-temperature(property(c.rated-temperature))), OPERATING-TEMPERATURE[0]],
+    fail-message =         "Capacitor %_ does not have an acceptable operating temperature %_C versus design target %_C" % [ref(c), min-value(operating-temperature(property(c.rated-temperature))), OPERATING-TEMPERATURE[0]],
     locators =             [c]
   )
 
@@ -1256,8 +1255,8 @@ public pcb-check check-leaded-pitch (lp:LandPattern) :
     description =          "Check leaded pad pitch"
     category =             "landpattern-check"
     subcheck-description = "Check landpattern leaded minimum pitch",
-    pass-message =         "Landpattern %_ min leaded pitch %_ does not violate min leaded pitch rules %_" % [/name(lp),min-pitch(lp),min-pitch-leaded],
-    fail-message =         "Landpattern %_ min leaded pitch %_ violates min leaded pitch rules %_" % [/name(lp),min-pitch(lp),min-pitch-leaded],
+    pass-message =         "Landpattern %_ min leaded pitch %_ does not violate min leaded pitch rules %_" % [/name(lp),min-pitch,min-pitch-leaded],
+    fail-message =         "Landpattern %_ min leaded pitch %_ violates min leaded pitch rules %_" % [/name(lp),min-pitch,min-pitch-leaded],
     locators =             [lp]
   )
 
