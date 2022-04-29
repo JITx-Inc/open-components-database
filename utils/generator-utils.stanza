@@ -14,7 +14,7 @@ defpackage ocdb/generator-utils:
   import ocdb/property-structs
   import ocdb/power-regulators
   import ocdb/bundles
-
+  import ocdb/tolerance
 
 ; =======================================
 ; Ciruit convenience functions
@@ -121,7 +121,7 @@ public defn propagate-rail-voltage ():
             if p1 != p2 and connected?([p1, p2]) :
               if has-property?(p2.rail-voltage) :
                 ; Override with higher voltage
-                if supply-voltage(property(p1.power-supply-pin)) > property(p2.rail-voltage):
+                if supply-voltage(property(p1.power-supply-pin)) as Double > property(p2.rail-voltage) as Double:
                   property(p2.rail-voltage) = supply-voltage(property(p1.power-supply-pin))
               else:
                 property(p2.rail-voltage) = supply-voltage(property(p1.power-supply-pin))
@@ -142,9 +142,9 @@ public defn calculate-operating-points ():
               if connected?([get-other-pin(i,p), property(self.gnd)]):
                 val voltage = property(p.rail-voltage)
                 if has-property?(i.resistance) :
-                  property(i.operating-point) = OperatingPoint(Interval(0.0, voltage, false), Interval(0.0, voltage / property(i.resistance), false))
+                  property(i.operating-point) = OperatingPoint(min-max(0.0, voltage), min-max(0.0, voltage / property(i.resistance)))
                 else if has-property?(i.capacitance) :
-                  property(i.operating-point) = OperatingPoint(Interval(0.0, voltage, false), Interval(0.0, 0.0, false))
+                  property(i.operating-point) = OperatingPoint(min-max(0.0, voltage), min-max(0.0, 0.0))
 
 ; =======================================
 ; Attach the power generator to designs and loads.

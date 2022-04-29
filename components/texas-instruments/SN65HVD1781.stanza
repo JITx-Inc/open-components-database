@@ -17,6 +17,7 @@ defpackage ocdb/texas-instruments/SN65HVD1781 :
   import ocdb/property-structs
   import ocdb/checks
   import ocdb/generator-utils
+  import ocdb/tolerance
 
 pcb-landpattern sn65hvd1786d-lp :
   val pad-shape = smd-pad(1.55, 0.6)
@@ -34,9 +35,9 @@ pcb-landpattern sn65hvd1786d-lp :
   ref-label()
 
 public pcb-component component :
-  val generic-props = GenericPin(Interval(-0.3, 7.0, false), 4000.0)
-  val ab-props = GenericPin(Interval(-70.0, 70.0, false), 16000.0)
-  val power-props = PowerPin(Interval(3.15, 5.5, false))
+  val generic-props = GenericPin(min-max(-0.3, 7.0), 4000.0)
+  val ab-props = GenericPin(min-max(-70.0, 70.0), 16000.0)
+  val power-props = PowerPin(min-max(3.15, 5.5))
   pin-properties :
     [pin:Ref | pads:Int ... | side:Dir| generic-pin:GenericPin | power-pin:PowerPin ]
     [R   | 1 | Left     | generic-props | - ]
@@ -55,7 +56,7 @@ public pcb-component component :
 
   eval-when has-property?(self.VDD.rail-voltage) :
     val vdd  = property(self.VDD.rail-voltage)
-    val drive-props = DigitalOutput(CMOSOutput(Interval(0.0, 0.8, false), Interval(2.4, vdd - 0.3, false)), false, self.VDD, self.GND)
+    val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.8), min-max(2.4, vdd - 0.3)), false, self.VDD, self.GND)
     val input-props = DigitalInput(0.8, 2.0, self.VDD, self.GND, 50.0e-6)
     for o in [self.R] do :
       property(o.digital-output) = drive-props

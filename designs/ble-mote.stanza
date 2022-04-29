@@ -15,6 +15,7 @@ defpackage ocdb/designs/ble-mote :
   import ocdb/property-structs
   import ocdb/checks
   import ocdb/rules
+  import ocdb/tolerance
 
 
 OPERATING-TEMPERATURE = [-20.0 50.0]
@@ -40,8 +41,8 @@ pcb-module pms7003 :
   net (set, header.p[9])
   res-strap(vin-mcu.vdd, set, 10.0e3)
   res-strap(vin-mcu.vdd, reset, 10.0e3)
-  property(header.p[1].power-pin) = PowerPin(Interval(4.5, 5.5, 5.0))
-  property(header.p[10].digital-output) = DigitalOutput(CMOSOutput(Interval(0.3, 0.5, false), Interval(2.6, 3.3, false)), false, header.p[1], header.p[3])
+  property(header.p[1].power-pin) = PowerPin(min-typ-max(4.5, 5.0, 5.5))
+  property(header.p[10].digital-output) = DigitalOutput(CMOSOutput(min-max(0.3, 0.5), min-max(2.6, 3.3)), false, header.p[1], header.p[3])
   property(header.p[8].digital-input) = DigitalInput(0.8, 2.6, header.p[1], header.p[3], 1.0e-6)
   property(header.p[6].digital-input) = DigitalInput(0.8, 2.6, header.p[1], header.p[3], 1.0e-6)
   property(header.p[9].digital-input) = DigitalInput(0.8, 2.6, header.p[1], header.p[3], 1.0e-6)
@@ -125,6 +126,16 @@ pcb-module sensor-mote :
   geom(gnd):
     copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = board-shape
     copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = board-shape
+
+; Add artwork
+  inst pcb-name: ocdb/board-text/text("PCB, BLE MOTE", 1.5, clearance(current-rules(), MinSilkscreenWidth) )
+  inst ver-rev : ocdb/board-text/text("v0 rev0", 1.0, 0.0)
+  inst logo : ocdb/jitx-logo/small(Silkscreen("artwork", Top),true)
+  inst assy-label : ocdb/mechanical/gen-label()
+  place(pcb-name) at loc(0.0,-0.5) on Bottom
+  place(ver-rev) at loc(10.0,3.0) on Bottom
+  place(logo) at loc(0.0,4.0, 0.0) on Bottom
+  place(assy-label) at loc(5.0,-5.25, 0.0) on Bottom
 
   ; Apply groups to sub-circuits for schematic and layout
   schematic-group([proc, ant, debug-tps rgb, i2c-pullups]) = esp32
