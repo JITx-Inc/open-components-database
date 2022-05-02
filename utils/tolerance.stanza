@@ -16,9 +16,11 @@ defmethod print (o:OutputStream, t:Toleranced):
 
 ; Create a tolerance with minimum, typical, and maximum
 public defn min-typ-max (min:Double, typ:Double|False, max:Double) -> Toleranced:
+  fatal("min-typ-max() should have max > min.") when max < min
   val typ-r = match(typ) :
     (t:Double) : t
     (f) : min + 0.500 * (max - min)
+  fatal("min-typ-max() should be min <= typ <= max") when (typ-r < min) or (max < typ-r)
   val tol- = typ-r - min
   val tol+ = max - typ-r
   tol(typ-r, tol+, tol-)
@@ -60,14 +62,23 @@ public defn tol (typ:Double, tol+:Double, tol-:Double) -> Toleranced:
 public defn tol (typ:Double, tol+-:Double) -> Toleranced:
   tol(typ, tol+-, tol+-)
 
+
+; Create a tolerance with zero upper and lower tolerances
+public defn tol (typ:Double) -> Toleranced:
+  tol(typ, 0.0, 0.0)
+
+; Create a tolerance with zero upper and lower tolerances
+public defn typ (typ:Double) -> Toleranced:
+  tol(typ, 0.0, 0.0)
+
 ; Returns the upper tolerance, as a percentage
 public defn tol+% (t:Toleranced) -> Double:
-  fatal("typ(Toleranced) must be nonzero to compute tol+%.") when typ(t) <= 0.0
+  fatal("typ(Toleranced) must be nonzero to compute tol+%.") when typ-value(t) == 0.0
   100.0 * tol+(t) / typ(t)
 
 ; Returns the lower tolerance, as a percentage
 public defn tol-% (t:Toleranced) -> Double:
-  fatal("typ(Toleranced) must be nonzero to compute tol-%.") when typ(t) <= 0.0
+  fatal("typ(Toleranced) must be nonzero to compute tol-%.") when typ-value(t) == 0.0
   100.0 * tol-(t) / typ(t)
 
 ; Returns the typ value
