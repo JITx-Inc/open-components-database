@@ -11,6 +11,7 @@ defpackage ocdb/checks:
   import ocdb/property-structs
   import ocdb/design-vars
   import ocdb/tolerance
+  import lang-utils
 
 ; #CHECK(
 ;   condition = p-props is GenericPin,                    ; A boolean check                     (True|False)                       
@@ -27,26 +28,45 @@ defpackage ocdb/checks:
 ; ==== Check convenience functions ===
 ; ====================================
 
+
+doc:"Set of standard checks to run on a top-level-module. \
+                                                          \
+     - Component instances marked DNP are skipped         \
+     - Resistors, Capacitors are checked                  \
+     - Components with temperature rating are checked     \
+       against design variables, see ocdb/design-vars     \
+     - Pins are checked                                   \
+       - GenericPin properties are checked                \
+       - PowerPin properties are checked                  \
+       - ResetPin properties are checked                  \
+     - Landpattern checks are run, see check-landpattern  \
+     - Digital I/O pin checks are run, see check-io       "
 public defn check-design (module:JITXObject):
   inside pcb-module:
-    for i in component-instances(module) do :
-      if not (has-property?(i.DNP) or has-property?(i.do-not-populate) or has-property?(i.dnp)) :
-        check rated-temperature(i)
-        if has-property?(i.capacitance) :
-          check capacitor-component(i)
-        if has-property?(i.resistance) :
-          check resistor-component(i)
+    for i in populated-components(module) do :
+      check rated-temperature(i)
+      check capacitor-component(i) when has-property?(i.capacitance)
+      check resistor-component(i)  when has-property?(i.resistance)
+      
+      for p in pins(i) do : 
+        check generic-pin(i) when has-property?(p.generic-pin)
+        check power-pin(i)   when has-property?(p.power-pin)
+        check reset-pin(i)   when has-property?(p.reset-pin)
 
-        for p in pins(i) do :
-          if has-property?(p.generic-pin) :
-            check generic-pin(p)
-          if has-property?(p.power-pin) :
-            check power-pin(p)
-          if has-property?(p.reset-pin) :
-            check reset-pin(p)
-
-    check io(module)
+    check-io(module)
     check-all-landpatterns(module)
+
+; Checks if an object is DNP (do-not-populate)
+defn dnp? (obj:JITXObject) : 
+  has-property?(obj.DNP) or 
+  has-property?(obj.do-not-populate) or 
+  has-property?(obj.dnp)
+
+; Returns component instances not marked dnp?
+defn populated-components (module:JITXObject) -> Tuple<JITXObject> : 
+  component-instances(module) 
+    $> filter{{not dnp?(_)}, _}
+    $> to-tuple
 
 defn get-other-pin (comp:JITXObject,  p:JITXObject) :
   for ps in pins(comp) find! :
@@ -113,8 +133,207 @@ public pcb-check rated-temperature (component:JITXObject):
     locators =             [component]  
   )
 
-public pcb-check io (module:JITXObject) :
+; Returns all the pins that are electrically-meaningful, ie are not 
+; from components marked do-not-place
+defn all-pins (module:JITXObject) -> Tuple<JITXObject> : 
+  populated-components(module) 
+    $> seq-cat{pins, _}
+    $> to-tuple
+  
+; Checks if a pin is marked "no-connect"
+defn no-connect? (p:JITXObject) -> True|False : 
+  has-property?(p.no-connect) or
+  has-property?(p.nc) or 
+  has-property?(p.NC)
 
+; Returns if a pin is a digital-io pin
+defn is-digital-io-pin? (p:JITXObject) -> True|False : 
+  has-property?(p.digital-io) or 
+  has-property?(p.digital-output)
+
+; Returns if a pin is a digital-input pin
+defn is-digital-input? (p:JITXObject) -> True|False : 
+  has-property?(p.digital-io) or 
+  has-property?(p.digital-input)
+
+; A PCB check that walks a module and verifies if all pins
+; marked no-connect are indeed not connected
+;
+pcb-check no-connect-pins-not-connected (module:JITXObject) : 
+  val all-pins = all-pins(module)
+  val nc-pins = filter(no-connect?, all-pins)
+  for p in nc-pins do : 
+    val connected? = any?(connected?{[_, p]}, all-pins)
+    #CHECK(
+      condition =            not connected?
+      name =                 "IO pin checks"
+      description =          "Check io pin properties"
+      category =             "pin-check"
+      subcheck-description = "Check that no-connect pads are not connected",
+      pass-message =         "Pin %_ is marked no-connect and is correctly not connected" % [ref(p)],
+      fail-message =         "Pin %_ is marked no-connect and is incorrectly connected to other pins" % [ref(p)],
+      locators =             [p])
+
+; A check used to verify the electrical properties of 
+; digital i/o pins.
+pcb-check digital-io-levels (module:JITXObject) : 
+  val all-pins = all-pins(module)
+  val io-pins  = filter(is-digital-io-pin?, all-pins)
+  for p in io-pins do : 
+    val all-connected-pins = all-pins 
+      $> filter{{connected?([p, _0]) and _0 != p}, _}
+      $> to-tuple   
+    val connected-io-pins = all-connected-pins
+      $> filter{is-digital-io-pin?, _}
+      $> to-tuple
+    
+    #CHECK(condition =            not empty?(connected-io-pins),
+           name =                 "IO pin checks"
+           description =          "Check io pin properties"
+           category =             "pin-check"
+           subcheck-description = "Check that no-connect pads are not connected",
+           pass-message =         "Pin %_ is marked no-connect and is correctly not connected" % [ref(p)],
+           fail-message =         "Pin %_ is marked no-connect and is incorrectly connected to other pins" % [ref(p)],
+           locators =             [p])
+
+    for out-p in connected-io-pins do :
+      val driver = 
+        if has-property?(out-p.digital-io) : 
+          driver(property(out-p.digital-io))
+        else : 
+          driver(property(out-p.digital-output))
+      match(driver) : 
+        (o:CMOSOutput|TTLOutput) : 
+          cmos-and-ttl-checks(out-p, connected-io-pins)
+        (o:OpenCollector) : 
+          open-collector-checks(out-p, o, all-connected-pins)
+ 
+; Checks any IO pins marked CMOSOutput or TLLOutput
+defn cmos-and-ttl-checks (out-p:JITXObject,
+                          connected-io-pins) : 
+  for in-p in filter({_ != out-p}, connected-io-pins) do :
+    ; run the checks
+    check-single-push-pull-levels(out-p, in-p)
+
+; Checks that run on a pin marked OpenCollector
+; - io-pin: the pin we are checking
+; - driver: the driver (value of driver(property(io-pin.digital-io)))
+; - all-connected-pins: the pins this pin is connected to
+;
+defn open-collector-checks (io-pin:JITXObject, 
+                            driver:OpenCollector,
+                            all-connected-pins:Tuple<JITXObject>) : 
+  ; First, we search for the pull-up-resistors that might be connected to this pin
+  val pull-up-resistors = to-tuple $
+    for p in all-connected-pins seq? : 
+      val instance = containing-instance(p) as Instance
+      val connected-to-rail? = 
+        for p in pins(instance) any? : 
+          has-property?(p.rail-voltage)
+      if has-property?(instance.resistance) and connected-to-rail? : 
+        One(instance) 
+      else : 
+        None()
+
+  ; Check that there exists at least one pull-up-resistor
+  #CHECK(
+    condition =            not empty?(pull-up-resistors),
+    name =                 "IO pin checks"
+    description =          "Check io pin properties"
+    category =             "pin-check"
+    subcheck-description = "Check that io pins marked OpenCollector have pullup resistors",
+    pass-message =         "Pin %_ is marked OpenCollector and has pull-up resistor(s)" % [ref(io-pin)],
+    fail-message =         "Pin %_ is marked OpenCollector and is missing pull-up resistor(s)" % [ref(io-pin)],
+    locators =             [io-pin])
+
+  ; Next, we check that all the pull-up resistors are connected to the same rail
+  val same-rail-voltage? = all-equal? $ 
+    for resistor in pull-up-resistors seq :
+      for p in pins(resistor) first! : 
+        property?(p.rail-voltage)
+    
+  #CHECK(
+    condition =            same-rail-voltage?,
+    name =                 "IO pin checks"
+    description =          "Check io pin properties"
+    category =             "pin-check"
+    subcheck-description = "Check that io pins marked OpenCollector have pullup resistors connected to the same rail voltage",
+    pass-message =         "Pin %_ is marked OpenCollector and has pull-up resistor(s) with correct rail voltage" % [ref(io-pin)],
+    fail-message =         "Pin %_ is marked OpenCollector and pull-up resistors have different rail voltages" % [ref(io-pin)],
+    locators =             [io-pin])
+
+  ; Here we find the value of the rail voltage
+  val rail-voltage = let : 
+    val r = pull-up-resistors[0]
+    for p in pins(r) first! :   
+      property?(p.rail-voltage)
+
+  ; And the total resistance of parallel connected
+  ; pull-up resistors
+  val total-resistance = 1.0 / sum $
+    for resistor in pull-up-resistors seq : 
+      1.0 / (property(resistor.resistance) as Double) ; todo: handle 0-ohm resistors
+  
+  ; Next, compute the sink current (V / R) and check if it is in spec for the
+  ; driver.
+  val sink-current = rail-voltage / total-resistance
+  #CHECK(condition =            sink-current < iol(driver),
+         name =                 "IO pin checks"
+         description =          "Check io pin properties"
+         category =             "pin-check"
+         subcheck-description = "Check open collector pin sink current requirement versus resistance specification",
+         pass-message =         "Open collector pin %_ current sink specification %_A satisfies the design requirement %_A" %   [ref(io-pin), iol(driver), sink-current],
+         fail-message =         "Open collector pin %_ current specification %_A does not satisfy the design requirement %_A" % [ref(io-pin), iol(driver), sink-current],
+         locators =             [io-pin])
+
+  ; Now we need to check on any io-pins connected to this output pin
+  val connected-io-pins = filter(is-digital-input?, all-connected-pins)
+  for p in connected-io-pins do : 
+    ; First check for any io props, either digital-input or digital-io
+    val io-props = 
+      if has-property?(p.digital-input) : 
+        property(p.digital-input) 
+      else if has-property?(p.digital-io) : 
+        property(p.digital-io) 
+      else : 
+        false
+    ; Check that the max voltage rating of the input pin is below that of the rail voltage
+    match(io-props:DigitalInput|DigitalIO) : 
+      val vih-v = vih(io-props)
+      #CHECK(condition =            rail-voltage > vih-v,
+             name =                 "IO pin checks"
+             description =          "Check io pin properties"
+             category =             "pin-check"
+             subcheck-description = "Check power supply rail is higher than the vih pin specification",
+             pass-message =         "Input pin %_ vih specification %_V is correctly lower than the power supply rail %_V"    % [ref(p), vih-v, rail-voltage],
+             fail-message =         "Input pin %_ vih specification %_V is incorrectly higher than the power supply rail %_V" % [ref(p), vih-v, rail-voltage],
+             locators =             [p])      
+
+    ; If teh pin has generic pin props, check that rail voltage is in range.
+    val generic-pin = property?(p.generic-pin)
+    match(generic-pin:One<GenericPin>) :
+      val max-voltage = max-voltage(value(generic-pin))
+      #CHECK(
+        condition =            in-range?(max-voltage, rail-voltage),
+        name =                 "IO pin checks"
+        description =          "Check io pin properties"
+        category =             "pin-check"
+        subcheck-description = "Check pin maximum voltage is within the design specification",
+        pass-message =         "Generic pin %_ maximum voltage %_V is correctly within the power supply specification %_V"    % [ref(p), max-voltage, rail-voltage],
+        fail-message =         "Generic pin %_ maximum voltage %_V is incorrectly outside the power supply specification %_V" % [ref(p), max-voltage, rail-voltage],
+        locators =             [p]
+      )
+
+; Run the general purpose io checks
+public defn check-io (module:JITXObject) : 
+  inside pcb-module : 
+    ; No-connects are not-connected
+    check no-connect-pins-not-connected(module)
+    ; The io-levels match
+    check digital-io-levels(module)
+
+doc: "DEPRECATED. Old IO Check. Retained for backwards compatibility"
+public pcb-check io (module:JITXObject) :
   val name = "IO pin checks"
   val description = "Check io pin properties"
   val category = "pin-check"
@@ -152,8 +371,9 @@ public pcb-check io (module:JITXObject) :
           fail-message =         "Output or I/O pin %_ does not have the correct digital-output or digital-io property attached" % [ref(out-p)],
           locators =             [out-p]
         )
+
         val o = 
-          if has-property?(out-p.digital-output) : driver(property(out-p.digital-output))
+          if has-property?(out-p.digital-output)  : driver(property(out-p.digital-output))
           else if has-property?(out-p.digital-io) : driver(property(out-p.digital-io))
           else : false
 
@@ -191,7 +411,7 @@ public pcb-check io (module:JITXObject) :
                 for p in net-pins do :
                   if has-property?(p.digital-input) or has-property?(p.digital-io) :
                     val vih-v = 
-                      if has-property?(p.digital-input) : vih(property(p.digital-input))
+                      if has-property?(p.digital-input)   : vih(property(p.digital-input))
                       else if has-property?(p.digital-io) : vih(property(p.digital-io))
                     #CHECK(
                       condition =            rail-voltage > vih-v,
@@ -225,9 +445,6 @@ public pcb-check io (module:JITXObject) :
               fail-message =         "Open-collector pin %_ is not correctly connected to a pull-up resistor and a power supply rail" % [ref(p)],
               locators =             [p]
             )
-
-
-
 
 ; Checks two push-pull digital logic pins, at least one of which can output
 public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
@@ -664,7 +881,7 @@ public pcb-check voltage-levels (p:JITXObject, range:[Double,Double,Double]) :
 
 ; ====== Component-level checks ======
 ; ====================================
-public pcb-check pull-up-check (p:JITXObject) :
+; public pcb-check pull-up-check (p:JITXObject) :
 
 
 ; Checks resistors against operating point and environment
