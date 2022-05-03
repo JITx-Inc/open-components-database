@@ -1553,3 +1553,58 @@ public defn check-all-landpatterns (module:JITXObject) :
 public defn check-all-landpatterns () : 
   inside pcb-module: 
     check-all-landpatterns(self)
+
+
+doc: "This check will make sure that components connected to each other \
+      over digital-io have matching power states, that is to say if a   \
+      component has the same named power state as something it is       \
+      connected to, this checks that they are both powered on or off.   \
+                                                                        \
+      - module: the module to check."
+public pcb-check power-states (module:JITXObject) : 
+  ; Tiny helper to check if two components are conneced over digital i/o
+  defn components-connected? (l:JITXObject, r:JITXObject) -> True|False : 
+    val pl = filter(is-digital-io?, pins(l))
+    val pr = filter(is-digital-io?, pins(r))
+    for pl in pl any? : 
+      for pr in pr any? : 
+        connected?([pl, pr])
+  
+  ; First collect all the components of interest : 
+  ; - components not marked DNP
+  ; - components with power-states properties
+  val all-components = to-tuple $ 
+    for component in component-instances(module) filter : 
+      has-property?(component.power-states) ; todo: and not dnp?(component)
+
+  ; For each of these components, check the power states
+  for component in all-components do : 
+    ; lookup our power-states
+    val power-states = property(component.power-states)
+
+    ; lookup our connected components
+    val connected-components = to-tuple $ 
+      for comp in all-components filter : 
+        components-connected?(component, comp)
+
+    ; check each pair of connected components, for each power state
+    for connected in connected-components do :
+      for state in power-states do : 
+        val connected-states = property(connected.power-states)
+
+        ; we only care about shared power states, based on the 
+        ; name of the state.
+        val found-state      = find({name(_) == name(state)}, connected-states)
+        match(found-state:PowerState) : 
+          #CHECK(condition   = powered?(found-state) == powered?(state)
+                 name        = "Power States"
+                 description = "Checks that all components have matching power states."
+                 category    = "power"
+                 subcheck-description = to-string $ 
+                 "Checking '%_' power state for component pair (%_, %_)" % [
+                   name(state), ref(component), ref(connected)]
+                 pass-message = "Connected components %_ and %_ have matching power states: %_" % [
+                   ref(component), ref(connected), name(state)]
+                 fail-message = "Connected components %_ and %_ do not have matching power states: %_" % [
+                   ref(component), ref(connected), name(state)]
+                 locators = [component, connected])
