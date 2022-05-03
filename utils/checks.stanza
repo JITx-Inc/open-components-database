@@ -147,7 +147,7 @@ defn no-connect? (p:JITXObject) -> True|False :
   has-property?(p.NC)
 
 ; Returns if a pin is a digital-io pin
-defn is-digital-io-pin? (p:JITXObject) -> True|False : 
+defn is-digital-output? (p:JITXObject) -> True|False : 
   has-property?(p.digital-io) or 
   has-property?(p.digital-output)
 
@@ -155,6 +155,11 @@ defn is-digital-io-pin? (p:JITXObject) -> True|False :
 defn is-digital-input? (p:JITXObject) -> True|False : 
   has-property?(p.digital-io) or 
   has-property?(p.digital-input)
+
+; Returns if a pin is a digital i/o pin 
+defn is-digital-io? (p:JITXObject) -> True|False : 
+  is-digital-input?(p) or
+  is-digital-output?(p)
 
 ; A PCB check that walks a module and verifies if all pins
 ; marked no-connect are indeed not connected
@@ -178,35 +183,44 @@ pcb-check no-connect-pins-not-connected (module:JITXObject) :
 ; digital i/o pins.
 pcb-check digital-io-levels (module:JITXObject) : 
   val all-pins = all-pins(module)
-  val io-pins  = filter(is-digital-io-pin?, all-pins)
+  val io-pins = filter(is-digital-io?, all-pins)
   for p in io-pins do : 
     val all-connected-pins = all-pins 
       $> filter{{connected?([p, _0]) and _0 != p}, _}
       $> to-tuple   
     val connected-io-pins = all-connected-pins
-      $> filter{is-digital-io-pin?, _}
+      $> filter{is-digital-input?, _}
       $> to-tuple
-    
-    #CHECK(condition =            not empty?(connected-io-pins),
-           name =                 "IO pin checks"
-           description =          "Check io pin properties"
-           category =             "pin-check"
-           subcheck-description = "Check that no-connect pads are not connected",
-           pass-message =         "Pin %_ is marked no-connect and is correctly not connected" % [ref(p)],
-           fail-message =         "Pin %_ is marked no-connect and is incorrectly connected to other pins" % [ref(p)],
-           locators =             [p])
+    val connected-out-pins = all-connected-pins 
+      $> filter{has-property?{_.digital-output}, _}
+      $> to-tuple
+
+    if has-property?(p.digital-output) :
+      #CHECK(condition =            empty?(connected-out-pins)
+            name =                 "IO pin checks"
+            description =          "Check io pin properties"
+            category =             "pin-check"
+            subcheck-description = "Check output pins are correctly connected",
+            pass-message =         "Pin %_ is marked as an output and not connected to any output pins" % [ref(p)],
+            fail-message =         "Pin %_ is marked as an output and connected to the following output pins: %," % [ref(p), seq(ref, connected-out-pins)],
+            locators =             [p])
 
     for out-p in connected-io-pins do :
       val driver = 
         if has-property?(out-p.digital-io) : 
           driver(property(out-p.digital-io))
-        else : 
+        else if has-property?(out-p.digital-output) :
           driver(property(out-p.digital-output))
+        else : 
+          false
+      
       match(driver) : 
         (o:CMOSOutput|TTLOutput) : 
           cmos-and-ttl-checks(out-p, connected-io-pins)
         (o:OpenCollector) : 
           open-collector-checks(out-p, o, all-connected-pins)
+        (f:False) : 
+          false ; do nothing
  
 ; Checks any IO pins marked CMOSOutput or TLLOutput
 defn cmos-and-ttl-checks (out-p:JITXObject,
@@ -229,7 +243,7 @@ defn open-collector-checks (io-pin:JITXObject,
       val instance = containing-instance(p) as Instance
       val connected-to-rail? = 
         for p in pins(instance) any? : 
-          has-property?(p.rail-voltage)
+          has-property?(p.power-pin) and has-property?(p.rail-voltage)
       if has-property?(instance.resistance) and connected-to-rail? : 
         One(instance) 
       else : 
