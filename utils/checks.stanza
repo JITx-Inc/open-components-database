@@ -49,9 +49,9 @@ public defn check-design (module:JITXObject):
       check resistor-component(i)  when has-property?(i.resistance)
       
       for p in pins(i) do : 
-        check generic-pin(i) when has-property?(p.generic-pin)
-        check power-pin(i)   when has-property?(p.power-pin)
-        check reset-pin(i)   when has-property?(p.reset-pin)
+        check generic-pin-check(i) when has-property?(p.generic-pin)
+        check power-pin-check(i)   when has-property?(p.power-pin)
+        check reset-pin-check(i)   when has-property?(p.reset-pin)
 
     check-io(module)
     check-all-landpatterns(module)
@@ -189,7 +189,7 @@ pcb-check digital-io-levels (module:JITXObject) :
       $> filter{{connected?([p, _0]) and _0 != p}, _}
       $> to-tuple   
     val connected-io-pins = all-connected-pins
-      $> filter{is-digital-input?, _}
+      $> filter{is-digital-io?, _}
       $> to-tuple
     val connected-out-pins = all-connected-pins 
       $> filter{has-property?{_.digital-output}, _}
@@ -255,8 +255,8 @@ defn open-collector-checks (io-pin:JITXObject,
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "pin-check"
-    subcheck-description = "Check that io pins marked OpenCollector have pullup resistors",
-    pass-message =         "Pin %_ is marked OpenCollector and has pull-up resistor(s)" % [ref(io-pin)],
+    subcheck-description = "Check that io pins marked OpenCollector have at least one pull-up resistor",
+    pass-message =         "Pin %_ is marked OpenCollector and has at least one pull-up resistor(s)" % [ref(io-pin)],
     fail-message =         "Pin %_ is marked OpenCollector and is missing pull-up resistor(s)" % [ref(io-pin)],
     locators =             [io-pin])
 
@@ -271,7 +271,7 @@ defn open-collector-checks (io-pin:JITXObject,
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "pin-check"
-    subcheck-description = "Check that io pins marked OpenCollector have pullup resistors connected to the same rail voltage",
+    subcheck-description = "Check that io pins marked OpenCollector have pull-up resistors connected to the same rail voltage",
     pass-message =         "Pin %_ is marked OpenCollector and has pull-up resistor(s) with correct rail voltage" % [ref(io-pin)],
     fail-message =         "Pin %_ is marked OpenCollector and pull-up resistors have different rail voltages" % [ref(io-pin)],
     locators =             [io-pin])
@@ -681,7 +681,7 @@ public pcb-check connected (p:JITXObject|Tuple<JITXObject>) :
   )
 
 ; Checks any generic pin for rated voltage
-public pcb-check generic-pin (p:JITXObject):
+public pcb-check generic-pin-check (p:JITXObject):
   val name = "Generic pin checks"
   val description = "Check generic pin properties"
   val category = "pin-check"
@@ -710,7 +710,7 @@ public pcb-check generic-pin (p:JITXObject):
     )
 
 ; Checks a power pin located on an active component
-public pcb-check power-pin (p:JITXObject) :
+public pcb-check power-pin-check (p:JITXObject) :
   val name = "Power pin checks"
   val description = "Check power pin properties"
   val category = "pin-check"
@@ -759,7 +759,7 @@ public pcb-check power-pin (p:JITXObject) :
     locators =             [p]
   )
 
-public pcb-check reset-pin (p:JITXObject) :
+public pcb-check reset-pin-check (p:JITXObject) :
   val name = "Reset pin checks"
   val description = "Check reset pin properties"
   val category = "pin-check"
@@ -1279,16 +1279,16 @@ public pcb-check capacitor-component (c:JITXObject) :
   )
 
 ; Checks the frequency of an oscillator (o) against an interface on an IC (intf)
-public pcb-check oscillator-check-property (o:JITXObject) :
-  val name = "Crystal oscillator checks"
-  val description = "Check crystal oscillator property"
-  val category = "oscillator-check"
+public pcb-check resonator-property-check (o:JITXObject) :
+  val name = "Crystal resonator checks"
+  val description = "Check crystal resonator property"
+  val category = "resonator-check"
   ; Check existence of property  
   #CHECK(
     condition =            has-property?(o.crystal-resonator),
-    name =                 "Crystal oscillator checks"
-    description =          "Check crystal oscillator property"
-    category =             "oscillator-check"
+    name =                 "Crystal resonator checks"
+    description =          "Check crystal resonator property"
+    category =             "resonator-check"
     subcheck-description = "Check crystal component has the correct crystal-resonator property",
     pass-message =         "Component %_ has the correct property for a crystal-resonator" % [ref(o)],
     fail-message =         "Component %_ does not have the correct property for a crystal-resonator" % [ref(o)],
@@ -1296,16 +1296,16 @@ public pcb-check oscillator-check-property (o:JITXObject) :
   )
 
 ; Checks the frequency of an oscillator (o) against an interface on an IC (intf)
-public pcb-check oscillator-check-frequency (o:JITXObject, intf:CrystalOscillator) :
-  val name = "Crystal oscillator checks"
-  val description = "Check crystal oscillator frequency"
-  val category = "oscillator-check"
+public pcb-check resonator-frequency-check (o:JITXObject, intf:CrystalOscillator) :
+  val name = "Crystal resonator checks"
+  val description = "Check crystal resonator frequency"
+  val category = "resonator-check"
   ; Check critical gain point to ensure oscillation
   #CHECK(
     condition =            frequency(property(o.crystal-resonator)) == frequency(intf),
-    name =                 "Crystal oscillator checks"
-    description =          "Check crystal oscillator frequency"
-    category =             "oscillator-check"
+    name =                 "Crystal resonator checks"
+    description =          "Check crystal resonator frequency"
+    category =             "resonator-check"
     subcheck-description = "Check crystal has the correct frequency meeting design specs",
     pass-message =         "Crystal %_ does have the correct frequency %_ to meet design specs %_" % [ref(o),frequency(property(o.crystal-resonator)),frequency(intf)],
     fail-message =         "Crystal %_ does not have the correct frequency %_ to meet design specs %_" % [ref(o),frequency(property(o.crystal-resonator)),frequency(intf)],
@@ -1313,18 +1313,18 @@ public pcb-check oscillator-check-frequency (o:JITXObject, intf:CrystalOscillato
   )
 
 ; Checks the critical gain of an oscillator (o) against an interface on an IC (intf)
-public pcb-check oscillator-check-gain (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
-  val name = "Crystal oscillator checks"
-  val description = "Check crystal oscillator gain"
-  val category = "oscillator-check"
+public pcb-check resonator-gain-check (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
+  val name = "Crystal resonator checks"
+  val description = "Check crystal resonator gain"
+  val category = "resonator-check"
   ; Check critical gain point to ensure oscillation
   val op = property(o.crystal-resonator)
   val gain = 4.0 * ESR(op) * pow(2.0 * PI * frequency(op), 2.0) * pow(shunt-capacitance(op) + load-capacitance(op), 2.0)
   #CHECK(
     condition =            gain < max-critical-gain(intf),
-    name =                 "Crystal oscillator checks"
-    description =          "Check crystal oscillator gain"
-    category =             "oscillator-check"
+    name =                 "Crystal resonator checks"
+    description =          "Check crystal resonator gain"
+    category =             "resonator-check"
     subcheck-description = "Check crystal circuit gain meets the design criteria for max-critical-gain",
     pass-message =         "Crystal %_ gain %_ meets the design criteria for max-critical-gain" % [ref(o), gain, max-critical-gain(intf)],
     fail-message =         "Crystal %_ gain %_ does not meet the design criteria for max-critical-gain" % [ref(o), gain, max-critical-gain(intf)],
@@ -1332,34 +1332,34 @@ public pcb-check oscillator-check-gain (o:JITXObject, intf:CrystalOscillator, lo
   )
 
 ; Checks the drive level of an oscillator (o) against an interface on an IC (intf)
-public pcb-check oscillator-check-drive (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
-  val name = "Crystal oscillator checks"
-  val description = "Check crystal oscillator drive level"
-  val category = "oscillator-check"
+public pcb-check resonator-drive-check (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
+  val name = "Crystal resonator checks"
+  val description = "Check crystal resonator drive level"
+  val category = "resonator-check"
   ; Check drive level against crystal maximum
   #CHECK(
     condition =            drive-level(intf) <= max-drive-level(property(o.crystal-resonator)),
-    name =                 "Crystal oscillator checks"
-    description =          "Check crystal oscillator drive level"
-    category =             "oscillator-check"
-    subcheck-description = "Check crystal oscillator circuit has the correct drive-level property to match crystal",
+    name =                 "Crystal resonator checks"
+    description =          "Check crystal resonator drive level"
+    category =             "resonator-check"
+    subcheck-description = "Check crystal resonator circuit has the correct drive-level property to match crystal",
     pass-message =         "Crystal circuit %_ has the correct drive-level property %_ that matches the crystal spec %_" % [ref(o),drive-level(intf),max-drive-level(property(o.crystal-resonator))],
     fail-message =         "Crystal circuit %_ does not have the correct drive-level property %_ that matches the crystal spec %_" % [ref(o),drive-level(intf),max-drive-level(property(o.crystal-resonator))],
     locators =             [o]
   )
 
 ; Check pullability of crystal to ensure accuracy
-public pcb-check oscillator-check-pullability (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
-  val name = "Crystal oscillator checks"
-  val description = "Check crystal oscillator pullability"
-  val category = "oscillator-check"
+public pcb-check resonator-pullability-check (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
+  val name = "Crystal resonator checks"
+  val description = "Check crystal resonator pullability"
+  val category = "resonator-check"
   val op = property(o.crystal-resonator)
   val pullability = motional-capacitance(op) / (2.0 * pow(shunt-capacitance(op) + load-capacitance(op), 2.0))
   #CHECK(
     condition =            has-property?(load-cap.tolerance),
-    name =                 "Crystal oscillator checks"
-    description =          "Check crystal oscillator pullability"
-    category =             "oscillator-check"
+    name =                 "Crystal resonator checks"
+    description =          "Check crystal resonator pullability"
+    category =             "resonator-check"
     subcheck-description = "Check crystal tuning capacitor has the correct tolerance property",
     pass-message =         "Capacitor %_ has the correct tolerance property for crystal tuning" % [ref(load-cap)],
     fail-message =         "Capacitor %_ does not have the correct tolerance property for crystal tuning" % [ref(load-cap)],
@@ -1367,9 +1367,9 @@ public pcb-check oscillator-check-pullability (o:JITXObject, intf:CrystalOscilla
   )
   #CHECK(
     condition =            has-property?(load-cap.capacitance),
-    name =                 "Crystal oscillator checks"
-    description =          "Check crystal oscillator pullability"
-    category =             "oscillator-check"
+    name =                 "Crystal resonator checks"
+    description =          "Check crystal resonator pullability"
+    category =             "resonator-check"
     subcheck-description = "Check crystal tuning capacitor has the correct capacitance property",
     pass-message =         "Capacitor %_ has the correct capacitance property for crystal tuning" % [ref(load-cap)],
     fail-message =         "Capacitor %_ does not have the correct capacitance property for crystal tuning" % [ref(load-cap)],
@@ -1380,23 +1380,23 @@ public pcb-check oscillator-check-pullability (o:JITXObject, intf:CrystalOscilla
   val freq-error = (pullability as Double) * (dC as Double) * frequency(op)
   #CHECK(
     condition =            frequency-tolerance(op) + freq-error < frequency-tolerance(intf),
-    name =                 "Crystal oscillator checks"
-    description =          "Check crystal oscillator pullability"
-    category =             "oscillator-check"
+    name =                 "Crystal resonator checks"
+    description =          "Check crystal resonator pullability"
+    category =             "resonator-check"
     subcheck-description = "Check crystal frequency tolerance with pullability meets the design specification",
     pass-message =         "Crystal %_ has the correct frequency tolerance %_ that meets the design spec %_" % [ref(load-cap),frequency-tolerance(op) + freq-error,frequency-tolerance(intf)],
     fail-message =         "Crystal %_ does not have the correct frequency tolerance %_ that meets the design spec %_" % [ref(load-cap),frequency-tolerance(op) + freq-error,frequency-tolerance(intf)],
     locators =             [load-cap]
   )
 
-public defn check-oscillator (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
+public defn check-resonator (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
   inside pcb-module:
-    check oscillator-check-property(o)
+    check resonator-property-check(o)
     if has-property?(o.crystal-resonator) :
-      check oscillator-check-frequency(o, intf)
-      check oscillator-check-gain(o, intf, load-cap)
-      check oscillator-check-drive(o, intf, load-cap)
-      check oscillator-check-pullability(o, intf, load-cap)
+      check resonator-frequency-check(o, intf)
+      check resonator-gain-check(o, intf, load-cap)
+      check resonator-drive-check(o, intf, load-cap)
+      check resonator-pullability-check(o, intf, load-cap)
 
 ; Extract the copper layer on a given side of a landpattern
 ; - note: geoms unsupported
