@@ -134,11 +134,71 @@ doc:"A well-defined state for a device's power, for example hibernation. \
      - name: the name of the state                                       \
      - powered?: true when the pin/component is powered on in the state, \
                  false if it is not."
-public pcb-struct ocdb/property-structs/PowerState : 
+public pcb-struct ocdb/property-structs/PowerState <: Equalable&Hashable : 
   name:String,
   powered?:True|False
+defmethod equal? (l:PowerState, r:PowerState) : 
+  name(l)     == name(r) and 
+  powered?(l) == powered?(r)
+defmethod hash (p:PowerState) : 
+  hash([name(p), powered?(p)])
+defmethod print (o:OutputStream, p:PowerState) : 
+  print(o, "PowerState(name:%_, powered?:%_)" % [name(p), powered?(p)])
 
 doc:"A helper function to setup the power states of a component or pin."
 public defn set-power-states (obj:JITXObject, states:Tuple<KeyValue<String, True|False>>) : 
   val states* = map(PowerState{key(_0), value(_0)}, states)
   set-property(obj, `power-states, states*)
+
+doc: "Helper to force power-states property to propagate through \
+      components in a design. Currently, the property may only   \
+      be shared along components with the power-supply-component \
+      property set `true`."
+public defn propagate-power-states (module:JITXObject) : 
+  ; Collect all the pins in the design
+  val all-pins  = to-tuple(seq-cat(pins, component-instances(module)))
+  ; println("pins: %," % [seq(ref,all-pins)])
+  ; Find the pins with the power-states property 
+  val roots =
+    for pin in all-pins filter :
+      has-property?(pin.power-states)
+
+  ; Helper, returns all the pins connected to `pin`
+  defn connected-pins (pin:JITXObject) -> Seq<JITXObject> : 
+    filter(connected?{[_, pin]}, all-pins)
+  
+  ; DFS walk of the netlist, to update power-states of 
+  ; connected power-pins 
+  val visited = HashSet<JITXObject>()
+  defn visit (pin:JITXObject, power-states:Tuple<PowerState>) :
+    if not visited[pin] :
+      add(visited, pin)
+      if not has-property?(pin.power-states) :
+        set-property(pin, `power-states, power-states)
+        
+      if has-property?(pin.power-pin) : 
+        do(visit{_, power-states}, connected-pins(pin))
+
+      val instance = containing-instance(pin) as Instance
+      if has-property?(instance.power-supply-component) and 
+         property(instance.power-supply-component) : 
+        do(visit{_, power-states}, pins(instance))
+
+  ; propagate the power-states to connected power-pins
+  do(visit{_0, property(_0.power-states)}, roots)
+
+  ; propagate from power pins to io-pins
+  for io-pin in filter(is-digital-io?, all-pins) do : 
+    val vdd-pin = 
+      if has-property?(io-pin.digital-input) : 
+        vdd-pin(property(io-pin.digital-input))
+      else if has-property?(io-pin.digital-output) : 
+        vdd-pin(property(io-pin.digital-output))
+      else if has-property?(io-pin.digital-io) : 
+        vdd-pin(property(io-pin.digital-io))
+      else : 
+        fatal("Expected a digital io pin.")
+    
+    if has-property?(vdd-pin.power-states) and 
+       (not has-property?(io-pin.power-states)): 
+      set-property(io-pin, `power-states, property(vdd-pin.power-states))

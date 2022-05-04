@@ -1562,49 +1562,30 @@ doc: "This check will make sure that components connected to each other \
                                                                         \
       - module: the module to check."
 public pcb-check power-states (module:JITXObject) : 
-  ; Tiny helper to check if two components are conneced over digital i/o
-  defn components-connected? (l:JITXObject, r:JITXObject) -> True|False : 
-    val pl = filter(is-digital-io?, pins(l))
-    val pr = filter(is-digital-io?, pins(r))
-    for pl in pl any? : 
-      for pr in pr any? : 
-        connected?([pl, pr])
-  
-  ; First collect all the components of interest : 
-  ; - components not marked DNP
-  ; - components with power-states properties
-  val all-components = to-tuple $ 
-    for component in component-instances(module) filter : 
-      has-property?(component.power-states) ; todo: and not dnp?(component)
+  val all-pins = to-tuple(seq-cat(pins, component-instances(module)))
+  val ps-pins  = to-tuple $ 
+    for pin in all-pins filter : 
+      has-property?(pin.power-states) and
+      is-digital-output?(pin)
 
-  ; For each of these components, check the power states
-  for component in all-components do : 
-    ; lookup our power-states
-    val power-states = property(component.power-states)
-
-    ; lookup our connected components
-    val connected-components = to-tuple $ 
-      for comp in all-components filter : 
-        components-connected?(component, comp)
-
-    ; check each pair of connected components, for each power state
-    for connected in connected-components do :
-      for state in power-states do : 
-        val connected-states = property(connected.power-states)
-
-        ; we only care about shared power states, based on the 
-        ; name of the state.
-        val found-state      = find({name(_) == name(state)}, connected-states)
-        match(found-state:PowerState) : 
-          #CHECK(condition   = powered?(found-state) == powered?(state)
-                 name        = "Power States"
-                 description = "Checks that all components have matching power states."
-                 category    = "power"
-                 subcheck-description = to-string $ 
-                 "Checking '%_' power state for component pair (%_, %_)" % [
-                   name(state), ref(component), ref(connected)]
-                 pass-message = "Connected components %_ and %_ have matching power states: %_" % [
-                   ref(component), ref(connected), name(state)]
-                 fail-message = "Connected components %_ and %_ do not have matching power states: %_" % [
-                   ref(component), ref(connected), name(state)]
-                 locators = [component, connected])
+  for output in ps-pins do :
+    val inputs = to-tuple $
+      for pin in all-pins filter : 
+        pin != output             and
+        connected?([pin, output]) and 
+        is-digital-input?(pin)    and 
+        has-property?(pin.power-states)
+    val expected = property(output.power-states)
+    for input in inputs do :
+      val found = property(input.power-states)
+      val condition? = 
+        length(expected) == length(found) and
+        all?({_0 == _1}, expected, found)
+      #CHECK(condition    = condition?
+              name        = "Power States"
+              description = "Checks that all components have matching power states."
+              category    = "power"
+              subcheck-description = "Checking power states match on connected pins"
+              pass-message = "Connected pins %_ and %_ have matching power states" % [ref(output), ref(input)]
+              fail-message = "Connected pins %_ and %_ do not have matching power states"  % [ref(output), ref(input)]
+              locators = [input, output])
