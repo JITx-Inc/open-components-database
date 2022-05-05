@@ -1,0 +1,195 @@
+#use-added-syntax(jitx)
+defpackage intel-demo-part-1 : 
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/checks
+  import ocdb/generic-components
+  import ocdb/land-patterns
+  import ocdb/property-structs
+  import ocdb/tolerance
+  import ocdb/generator-utils
+
+
+; IO variant check
+; Get a relevant design working that has a collection of IO, and at least 1 i2c bus
+; A module that connects to i2c also includes pullup resistors
+; 2. Show checks passing on this design
+; 3. Use a variant definition to DNP the module that had the pullup resistors - show checks failing
+; 4. Add add-open-collector-pullups , show checks passing
+; 5. un DNP the module, and show checks passing , but higher iol value.
+
+
+pcb-landpattern soic127-p8:
+  make-n-pin-soic-landpattern(8, 
+                              1.27, 
+                              tol(6.0, 0.2), 
+                              tol(3.9, 0.1), 
+                              tol(4.9, 0.1), 
+                              min-typ-max(0.4, 1.04, 1.27), 
+                              min-typ-max(0.28, 0.38, 0.48),
+                              false)
+
+pcb-component Microcontroller : 
+  pin-properties : 
+    [pin: Ref | pads: Ref ... ]
+    [vcc      | p[1]          ]
+    [gnd      | p[8]          ]
+    [sda      | p[2]          ]
+    [scl      | p[3]          ]
+    [sleep    | p[4]          ]
+
+  make-box-symbol()
+  assign-landpattern(soic127-p8)
+  supports i2c : 
+    i2c.sda => self.sda
+    i2c.scl => self.scl
+  
+  val io = DigitalIO(logic-family,
+                     vil,
+                     vih,
+                     vdd-pin, 
+                     gnd-pin,
+                     leakage-current) where : 
+    val logic-family = OpenCollector(tol(3.3, 100.0e-3), 1.0)
+    val vil = 3.3
+    val vih = 5.5
+    val vdd-pin = self.vcc
+    val gnd-pin = self.gnd
+    val leakage-current = 0.100
+
+  property(self.vcc.power-pin)  = PowerPin(tol(3.3, 0.33))
+  property(self.sda.digital-io) = io
+  property(self.scl.digital-io) = io
+
+  set-property(self, `rated-temperature, RatedTemperature(min-max(-40.0, 85.0)))
+
+pcb-component Peripheral :   
+  pin-properties : 
+    [pin: Ref | pads: Ref ... ]
+    [vcc      | p[1]          ]
+    [gnd      | p[8]          ]
+    [sda      | p[6]          ]
+    [scl      | p[7]          ]
+
+  make-box-symbol()
+  assign-landpattern(soic127-p8)
+  supports i2c : 
+    i2c.sda => self.sda
+    i2c.scl => self.scl
+
+  val io = DigitalIO(logic-family,
+                     vil,
+                     vih,
+                     vdd-pin, 
+                     gnd-pin,
+                     leakage-current) where : 
+    val logic-family = OpenCollector(tol(3.3, 0.33), 10.0e-3)
+    val vil = 3.3
+    val vih = 5.5
+    val vdd-pin = self.vcc
+    val gnd-pin = self.gnd
+    val leakage-current = 0.100
+    
+  property(self.vcc.power-pin)  = PowerPin(tol(3.3, 0.33))  
+  property(self.sda.digital-io) = io
+  property(self.scl.digital-io) = io
+  
+  set-property(self, `rated-temperature, RatedTemperature(min-max(-40.0, 85.0)))
+
+
+pcb-component Regulator : 
+  pin-properties : 
+    [ pin:Ref | pads:Ref ... ]
+    [ vin     | p[1]         ]
+    [ vout    | p[2]         ]
+    [ active  | p[3]         ]
+  assign-landpattern(SOT23-3)
+  make-box-symbol()
+  property(self.vin.power-pin)  = PowerPin(tol(3.3, 0.33))  
+  property(self.vout.power-pin) = PowerPin(tol(3.3, 0.33))  
+  set-property(self, `rated-temperature, RatedTemperature(min-max(-40.0, 85.0)))
+
+pcb-module sub-module : 
+  pin scl
+  pin sda
+  pin vcc
+  pin gnd
+  public inst peripheral : Peripheral
+  net (peripheral.vcc, vcc)
+  net (peripheral.gnd, gnd)
+
+  require i2c* : i2c from peripheral
+  net (i2c*.scl, scl)
+  net (i2c*.sda, sda)
+
+pcb-module pull-up-option :
+  pin scl
+  pin sda
+  pin vdd
+  res-strap(scl, vdd, 1.0e3)
+  res-strap(sda, vdd, 1.0e3)
+  self
+
+
+pcb-module main-module : 
+  ; Some power supply
+  inst vcc-src : gen-testpad(1.0)
+  inst gnd-src : gen-testpad(1.0)
+
+  ; we have a few components, an MCU, 
+  ; some peripheral, and some regulator
+  inst mcu        : Microcontroller
+  inst peripheral : sub-module ; note: this is a hierarchical design!
+  inst regulator  : Regulator
+
+  require i2c* : i2c from mcu
+
+  inst pu : pull-up-option
+
+
+  net (mcu.sda pu.sda)
+  net (mcu.scl pu.scl)
+  net (mcu.vcc pu.vdd)
+  ; connect the mcu to the peripheral with 
+  ; some digital i/o and power
+  net (mcu.sda, peripheral.peripheral.sda)
+  net (mcu.scl, peripheral.peripheral.scl)
+  net vdd (vcc-src.p, regulator.vin, mcu.vcc)
+  net vout (regulator.vout, peripheral.vcc)
+  net gnd (mcu.gnd, peripheral.gnd)
+  net (mcu.sleep, regulator.active)
+
+  ; Annotate the power states for the MCU, it is powered off (false)
+  ; in the "hibernate" state
+  for p in [mcu.sda, mcu.scl] do : 
+    set-power-states(p, ["wake"      => true,
+                         "hibernate" => false])
+
+  ; We notate that this component propagates  
+  set-property(regulator, `power-supply-component, true)
+  
+  ; We set the power states of the output regulator.
+  set-power-states(regulator.vout, [
+    "wake"      => true,
+    "hibernate" => true
+  ])
+  
+  place(mcu)        on Top
+  place(peripheral) on Top
+  place(regulator)  on Top
+  place(pu)  on Top
+
+  propagate-power-states(self)
+  check-design(self)
+  check power-states(self)
+
+set-design("intel-design")
+set-main-module(main-module)
+assign-pins()
+run-checks("checks.txt")
+view-schematic()
+; view-board()
