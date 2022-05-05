@@ -183,7 +183,7 @@ pcb-check no-connect-pins-not-connected (module:JITXObject) :
 ; digital i/o pins.
 pcb-check digital-io-levels (module:JITXObject) : 
   val all-pins = all-pins(module)
-  val io-pins = filter(is-digital-io?, all-pins)
+  val io-pins  = filter(is-digital-io?, all-pins)
   for p in io-pins do : 
     val all-connected-pins = all-pins 
       $> filter{{connected?([p, _0]) and _0 != p}, _}
@@ -1555,6 +1555,70 @@ public defn check-all-landpatterns () :
     check-all-landpatterns(self)
 
 
+
+doc: "Helper to force power-states property to propagate through \
+      components in a design. Currently, the property may only   \
+      be shared along components with the power-supply-component \
+      property set `true`."
+public defn propagate-power-states (module:JITXObject) : 
+  ; Collect all the pins in the design
+  val all-pins  = to-tuple(seq-cat(pins, component-instances(module)))
+  ; println("pins: %," % [seq(ref,all-pins)])
+  ; Find the pins with the power-states property 
+  val roots =
+    for pin in all-pins filter :
+      has-property?(pin.power-states)
+
+  ; Helper, returns all the pins connected to `pin`
+  defn connected-pins (pin:JITXObject) -> Seq<JITXObject> : 
+    filter(connected?{[_, pin]}, all-pins)
+  
+  ; DFS walk of the netlist, to update power-states of 
+  ; connected power-pins 
+  val visited = HashSet<JITXObject>()
+  defn visit (pin:JITXObject, power-states:Tuple<PowerState>) :
+    if not visited[pin] :
+      add(visited, pin)
+      if not has-property?(pin.power-states) :
+        set-property(pin, `power-states, power-states)
+        
+      if has-property?(pin.power-pin) : 
+        do(visit{_, power-states}, connected-pins(pin))
+
+      val instance = containing-instance(pin) as Instance
+      if has-property?(instance.power-supply-component) and 
+         property(instance.power-supply-component) : 
+        do(visit{_, power-states}, pins(instance))
+
+  ; propagate the power-states to connected power-pins
+  do(visit{_0, property(_0.power-states)}, roots)
+
+  ; propagate from power pins to io-pins
+  for io-pin in filter(is-digital-io?, all-pins) do : 
+    val vdd-pin = 
+      if has-property?(io-pin.digital-input) : 
+        vdd-pin(property(io-pin.digital-input))
+      else if has-property?(io-pin.digital-output) : 
+        vdd-pin(property(io-pin.digital-output))
+      else if has-property?(io-pin.digital-io) : 
+        vdd-pin(property(io-pin.digital-io))
+      else : 
+        fatal("Expected a digital io pin.")
+    
+    if has-property?(vdd-pin.power-states) and 
+       (not has-property?(io-pin.power-states)): 
+      set-property(io-pin, `power-states, property(vdd-pin.power-states))
+
+defn check-has-power-states (p:JITXObject) : 
+  #CHECK(condition = has-property?(p.power-states)
+         name        = "Check Power States"
+         description = "Checks that all i/o pins have power states"
+         category    = "power-states"
+         subcheck-description = "Check that a pin has power states"
+         pass-message = "%_ has a valid .power-states property"    % [ref(p)]
+         fail-message = "%_ is missing the .power-states property" % [ref(p)]
+         locators = [p])
+
 doc: "This check will make sure that components connected to each other \
       over digital-io have matching power states, that is to say if a   \
       component has the same named power state as something it is       \
@@ -1563,28 +1627,33 @@ doc: "This check will make sure that components connected to each other \
       - module: the module to check."
 public pcb-check power-states (module:JITXObject) : 
   val all-pins = to-tuple(seq-cat(pins, component-instances(module)))
+  ; TODO: Iterate by nets instead of by pins, so complexity is O(N + M)
+  ;       instead of O(N^2) where N = number of pins, M = number of nets
   val ps-pins  = to-tuple $ 
     for pin in all-pins filter : 
-      has-property?(pin.power-states) and
       is-digital-output?(pin)
 
   for output in ps-pins do :
+    check-has-power-states(output)
+    val expected = property(output.power-states)
     val inputs = to-tuple $
       for pin in all-pins filter : 
         pin != output             and
         connected?([pin, output]) and 
-        is-digital-input?(pin)    and 
-        has-property?(pin.power-states)
-    val expected = property(output.power-states)
+        is-digital-input?(pin)
+    
     for input in inputs do :
+      check-has-power-states(input)
       val found = property(input.power-states)
       val condition? = 
         length(expected) == length(found) and
-        all?({_0 == _1}, expected, found)
+        for s1 in expected all? :
+          contains?(found, s1)
+      
       #CHECK(condition    = condition?
               name        = "Power States"
               description = "Checks that all components have matching power states."
-              category    = "power"
+              category    = "power-states"
               subcheck-description = "Checking power states match on connected pins"
               pass-message = "Connected pins %_ and %_ have matching power states" % [ref(output), ref(input)]
               fail-message = "Connected pins %_ and %_ do not have matching power states"  % [ref(output), ref(input)]
