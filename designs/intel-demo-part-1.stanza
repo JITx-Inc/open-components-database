@@ -65,9 +65,9 @@ pcb-component Microcontroller :
     val gnd-pin = self.gnd
     val leakage-current = 0.100
 
-  property(self.vcc.power-pin)  = PowerPin(tol(3.3, 0.33))
-  property(self.sda.digital-io) = io
-  property(self.scl.digital-io) = io
+  set-property(self.vcc, `power-pin, PowerPin(tol(3.3, 0.33)))
+  set-property(self.sda, `digital-io, io)
+  set-property(self.scl, `digital-io, io)
 
   set-property(self, `rated-temperature, RatedTemperature(min-max(-40.0, 85.0)))
 
@@ -169,7 +169,8 @@ pcb-module main-module :
   ; we have a few components, an MCU, 
   ; some peripheral, and some regulator
   inst mcu        : Microcontroller
-  inst peripheral : sub-module ; note: this is a hierarchical design!
+;   inst peripheral : sub-module ; note: this is a hierarchical design!
+  inst peripheral : Peripheral ; note: this is a hierarchical design!
   inst regulator  : Regulator
 
 ;   require mcu-i2c : i2c from mcu
@@ -184,8 +185,8 @@ pcb-module main-module :
 ;   net (mcu.scl pu.scl)
 ;   net (mcu.vcc pu.vdd)
 
-  public inst scl-pu : chip-resistor(100.0)
-  public inst sda-pu : chip-resistor(100.0)
+  inst scl-pu : chip-resistor(470.0)
+  inst sda-pu : chip-resistor(470.0)
   net (mcu.scl scl-pu.p[1])
   net (mcu.sda sda-pu.p[1])
   net (sda-pu.p[2] scl-pu.p[2] mcu.vcc)
@@ -193,8 +194,8 @@ pcb-module main-module :
 
   ; connect the mcu to the peripheral with 
   ; some digital i/o and power
-  net (mcu.sda, peripheral.peripheral.sda)
-  net (mcu.scl, peripheral.peripheral.scl)
+  net (mcu.sda, peripheral.sda)
+  net (mcu.scl, peripheral.scl)
   net vdd (vcc-src.p, regulator.vin, mcu.vcc)
   net vout (regulator.vout, peripheral.vcc)
   net gnd (mcu.gnd, peripheral.gnd)
