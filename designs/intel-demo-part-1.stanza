@@ -4,6 +4,7 @@ defpackage intel-demo-part-1 :
   import collections
   import jitx
   import jitx/commands
+
   import ocdb/box-symbol
   import ocdb/bundles
   import ocdb/checks
@@ -12,6 +13,9 @@ defpackage intel-demo-part-1 :
   import ocdb/property-structs
   import ocdb/tolerance
   import ocdb/generator-utils
+
+  import ocdb/defaults
+  import ocdb/symbols
 
 
 ; IO variant check
@@ -54,7 +58,7 @@ pcb-component Microcontroller :
                      vdd-pin, 
                      gnd-pin,
                      leakage-current) where : 
-    val logic-family = OpenCollector(tol(3.3, 100.0e-3), 1.0)
+    val logic-family = OpenCollector(tol(3.3, 100.0e-3), 1.0e-3)
     val vil = 3.3
     val vih = 5.5
     val vdd-pin = self.vcc
@@ -66,6 +70,15 @@ pcb-component Microcontroller :
   property(self.scl.digital-io) = io
 
   set-property(self, `rated-temperature, RatedTemperature(min-max(-40.0, 85.0)))
+
+;   eval-when has-property?(vcc.rail-voltage):
+;     val myvcc = property(vcc.rail-voltage)
+;     val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.1 * myvcc), min-max(0.8 * myvcc, myvcc)), false, vcc, gnd)
+;     val input-props = DigitalInput(0.25 * myvcc, 0.75 * myvcc, vcc, gnd, 50.0e-9)
+    ; property(U0TXD.digital-output) = drive-props
+    ; property(U0RXD.digital-input) = input-props
+    ; property(EN.reset-pin) = ResetPin(input-props)
+
 
 pcb-component Peripheral :   
   pin-properties : 
@@ -87,16 +100,16 @@ pcb-component Peripheral :
                      vdd-pin, 
                      gnd-pin,
                      leakage-current) where : 
-    val logic-family = OpenCollector(tol(3.3, 0.33), 10.0e-3)
+    val logic-family = OpenCollector(tol(3.3, 0.33), 1.0e-3)
     val vil = 3.3
     val vih = 5.5
     val vdd-pin = self.vcc
     val gnd-pin = self.gnd
     val leakage-current = 0.100
     
-  property(self.vcc.power-pin)  = PowerPin(tol(3.3, 0.33))  
-  property(self.sda.digital-io) = io
-  property(self.scl.digital-io) = io
+  set-property(self.vcc, `power-pin, PowerPin(tol(3.3, 0.33)))
+  set-property(self.sda, `digital-io, io)
+  set-property(self.scl, `digital-io, io)
   
   set-property(self, `rated-temperature, RatedTemperature(min-max(-40.0, 85.0)))
 
@@ -109,8 +122,10 @@ pcb-component Regulator :
     [ active  | p[3]         ]
   assign-landpattern(SOT23-3)
   make-box-symbol()
+  property(self.vout.power-supply-pin) = PowerSupplyPin(3.3, 0.5) 
+
   property(self.vin.power-pin)  = PowerPin(tol(3.3, 0.33))  
-  property(self.vout.power-pin) = PowerPin(tol(3.3, 0.33))  
+;   property(self.vout.power-pin) = PowerPin(tol(3.3, 0.33))  
   set-property(self, `rated-temperature, RatedTemperature(min-max(-40.0, 85.0)))
 
 pcb-module sub-module : 
@@ -125,14 +140,22 @@ pcb-module sub-module :
   require i2c* : i2c from peripheral
   net (i2c*.scl, scl)
   net (i2c*.sda, sda)
+  schematic-group(self) = sub-module
 
 pcb-module pull-up-option :
   pin scl
   pin sda
   pin vdd
-  res-strap(scl, vdd, 1.0e3)
-  res-strap(sda, vdd, 1.0e3)
-  self
+
+  public inst scl-pu : chip-resistor(100.0)
+  public inst sda-pu : chip-resistor(100.0)
+  net (scl scl-pu.p[1])
+  net (sda sda-pu.p[1])
+  net (sda-pu.p[2] scl-pu.p[2] vdd)
+;   res-strap(scl, vdd, 1.0e3)
+;   res-strap(sda, vdd, 1.0e3)
+;   self
+  schematic-group(self) = pull-ups
 
 
 pcb-module main-module : 
@@ -140,20 +163,34 @@ pcb-module main-module :
   inst vcc-src : gen-testpad(1.0)
   inst gnd-src : gen-testpad(1.0)
 
+
+  property(vcc-src.p.power-supply-pin) = PowerSupplyPin(3.3, 0.5) 
+
   ; we have a few components, an MCU, 
   ; some peripheral, and some regulator
   inst mcu        : Microcontroller
   inst peripheral : sub-module ; note: this is a hierarchical design!
   inst regulator  : Regulator
 
-  require i2c* : i2c from mcu
+;   require mcu-i2c : i2c from mcu
+;   require peripheral-i2c : i2c from sub-module.peripheral
 
-  inst pu : pull-up-option
+;   net (mcu-i2c peripheral-i2c)
+;   inst pu : pull-up-option
+
+;   ;set-property(pu.sda-pu, `DNP, true)
+
+;   net (mcu.sda pu.sda)
+;   net (mcu.scl pu.scl)
+;   net (mcu.vcc pu.vdd)
+
+  public inst scl-pu : chip-resistor(100.0)
+  public inst sda-pu : chip-resistor(100.0)
+  net (mcu.scl scl-pu.p[1])
+  net (mcu.sda sda-pu.p[1])
+  net (sda-pu.p[2] scl-pu.p[2] mcu.vcc)
 
 
-  net (mcu.sda pu.sda)
-  net (mcu.scl pu.scl)
-  net (mcu.vcc pu.vdd)
   ; connect the mcu to the peripheral with 
   ; some digital i/o and power
   net (mcu.sda, peripheral.peripheral.sda)
@@ -181,15 +218,19 @@ pcb-module main-module :
   place(mcu)        on Top
   place(peripheral) on Top
   place(regulator)  on Top
-  place(pu)  on Top
+;   place(pu)  on Top
 
-  propagate-power-states(self)
+  propagate-rail-voltage()
+
+  ;propagate-power-states(self)
   check-design(self)
-  check power-states(self)
+  ;check power-states(self)
+
+val final-design = run-final-passes(main-module)
 
 set-design("intel-design")
-set-main-module(main-module)
-assign-pins()
+set-main-module(final-design)
+
 run-checks("checks.txt")
 view-schematic()
 ; view-board()
