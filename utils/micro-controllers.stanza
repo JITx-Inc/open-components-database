@@ -71,6 +71,21 @@ public defn micro-controller (params:Tuple<KeyValue>) -> (Tuple<KeyValue<Symbol,
   val component = to-jitx(mcu)
   mcu-module(component)
 
+public defn find-micro-controller (core-parameters:Tuple<KeyValue<String, ?>>, 
+                            module-parameters:Tuple<KeyValue<Symbol, ?>>,  
+                            mcu-design) :
+  val possible-mcus = MicroControllers(core-parameters, 10)
+  for mcu in possible-mcus first :
+    println("Testing %_ " % [mpn(mcu)])
+    val test-mcu = mcu-module $ to-jitx(mcu)
+    val design = mcu-design(test-mcu(module-parameters))
+    set-main-module(design)
+    val result = assign-pins?()
+    match(result:Instantiable):
+      println("MPN: %_ satisfies IO requirements. Producing design." % [mpn(mcu)])
+      One(test-mcu(module-parameters))
+    else :
+      None()
 ;============================================================
 ;================ look-up-micro-controllers =================
 ;============================================================
