@@ -88,7 +88,7 @@ pcb-component Microcontroller :
     ; property(EN.reset-pin) = ResetPin(input-props)
 
 
-pcb-component Peripheral :   
+pcb-component Memory :   
   pin-properties : 
     [pin: Ref | pads: Ref ... ]
     [vcc      | p[1]          ]
@@ -108,7 +108,7 @@ pcb-component Peripheral :
                      vdd-pin, 
                      gnd-pin,
                      leakage-current) where : 
-    val logic-family = OpenCollector(tol(3.3, 0.33), 1.0e-3)
+    val logic-family = OpenCollector(tol(3.3, 0.33), 10.0e-3)
     val vil = 0.25 * 3.3
     val vih = 0.75 * 3.3
     val vdd-pin = self.vcc
@@ -139,11 +139,11 @@ pcb-module sub-module :
   pin sda
   pin vcc
   pin gnd
-  public inst peripheral : Peripheral
-  net (peripheral.vcc, vcc)
-  net (peripheral.gnd, gnd)
+  public inst mem : Memory
+  net (mem.vcc, vcc)
+  net (mem.gnd, gnd)
 
-  require i2c* : i2c from peripheral
+  require i2c* : i2c from mem
   net (i2c*.scl, scl)
   net (i2c*.sda, sda)
   schematic-group(self) = sub-module
@@ -153,22 +153,26 @@ pcb-module pull-up-option :
   pin sda
   pin vdd
 
-  public inst scl-pu : chip-resistor(100.0)
-  public inst sda-pu : chip-resistor(100.0)
-  net (scl scl-pu.p[1])
-  net (sda sda-pu.p[1])
-  net (sda-pu.p[2] scl-pu.p[2] vdd)
+  public inst r-scl-pu : chip-resistor(1000.0)
+  public inst r-sda-pu : chip-resistor(1000.0)
+
+  set-property(r-scl-pu, `operating-point, OperatingPoint(min-max(0.0, 5.0), min-max(0.0, 1.0e-3))) ; peak-voltage, peak-current as Toleranced
+  set-property(r-sda-pu, `operating-point, OperatingPoint(min-max(0.0, 5.0), min-max(0.0, 1.0e-3))) ; peak-voltage, peak-current as Toleranced
+
+
+  net (scl r-scl-pu.p[1])
+  net (sda r-sda-pu.p[1])
+  net (r-sda-pu.p[2] r-scl-pu.p[2] vdd)
 ;   res-strap(scl, vdd, 1.0e3)
 ;   res-strap(sda, vdd, 1.0e3)
 ;   self
-  schematic-group(self) = pull-ups
+  schematic-group(self) = pull-up-option
 
 
 pcb-module main-module : 
   ; Some power supply
   inst vcc-src : gen-testpad(1.0)
   inst gnd-src : gen-testpad(1.0)
-
 
   property(vcc-src.p.power-supply-pin) = PowerSupplyPin(3.3, 0.5)
   set-property(vcc-src, `rated-temperature, RatedTemperature(min-max(-40.0, 85.0)))
@@ -177,30 +181,30 @@ pcb-module main-module :
   ; we have a few components, an MCU, 
   ; some peripheral, and some regulator
   inst mcu        : Microcontroller
-;   inst peripheral : sub-module ; note: this is a hierarchical design!
-  inst peripheral : Peripheral ; note: this is a hierarchical design!
+  inst peripheral : sub-module ; note: this is a hierarchical design!
+  ; inst peripheral : Peripheral
   inst regulator  : Regulator
 
-;   require mcu-i2c : i2c from mcu
-;   require peripheral-i2c : i2c from sub-module.peripheral
+  ; require mcu-i2c : i2c from mcu
+  ; require peripheral-i2c : i2c from peripheral.mem
 
-;   net (mcu-i2c peripheral-i2c)
-;   inst pu : pull-up-option
+  ; net (mcu-i2c peripheral-i2c)
+  inst pu : pull-up-option
 
 ;   ;set-property(pu.sda-pu, `DNP, true)
 
-;   net (mcu.sda pu.sda)
-;   net (mcu.scl pu.scl)
-;   net (mcu.vcc pu.vdd)
+  net (mcu.sda pu.sda)
+  net (mcu.scl pu.scl)
+  net (mcu.vcc pu.vdd)
 
-  inst scl-pu : chip-resistor(470.0)
-  inst sda-pu : chip-resistor(470.0)
-  set-property(scl-pu, `operating-point, OperatingPoint(min-max(0.0, 5.0), min-max(0.0, 1.0e-3))) ; peak-voltage, peak-current as Toleranced
-  set-property(sda-pu, `operating-point, OperatingPoint(min-max(0.0, 5.0), min-max(0.0, 1.0e-3))) ; peak-voltage, peak-current as Toleranced
+  ; inst scl-pu : chip-resistor(470.0)
+  ; inst sda-pu : chip-resistor(470.0)
+  ; set-property(scl-pu, `operating-point, OperatingPoint(min-max(0.0, 5.0), min-max(0.0, 1.0e-3))) ; peak-voltage, peak-current as Toleranced
+  ; set-property(sda-pu, `operating-point, OperatingPoint(min-max(0.0, 5.0), min-max(0.0, 1.0e-3))) ; peak-voltage, peak-current as Toleranced
 
-  net (mcu.scl scl-pu.p[1])
-  net (mcu.sda sda-pu.p[1])
-  net (sda-pu.p[2] scl-pu.p[2] mcu.vcc)
+  ; net (mcu.scl scl-pu.p[1])
+  ; net (mcu.sda sda-pu.p[1])
+  ; net (sda-pu.p[2] scl-pu.p[2] mcu.vcc)
 
   ; connect the mcu to the peripheral with 
   ; some digital i/o and power
