@@ -34,6 +34,13 @@ OPERATING-TEMPERATURE = [-20.0 70.0]
 ; 5. un DNP the module, and show checks passing , but higher iol value.
 
 
+; Back powering check
+; Get a relevant design (Intel processor + SPI flash) running. Has legible code for configuring power states that match Intel conventions "S0" "S5", etc...
+; Run the checks without SPI connected - passes
+; Connect SPI and re-run - check fails with "Intel processor is back-powered in S0 by spi-flash" because the flash is powered by a regulator that has a power state that is on, when the IO domain of the spi connection on the Intel CPU is off.
+; Add a load switch to the SPI flash (that overrides the power state of the spi flash), the check passes.
+
+
 pcb-landpattern soic127-p8:
   make-n-pin-soic-landpattern(8, 
                               1.27, 
@@ -340,6 +347,30 @@ pcb-module main-module-wo-pu :
   symbol(gnd) = ocdb/symbols/ground-sym
   symbol(vdd) = ocdb/symbols/altium-power-bar-sym
   symbol(vout) = ocdb/symbols/altium-power-bar-sym
+  ; Annotate the power states for the MCU, it is powered off (false)
+  ; in the "hibernate" state
+  for p in [mcu.sda, mcu.scl] do : 
+    set-power-states(p, ["wake"      => true,
+                         "hibernate" => false])
+
+  ; We notate that this component propagates  
+  set-property(regulator, `power-supply-component, true)
+  
+  ; We set the power states of the output regulator.
+  set-power-states(regulator.vout, [
+    "wake"      => true,
+    "hibernate" => false])
+  
+  place(mcu)        on Top
+  place(peripheral) on Top
+  place(regulator)  on Top
+;   place(pu)  on Top
+
+  propagate-rail-voltage()
+
+  propagate-power-states(self)
+  check-design(self)
+  check power-states(self)
 
 
 
