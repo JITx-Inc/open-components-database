@@ -79,6 +79,32 @@ pcb-component Microcontroller :
 
   set-property(self, `rated-temperature, RatedTemperature(min-max(-40.0, 85.0)))
 
+pcb-module mcu-module :
+  pin vcc
+  pin gnd
+  pin sda
+  pin scl
+  pin sleep
+
+  inst U1 : Microcontroller
+  net (gnd U1.gnd)
+  net (vcc U1.vcc)
+  net (sda U1.sda)
+  net (scl U1.scl)
+  net (sleep U1.sleep)
+  val cap = bypass-cap-strap(vcc, gnd, 100.0e-9)
+  set-property(cap, `operating-point, OperatingPoint(min-max(0.0, 5.0), min-max(0.0, 1.0e-3))) ; peak-voltage, peak-current as Toleranced
+
+  public inst r-scl-pu : chip-resistor(100.0)
+  public inst r-sda-pu : chip-resistor(100.0)
+  set-property(r-scl-pu, `operating-point, OperatingPoint(min-max(0.0, 5.0), min-max(0.0, 1.0e-3))) ; peak-voltage, peak-current as Toleranced
+  set-property(r-sda-pu, `operating-point, OperatingPoint(min-max(0.0, 5.0), min-max(0.0, 1.0e-3))) ; peak-voltage, peak-current as Toleranced  
+  net (scl r-scl-pu.p[1])
+  net (sda r-sda-pu.p[1])
+  net (r-sda-pu.p[2] r-scl-pu.p[2] vcc)
+
+  schematic-group(self) = mcu-module
+
 ;   eval-when has-property?(vcc.rail-voltage):
 ;     val myvcc = property(vcc.rail-voltage)
 ;     val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.1 * myvcc), min-max(0.8 * myvcc, myvcc)), false, vcc, gnd)
@@ -122,6 +148,33 @@ pcb-component Memory :
 
   set-property(self, `rated-temperature, RatedTemperature(min-max(-40.0, 85.0)))
 
+pcb-module flash-module :
+  pin vcc
+  pin gnd
+  pin sda
+  pin scl
+
+  inst U1 : Memory
+  net (gnd U1.gnd)
+  net (vcc U1.vcc)
+  net (sda U1.sda)
+  net (scl U1.scl)
+  val cap = bypass-cap-strap(vcc, gnd, 100.0e-9)
+  set-property(cap, `operating-point, OperatingPoint(min-max(0.0, 5.0), min-max(0.0, 1.0e-3))) ; peak-voltage, peak-current as Toleranced
+
+  public inst r-scl-pu : chip-resistor(100.0)
+  public inst r-sda-pu : chip-resistor(100.0)
+  set-property(r-scl-pu, `operating-point, OperatingPoint(min-max(0.0, 5.0), min-max(0.0, 1.0e-3))) ; peak-voltage, peak-current as Toleranced
+  set-property(r-sda-pu, `operating-point, OperatingPoint(min-max(0.0, 5.0), min-max(0.0, 1.0e-3))) ; peak-voltage, peak-current as Toleranced  
+  net (scl r-scl-pu.p[1])
+  net (sda r-sda-pu.p[1])
+  net (r-sda-pu.p[2] r-scl-pu.p[2] vcc)
+  supports i2c : 
+    i2c.sda => U1.sda
+    i2c.scl => U1.scl
+
+  schematic-group(self) = flash-module
+
 pcb-component Regulator : 
   pin-properties : 
     [ pin:Ref | pads:Ref ... ]
@@ -139,7 +192,7 @@ pcb-module sub-module :
   pin sda
   pin vcc
   pin gnd
-  public inst mem : Memory
+  public inst mem : flash-module
   net (mem.vcc, vcc)
   net (mem.gnd, gnd)
 
@@ -180,7 +233,7 @@ pcb-module main-module :
 
   ; we have a few components, an MCU, 
   ; some peripheral, and some regulator
-  inst mcu        : Microcontroller
+  inst mcu        : mcu-module
   inst peripheral : sub-module ; note: this is a hierarchical design!
   ; inst peripheral : Peripheral
   inst regulator  : Regulator
@@ -191,7 +244,7 @@ pcb-module main-module :
   ; net (mcu-i2c peripheral-i2c)
   inst pu : pull-up-option
 
-;   ;set-property(pu.sda-pu, `DNP, true)
+  ;set-property(pu.r-sda-pu, `DNP, true)
 
   net (mcu.sda pu.sda)
   net (mcu.scl pu.scl)
@@ -244,7 +297,53 @@ pcb-module main-module :
   check-design(self)
   check power-states(self)
 
-val final-design = run-final-passes(main-module)
+
+pcb-module main-module-wo-pu : 
+  ; Some power supply
+  inst vcc-src : gen-testpad(1.0)
+  inst gnd-src : gen-testpad(1.0)
+
+  property(vcc-src.p.power-supply-pin) = PowerSupplyPin(3.3, 0.5)
+  set-property(vcc-src, `rated-temperature, RatedTemperature(min-max(-40.0, 85.0)))
+  set-property(gnd-src, `rated-temperature, RatedTemperature(min-max(-40.0, 85.0)))
+
+  ; we have a few components, an MCU, 
+  ; some peripheral, and some regulator
+  inst mcu        : mcu-module
+  inst peripheral : sub-module ; note: this is a hierarchical design!
+  ; inst peripheral : Peripheral
+  inst regulator  : Regulator
+
+
+  inst pu : pull-up-option
+
+  set-property(pu.r-sda-pu, `DNP, true)
+  set-property(pu.r-scl-pu, `DNP, true)
+  set-property(mcu.r-sda-pu, `DNP, true)
+  set-property(mcu.r-scl-pu, `DNP, true)
+  set-property(peripheral.mem.r-sda-pu, `DNP, true)
+  set-property(peripheral.mem.r-scl-pu, `DNP, true)
+
+  net (mcu.sda pu.sda)
+  net (mcu.scl pu.scl)
+  net (mcu.vcc pu.vdd)
+
+  ; connect the mcu to the peripheral with 
+  ; some digital i/o and power
+  net (mcu.sda, peripheral.sda)
+  net (mcu.scl, peripheral.scl)
+  net vdd (vcc-src.p, regulator.vin, mcu.vcc)
+  net vout (regulator.vout, peripheral.vcc)
+  net gnd (gnd-src.p, mcu.gnd, peripheral.gnd)
+  net (mcu.sleep, regulator.active)
+
+  symbol(gnd) = ocdb/symbols/ground-sym
+  symbol(vdd) = ocdb/symbols/altium-power-bar-sym
+  symbol(vout) = ocdb/symbols/altium-power-bar-sym
+
+
+
+val final-design = run-final-passes(main-module-wo-pu)
 
 set-design("intel-design")
 set-main-module(final-design)
