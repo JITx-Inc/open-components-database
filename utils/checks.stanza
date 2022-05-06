@@ -1568,7 +1568,7 @@ public defn propagate-power-states (module:JITXObject) :
   val all-pins  = to-tuple(seq-cat(pins, component-instances(module)))
   ; println("pins: %," % [seq(ref,all-pins)])
   ; Find the pins with the power-states property 
-  val roots =
+  val roots = to-tuple $
     for pin in all-pins filter :
       has-property?(pin.power-states)
 
@@ -1585,7 +1585,8 @@ public defn propagate-power-states (module:JITXObject) :
       if not has-property?(pin.power-states) :
         set-property(pin, `power-states, power-states)
         
-      if has-property?(pin.power-pin) : 
+      if has-property?(pin.power-pin) or
+         has-property?(pin.power-supply-pin) :
         do(visit{_, power-states}, connected-pins(pin))
 
       val instance = containing-instance(pin) as Instance
