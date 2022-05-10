@@ -10,13 +10,28 @@ defpackage ocdb/designs/mcu :
   import ocdb/design-vars
   import ocdb/micro-controllers
 
-println("Available mcu cores: %_" % [look-up-micro-controllers("core")])
-
 val BOARD-SHAPE = RoundedRectangle(25.0, 25.0, 0.25)
-pcb-module my-design:
-  inst mcu : micro-controller(["core" => "ARM Cortex-M3"])([`cap-bypass-package => 4.7e-6])
+DESIGN-QUANTITY = 0
+OPTIMIZE-FOR = ["area"]
+
+val mcu-parameters = ["series" => "STM32F4"]
+val module-parameters = [`debug-interface => jtag()]
+
+pcb-module mcu-design (mcu:Instantiable):
+  inst stm32 : mcu
+  require leds : gpio[3] from stm32.mcu
+  require usart : usart([])[3] from stm32.mcu
+  require spi : spi-controller()[3] from stm32.mcu
+  require i2s : i2s() from stm32.mcu
+  ; require i2c : i2c[3] from stm32.mcu
+
   add-mounting-holes(BOARD-SHAPE, [2, 3])
 
-make-default-board(my-design, 4, BOARD-SHAPE)
-view-board()
-view-schematic()
+val best-mcu = find-micro-controller(mcu-parameters, module-parameters, mcu-design)
+
+match(value?(best-mcu)):
+  (mcu:Instantiable):
+    make-default-board(mcu-design(mcu), 4, BOARD-SHAPE)
+    view-board()
+    view-schematic()
+  (_:False) : println("No mcu fits this design.")
