@@ -14,6 +14,7 @@ defpackage ocdb/texas-instruments/TCAN1051 :
   import ocdb/generator-utils
   import ocdb/generic-components
   import ocdb/property-structs
+  import ocdb/tolerance
 
 public pcb-component component :
   manufacturer = "Texas Instruments"
@@ -34,13 +35,13 @@ public pcb-component component :
   make-box-symbol()
   assign-landpattern(soic127p-landpattern(8))
 
-  property(self.VIO.power-pin) = PowerPin(Interval(2.8, 5.5, false))
-  property(self.VCC.power-pin) = PowerPin(Interval(4.5, 5.5, false))
+  property(self.VIO.power-pin) = PowerPin(min-max(2.8, 5.5))
+  property(self.VCC.power-pin) = PowerPin(min-max(4.5, 5.5))
 
   ; Figure out what the io voltage level is in the design.
   eval-when has-property?(self.VIO.rail-voltage):
     val vdd = property(self.VIO.rail-voltage)
-    val drive-props = DigitalOutput(CMOSOutput(Interval(0.0, 0.2 * vdd, false), Interval(0.8 * vdd, vdd, false)), false, self.VCC, self.GND)
+    val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.2 * vdd), min-max(0.8 * vdd, vdd)), false, self.VCC, self.GND)
     val input-props = DigitalInput(0.3 * vdd, 0.7 * vdd, self.VCC, self.GND, 30.0e-6)
     property(self.TXD.digital-output) = drive-props
     property(self.RXD.digital-input) = input-props

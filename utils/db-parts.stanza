@@ -4,7 +4,8 @@ defpackage ocdb/db-parts :
   import collections
   import json
   import math
-  import lang-utils
+  import lang-utils with:
+    prefix(min-max) => lang-
 
   import jitx with :
     prefix(Resistor) => EModel-
@@ -18,6 +19,7 @@ defpackage ocdb/db-parts :
   import ocdb/property-structs
   import ocdb/symbols
   import ocdb/design-vars
+  import ocdb/tolerance
 
 public deftype Component
 public defmulti x (component: Component) -> Double
@@ -843,7 +845,7 @@ public pcb-struct ocdb/db-parts/MinMaxRange :
 public defn parse-rated-temperature (json: JObject) -> RatedTemperature|False :
   val rated-temperature-json = get?(json, "rated-temperature")
   match(rated-temperature-json: JObject) :
-    RatedTemperature(Interval(rated-temperature-json["min"] as Double, rated-temperature-json["max"] as Double, false))
+    RatedTemperature(min-max(rated-temperature-json["min"] as Double, rated-temperature-json["max"] as Double) as Toleranced)
 
 defn parse-tolerance (json: JObject) -> MinMaxRange|False :
   val tolerance-json = get?(json, "tolerance")

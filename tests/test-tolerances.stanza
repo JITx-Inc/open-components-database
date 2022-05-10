@@ -22,6 +22,13 @@ deftest constructors:
     #EXPECT(max-value(tolerance) == 1.00)
     #EXPECT(typ-value(tolerance) == 0.5)
   let:
+    val tolerance = min-typ-max(0.35, false, 1.65)
+    println(tolerance)
+    println(1.00 - typ-value(tolerance))
+    #EXPECT(min-value(tolerance) == 0.35)
+    #EXPECT(max-value(tolerance) == 1.65)
+    #EXPECT(typ-value(tolerance) - 1.00 < 1.0e-10)
+  let:
     val tolerance = tol(1.0, 0.5)
     #EXPECT(min-value(tolerance) == 0.5)
     #EXPECT(max-value(tolerance) == 1.5)
@@ -38,8 +45,9 @@ defn expect-fatal (body:() -> ?):
 deftest percentages: 
   let: 
     val tolerance = min-typ-max(0.75, 1.0, 1.5)
-    #EXPECT(tol-%(tolerance) == 0.25)
-    #EXPECT(tol+%(tolerance) == 0.50)
+    println(tolerance)
+    #EXPECT(tol-%(tolerance) == 25.0)
+    #EXPECT(tol+%(tolerance) == 50.0)
   let:
     val tolerance = tol(0.0, 0.5)
     within expect-fatal():
@@ -71,6 +79,20 @@ deftest range:
     #EXPECT(tolerance-range(tolerance) == 0.5)
     #EXPECT(in-range?(tolerance, 1.15))
     #EXPECT(not in-range?(tolerance, 3.0))
+
+deftest ordered-input:
+  let:
+    within expect-fatal():
+      min-max(1.0, 0.5)
+    within expect-fatal():
+      min-max(-1.0, -2.0)
+    within expect-fatal():
+      min-typ-max(1.0, 0.75, 0.5)
+    within expect-fatal():
+      min-typ-max(-1.0, 1.0, -2.0)
+    #EXPECT(min-value(min-typ-max(-10.0, -1.0, -0.1)) == min-value(tol(-1.0, 0.9, 9.0)))
+    #EXPECT(max-value(min-typ-max(-10.0, -1.0, -0.1)) == max-value(tol(-1.0, 0.9, 9.0)))
+    #EXPECT(typ-value(min-typ-max(-10.0, -1.0, -0.1)) == typ-value(tol(-1.0, 0.9, 9.0)))
 
 deftest printer:
   let:

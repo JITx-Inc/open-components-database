@@ -13,6 +13,7 @@ defpackage ocdb/designs/usb-light :
   import ocdb/symbols
   import ocdb/property-structs
   import ocdb/checks
+  import ocdb/tolerance
 
 val BOARD-SHAPE = RoundedRectangle(25.0, 25.0, 0.25)
 
@@ -22,13 +23,13 @@ defn led-circuit-resistance (vbus:Double, forward-voltage:Double, current:Double
 pcb-module main-board:
   inst conn : ocdb/amphenol/10103594-0001LF/component
   port vbus : power
-  property(conn.VCC.power-pin) = PowerPin(Interval(4.75, 5.5, 5.0))
+  property(conn.VCC.power-pin) = PowerPin(min-typ-max(4.75, 5.0, 5.5))
   inst led : gen-led-cmp(tol(2.1,0.1), 0.02, "YELLOW", "0805")[8]
   net p5v (vbus.vdd conn.VCC)
   net gnd (vbus.gnd conn.GND conn.SHIELD)
   symbol(p5v) = ocdb/symbols/supply-sym
   symbol(gnd) = ocdb/symbols/ground-sym
-  val vbus-voltage = (nominal(recommended-voltage(property(conn.VCC.power-pin)))) as Double
+  val vbus-voltage = (nom-value(recommended-voltage(property(conn.VCC.power-pin)))) as Double
   val exact-resistance = led-circuit-resistance(vbus-voltage, property(led[0].forward-voltage), property(led[0].test-current), 2)
   inst res : gen-res-cmp(closest-std-val(exact-resistance,5.0), "0603")[4]
   for i in 0 to 4 do :
@@ -36,9 +37,9 @@ pcb-module main-board:
     net (led[i + 4].a led[i].c)
     net (res[i].p[1] led[i + 4].c)
     net (gnd res[i].p[2])
-    place(led[i + 4]) at loc(-2.5, 5.0 * to-double(i) - 7.5, 180.0) on Top
-    place(led[i]) at loc(-7.5, 5.0 * to-double(i) - 7.5, 180.0) on Top
-    place(res[i]) at loc(2.5, 5.0 * to-double(i) - 7.5, 0.0) on Top
+    place(led[i + 4]) at loc(-2.5, 5.0 * to-double(i) - 7.5, 90.0) on Top
+    place(led[i]) at loc(-7.5, 5.0 * to-double(i) - 7.5, 90.0) on Top
+    place(res[i]) at loc(2.5, 5.0 * to-double(i) - 7.5, 90.0) on Top
   place(conn) at loc(10.75, 0.0, 90.0) on Top
 
   println("Calculated Resistance = %_, Standard Value Resistance = %_" % [exact-resistance property(res[0].resistance)])
