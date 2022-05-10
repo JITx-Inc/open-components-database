@@ -240,13 +240,14 @@ defn open-collector-checks (io-pin:JITXObject,
                             all-pins:Tuple<JITXObject>) : 
   ; First, we search for the pull-up-resistors that might be connected to this pin
   val pull-up-resistors = to-tuple $
-    for p in all-connected-pins seq? : 
+    for p in all-connected-pins seq? :
       val instance = containing-instance(p) as Instance
       val connected-to-rail? = 
         for p in pins(instance) any? :
-          val connected-pins = filter(connected?{[_, p]}, all-pins)
-          for cp in connected-pins any? : 
-            has-property?(cp.power-pin) and has-property?(cp.rail-voltage)
+          ; Assumes that power states have been propagated.
+          has-property?(p.rail-voltage) or 
+          has-property?(p.power-pin)
+
       if has-property?(instance.resistance) and connected-to-rail? : 
         One(instance) 
       else : 
