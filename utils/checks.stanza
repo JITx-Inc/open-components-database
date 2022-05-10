@@ -183,11 +183,11 @@ pcb-check no-connect-pins-not-connected (module:JITXObject) :
 ; digital i/o pins.
 pcb-check digital-io-levels (module:JITXObject) : 
   val all-pins = all-pins(module)
-  val io-pins  = filter(is-digital-io?, all-pins)
+  val io-pins  = to-tuple $ filter(is-digital-io?, all-pins)
   for p in io-pins do : 
     val all-connected-pins = all-pins 
       $> filter{{connected?([p, _0]) and _0 != p}, _}
-      $> to-tuple   
+      $> to-tuple
     val connected-io-pins = all-connected-pins
       $> filter{is-digital-io?, _}
       $> to-tuple
@@ -218,7 +218,7 @@ pcb-check digital-io-levels (module:JITXObject) :
         (o:CMOSOutput|TTLOutput) : 
           cmos-and-ttl-checks(out-p, connected-io-pins)
         (o:OpenCollector) : 
-          open-collector-checks(out-p, o, all-connected-pins)
+          open-collector-checks(out-p, o, all-connected-pins, all-pins)
         (f:False) : 
           false ; do nothing
  
@@ -236,14 +236,17 @@ defn cmos-and-ttl-checks (out-p:JITXObject,
 ;
 defn open-collector-checks (io-pin:JITXObject, 
                             driver:OpenCollector,
-                            all-connected-pins:Tuple<JITXObject>) : 
+                            all-connected-pins:Tuple<JITXObject>,
+                            all-pins:Tuple<JITXObject>) : 
   ; First, we search for the pull-up-resistors that might be connected to this pin
   val pull-up-resistors = to-tuple $
     for p in all-connected-pins seq? : 
       val instance = containing-instance(p) as Instance
       val connected-to-rail? = 
-        for p in pins(instance) any? : 
-          has-property?(p.power-pin) and has-property?(p.rail-voltage)
+        for p in pins(instance) any? :
+          val connected-pins = filter(connected?{[_, p]}, all-pins)
+          for cp in connected-pins any? : 
+            has-property?(cp.power-pin) and has-property?(cp.rail-voltage)
       if has-property?(instance.resistance) and connected-to-rail? : 
         One(instance) 
       else : 
@@ -1565,7 +1568,7 @@ public defn propagate-power-states (module:JITXObject) :
   val all-pins  = to-tuple(seq-cat(pins, component-instances(module)))
   ; println("pins: %," % [seq(ref,all-pins)])
   ; Find the pins with the power-states property 
-  val roots =
+  val roots = to-tuple $
     for pin in all-pins filter :
       has-property?(pin.power-states)
 
@@ -1582,7 +1585,8 @@ public defn propagate-power-states (module:JITXObject) :
       if not has-property?(pin.power-states) :
         set-property(pin, `power-states, power-states)
         
-      if has-property?(pin.power-pin) : 
+      if has-property?(pin.power-pin) or
+         has-property?(pin.power-supply-pin) :
         do(visit{_, power-states}, connected-pins(pin))
 
       val instance = containing-instance(pin) as Instance
