@@ -13,6 +13,8 @@ defpackage ocdb/checks:
   import ocdb/tolerance
   import lang-utils
 
+; FIXME!: Double check to not have forgotten the dnp? filter by replacing things by connected-pins(.)
+
 ; #CHECK(
 ;   condition = p-props is GenericPin,                    ; A boolean check                     (True|False)                       
 ;   name = "Generic Pin",                                 ; short name for the check category   (Printable)
@@ -67,6 +69,9 @@ defn populated-components (module:JITXObject) -> Tuple<JITXObject> :
   component-instances(module) 
     $> filter{{not dnp?(_)}, _}
     $> to-tuple
+
+public defn containing-instance! (obj:JITXObject) -> Instance :
+  containing-instance(obj) as Instance
 
 defn get-other-pin (comp:JITXObject,  p:JITXObject) :
   for ps in pins(comp) find! :
@@ -166,11 +171,11 @@ defn is-digital-io? (p:JITXObject) -> True|False :
 ;
 pcb-check no-connect-pins-not-connected (module:JITXObject) : 
   val all-pins = all-pins(module)
+  ; FIXME!: Make an instrospection to query all no-connects at once (maybe 0) without iterating over the huge number of pins in the design
   val nc-pins = filter(no-connect?, all-pins)
-  for p in nc-pins do : 
-    val connected? = any?(connected?{[_, p]}, all-pins)
+  for p in nc-pins do :
     #CHECK(
-      condition =            not connected?
+      condition =            not connected?(p)
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "pin-check"
@@ -184,29 +189,26 @@ pcb-check no-connect-pins-not-connected (module:JITXObject) :
 pcb-check digital-io-levels (module:JITXObject) : 
   val all-pins = all-pins(module)
   val io-pins  = to-tuple $ filter(is-digital-io?, all-pins)
-  for p in io-pins do : 
-    val all-connected-pins = all-pins 
-      $> filter{{connected?([p, _0]) and _0 != p}, _}
-      $> to-tuple
-    val connected-io-pins = all-connected-pins
-      $> filter{is-digital-io?, _}
-      $> to-tuple
-    val connected-out-pins = all-connected-pins 
-      $> filter{has-property?{_.digital-output}, _}
-      $> to-tuple
+  for p in io-pins do :
+    val all-connected-pins = connected-pins(p)
 
     if has-property?(p.digital-output) :
+      val connected-out-pins = all-connected-pins $> filter{has-property?{_.digital-output}, _}
+                                                  $> to-tuple
       #CHECK(condition =            empty?(connected-out-pins)
-            name =                 "IO pin checks"
-            description =          "Check io pin properties"
-            category =             "pin-check"
-            subcheck-description = "Check output pins are correctly connected",
-            pass-message =         "Pin %_ is marked as an output and not connected to any output pins" % [ref(p)],
-            fail-message =         "Pin %_ is marked as an output and connected to the following output pins: %," % [ref(p), seq(ref, connected-out-pins)],
-            locators =             [p])
+             name =                 "IO pin checks"
+             description =          "Check io pin properties"
+             category =             "pin-check"
+             subcheck-description = "Check output pins are correctly connected",
+             pass-message =         "Pin %_ is marked as an output and not connected to any output pins" % [ref(p)],
+             fail-message =         "Pin %_ is marked as an output and connected to the following output pins: %," % [ref(p), seq(ref, connected-out-pins)],
+             locators =             [p])
+
+    val connected-io-pins = all-connected-pins $> filter{is-digital-io?, _}
+                                               $> to-tuple
 
     for out-p in connected-io-pins do :
-      val driver = 
+      val driver =
         if has-property?(out-p.digital-io) : 
           driver(property(out-p.digital-io))
         else if has-property?(out-p.digital-output) :
@@ -215,13 +217,14 @@ pcb-check digital-io-levels (module:JITXObject) :
           false
       
       match(driver) : 
-        (o:CMOSOutput|TTLOutput) : 
+        (_:CMOSOutput|TTLOutput) :
           cmos-and-ttl-checks(out-p, connected-io-pins)
         (o:OpenCollector) : 
-          open-collector-checks(out-p, o, all-connected-pins, all-pins)
-        (f:False) : 
+          open-collector-checks(out-p, o, all-connected-pins)
+        (_:False) :
           false ; do nothing
- 
+
+; FIXME!: What about p itself?
 ; Checks any IO pins marked CMOSOutput or TLLOutput
 defn cmos-and-ttl-checks (out-p:JITXObject,
                           connected-io-pins) : 
@@ -236,22 +239,26 @@ defn cmos-and-ttl-checks (out-p:JITXObject,
 ;
 defn open-collector-checks (io-pin:JITXObject, 
                             driver:OpenCollector,
-                            all-connected-pins:Tuple<JITXObject>,
-                            all-pins:Tuple<JITXObject>) : 
-  ; First, we search for the pull-up-resistors that might be connected to this pin
-  val pull-up-resistors = to-tuple $
-    for p in all-connected-pins seq? :
-      val instance = containing-instance(p) as Instance
-      val connected-to-rail? = 
-        for p in pins(instance) any? :
-          ; Assumes that power states have been propagated.
-          has-property?(p.rail-voltage) or 
-          has-property?(p.power-pin)
+                            all-connected-pins:Tuple<JITXObject>) :
+  defn connected-to-rail? (instance: Instance) :
+    for p in pins(instance) any? :
+      ; Assumes that power states have been propagated.
+      has-property?(p.rail-voltage) or
+      has-property?(p.power-pin)
 
-      if has-property?(instance.resistance) and connected-to-rail? : 
-        One(instance) 
-      else : 
-        None()
+  ; lazy 'and', connected-to-rail? can be heavy
+  defn pull-up? (instance) :
+    has-property?(instance.resistance) and
+    connected-to-rail?(instance)
+
+  ; FIXME!: A lot of pins must have the same containing instance!,
+  ; no need to recompute pull-up? and have a lot of checks done on the same instance
+  ; First, we search for the pull-up-resistors that might be connected to this pin
+  val pull-up-resistors = all-connected-pins $> map{containing-instance!, _}
+                                             $> unique
+                                             $> filter{pull-up?, _}
+                                             $> to-tuple
+
 
   ; Check that there exists at least one pull-up-resistor
   #CHECK(
@@ -265,13 +272,14 @@ defn open-collector-checks (io-pin:JITXObject,
     locators =             [io-pin])
 
   ; Next, we check that all the pull-up resistors are connected to the same rail
-  val same-rail-voltage? = all-equal? $ 
-    for resistor in pull-up-resistors seq :
+  val rail-voltages =
+    for resistor in pull-up-resistors map :
+      ; FIXME!: We ensured that those resistors have either a rail-voltage or a power-pin, so this `first!` can crash
       for p in pins(resistor) first! : 
         property?(p.rail-voltage)
-    
+
   #CHECK(
-    condition =            same-rail-voltage?,
+    condition =            all-equal?(rail-voltages),
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "pin-check"
@@ -281,15 +289,14 @@ defn open-collector-checks (io-pin:JITXObject,
     locators =             [io-pin])
 
   ; Here we find the value of the rail voltage
-  val rail-voltage = let : 
-    val r = pull-up-resistors[0]
-    for p in pins(r) first! :   
-      property?(p.rail-voltage)
+  ; FIXME!: There can be a lot of pins, do not recompute it again
+  val rail-voltage = rail-voltages[0]
 
   ; And the total resistance of parallel connected
   ; pull-up resistors
   val total-resistance = 1.0 / sum $
-    for resistor in pull-up-resistors seq : 
+    for resistor in pull-up-resistors seq :
+      ; FIXME!: Add a nano ohm so that it can't be zero or put an if statement to handle the case ?
       1.0 / (property(resistor.resistance) as Double) ; todo: handle 0-ohm resistors
   
   ; Next, compute the sink current (V / R) and check if it is in spec for the
@@ -327,7 +334,7 @@ defn open-collector-checks (io-pin:JITXObject,
              fail-message =         "Input pin %_ vih specification %_V is incorrectly higher than the power supply rail %_V" % [ref(p), vih-v, rail-voltage],
              locators =             [p])      
 
-    ; If teh pin has generic pin props, check that rail voltage is in range.
+    ; If the pin has generic pin props, check that rail voltage is in range.
     val generic-pin = property?(p.generic-pin)
     match(generic-pin:One<GenericPin>) :
       val max-voltage = max-voltage(value(generic-pin))
@@ -360,6 +367,7 @@ public pcb-check io (module:JITXObject) :
   for p1 in pins do :
     if (has-property?(p1.no-connect)) :
       net-pins = to-tuple(filter({connected?([p1, _])}, pins))
+      ; FIXME!: Wrong? You would have length(net-pins) == 1
       #CHECK(
         condition =            length(net-pins) > 1,
         name =                 "IO pin checks"
@@ -408,7 +416,7 @@ public pcb-check io (module:JITXObject) :
           ; println("checking %_ as OpenCollector" % [ref(out-p)])
           var is-open-collector-ok? = false
           for p in net-pins do :
-            val myinst = containing-instance(p) as JITXObject
+            val myinst = containing-instance!(p)
             if has-property?(myinst.resistance) :
               val high-pin = get-other-pin(myinst, p)
               if has-property?(high-pin.rail-voltage):
@@ -928,7 +936,10 @@ public pcb-check resistor-component (r:JITXObject) :
     locators =             [r]
   )
 
-  val [vpk i temp] = [[min-value(peak-voltage(property(r.operating-point))) max-value(peak-voltage(property(r.operating-point)))] max-value(peak-current(property(r.operating-point))) OPERATING-TEMPERATURE[1]]
+  val [vpk, i, temp] = [[min-value(peak-voltage(property(r.operating-point)))
+                         max-value(peak-voltage(property(r.operating-point)))],
+                        max-value(peak-current(property(r.operating-point))),
+                        OPERATING-TEMPERATURE[1]]
 
   val power = property(r.resistance) * pow(i, 2.0)
   if has-property?(r.derating) :
@@ -1069,7 +1080,8 @@ public pcb-check capacitor-component (c:JITXObject) :
         locators =             [c]
       )
 
-      val [i-pk i-rms] = [lookup(property(c.operating-point), `current-pk) lookup(property(c.operating-point), `current-rms)]
+      val [i-pk, i-rms] = [lookup(property(c.operating-point), `current-pk),
+                           lookup(property(c.operating-point), `current-rms)]
 
       if (property(c.anode) == "tantalum" and property(c.electrolyte) == "polymer") :
         #CHECK(
@@ -1572,10 +1584,6 @@ public defn propagate-power-states (module:JITXObject) :
   val roots = to-tuple $
     for pin in all-pins filter :
       has-property?(pin.power-states)
-
-  ; Helper, returns all the pins connected to `pin`
-  defn connected-pins (pin:JITXObject) -> Seq<JITXObject> : 
-    filter(connected?{[_, pin]}, all-pins)
   
   ; DFS walk of the netlist, to update power-states of 
   ; connected power-pins 
@@ -1590,7 +1598,7 @@ public defn propagate-power-states (module:JITXObject) :
          has-property?(pin.power-supply-pin) :
         do(visit{_, power-states}, connected-pins(pin))
 
-      val instance = containing-instance(pin) as Instance
+      val instance = containing-instance!(pin)
       if has-property?(instance.power-supply-component) and 
          property(instance.power-supply-component) : 
         do(visit{_, power-states}, pins(instance))
@@ -1634,22 +1642,17 @@ public pcb-check power-states (module:JITXObject) :
   val all-pins = to-tuple(seq-cat(pins, component-instances(module)))
   ; TODO: Iterate by nets instead of by pins, so complexity is O(N + M)
   ;       instead of O(N^2) where N = number of pins, M = number of nets
-  val ps-pins  = to-tuple $ 
-    for pin in all-pins filter : 
-      is-digital-output?(pin)
+  val ps-pins  = filter(is-digital-output?, all-pins)
 
   for output in ps-pins do :
     check-has-power-states(output)
     val expected = property(output.power-states)
-    val inputs = to-tuple $
-      for pin in all-pins filter : 
-        pin != output             and
-        connected?([pin, output]) and 
-        is-digital-input?(pin)
+    val inputs = filter(is-digital-input?, connected-pins(output))
     
     for input in inputs do :
       check-has-power-states(input)
       val found = property(input.power-states)
+      ; FIXME! if the 2 lists do not have duplicates, this is equivalent to set equality (PowerState is hashable and equalable)
       val condition? = 
         length(expected) == length(found) and
         for s1 in expected all? :
