@@ -172,7 +172,7 @@ defn is-digital-input? (p:JITXObject) -> True|False :
   has-property?(p.digital-input)
 
 ; Returns if a pin is a digital i/o pin 
-defn is-digital-io? (p:JITXObject) -> True|False : 
+defn is-digital-pin? (p:JITXObject) -> True|False :
   is-digital-input?(p) or
   is-digital-output?(p)
 
@@ -180,6 +180,11 @@ defn is-digital-io? (p:JITXObject) -> True|False :
 ; marked no-connect are indeed not connected
 ;
 pcb-check no-connect-pins-not-connected (module:JITXObject) :
+  for p in all-pins(module) do :
+    ; FIXME!: make a #CHECK
+    if has-property?(p.power-pin) and not has-property?(p.rail-voltage) :
+      fatal("Power pin %_ does not have a rail voltage property" % [ref(p)])
+
   val all-populated-pins = all-populated-pins(module)
   ; FIXME!: Make an instrospection to query all no-connects at once (maybe 0) without iterating over the huge number of pins in the design
   val nc-pins = filter(no-connect?, all-populated-pins)
@@ -197,7 +202,7 @@ pcb-check no-connect-pins-not-connected (module:JITXObject) :
 ; A check used to verify the electrical properties of
 ; digital i/o pins.
 pcb-check digital-io-levels (module:JITXObject) :
-  val io-pins = filter(is-digital-io?, all-populated-pins(module))
+  val io-pins = filter(is-digital-pin?, all-populated-pins(module))
 
   ; FIXME! Could we split them first in connected groups and then run the loop only once per connected group?
   ; Issue:: some of the logic is assymetrical and considers this p as special in the connected group considered
@@ -217,7 +222,7 @@ pcb-check digital-io-levels (module:JITXObject) :
              fail-message =         "Pin %_ is marked as an output and connected to the following output pins: %," % [ref(p), seq(ref, connected-out-pins)],
              locators =             [p])
 
-    val connected-io-pins = filter(is-digital-io?, all-connected-pins)
+    val connected-io-pins = filter(is-digital-pin?, all-connected-pins)
 
     for out-p in connected-io-pins do :
       val driver =
@@ -285,10 +290,10 @@ defn open-collector-checks (io-pin:JITXObject,
     locators =             [io-pin])
 
   ; Next, we check that all the pull-up resistors are connected to the same rail
-  val rail-voltages =
-    for resistor in pull-up-resistors map :
+  val rail-voltages = to-tuple $
+    for resistor in pull-up-resistors seq-cat :
       ; FIXME!: We ensured that those resistors have either a rail-voltage or a power-pin, so this `first!` can crash
-      for p in pins(resistor) first! : 
+      for p in pins(resistor) seq? :
         property?(p.rail-voltage)
 
   #CHECK(
@@ -309,7 +314,9 @@ defn open-collector-checks (io-pin:JITXObject,
   ; pull-up resistors
   val total-resistance = 1.0 / sum $
     for resistor in pull-up-resistors seq :
-      ; FIXME!: Add a nano ohm so that it can't be zero or put an if statement to handle the case ?
+      ; FIXME!: Make a check
+      if (property(resistor.resistance) as Double) == 0 :
+        fatal("Pull-up resistor %_ has 0-ohm resistance." % [ref(resistor)])
       1.0 / (property(resistor.resistance) as Double) ; todo: handle 0-ohm resistors
   
   ; Next, compute the sink current (V / R) and check if it is in spec for the
@@ -325,12 +332,13 @@ defn open-collector-checks (io-pin:JITXObject,
          locators =             [io-pin])
 
   ; Now we need to check on any io-pins connected to this output pin
+  ; FIXME!: return the values of props directly?
   val connected-io-pins = filter(is-digital-input?, all-connected-pins)
   for p in connected-io-pins do : 
     ; First check for any io props, either digital-input or digital-io
     val io-props = 
       if has-property?(p.digital-input) : 
-        property(p.digital-input) 
+        property(p.digital-input)
       else if has-property?(p.digital-io) : 
         property(p.digital-io) 
       else : 
@@ -1592,7 +1600,7 @@ doc: "Helper to force power-states property to propagate through \
 public defn propagate-power-states (module:JITXObject) : 
   ; Collect all the pins in the design
   ; FIXME!: We care about the DNP pins?
-  val all-pins = all-pins(module)
+  val all-pins = all-populated-pins(module)
   ; println("pins: %," % [seq(ref,all-pins)])
 
   ; Find the pins with the power-states property
@@ -1622,7 +1630,7 @@ public defn propagate-power-states (module:JITXObject) :
   do(visit{_0, property(_0.power-states)}, roots)
 
   ; propagate from power pins to io-pins
-  for io-pin in filter(is-digital-io?, all-pins) do : 
+  for io-pin in filter(is-digital-pin?, all-pins) do :
     val vdd-pin = 
       if has-property?(io-pin.digital-input) : 
         vdd-pin(property(io-pin.digital-input))
@@ -1656,7 +1664,7 @@ doc: "This check will make sure that components connected to each other \
 public pcb-check power-states (module:JITXObject) :
   ; TODO: Iterate by nets instead of by pins, so complexity is O(N + M)
   ;       instead of O(N^2) where N = number of pins, M = number of nets
-  val ps-pins  = filter(is-digital-output?, all-pins(module))
+  val ps-pins  = filter(is-digital-output?, all-populated-pins(module))
 
   for output in ps-pins do :
     check-has-power-states(output)
