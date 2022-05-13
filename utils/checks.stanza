@@ -70,6 +70,11 @@ defn populated-components (module:JITXObject) -> Tuple<JITXObject> :
     $> filter{{not dnp?(_)}, _}
     $> to-tuple
 
+; Returns connected pins to `p` not marked dnp?
+defn populated-connected-pins (p: JITXObject) :
+  connected-pins(p) $> filter{{not dnp?(containing-instance!(_))}, _}
+                    $> to-tuple
+
 public defn containing-instance! (obj:JITXObject) -> Instance :
   containing-instance(obj) as Instance
 
@@ -140,8 +145,13 @@ public pcb-check rated-temperature (component:JITXObject):
 
 ; Returns all the pins that are electrically-meaningful, ie are not 
 ; from components marked do-not-place
-defn all-pins (module:JITXObject) -> Tuple<JITXObject> : 
-  populated-components(module) 
+defn all-populated-pins (module:JITXObject) -> Tuple<JITXObject> :
+  populated-components(module)
+    $> seq-cat{pins, _}
+    $> to-tuple
+
+defn all-pins (module:JITXObject) -> Tuple<JITXObject> :
+  component-instances(module)
     $> seq-cat{pins, _}
     $> to-tuple
   
@@ -169,10 +179,10 @@ defn is-digital-io? (p:JITXObject) -> True|False :
 ; A PCB check that walks a module and verifies if all pins
 ; marked no-connect are indeed not connected
 ;
-pcb-check no-connect-pins-not-connected (module:JITXObject) : 
-  val all-pins = all-pins(module)
+pcb-check no-connect-pins-not-connected (module:JITXObject) :
+  val all-populated-pins = all-populated-pins(module)
   ; FIXME!: Make an instrospection to query all no-connects at once (maybe 0) without iterating over the huge number of pins in the design
-  val nc-pins = filter(no-connect?, all-pins)
+  val nc-pins = filter(no-connect?, all-populated-pins)
   for p in nc-pins do :
     #CHECK(
       condition =            not connected?(p)
@@ -184,14 +194,17 @@ pcb-check no-connect-pins-not-connected (module:JITXObject) :
       fail-message =         "Pin %_ is marked no-connect and is incorrectly connected to other pins" % [ref(p)],
       locators =             [p])
 
-; A check used to verify the electrical properties of 
+; A check used to verify the electrical properties of
 ; digital i/o pins.
-pcb-check digital-io-levels (module:JITXObject) : 
-  val all-pins = all-pins(module)
-  val io-pins  = to-tuple $ filter(is-digital-io?, all-pins)
-  for p in io-pins do :
-    val all-connected-pins = connected-pins(p)
+pcb-check digital-io-levels (module:JITXObject) :
+  val io-pins = filter(is-digital-io?, all-populated-pins(module))
 
+  ; FIXME! Could we split them first in connected groups and then run the loop only once per connected group?
+  ; Issue:: some of the logic is assymetrical and considers this p as special in the connected group considered
+  for p in io-pins do :
+    val all-connected-pins = populated-connected-pins(p)
+
+    ; FIXME!: not calling digital-output? that accepts digital-io property?
     if has-property?(p.digital-output) :
       val connected-out-pins = all-connected-pins $> filter{has-property?{_.digital-output}, _}
                                                   $> to-tuple
@@ -204,8 +217,7 @@ pcb-check digital-io-levels (module:JITXObject) :
              fail-message =         "Pin %_ is marked as an output and connected to the following output pins: %," % [ref(p), seq(ref, connected-out-pins)],
              locators =             [p])
 
-    val connected-io-pins = all-connected-pins $> filter{is-digital-io?, _}
-                                               $> to-tuple
+    val connected-io-pins = filter(is-digital-io?, all-connected-pins)
 
     for out-p in connected-io-pins do :
       val driver =
@@ -227,7 +239,8 @@ pcb-check digital-io-levels (module:JITXObject) :
 ; FIXME!: What about p itself?
 ; Checks any IO pins marked CMOSOutput or TLLOutput
 defn cmos-and-ttl-checks (out-p:JITXObject,
-                          connected-io-pins) : 
+                          connected-io-pins) :
+  ; FIXME!: Triply nested loop, do we care about the order in the triplet?
   for in-p in filter({_ != out-p}, connected-io-pins) do :
     ; run the checks
     check-single-push-pull-levels(out-p, in-p)
@@ -1578,10 +1591,12 @@ doc: "Helper to force power-states property to propagate through \
       property set `true`."
 public defn propagate-power-states (module:JITXObject) : 
   ; Collect all the pins in the design
-  val all-pins  = to-tuple(seq-cat(pins, component-instances(module)))
+  ; FIXME!: We care about the DNP pins?
+  val all-pins = all-pins(module)
   ; println("pins: %," % [seq(ref,all-pins)])
-  ; Find the pins with the power-states property 
-  val roots = to-tuple $
+
+  ; Find the pins with the power-states property
+  val roots =
     for pin in all-pins filter :
       has-property?(pin.power-states)
   
@@ -1638,17 +1653,17 @@ doc: "This check will make sure that components connected to each other \
       connected to, this checks that they are both powered on or off.   \
                                                                         \
       - module: the module to check."
-public pcb-check power-states (module:JITXObject) : 
-  val all-pins = to-tuple(seq-cat(pins, component-instances(module)))
+public pcb-check power-states (module:JITXObject) :
   ; TODO: Iterate by nets instead of by pins, so complexity is O(N + M)
   ;       instead of O(N^2) where N = number of pins, M = number of nets
-  val ps-pins  = filter(is-digital-output?, all-pins)
+  val ps-pins  = filter(is-digital-output?, all-pins(module))
 
   for output in ps-pins do :
     check-has-power-states(output)
     val expected = property(output.power-states)
     val inputs = filter(is-digital-input?, connected-pins(output))
-    
+
+    ; FIXME!: Double nested loop with potentially (x, y) and (y, x) if digital input and output?
     for input in inputs do :
       check-has-power-states(input)
       val found = property(input.power-states)
