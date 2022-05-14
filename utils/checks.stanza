@@ -253,41 +253,46 @@ defn check-digital-output (output-pins: Tuple<Pin>) :
            fail-message =         "The following output pins are connected together: %," % [seq(ref, output-pins)],
            locators =             output-pins)
 
+
+defstruct DigitalPin <: Equalable :
+  pin: Pin
+  prop: ?
+
+defmethod equal? (p1: DigitalPin, p2: DigitalPin) -> True|False :
+  pin(p1) == pin(p2)
+
 defstruct DigitalPinCategories :
-  ios : Tuple<Pin>
-  inputs : Tuple<Pin>
-  outputs : Tuple<Pin>
-  analogs : Tuple<Pin>
+  ios : Tuple<DigitalPin>
+  inputs : Tuple<DigitalPin>
+  outputs : Tuple<DigitalPin>
+  all: Tuple<Pin>
 
-defn categorize-digital-pins (digital-pins: Tuple<Pin>) -> DigitalPinCategories :
-  val ios = Vector<Pin>()
-  val inputs = Vector<Pin>()
-  val outputs = Vector<Pin>()
-  val analogs = Vector<Pin>()
+defn categorize-digital-pins (pins: Seqable<Pin>) -> DigitalPinCategories :
+  val ios = Vector<DigitalPin>()
+  val inputs = Vector<DigitalPin>()
+  val outputs = Vector<DigitalPin>()
 
-  for p in digital-pins do :
+  for p in pins do :
     ; TODO: Checking that rail-voltage propagation is correct for collector check, can remove later
     if has-property?(p.power-pin) and not has-property?(p.rail-voltage) :
       fatal("Power pin %_ does not have a rail voltage property" % [ref(p)])
 
-    val io? = has-property?(p.digital-io)
-    val i? = has-property?(p.digital-input)
-    val o? = has-property?(p.digital-output)
+    val io? = property?(p.digital-io)
+    val i? = property?(p.digital-input)
+    val o? = property?(p.digital-output)
 
     var count = 0
-    if io? :
-      add(ios, p)
+    if not empty?(io?) :
+      add(ios, DigitalPin(p, value! $ io?))
       count = count + 1
-    if i? :
-      add(inputs, p)
+    if not empty?(i?) :
+      add(inputs, DigitalPin(p, value! $ i?))
       count = count + 1
-    if o? :
-      add(outputs, p)
+    if not empty?(o?) :
+      add(outputs, DigitalPin(p, value! $ o?))
       count = count + 1
 
-    if count == 0 :
-      add(analogs, p)
-    else :
+    if count != 0 :
       #CHECK(
         condition =            count == 1,
         name =                 "IO pin checks"
@@ -299,71 +304,96 @@ defn categorize-digital-pins (digital-pins: Tuple<Pin>) -> DigitalPinCategories 
         locators =             [p])
 
   DigitalPinCategories(to-tuple(ios),
-                       to-tuple(inputs),
-                       to-tuple(outputs),
-                       to-tuple(analogs))
-
+                to-tuple(inputs),
+                to-tuple(outputs),
+                to-tuple(pins))
 
 ; A check used to verify the electrical properties of
 ; digital i/o pins.
 pcb-check digital-io-levels (module:JITXObject) :
   for connected-group in populated-connected-groups(module) do :
     val pin-categories = categorize-digital-pins(connected-group)
-    val digital-pins = to-tuple $ cat-all $ [ios(pin-categories), inputs(pin-categories), outputs(pin-categories)]
 
-    ; Check at most 1 output pin
-    check-digital-output $ outputs(pin-categories)
+    ; Check at most 1 output pin in net
+    check-digital-output $ to-tuple $ seq(pin, outputs(pin-categories))
 
-    ; Check driving behaviour on IO pins
-    for p in ios(pin-categories) do :
-      check-driver(p, property(p.digital-io), connected-group, digital-pins)
+    ; Open collector checks
+    val open-collectors = to-tuple $
+      for resolved-pin in cat(ios(pin-categories), outputs(pin-categories)) filter :
+        driver(prop(resolved-pin)) is OpenCollector
 
-    ; Check driving behaviour on Output pins
-    for p in outputs(pin-categories) do :
-      check-driver(p, property(p.digital-output), connected-group, digital-pins)
+    open-collector-checks(open-collectors, pin-categories)
 
-defn check-driver (p: Pin, prop: ?, connected-group: Tuple<Pin>, digital-pins: Tuple<Pin>) :
-  match(driver(prop)) :
-    (_: CMOSOutput|TTLOutput) : cmos-and-ttl-checks(p, digital-pins)
-    (property: OpenCollector) : open-collector-checks(p, property, connected-group)
-    (_: False) : false
+    ; CMOS / TTL Output checks
+    val cmos-ttl-outputs = to-tuple $
+      for resolved-pin in cat(ios(pin-categories), outputs(pin-categories)) filter :
+        driver(prop(resolved-pin)) is CMOSOutput|TTLOutput
+
+    cmos-and-ttl-checks(cmos-ttl-outputs, pin-categories)
 
 ; FIXME!: What about p itself?
 ; Checks any IO pins marked CMOSOutput or TLLOutput
-defn cmos-and-ttl-checks (out-p:JITXObject,
-                          connected-io-pins) :
-  ; FIXME!: Triply nested loop, do we care about the order in the triplet?
-  for in-p in filter({_ != out-p}, connected-io-pins) do :
-    ; run the checks
-    check-single-push-pull-levels(out-p, in-p)
+defn cmos-and-ttl-checks (cmos-ttl-outputs:Tuple<DigitalPin>,
+                          pin-categories:DigitalPinCategories) :
+  val digital-pins = cat-all $ [ios(pin-categories), inputs(pin-categories), outputs(pin-categories)]
+  ; FIXME!: Triply nested loop, do we care about the order?
+  for out-p in cmos-ttl-outputs do :
+    for in-p in filter({_ != out-p}, digital-pins) do :
+      ; FIXME!: change check-single-push-pull-levels to use DigitalPins
+      check-single-push-pull-levels(pin(out-p), pin(in-p))
 
 ; Checks that run on a pin marked OpenCollector
 ; - io-pin: the pin we are checking
 ; - driver: the driver (value of driver(property(io-pin.digital-io)))
 ; - connected-group: the pins this pin is connected to
 ;
-defn open-collector-checks (io-pin:Pin,
-                            driver:OpenCollector,
-                            connected-group:Tuple<Pin>) :
-  defn connected-to-rail? (instance: Instance) :
-    for p in pins(instance) any? :
-      ; Assumes that power states have been propagated.
-      has-property?(p.rail-voltage)
+defn open-collector-checks (open-collectors:Tuple<DigitalPin>,
+                            pin-categories:DigitalPinCategories) :
+  val [pull-up-resistors, rail-voltages] = collect-pull-up-resistors-and-their-rail-voltages(pin-categories)
+  check-a-pull-resistor-exists(open-collectors, pull-up-resistors)
+  val rail-voltage = check-and-return-unique-rail-voltage(rail-voltages, pull-up-resistors, open-collectors)
+  check-sink-current-meets-collector-ratings(rail-voltage, pull-up-resistors, open-collectors)
+  check-input-and-generic-pin-max-voltage-rating(rail-voltage, pin-categories)
+
+defn collect-pull-up-resistors-and-their-rail-voltages (pin-categories: DigitalPinCategories) :
+  val collected-rail-voltages = Vector<Double>()
+
+  defn collect-rail-voltages? (instance: Instance) -> True|False :
+    val voltages = to-tuple $
+      for p in pins(instance) seq? :
+        property?(p.rail-voltage)
+
+    add-all(collected-rail-voltages, voltages as Tuple<Double>)
+    not empty?(voltages)
 
   ; lazy 'and', connected-to-rail? can be heavy
   defn pull-up? (instance) :
     has-property?(instance.resistance) and
-    connected-to-rail?(instance)
+    collect-rail-voltages?(instance)
 
   ; FIXME!: A lot of pins must have the same containing instance!,
   ; no need to recompute pull-up? and have a lot of checks done on the same instance
   ; First, we search for the pull-up-resistors that might be connected to this pin
-  val pull-up-resistors = connected-group $> map{containing-instance!, _}
-                                          $> unique
-                                          $> filter{pull-up?, _}
-                                          $> to-tuple
+  val pull-up-resistors = all(pin-categories) $> map{containing-instance!, _}
+                                              $> unique
+                                              $> filter{pull-up?, _}
+                                              $> to-tuple
 
+  [pull-up-resistors, to-tuple(collected-rail-voltages)]
 
+defn open-collector-pass-message (open-collectors:Tuple<DigitalPin>, action: String|Printable) :
+  if length(open-collectors) == 1 :
+    "Pin %_ is marked OpenCollector and has %_" % [ref $ pin(open-collectors[0]), action]
+  else :
+    "Pins %, are marked OpenCollector on the same net and have %_" % [seq(ref{pin(_)}, open-collectors), action]
+
+defn open-collector-fail-message (open-collectors:Tuple<DigitalPin>, action: String|Printable) :
+  if length(open-collectors) == 1 :
+    "Pin %_ is marked OpenCollector but does not have %_" % [ref $ pin(open-collectors[0]), action]
+  else :
+    "Pins %, are marked OpenCollector on the same net but do not have %_" % [seq(ref{pin(_)}, open-collectors), action]
+
+defn check-a-pull-resistor-exists (open-collectors: Tuple<DigitalPin>, pull-up-resistors: Tuple<Instance>) :
   ; Check that there exists at least one pull-up-resistor
   #CHECK(
     condition =            not empty?(pull-up-resistors),
@@ -371,78 +401,70 @@ defn open-collector-checks (io-pin:Pin,
     description =          "Check io pin properties"
     category =             "pin-check"
     subcheck-description = "Check that io pins marked OpenCollector have at least one pull-up resistor",
-    pass-message =         "Pin %_ is marked OpenCollector and has at least one pull-up resistor(s)" % [ref(io-pin)],
-    fail-message =         "Pin %_ is marked OpenCollector and is missing pull-up resistor(s)" % [ref(io-pin)],
-    locators =             [io-pin])
+    pass-message =         open-collector-pass-message(open-collectors, "at least one pull-up resistor"),
+    fail-message =         open-collector-fail-message(open-collectors, "any pull-up resistor attached"),
+    locators =             to-tuple $ seq(pin, open-collectors))
 
-  ; Next, we check that all the pull-up resistors are connected to the same rail
-  val rail-voltages = to-tuple $
-    for resistor in pull-up-resistors seq-cat :
-      ; FIXME!: We ensured that those resistors have either a rail-voltage or a power-pin, so this `first!` can crash
-      for p in pins(resistor) seq? :
-        property?(p.rail-voltage)
-
+defn check-and-return-unique-rail-voltage (rail-voltages: Tuple<Double>, pull-up-resistors: Tuple<Instance>, open-collectors: Tuple<DigitalPin>) -> Double :
   #CHECK(
     condition =            all-equal?(rail-voltages),
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "pin-check"
     subcheck-description = "Check that io pins marked OpenCollector have pull-up resistors connected to the same rail voltage",
-    pass-message =         "Pin %_ is marked OpenCollector and has pull-up resistor(s) with correct rail voltage" % [ref(io-pin)],
-    fail-message =         "Pin %_ is marked OpenCollector and pull-up resistors have different rail voltages" % [ref(io-pin)],
-    locators =             [io-pin])
+    pass-message =         open-collector-pass-message(open-collectors, "all pull-up resistors with the same rail voltage"),
+    fail-message =         open-collector-fail-message(open-collectors, "all pull-up resistors %, with the same rail voltage" % [seq(ref, pull-up-resistors)]),
+    locators =             pull-up-resistors)
 
   ; Here we find the value of the rail voltage
-  ; FIXME!: There can be a lot of pins, do not recompute it again
-  val rail-voltage = rail-voltages[0]
+  rail-voltages[0]
 
+defn compute-equivalent-resistance (pull-up-resistors: Tuple<Instance>) :
   ; And the total resistance of parallel connected
   ; pull-up resistors
-  val total-resistance = 1.0 / sum $
+  1.0 / sum $
     for resistor in pull-up-resistors seq :
       ; FIXME!: Make a check
-      if (property(resistor.resistance) as Double) == 0 :
+      val resistance = property(resistor.resistance) as Double
+      if resistance == 0 :
         fatal("Pull-up resistor %_ has 0-ohm resistance." % [ref(resistor)])
-      1.0 / (property(resistor.resistance) as Double) ; todo: handle 0-ohm resistors
-  
-  ; Next, compute the sink current (V / R) and check if it is in spec for the
-  ; driver.
-  val sink-current = rail-voltage / total-resistance
-  #CHECK(condition =            sink-current < iol(driver),
-         name =                 "IO pin checks"
-         description =          "Check io pin properties"
-         category =             "pin-check"
-         subcheck-description = "Check open collector pin sink current requirement versus resistance specification",
-         pass-message =         "Open collector pin %_ current sink specification %_A satisfies the design requirement %_A" %   [ref(io-pin), iol(driver), sink-current],
-         fail-message =         "Open collector pin %_ current specification %_A does not satisfy the design requirement %_A" % [ref(io-pin), iol(driver), sink-current],
-         locators =             [io-pin])
+      1.0 / resistance
 
+defn check-sink-current-meets-collector-ratings (rail-voltage: Double, pull-up-resistors: Tuple<Instance>, open-collectors: Tuple<DigitalPin>) :
+  val equivalent-resistance = compute-equivalent-resistance(pull-up-resistors)
+  ; Next, compute the sink current (V / R) and check if it is in spec for the driver.
+  val sink-current = rail-voltage / equivalent-resistance
+  for open-collector in open-collectors do :
+    val driver = driver $ prop(open-collector)
+    #CHECK(condition =            sink-current < iol(driver),
+           name =                 "IO pin checks"
+           description =          "Check io pin properties"
+           category =             "pin-check"
+           subcheck-description = "Check open collector pin sink current requirement versus resistance specification",
+           pass-message =         "Open collector pin %_ current sink specification %_A satisfies the design requirement %_A" %   [ref $ pin(open-collector), iol(driver), sink-current],
+           fail-message =         "Open collector pin %_ current specification %_A does not satisfy the design requirement %_A" % [ref $ pin(open-collector), iol(driver), sink-current],
+           locators =             [pin(open-collector)])
+
+defn check-input-and-generic-pin-max-voltage-rating (rail-voltage: Double, pin-categories: DigitalPinCategories) :
   ; Now we need to check on any io-pins connected to this output pin
-  ; FIXME!: return the values of props directly?
-  val connected-io-pins = filter(is-digital-input?, connected-group)
-  for p in connected-io-pins do : 
-    ; First check for any io props, either digital-input or digital-io
-    val io-props = 
-      if has-property?(p.digital-input) : 
-        property(p.digital-input)
-      else if has-property?(p.digital-io) : 
-        property(p.digital-io) 
-      else : 
-        false
+  val input-pins = cat(ios(pin-categories), inputs(pin-categories))
+  for p in input-pins do :
+    val pin = pin(p)
+    val input-prop = prop(p)
     ; Check that the max voltage rating of the input pin is below that of the rail voltage
-    match(io-props:DigitalInput|DigitalIO) : 
-      val vih-v = vih(io-props)
+    match(input-prop: DigitalInput|DigitalIO) :
+      val vih-v = vih(input-prop)
       #CHECK(condition =            rail-voltage > vih-v,
              name =                 "IO pin checks"
              description =          "Check io pin properties"
              category =             "pin-check"
              subcheck-description = "Check power supply rail is higher than the vih pin specification",
-             pass-message =         "Input pin %_ vih specification %_V is correctly lower than the power supply rail %_V"    % [ref(p), vih-v, rail-voltage],
-             fail-message =         "Input pin %_ vih specification %_V is incorrectly higher than the power supply rail %_V" % [ref(p), vih-v, rail-voltage],
-             locators =             [p])      
+             pass-message =         "Input pin %_ vih specification %_V is correctly lower than the power supply rail %_V"    % [ref $ pin, vih-v, rail-voltage],
+             fail-message =         "Input pin %_ vih specification %_V is incorrectly higher than the power supply rail %_V" % [ref $ pin, vih-v, rail-voltage],
+             locators =             [pin])
 
     ; If the pin has generic pin props, check that rail voltage is in range.
-    val generic-pin = property?(p.generic-pin)
+    val generic-pin = property?(pin.generic-pin)
     match(generic-pin:One<GenericPin>) :
       val max-voltage = max-voltage(value(generic-pin))
       #CHECK(
@@ -451,9 +473,9 @@ defn open-collector-checks (io-pin:Pin,
         description =          "Check io pin properties"
         category =             "pin-check"
         subcheck-description = "Check pin maximum voltage is within the design specification",
-        pass-message =         "Generic pin %_ maximum voltage %_V is correctly within the power supply specification %_V"    % [ref(p), max-voltage, rail-voltage],
-        fail-message =         "Generic pin %_ maximum voltage %_V is incorrectly outside the power supply specification %_V" % [ref(p), max-voltage, rail-voltage],
-        locators =             [p]
+        pass-message =         "Generic pin %_ maximum voltage %_V is correctly within the power supply specification %_V"    % [ref $ pin, max-voltage, rail-voltage],
+        fail-message =         "Generic pin %_ maximum voltage %_V is incorrectly outside the power supply specification %_V" % [ref $ pin, max-voltage, rail-voltage],
+        locators =             [pin]
       )
 
 ; Run the general purpose io checks
