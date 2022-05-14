@@ -14,34 +14,37 @@ defpackage ocdb/checks:
   import lang-utils
 
 
-; #CHECK(
-;   condition = p-props is GenericPin,                    ; A boolean check                     (True|False)                       
-;   name = "Generic Pin",                                 ; short name for the check category   (Printable)
-;   description = "Checks the voltage applied to pins",   ; The description of the pcb check    (Printable)
-;   category = "pin-check",                               ; Category for the check              (Printable)
-;   subcheck-description = "sub-check detail description",; The description of the sub check    (Printable)
-;   pass-message = "pass printable %_" % [ref(p)],        ; What is printed if the check passes (Printable)
-;   fail-message = "fail printable %_ " % [ref(p)],       ; What is printed if the check fails  (Printable)
-;   locators = [p]                                        ; Locators                            (Tuple<JITXObject|JITXDef>)
-; )
+;<>
+#CHECK(
+  condition = p-props is GenericPin,                    ; A boolean check                     (True|False)
+  name = "Generic Pin",                                 ; short name for the check category   (Printable)
+  description = "Checks the voltage applied to pins",   ; The description of the pcb check    (Printable)
+  category = "pin-check",                               ; Category for the check              (Printable)
+  subcheck-description = "sub-check detail description",; The description of the sub check    (Printable)
+  pass-message = "pass printable %_" % [ref(p)],        ; What is printed if the check passes (Printable)
+  fail-message = "fail printable %_ " % [ref(p)],       ; What is printed if the check fails  (Printable)
+  locators = [p]                                        ; Locators                            (Tuple<JITXObject|JITXDef>)
+)
+<>
 
-
+; ====================================
 ; ==== Check convenience functions ===
 ; ====================================
 
 
-doc:"Set of standard checks to run on a top-level-module. \
-                                                          \
-     - Component instances marked DNP are skipped         \
-     - Resistors, Capacitors are checked                  \
-     - Components with temperature rating are checked     \
-       against design variables, see ocdb/design-vars     \
-     - Pins are checked                                   \
-       - GenericPin properties are checked                \
-       - PowerPin properties are checked                  \
-       - ResetPin properties are checked                  \
-     - Landpattern checks are run, see check-landpattern  \
-     - Digital I/O pin checks are run, see check-io       "
+doc: \<S>
+Set of standard checks to run on a top-level-module.
+ - Component instances marked DNP are skipped
+ - Resistors, Capacitors are checked
+ - Components with temperature rating are checked
+   against design variables, see ocdb/design-vars
+ - Pins are checked
+   - GenericPin properties are checked
+   - PowerPin properties are checked
+   - ResetPin properties are checked
+ - Landpattern checks are run, see check-landpattern
+ - Digital I/O pin checks are run, see check-io
+<S>
 
 public defn check-design (module:JITXObject):
   inside pcb-module:
@@ -227,6 +230,7 @@ defn is-digital-pin? (p:JITXObject) -> True|False :
 pcb-check no-connect-pins-not-connected (module:JITXObject) :
   val all-populated-pins = all-populated-pins(module)
   val nc-pins = filter(no-connect?, all-populated-pins)
+  ; FIXME!: This errors if an NC pin is connected to a DNP pin
   for p in nc-pins do :
     #CHECK(
       condition =            not connected?(p)
@@ -336,16 +340,15 @@ defn cmos-and-ttl-checks (out-p:JITXObject,
 ; Checks that run on a pin marked OpenCollector
 ; - io-pin: the pin we are checking
 ; - driver: the driver (value of driver(property(io-pin.digital-io)))
-; - all-connected-pins: the pins this pin is connected to
+; - connected-group: the pins this pin is connected to
 ;
-defn open-collector-checks (io-pin:JITXObject, 
+defn open-collector-checks (io-pin:Pin,
                             driver:OpenCollector,
-                            all-connected-pins:Tuple<JITXObject>) :
+                            connected-group:Tuple<Pin>) :
   defn connected-to-rail? (instance: Instance) :
     for p in pins(instance) any? :
       ; Assumes that power states have been propagated.
-      has-property?(p.rail-voltage) or
-      has-property?(p.power-pin)
+      has-property?(p.rail-voltage)
 
   ; lazy 'and', connected-to-rail? can be heavy
   defn pull-up? (instance) :
@@ -355,10 +358,10 @@ defn open-collector-checks (io-pin:JITXObject,
   ; FIXME!: A lot of pins must have the same containing instance!,
   ; no need to recompute pull-up? and have a lot of checks done on the same instance
   ; First, we search for the pull-up-resistors that might be connected to this pin
-  val pull-up-resistors = all-connected-pins $> map{containing-instance!, _}
-                                             $> unique
-                                             $> filter{pull-up?, _}
-                                             $> to-tuple
+  val pull-up-resistors = connected-group $> map{containing-instance!, _}
+                                          $> unique
+                                          $> filter{pull-up?, _}
+                                          $> to-tuple
 
 
   ; Check that there exists at least one pull-up-resistor
@@ -416,7 +419,7 @@ defn open-collector-checks (io-pin:JITXObject,
 
   ; Now we need to check on any io-pins connected to this output pin
   ; FIXME!: return the values of props directly?
-  val connected-io-pins = filter(is-digital-input?, all-connected-pins)
+  val connected-io-pins = filter(is-digital-input?, connected-group)
   for p in connected-io-pins do : 
     ; First check for any io props, either digital-input or digital-io
     val io-props = 
