@@ -13,7 +13,6 @@ defpackage ocdb/checks:
   import ocdb/tolerance
   import lang-utils
 
-; FIXME!: Double check to not have forgotten the dnp? filter by replacing things by connected-pins(.)
 
 ; #CHECK(
 ;   condition = p-props is GenericPin,                    ; A boolean check                     (True|False)                       
@@ -43,6 +42,7 @@ doc:"Set of standard checks to run on a top-level-module. \
        - ResetPin properties are checked                  \
      - Landpattern checks are run, see check-landpattern  \
      - Digital I/O pin checks are run, see check-io       "
+
 public defn check-design (module:JITXObject):
   inside pcb-module:
     for i in populated-components(module) do :
@@ -58,6 +58,49 @@ public defn check-design (module:JITXObject):
     check-io(module)
     check-all-landpatterns(module)
 
+;============================================================
+;======================== Check IO ==========================
+;============================================================
+
+defstruct Connections :
+  connected-groups: Tuple<Tuple<Pin>> ; ignores singletons made of non-connected-pins
+  non-connected-pins: Tuple<Pin>
+
+val POPULATED-CONNECTIONS = HashTable<JITXObject, Connections>()
+
+defn populated-connected-groups (module:JITXObject) -> Tuple<Tuple<Pin>> :
+  connected-groups $ populated-connections(module)
+
+defn populated-non-connected-pins (module:JITXObject) -> Tuple<Pin> :
+  non-connected-pins $ populated-connections(module)
+
+defn populated-connections (module:JITXObject) -> Connections :
+  if not key?(POPULATED-CONNECTIONS, module) :
+    POPULATED-CONNECTIONS[module] = connect-groups(module)
+
+  POPULATED-CONNECTIONS[module]
+
+defn connect-groups (module:JITXObject) -> Connections :
+  val visited-connections = HashSet<Pin>()
+  val connected-groups = Vector<Tuple<Pin>>()
+  val non-connected-pins = Vector<Pin>()
+
+  for p in all-populated-pins(module) do :
+    ; p is not added to visited-connections because we already looped over it, so it is clear.
+    if visited-connections[p] :
+      None()
+    else :
+      val connections = connected-pins(p)
+      if empty?(connections) :
+        add(non-connected-pins, p)
+      else :
+        add-all(visited-connections, connections)
+        val connected-group = to-tuple $ cat([p], connections)
+        add(connected-groups, connected-group)
+
+  Connections(to-tuple(connected-groups),
+              to-tuple(non-connected-pins))
+
 ; Checks if an object is DNP (do-not-populate)
 defn dnp? (obj:JITXObject) : 
   has-property?(obj.DNP) or 
@@ -68,6 +111,19 @@ defn dnp? (obj:JITXObject) :
 defn populated-components (module:JITXObject) -> Tuple<JITXObject> : 
   component-instances(module) 
     $> filter{{not dnp?(_)}, _}
+    $> to-tuple
+
+; Returns all the pins that are electrically-meaningful, ie are not
+; from components marked do-not-place
+defn all-populated-pins (module:JITXObject) -> Tuple<Pin> :
+  populated-components(module)
+    $> seq-cat{pins, _}
+    $> to-tuple ; FIXME! There can be a lot, do not to-tuple?
+    $> {_ as Tuple<Pin>}
+
+defn all-pins (module:JITXObject) -> Tuple<JITXObject> :
+  component-instances(module)
+    $> seq-cat{pins, _}
     $> to-tuple
 
 ; Returns connected pins to `p` not marked dnp?
@@ -142,18 +198,6 @@ public pcb-check rated-temperature (component:JITXObject):
     fail-message =         "%_ does not have an acceptable higher operating temperature versus design target (%_C < %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[1]],
     locators =             [component]  
   )
-
-; Returns all the pins that are electrically-meaningful, ie are not 
-; from components marked do-not-place
-defn all-populated-pins (module:JITXObject) -> Tuple<JITXObject> :
-  populated-components(module)
-    $> seq-cat{pins, _}
-    $> to-tuple
-
-defn all-pins (module:JITXObject) -> Tuple<JITXObject> :
-  component-instances(module)
-    $> seq-cat{pins, _}
-    $> to-tuple
   
 ; Checks if a pin is marked "no-connect"
 defn no-connect? (p:JITXObject) -> True|False : 
@@ -173,20 +217,15 @@ defn is-digital-input? (p:JITXObject) -> True|False :
 
 ; Returns if a pin is a digital i/o pin 
 defn is-digital-pin? (p:JITXObject) -> True|False :
-  is-digital-input?(p) or
-  is-digital-output?(p)
+  has-property?(p.digital-io) or
+  has-property?(p.digital-input) or
+  has-property?(p.digital-output)
 
 ; A PCB check that walks a module and verifies if all pins
 ; marked no-connect are indeed not connected
 ;
 pcb-check no-connect-pins-not-connected (module:JITXObject) :
-  for p in all-pins(module) do :
-    ; FIXME!: make a #CHECK
-    if has-property?(p.power-pin) and not has-property?(p.rail-voltage) :
-      fatal("Power pin %_ does not have a rail voltage property" % [ref(p)])
-
   val all-populated-pins = all-populated-pins(module)
-  ; FIXME!: Make an instrospection to query all no-connects at once (maybe 0) without iterating over the huge number of pins in the design
   val nc-pins = filter(no-connect?, all-populated-pins)
   for p in nc-pins do :
     #CHECK(
@@ -199,47 +238,91 @@ pcb-check no-connect-pins-not-connected (module:JITXObject) :
       fail-message =         "Pin %_ is marked no-connect and is incorrectly connected to other pins" % [ref(p)],
       locators =             [p])
 
+defn check-digital-output (output-pins: Tuple<Pin>) :
+  if not empty?(output-pins) :
+    #CHECK(condition =            length(output-pins) == 1
+           name =                 "IO pin checks"
+           description =          "Check io pin properties"
+           category =             "pin-check"
+           subcheck-description = "Check output pins are correctly connected",
+           pass-message =         "Pin %_ is marked as an output and not connected to any output pins" % [ref $ output-pins[0]],
+           fail-message =         "The following output pins are connected together: %," % [seq(ref, output-pins)],
+           locators =             output-pins)
+
+defstruct DigitalPinCategories :
+  ios : Tuple<Pin>
+  inputs : Tuple<Pin>
+  outputs : Tuple<Pin>
+  analogs : Tuple<Pin>
+
+defn categorize-digital-pins (digital-pins: Tuple<Pin>) -> DigitalPinCategories :
+  val ios = Vector<Pin>()
+  val inputs = Vector<Pin>()
+  val outputs = Vector<Pin>()
+  val analogs = Vector<Pin>()
+
+  for p in digital-pins do :
+    ; TODO: Checking that rail-voltage propagation is correct for collector check, can remove later
+    if has-property?(p.power-pin) and not has-property?(p.rail-voltage) :
+      fatal("Power pin %_ does not have a rail voltage property" % [ref(p)])
+
+    val io? = has-property?(p.digital-io)
+    val i? = has-property?(p.digital-input)
+    val o? = has-property?(p.digital-output)
+
+    var count = 0
+    if io? :
+      add(ios, p)
+      count = count + 1
+    if i? :
+      add(inputs, p)
+      count = count + 1
+    if o? :
+      add(outputs, p)
+      count = count + 1
+
+    if count == 0 :
+      add(analogs, p)
+    else :
+      #CHECK(
+        condition =            count == 1,
+        name =                 "IO pin checks"
+        description =          "Check io pin properties"
+        category =             "pin-check"
+        subcheck-description = "Check that pins have at most 1 property amongst: digital-io, digital-input, digital-output",
+        pass-message =         "Pin %_ has valid digital properties" % [ref(p)],
+        fail-message =         "Pin %_ has invalid digital properties: digital-io=%_, digital-input=%_, digital-output=%_" % [ref(p), io?, i?, o?],
+        locators =             [p])
+
+  DigitalPinCategories(to-tuple(ios),
+                       to-tuple(inputs),
+                       to-tuple(outputs),
+                       to-tuple(analogs))
+
+
 ; A check used to verify the electrical properties of
 ; digital i/o pins.
 pcb-check digital-io-levels (module:JITXObject) :
-  val io-pins = filter(is-digital-pin?, all-populated-pins(module))
+  for connected-group in populated-connected-groups(module) do :
+    val pin-categories = categorize-digital-pins(connected-group)
+    val digital-pins = to-tuple $ cat-all $ [ios(pin-categories), inputs(pin-categories), outputs(pin-categories)]
 
-  ; FIXME! Could we split them first in connected groups and then run the loop only once per connected group?
-  ; Issue:: some of the logic is assymetrical and considers this p as special in the connected group considered
-  for p in io-pins do :
-    val all-connected-pins = populated-connected-pins(p)
+    ; Check at most 1 output pin
+    check-digital-output $ outputs(pin-categories)
 
-    ; FIXME!: not calling digital-output? that accepts digital-io property?
-    if has-property?(p.digital-output) :
-      val connected-out-pins = all-connected-pins $> filter{has-property?{_.digital-output}, _}
-                                                  $> to-tuple
-      #CHECK(condition =            empty?(connected-out-pins)
-             name =                 "IO pin checks"
-             description =          "Check io pin properties"
-             category =             "pin-check"
-             subcheck-description = "Check output pins are correctly connected",
-             pass-message =         "Pin %_ is marked as an output and not connected to any output pins" % [ref(p)],
-             fail-message =         "Pin %_ is marked as an output and connected to the following output pins: %," % [ref(p), seq(ref, connected-out-pins)],
-             locators =             [p])
+    ; Check driving behaviour on IO pins
+    for p in ios(pin-categories) do :
+      check-driver(p, property(p.digital-io), connected-group, digital-pins)
 
-    val connected-io-pins = filter(is-digital-pin?, all-connected-pins)
+    ; Check driving behaviour on Output pins
+    for p in outputs(pin-categories) do :
+      check-driver(p, property(p.digital-output), connected-group, digital-pins)
 
-    for out-p in connected-io-pins do :
-      val driver =
-        if has-property?(out-p.digital-io) : 
-          driver(property(out-p.digital-io))
-        else if has-property?(out-p.digital-output) :
-          driver(property(out-p.digital-output))
-        else : 
-          false
-      
-      match(driver) : 
-        (_:CMOSOutput|TTLOutput) :
-          cmos-and-ttl-checks(out-p, connected-io-pins)
-        (o:OpenCollector) : 
-          open-collector-checks(out-p, o, all-connected-pins)
-        (_:False) :
-          false ; do nothing
+defn check-driver (p: Pin, prop: ?, connected-group: Tuple<Pin>, digital-pins: Tuple<Pin>) :
+  match(driver(prop)) :
+    (_: CMOSOutput|TTLOutput) : cmos-and-ttl-checks(p, digital-pins)
+    (property: OpenCollector) : open-collector-checks(p, property, connected-group)
+    (_: False) : false
 
 ; FIXME!: What about p itself?
 ; Checks any IO pins marked CMOSOutput or TLLOutput
@@ -371,8 +454,8 @@ defn open-collector-checks (io-pin:JITXObject,
       )
 
 ; Run the general purpose io checks
-public defn check-io (module:JITXObject) : 
-  inside pcb-module : 
+public defn check-io (module:JITXObject) :
+  inside pcb-module :
     ; No-connects are not-connected
     check no-connect-pins-not-connected(module)
     ; The io-levels match
