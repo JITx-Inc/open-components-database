@@ -248,12 +248,14 @@ pcb-check no-connect-pins-not-connected (module:JITXObject) :
       fail-message =         "Pin %_ is marked no-connect and is incorrectly connected to other pins: %," % [ref(p), seq(ref, populated-connected-pins)],
       locators =             [p])
 
-defn check-digital-output (output-pins: Tuple<DigitalPin>) :
-  defn pin-refs (digital-pins: Seqable<DigitalPin>) -> Seq<Ref> :
-    seq(ref{pin(_)}, digital-pins)
+defn pin-refs (digital-pins: Tuple<DigitalPin>) -> Tuple<Ref> :
+  map(ref{pin(_)}, digital-pins)
 
-  defn to-jitx-pins (digital-pins: Seqable<DigitalPin>) -> Tuple<Pin> :
-    to-tuple $ seq(pin, digital-pins)
+defn to-jitx-pins (digital-pins: Tuple<DigitalPin>) -> Tuple<Pin> :
+  map(pin, digital-pins)
+
+defn check-digital-output (output-pins: Tuple<DigitalPin>) :
+
 
   ; If no output pins on the net, no need to record a passing check
   if not empty?(output-pins) :
@@ -422,7 +424,7 @@ defn check-a-pull-resistor-exists (open-collectors: Tuple<DigitalPin>, pull-up-r
     subcheck-description = "Check that io pins marked OpenCollector have at least one pull-up resistor",
     pass-message =         open-collector-pass-message(open-collectors, "at least one pull-up resistor"),
     fail-message =         open-collector-fail-message(open-collectors, "any pull-up resistor attached"),
-    locators =             to-tuple $ seq(pin, open-collectors))
+    locators =             to-jitx-pins(open-collectors))
 
 defn check-and-return-unique-rail-voltage (rail-voltages: Tuple<Double>, pull-up-resistors: Tuple<Instance>, open-collectors: Tuple<DigitalPin>) -> Double :
   #CHECK(
@@ -1884,7 +1886,6 @@ doc: "Helper to force power-states property to propagate through \
       property set `true`."
 public defn propagate-power-states (module:JITXObject) : 
   ; Collect all the pins in the design
-  ; FIXME!: We care about the DNP pins?
   val all-pins = all-populated-pins(module)
   ; println("pins: %," % [seq(ref,all-pins)])
 
@@ -1947,30 +1948,24 @@ doc: "This check will make sure that components connected to each other \
                                                                         \
       - module: the module to check."
 public pcb-check power-states (module:JITXObject) :
-  ; TODO: Iterate by nets instead of by pins, so complexity is O(N + M)
-  ;       instead of O(N^2) where N = number of pins, M = number of nets
-  val ps-pins  = filter(is-digital-output?, all-populated-pins(module))
+  for connected-group in populated-connected-groups(module) do :
+    val pin-categories = categorize-digital-pins(connected-group)
+    val digital-pins = to-tuple $ cat-all([inputs(pin-categories),
+                                           outputs(pin-categories),
+                                           ios(pin-categories)])
 
-  for output in ps-pins do :
-    check-has-power-states(output)
-    val expected = property(output.power-states)
-    val inputs = filter(is-digital-input?, connected-pins(output))
+    for digital-pin in digital-pins do :
+      check-has-power-states $ pin(digital-pin)
 
-    ; FIXME!: Double nested loop with potentially (x, y) and (y, x) if digital input and output?
-    for input in inputs do :
-      check-has-power-states(input)
-      val found = property(input.power-states)
-      ; FIXME! if the 2 lists do not have duplicates, this is equivalent to set equality (PowerState is hashable and equalable)
-      val condition? = 
-        length(expected) == length(found) and
-        for s1 in expected all? :
-          contains?(found, s1)
-      
-      #CHECK(condition    = condition?
-              name        = "Power States"
-              description = "Checks that all components have matching power states."
-              category    = "power-states"
-              subcheck-description = "Checking power states match on connected pins"
-              pass-message = "Connected pins %_ and %_ have matching power states" % [ref(output), ref(input)]
-              fail-message = "Connected pins %_ and %_ do not have matching power states"  % [ref(output), ref(input)]
-              locators = [input, output])
+    val condition? = all-equal? $
+      for digital-pin in digital-pins seq :
+        property(pin(digital-pin).power-states)
+
+    #CHECK(condition    = condition?
+            name        = "Power States"
+            description = "Checks that all components have matching power states."
+            category    = "power-states"
+            subcheck-description = "Checking power states match on connected pins"
+            pass-message = "Connected pins %, do not have matching power states" % [pin-refs(digital-pins)]
+            fail-message = "Connected pins %_ and %_ do not have matching power states"  % [pin-refs(digital-pins)]
+            locators = to-jitx-pins(digital-pins))
