@@ -348,7 +348,6 @@ pcb-check digital-io-levels (module:JITXObject) :
 
     cmos-and-ttl-checks(cmos-ttl-outputs, pin-categories)
 
-; FIXME!: What about p itself?
 ; Checks any IO pins marked CMOSOutput or TLLOutput
 defn cmos-and-ttl-checks (cmos-ttl-outputs:Tuple<DigitalPin>,
                           pin-categories:DigitalPinCategories) :
@@ -389,10 +388,17 @@ defn collect-pull-up-resistors-and-their-rail-voltages (pin-categories: DigitalP
     has-property?(instance.resistance) and
     collect-rail-voltages-and-returns-if-any?(instance)
 
-  ; FIXME!: make a check. Bhusan said that sometimes we'd want to connect a rail? Just for board debugging?
+  ; FIXME!: Bhusan said that sometimes we'd want to connect a rail? Just for board debugging?
   for p in all(pin-categories) do :
-    if has-property?(p.rail-voltage) :
-      fatal("Open collector pin %_ directly attached to rail." % [ref(p)])
+    #CHECK(
+      condition =            not has-property?(p.rail-voltage),
+      name =                 "IO pin checks"
+      description =          "Check io pin properties"
+      category =             "pin-check"
+      subcheck-description = "Check that io pins marked OpenCollector are not connected to a rail",
+      pass-message =         "Open collector pin %_ is not directly connected to a rail." % [ref(p)],
+      fail-message =         "Open collector pin %_ is directly connected to a rail." % [ref(p)],
+      locators =             [p])
 
   ; First, we search for the pull-up-resistors that might be connected to this pin
   val pull-up-resistors = all(pin-categories) $> map{containing-instance!, _}
@@ -440,15 +446,27 @@ defn check-and-return-unique-rail-voltage (rail-voltages: Tuple<Double>, pull-up
   ; Here we find the value of the rail voltage
   rail-voltages[0]
 
+defn check-pull-up-resistor-does-not-have-0-ohm-resistance (resistor: JITXObject) -> Double :
+  val resistance = property(resistor.resistance) as Double
+
+  #CHECK(
+    condition =            resistance != 0,
+    name =                 "IO pin checks"
+    description =          "Check io pin properties"
+    category =             "pin-check"
+    subcheck-description = "Check that io pins marked OpenCollector have pull-up resistors with non 0-ohm resistance",
+    pass-message =         "Pull-up resistor %_ does not have 0-ohm resistance." % [ref(resistor)],
+    fail-message =         "Pull-up resistor %_ has 0-ohm resistance." % [ref(resistor)],
+    locators =             [resistor])
+
+  resistance
+
 defn compute-equivalent-resistance (pull-up-resistors: Tuple<Instance>) :
   ; And the total resistance of parallel connected
   ; pull-up resistors
   1.0 / sum $
     for resistor in pull-up-resistors seq :
-      ; FIXME!: Make a check
-      val resistance = property(resistor.resistance) as Double
-      if resistance == 0 :
-        fatal("Pull-up resistor %_ has 0-ohm resistance." % [ref(resistor)])
+      val resistance = check-pull-up-resistor-does-not-have-0-ohm-resistance(resistor)
       1.0 / resistance
 
 defn check-sink-current-meets-collector-ratings (rail-voltage: Double, pull-up-resistors: Tuple<Instance>, open-collectors: Tuple<DigitalPin>) :
