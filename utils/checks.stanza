@@ -52,6 +52,7 @@ public defn check-design (module:JITXObject):
       check rated-temperature(i)
       check capacitor-component(i) when has-property?(i.capacitance)
       check resistor-component(i)  when has-property?(i.resistance)
+      check inductor-component(i)  when has-property?(i.inductance)
       
       for p in pins(i) do :
         check generic-pin-check(p) when has-property?(p.generic-pin)
@@ -71,7 +72,7 @@ defstruct Connections :
 
 val POPULATED-CONNECTIONS = HashTable<JITXObject, Connections>()
 
-defn populated-connected-groups (module:JITXObject) -> Tuple<Tuple<Pin>> :
+public defn populated-connected-groups (module:JITXObject) -> Tuple<Tuple<Pin>> :
   connected-groups $ populated-connections(module)
 
 defn populated-non-connected-pins (module:JITXObject) -> Tuple<Pin> :
@@ -255,8 +256,6 @@ defn to-jitx-pins (digital-pins: Tuple<DigitalPin>) -> Tuple<Pin> :
   map(pin, digital-pins)
 
 defn check-digital-output (output-pins: Tuple<DigitalPin>) :
-
-
   ; If no output pins on the net, no need to record a passing check
   if not empty?(output-pins) :
     val non-tristateable-output-pins = to-tuple $ filter({not tristateable(prop(_))}, output-pins)
@@ -269,7 +268,6 @@ defn check-digital-output (output-pins: Tuple<DigitalPin>) :
            pass-message =         "Output pins %, are connected together and at most 1 of them is non-tristateable" % [pin-refs(output-pins)],
            fail-message =         "The following non-tristateable output pins are connected together: %," % [pin-refs(non-tristateable-output-pins)],
            locators =             to-jitx-pins(non-tristateable-output-pins))
-
 
 defstruct DigitalPin <: Equalable :
   pin: Pin
@@ -339,14 +337,16 @@ pcb-check digital-io-levels (module:JITXObject) :
       for resolved-pin in cat(ios(pin-categories), outputs(pin-categories)) filter :
         driver(prop(resolved-pin)) is OpenCollector
 
-    open-collector-checks(open-collectors, pin-categories)
+    if not empty?(open-collectors) :
+      open-collector-checks(open-collectors, pin-categories)
 
     ; CMOS / TTL Output checks
     val cmos-ttl-outputs = to-tuple $
       for resolved-pin in cat(ios(pin-categories), outputs(pin-categories)) filter :
         driver(prop(resolved-pin)) is CMOSOutput|TTLOutput
 
-    cmos-and-ttl-checks(cmos-ttl-outputs, pin-categories)
+    if not empty?(cmos-ttl-outputs) :
+      cmos-and-ttl-checks(cmos-ttl-outputs, pin-categories)
 
 ; Checks any IO pins marked CMOSOutput or TLLOutput
 defn cmos-and-ttl-checks (cmos-ttl-outputs:Tuple<DigitalPin>,
@@ -366,13 +366,13 @@ defn cmos-and-ttl-checks (cmos-ttl-outputs:Tuple<DigitalPin>,
 ;
 defn open-collector-checks (open-collectors:Tuple<DigitalPin>,
                             pin-categories:DigitalPinCategories) :
-  val [pull-up-resistors, rail-voltages] = collect-pull-up-resistors-and-their-rail-voltages(pin-categories)
+  val [pull-up-resistors, rail-voltages] = collect-pull-up-resistors-and-their-rail-voltages(open-collectors, pin-categories)
   check-a-pull-resistor-exists(open-collectors, pull-up-resistors)
   val rail-voltage = check-and-return-unique-rail-voltage(rail-voltages, pull-up-resistors, open-collectors)
   check-sink-current-meets-collector-ratings(rail-voltage, pull-up-resistors, open-collectors)
   check-input-and-generic-pin-max-voltage-rating(rail-voltage, pin-categories)
 
-defn collect-pull-up-resistors-and-their-rail-voltages (pin-categories: DigitalPinCategories) :
+defn collect-pull-up-resistors-and-their-rail-voltages (open-collectors:Tuple<DigitalPin>, pin-categories: DigitalPinCategories) :
   val collected-rail-voltages = Vector<Double>()
 
   defn collect-rail-voltages-and-returns-if-any? (instance: Instance) -> True|False :
@@ -389,7 +389,7 @@ defn collect-pull-up-resistors-and-their-rail-voltages (pin-categories: DigitalP
     collect-rail-voltages-and-returns-if-any?(instance)
 
   ; FIXME!: Bhusan said that sometimes we'd want to connect a rail? Just for board debugging?
-  for p in all(pin-categories) do :
+  for p in seq(pin, open-collectors) do :
     #CHECK(
       condition =            not has-property?(p.rail-voltage),
       name =                 "IO pin checks"
@@ -525,303 +525,6 @@ public defn check-io (module:JITXObject) :
     ; The io-levels match
     check digital-io-levels(module)
 
-doc: "DEPRECATED. Old IO Check. Retained for backwards compatibility"
-public pcb-check io (module:JITXObject) :
-  val name = "IO pin checks"
-  val description = "Check io pin properties"
-  val category = "pin-check"
-  val pins = to-tuple(seq-cat(pins, component-instances(module)))
-  var net-pins = []
-  for p1 in pins do :
-    if (has-property?(p1.no-connect)) :
-      net-pins = to-tuple(filter({connected?([p1, _])}, pins))
-      ; FIXME!: Wrong? You would have length(net-pins) == 1
-      #CHECK(
-        condition =            length(net-pins) > 1,
-        name =                 "IO pin checks"
-        description =          "Check io pin properties"
-        category =             "pin-check"
-        subcheck-description = "Check that no-connect pads are not connected",
-        pass-message =         "Pin %_ is marked no-connect and is correctly not connected" % [ref(p1)],
-        fail-message =         "Pin %_ is marked no-connect and is incorrectly connected to other pins" % [ref(p1)],
-        locators =             [p1]
-      )
-    ; Look for Digital inputs\
-    if (has-property?(p1.digital-output) or has-property?(p1.digital-io)) :
-      ; Get all pins on the net
-      net-pins = to-tuple(filter({connected?([p1, _])}, pins))
-      val out-pins = to-tuple(filter({has-property?(_.digital-output)}, net-pins))
-      val io-pins  = to-tuple(filter({has-property?(_.digital-io)}, net-pins))
-      ; val in-pins  = to-tuple(filter({has-property?(_.digital-input)}, net-pins))
-      ; Check outputs against every pin
-      for out-p in cat(out-pins, io-pins) do :
-        #CHECK(
-          condition =            (has-property?(out-p.digital-output) or has-property?(out-p.digital-io)),
-          name =                 "IO pin checks"
-          description =          "Check io pin properties"
-          category =             "pin-check"
-          subcheck-description = "Verify output or i-o pins have the correct digital-output or digital-io property",
-          pass-message =         "Output or I/O pin %_ has the correct digital-output or digital-io property attached" % [ref(out-p)],
-          fail-message =         "Output or I/O pin %_ does not have the correct digital-output or digital-io property attached" % [ref(out-p)],
-          locators =             [out-p]
-        )
-
-        val o = 
-          if has-property?(out-p.digital-output)  : driver(property(out-p.digital-output))
-          else if has-property?(out-p.digital-io) : driver(property(out-p.digital-io))
-          else : false
-
-        ; println("Out %_ is %_" % [ref(out-p) o])
-        ; for n in net-pins do: println(ref(n))
-
-        if (o is CMOSOutput or o is TTLOutput) :
-          for in-p in net-pins do :
-            if in-p != out-p :
-              ; println("checking %_ vs %_" % [ref(out-p) ref(in-p)])
-              check-single-push-pull-levels(out-p, in-p)
-
-        match(o:OpenCollector) :
-          ; println("checking %_ as OpenCollector" % [ref(out-p)])
-          var is-open-collector-ok? = false
-          for p in net-pins do :
-            val myinst = containing-instance!(p)
-            if has-property?(myinst.resistance) :
-              val high-pin = get-other-pin(myinst, p)
-              if has-property?(high-pin.rail-voltage):
-                val rail-voltage = property(high-pin.rail-voltage)
-                ; Valid open-collector nets have pull up resistors
-                is-open-collector-ok? = true
-                val i = rail-voltage / property(myinst.resistance)
-                #CHECK(
-                  condition =            i < iol(o),
-                  name =                 "IO pin checks"
-                  description =          "Check io pin properties"
-                  category =             "pin-check"
-                  subcheck-description = "Check open collector pin sink current requirement versus resistance specification",
-                  pass-message =         "Open collector pin %_ current sink specification %_A satisfies the design requirement %_A" % [ref(p),iol(o),i],
-                  fail-message =         "Open collector pin %_ current specification %_A does not satisfy the design requirement %_A" % [ref(p),iol(o),i],
-                  locators =             [p]
-                )
-                for p in net-pins do :
-                  if has-property?(p.digital-input) or has-property?(p.digital-io) :
-                    val vih-v = 
-                      if has-property?(p.digital-input)   : vih(property(p.digital-input))
-                      else if has-property?(p.digital-io) : vih(property(p.digital-io))
-                    #CHECK(
-                      condition =            rail-voltage > vih-v,
-                      name =                 "IO pin checks"
-                      description =          "Check io pin properties"
-                      category =             "pin-check"
-                      subcheck-description = "Check power supply rail is higher than the vih pin specification",
-                      pass-message =         "Input pin %_ vih specification %_V is correctly lower than the power supply rail %_V" % [ref(p),vih-v,rail-voltage],
-                      fail-message =         "Input pin %_ vih specification %_V is incorrectly higher than the power supply rail %_V" % [ref(p),vih-v,rail-voltage],
-                      locators =             [p]
-                    )
-                  if has-property?(p.generic-pin):
-                    #CHECK(
-                      condition =            in-range?(max-voltage(property(p.generic-pin)), rail-voltage),
-                      name =                 "IO pin checks"
-                      description =          "Check io pin properties"
-                      category =             "pin-check"
-                      subcheck-description = "Check pin maximum voltage is within the design specification",
-                      pass-message =         "Generic pin %_ maximum voltage %_V is correctly within the power supply specification %_V" % [ref(p),max-voltage(property(p.generic-pin)),rail-voltage],
-                      fail-message =         "Generic pin %_ maximum voltage %_V is incorrectly outside the power supply specification %_V" % [ref(p),max-voltage(property(p.generic-pin)),rail-voltage],
-                      locators =             [p]
-                    )
-          
-            #CHECK(
-              condition =            is-open-collector-ok?,
-              name =                 "IO pin checks"
-              description =          "Check io pin properties"
-              category =             "pin-check"
-              subcheck-description = "Verify open-collector pin is connected to a pull-up resistor and a power supply",
-              pass-message =         "Open-collector pin %_ is correctly connected to a pull-up resistor and a power supply rail" % [ref(p)],
-              fail-message =         "Open-collector pin %_ is not correctly connected to a pull-up resistor and a power supply rail" % [ref(p)],
-              locators =             [p]
-            )
-
-; DEPRECATED
-; Checks two push-pull digital logic pins, at least one of which can output
-public defn check-single-push-pull-levels (out-p:JITXObject, in-p:JITXObject) :
-  ; if has-property?(in-p.digital-input): println(ref(gnd-pin(property(in-p.digital-input))))
-  #CHECK(
-    condition =            has-property?(out-p.digital-output) or has-property?(out-p.digital-io),
-    name =                 "IO pin checks"
-    description =          "Check io pin properties"
-    category =             "pin-check"
-    subcheck-description = "Verify output or i-o pin has the correct digital-output or digital-io property",
-    pass-message =         "Output or I/O pin %_ has the correct digital-output or digital-io property attached" % [ref(out-p)],
-    fail-message =         "Output or I/O pin %_ does not have the correct digital-output or digital-io property attached" % [ref(out-p)],
-    locators =             [out-p]
-  )
-  val o =
-    if has-property?(out-p.digital-output) : property(out-p.digital-output)
-    else if has-property?(out-p.digital-io) : property(out-p.digital-io)
-    else : fatal("Verifying digital-output or digital-io pin property precludes this case.")
-  #CHECK(
-    condition =            driver(o) is CMOSOutput|TTLOutput,
-    name =                 "IO pin checks"
-    description =          "Check io pin properties"
-    category =             "pin-check"
-    subcheck-description = "Verify output driver is either CMOS or TTL",
-    pass-message =         "Output pin %_ has the correct driver property property attached" % [ref(out-p)],
-    fail-message =         "Output pin %_ does not have the correct driver property property attached" % [ref(out-p)],
-    locators =             [out-p]
-  )
-
-  ; If in-p is just an input, check output against input
-  if has-property?(in-p.digital-input) :
-    val [vih vil] = [vih(property(in-p.digital-input)) vil(property(in-p.digital-input))]
-    #CHECK(
-      condition =            connected?([gnd-pin(o) gnd-pin(property(in-p.digital-input))]),
-      name =                 "IO pin checks"
-      description =          "Check io pin properties"
-      category =             "pin-check"
-      subcheck-description = "Verify input pin is referenced to ground of the output driver",
-      pass-message =         "Gnd of the input pin %_ is correctly referenced to the ground net of the driver pin %_" % [ref(in-p), ref(out-p)],
-      fail-message =         "Gnd of the input pin %_ is not correctly referenced to the ground net of the driver pin %_" % [ref(in-p), ref(out-p)],
-      locators =             [in-p]
-    )
-    #CHECK(
-      condition =            min-value(voh(driver(o))) > vih,
-      name =                 "IO pin checks"
-      description =          "Check io pin properties"
-      category =             "pin-check"
-      subcheck-description = "Verify min voh of output driver is higher than the vih of the input pin",
-      pass-message =         "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-p), min-value(voh(driver(o))), ref(in-p), vih],
-      fail-message =         "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-p), min-value(voh(driver(o))), ref(in-p), vih],
-      locators =             [in-p]
-    )
-    #CHECK(
-      condition =            max-value(vol(driver(o))) < vil,
-      name =                 "IO pin checks"
-      description =          "Check io pin properties"
-      category =             "pin-check"
-      subcheck-description = "Verify max vol of output driver is compatible with the vil of the input pin",
-      pass-message =         "Output pin %_ max vol %_ is compatible with the input pin %_ vil %_" % [ref(out-p), max-value(vol(driver(o))), ref(in-p), vil],
-      fail-message =         "Output pin %_ max vol %_ is not compatible with the input pin %_ vil %_" % [ref(out-p), max-value(vol(driver(o))), ref(in-p), vil],
-      locators =             [in-p]
-    )
-    if has-property?(in-p.generic-pin):
-      #CHECK(
-        condition =            in-range?(max-voltage(property(in-p.generic-pin)), voh(driver(o))),
-        name =                 "IO pin checks"
-        description =          "Check io pin properties"
-        category =             "pin-check"
-        subcheck-description = "Verify voh of output driver is compatible with voltage range of a generic pin",
-        pass-message =         "Output pin %_ max voh %_ is compatible with the voltage range of the generic pin %_ of %_" % [ref(out-p), voh(driver(o)), ref(in-p), max-voltage(property(in-p.generic-pin))],
-        fail-message =         "Output pin %_ max voh %_ is not compatible with the voltage range of the generic pin %_ of %_" % [ref(out-p), voh(driver(o)), ref(in-p), max-voltage(property(in-p.generic-pin))],
-        locators =             [in-p]
-      )
-  else if has-property?(in-p.digital-io):
-    #CHECK(
-      condition =            connected?([gnd-pin(o) gnd-pin(property(in-p.digital-io))]),
-      name =                 "IO pin checks"
-      description =          "Check io pin properties"
-      category =             "pin-check"
-      subcheck-description = "Verify the digital io pin is referenced to the ground of the output driver",
-      pass-message =         "Gnd of the io pin %_ is correctly referenced to the ground net of the driver pin %_" % [ref(in-p), ref(out-p)],
-      fail-message =         "Gnd of the io pin %_ is not correctly referenced to the ground net of the driver pin %_" % [ref(in-p), ref(out-p)],
-      locators =             [in-p]
-    )
-    val i = driver(property(in-p.digital-io))
-    #CHECK(
-      condition =            i is CMOSOutput|TTLOutput,
-      name =                 "IO pin checks"
-      description =          "Check io pin properties"
-      category =             "pin-check"
-      subcheck-description = "Verify io driver is either CMOS or TTL",
-      pass-message =         "IO pin %_ has the correct driver property property attached" % [ref(out-p)],
-      fail-message =         "IO pin %_ does not have the correct driver property property attached" % [ref(out-p)],
-      locators =             [in-p]
-    )
-    val [vih-v vil-v] = [vih(property(in-p.digital-io)) vil(property(in-p.digital-io))]
-    #CHECK(
-      condition =            min-value(voh(driver(o))) > vih-v,
-      name =                 "IO pin checks"
-      description =          "Check io pin properties"
-      category =             "pin-check"
-      subcheck-description = "Verify min voh of output driver is higher than the vih of the input pin",
-      pass-message =         "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-p), min-value(voh(driver(o))), ref(in-p), vih-v],
-      fail-message =         "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-p), min-value(voh(driver(o))), ref(in-p), vih-v],
-      locators =             [in-p]
-    )
-    #CHECK(
-      condition =            max-value(vol(driver(o))) < vil-v,
-      name =                 "IO pin checks"
-      description =          "Check io pin properties"
-      category =             "pin-check"
-      subcheck-description = "Verify max vol of output driver is compatible with the vil of the input pin",
-      pass-message =         "Output pin %_ max vol %_ is compatible with the input pin %_ vil %_" % [ref(out-p), max-value(vol(driver(o))), ref(in-p), vil-v],
-      fail-message =         "Output pin %_ max vol %_ is not compatible with the input pin %_ vil %_" % [ref(out-p), max-value(vol(driver(o))), ref(in-p), vil-v],
-      locators =             [in-p]
-    )
-    if has-property?(out-p.digital-io):
-      #CHECK(
-        condition =            min-value(voh(i)) > vih(o),
-        name =                 "IO pin checks"
-        description =          "Check io pin properties"
-        category =             "pin-check"
-        subcheck-description = "Verify min voh of io driver is higher than the vih of the io pin",
-        pass-message =         "IO pin %_ min voh %_ is compatible with the io pin %_ vih %_" % [ref(in-p), min-value(voh(i)), ref(out-p), vih(o)],
-        fail-message =         "IO pin %_ min voh %_ is not compatible with the io pin %_ vih %_" % [ref(in-p), min-value(voh(i)), ref(out-p), vih(o)],
-        locators =             [in-p]
-      )
-      #CHECK(
-        condition =            max-value(vol(i)) < vil(o),
-        name =                 "IO pin checks"
-        description =          "Check io pin properties"
-        category =             "pin-check"
-        subcheck-description = "Verify max vol of io driver is compatible with the vil of the io pin",
-        pass-message =         "IO pin %_ max vol %_ is compatible with the io pin %_ vil %_" % [ref(in-p), max-value(vol(i)), ref(out-p), vil(o)],
-        fail-message =         "IO pin %_ max vol %_ is not compatible with the io pin %_ vil %_" % [ref(in-p), max-value(vol(i)), ref(out-p), vil(o)],
-        locators =             [in-p]
-      )
-    if has-property?(in-p.generic-pin):
-      #CHECK(
-        condition =            in-range?(max-voltage(property(in-p.generic-pin)), voh(driver(o))),
-        name =                 "IO pin checks"
-        description =          "Check io pin properties"
-        category =             "pin-check"
-        subcheck-description = "Verify voh of output driver is compatible with voltage range of a generic pin",
-        pass-message =         "Output pin %_ max voh %_ is compatible with the voltage range of the generic pin %_ of %_" % [ref(out-p), voh(driver(o)), ref(in-p), max-voltage(property(in-p.generic-pin))],
-        fail-message =         "Output pin %_ max voh %_ is not compatible with the voltage range of the generic pin %_ of %_" % [ref(out-p), voh(driver(o)), ref(in-p), max-voltage(property(in-p.generic-pin))],
-        locators =             [in-p]
-      )
-    if has-property?(out-p.generic-pin):
-      #CHECK(
-        condition =            in-range?(max-voltage(property(out-p.generic-pin)), voh(i)),
-        name =                 "IO pin checks"
-        description =          "Check io pin properties"
-        category =             "pin-check"
-        subcheck-description = "Verify voh of output driver is compatible with voltage range of a generic pin",
-        pass-message =         "IO pin %_ max voh %_ is compatible with the voltage range of the generic pin %_ of %_" % [ref(in-p), voh(i), ref(out-p), max-voltage(property(out-p.generic-pin))],
-        fail-message =         "IO pin %_ max voh %_ is not compatible with the voltage range of the generic pin %_ of %_" % [ref(in-p), voh(i), ref(out-p), max-voltage(property(out-p.generic-pin))],
-        locators =             [out-p]
-      )
-  else if has-property?(in-p.digital-output) and o is DigitalOutput:
-    #CHECK(
-      condition =            tristateable(o),
-      name =                 "IO pin checks"
-      description =          "Check io pin properties"
-      category =             "pin-check"
-      subcheck-description = "Verify output driver is tri-stateable to be compatible with input pin type",
-      pass-message =         "IO pin %_ is tri-stateable and is compatible with the input pin %_" % [ref(out-p), ref(in-p)],
-      fail-message =         "IO pin %_ is not tri-stateable and is not compatible with the input pin %_" % [ref(out-p), ref(in-p)],
-      locators =             [out-p]
-    )
-
-    #CHECK(
-      condition =            tristateable(property(in-p.digital-output)),
-      name =                 "IO pin checks"
-      description =          "Check io pin properties"
-      category =             "pin-check"
-      subcheck-description = "Verify input pin is tri-stateable to be compatible with output pin type",
-      pass-message =         "Input pin %_ is tri-stateable and is compatible with the output pin %_" % [ref(in-p), ref(out-p)],
-      fail-message =         "Input pin %_ is not tri-stateable and is not compatible with the output pin %_" % [ref(in-p), ref(out-p)],
-      locators =             [in-p]
-    )
-
 ; Checks two push-pull digital logic pins, at least one of which can output
 public defn check-single-push-pull-levels-with-inputs (out-p:DigitalPin, in-p:DigitalPin) :
   val out-prop = prop(out-p)
@@ -843,7 +546,7 @@ public defn check-single-push-pull-levels-with-inputs (out-p:DigitalPin, in-p:Di
     locators =             [out-pin, in-pin]
   )
   #CHECK(
-    condition =            min-value(driver-voh) > vih,
+    condition =            min-value(driver-voh) >= vih,
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "pin-check"
@@ -853,7 +556,7 @@ public defn check-single-push-pull-levels-with-inputs (out-p:DigitalPin, in-p:Di
     locators =             [out-pin, in-pin]
   )
   #CHECK(
-    condition =            max-value(driver-vol) < vil,
+    condition =            max-value(driver-vol) <= vil,
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "pin-check"
@@ -910,7 +613,7 @@ public defn check-single-push-pull-levels-with-ios (out-p:DigitalPin, io-p:Digit
   )
   val [vih-v vil-v] = [vih(io-prop) vil(io-prop)]
   #CHECK(
-    condition =            min-value(driver-voh) > vih-v,
+    condition =            min-value(driver-voh) >= vih-v,
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "pin-check"
@@ -920,7 +623,7 @@ public defn check-single-push-pull-levels-with-ios (out-p:DigitalPin, io-p:Digit
     locators =             [out-pin, io-pin]
   )
   #CHECK(
-    condition =            max-value(driver-vol) < vil-v,
+    condition =            max-value(driver-vol) <= vil-v,
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "pin-check"
@@ -931,7 +634,7 @@ public defn check-single-push-pull-levels-with-ios (out-p:DigitalPin, io-p:Digit
   )
   if has-property?(out-pin.digital-io):
     #CHECK(
-      condition =            min-value(voh(io-driver)) > vih(out-prop),
+      condition =            min-value(voh(io-driver)) >= vih(out-prop),
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "pin-check"
@@ -941,7 +644,7 @@ public defn check-single-push-pull-levels-with-ios (out-p:DigitalPin, io-p:Digit
       locators =             [io-pin]
     )
     #CHECK(
-      condition =            max-value(vol(io-driver)) < vil(out-prop),
+      condition =            max-value(vol(io-driver)) <= vil(out-prop),
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "pin-check"
@@ -1235,12 +938,107 @@ public pcb-check voltage-levels (p:JITXObject, range:[Double,Double,Double]) :
 ; ====================================
 ; public pcb-check pull-up-check (p:JITXObject) :
 
+public pcb-check inductor-component (l:JITXObject) :
+  val name = "Inductor checks"
+  val description = "Check inductor component properties"
+  val category = "component-check"
+
+  ; should check that pins of the resistor are connected (if they don't have a NC property)
+  for l-pin in pins(l) do :
+    if not no-connect?(l-pin) :
+      val conn-pin = populated-connected-pins(l-pin)
+      #CHECK(
+        condition =            not empty?(conn-pin),
+        name =                 "Inductor checks"
+        description =          "Check that the inductor pins are connected"
+        category =             "component-check"
+        subcheck-description = "Check inductor component is connected property",
+        pass-message =         "Inductor %_ pin %_ is connected properly" % [ref(l), ref(l-pin)],
+        fail-message =         "Inductor %_ pin %_ is not connected properly" % [ref(l), ref(l-pin)],
+        locators =             [l]
+      )
+
+  #CHECK(
+    condition =            has-property?(l.inductor),
+    name =                 "Inductor checks"
+    description =          "Check inductor component properties"
+    category =             "component-check"
+    subcheck-description = "Check inductor component has the correct inductor property",
+    pass-message =         "Inductor %_ has the correct property for an inductor" % [ref(l)],
+    fail-message =         "Inductor %_ does not have the correct property for an inductor" % [ref(l)],
+    locators =             [l]
+  )
+  #CHECK(
+    condition =            has-property?(l.operating-point),
+    name =                 "Inductor checks"
+    description =          "Check inductor component properties"
+    category =             "component-check"
+    subcheck-description = "Check inductor component has the correct inductor property",
+    pass-message =         "Inductor %_ has the correct property for operating-point" % [ref(l)],
+    fail-message =         "Inductor %_ does not have the correct property for the operating-point" % [ref(l)],
+    locators =             [l]
+  )
+
+  val [vpk, i, temp] = [[min-value(peak-voltage(property(l.operating-point)))
+                         max-value(peak-voltage(property(l.operating-point)))],
+                        max-value(peak-current(property(l.operating-point))),
+                        OPERATING-TEMPERATURE[1]]
+
+  val power = property(l.dc-resistance) * pow(i, 2.0) ; FIXME! just using the DC formula
+  if has-property?(l.derating) and has-property?(l.rated-power):
+    ; Derate the power based on the piecewise linear curve from MFG
+    val derating = PWL(property(l.derating))[temp]
+    val pwr = derating * property(l.rated-power)
+    #CHECK(
+      condition =            pwr * DERATE-INDUCTOR-POWER > power,
+      name =                 "Inductor checks"
+      description =          "Check inductor component properties"
+      category =             "component-check"
+      subcheck-description = "Check inductor power derating meets the design requirements",
+      pass-message =         "Inductor %_ power derating %_W meets the design requirements of %_W" % [ref(l), pwr * DERATE-RESISTOR-POWER, power],
+      fail-message =         "Inductor %_ power derating %_W does not meet the design requirements of %_W" % [ref(l), pwr * DERATE-RESISTOR-POWER, power],
+      locators =             [l]
+    )
+  else :
+    ; Derate the power if MFG derating is missing
+    ; adapted from http://www.interfacebus.com/Component_Derating_Guide_line.html but substituting r for l-dc-resistance
+    val derating = PWL([[0.0 1.0] [70.0 1.0] [110.0 0.8] [150.0 0.6] [190.0 0.4] [240.0 0.2] [260.0 0.1]])[temp]
+    val pwr = derating * property(l.rated-power)
+    #CHECK(
+      condition =            pwr * DERATE-INDUCTOR-POWER > power,
+      name =                 "Inductor checks"
+      description =          "Check inductor component properties"
+      category =             "component-check"
+      subcheck-description = "Check inductor default power derating meets the design requirements",
+      pass-message =         "Inductor %_ default power derating %_W meets the design requirements of %_W" % [ref(l), pwr * DERATE-RESISTOR-POWER, power],
+      fail-message =         "Inductor %_ default power derating %_W does not meet the design requirements of %_W" % [ref(l), pwr * DERATE-RESISTOR-POWER, power],
+      locators =             [l]
+    )
+
 
 ; Checks resistors against operating point and environment
 public pcb-check resistor-component (r:JITXObject) :
   val name = "Resistor checks"
   val description = "Check resistor component properties"
   val category = "component-check"
+
+  ; should check that pins of the resistor are connected (if they don't have a NC property)
+  for r-pin in pins(r) do :
+    if not no-connect?(r-pin) :
+      val conn-pin = populated-connected-pins(r-pin)
+      #CHECK(
+        condition =            not empty?(conn-pin),
+        name =                 "Resistor checks"
+        description =          "Check that the resistor pins are connected"
+        category =             "component-check"
+        subcheck-description = "Check resistor component is connected property",
+        pass-message =         "Resistor %_ pin %_ is connected properly" % [ref(r), ref(r-pin)],
+        fail-message =         "Resistor %_ pin %_ is not connected properly" % [ref(r), ref(r-pin)],
+        locators =             [r]
+      )
+
+
+
   #CHECK(
     condition =            has-property?(r.resistor),
     name =                 "Resistor checks"
@@ -1284,7 +1082,7 @@ public pcb-check resistor-component (r:JITXObject) :
     )
   else :
     ; Derate the power if MFG derating is missing
-    val derating = PWL([[0.0 1.0] [70.0 1.0] [125.0 0.0]])[temp]
+    val derating = PWL([[0.0 1.0] [70.0 1.0] [110.0 0.8] [150.0 0.6] [190.0 0.4] [240.0 0.2] [260.0 0.1]])[temp]
     val pwr = derating * property(r.rated-power)
     #CHECK(
       condition =            pwr * DERATE-RESISTOR-POWER > power,
@@ -1301,6 +1099,22 @@ public pcb-check capacitor-component (c:JITXObject) :
   val name = "Capacitor checks"
   val description = "Check capacitor component properties"
   val category = "component-check"
+
+  ; should check that pins of the cap are connected (if they don't have a NC property)
+  for c-pin in pins(c) do :
+    if not no-connect?(c-pin) :
+      val conn-pin = populated-connected-pins(c-pin)
+      #CHECK(
+        condition =            not empty?(conn-pin),
+        name =                 "Capacitor checks"
+        description =          "Check that the capacitor pins are connected"
+        category =             "component-check"
+        subcheck-description = "Check capacitor component is connected property",
+        pass-message =         "Capacitor %_ pin %_ is connected properly" % [ref(c), ref(c-pin)],
+        fail-message =         "Capacitor %_ pin %_ is not connected properly" % [ref(c), ref(c-pin)],
+        locators =             [c]
+      )
+
   #CHECK(
     condition =            has-property?(c.capacitor),
     name =                 "Capacitor checks"
@@ -1324,7 +1138,6 @@ public pcb-check capacitor-component (c:JITXObject) :
   val [vpk temp] = [[min-value(peak-voltage(property(c.operating-point))) max-value(peak-voltage(property(c.operating-point)))] OPERATING-TEMPERATURE[1]]
   val max-temp = max-value(operating-temperature(property(c.rated-temperature)))
   switch(property(c.type)) :
-
     "ceramic" :
       val vpk-derate-wc = PWL(DERATE-CAPACITOR-MLCC-VPK-WC)[temp]
       #CHECK(
@@ -1926,7 +1739,7 @@ public defn propagate-power-states (module:JITXObject) :
         do(visit{_, power-states}, connected-pins(pin))
 
       val instance = containing-instance!(pin)
-      if has-property?(instance.power-supply-component) and 
+      if has-property?(instance.power-supply-component) and
          property(instance.power-supply-component) : 
         do(visit{_, power-states}, pins(instance))
 

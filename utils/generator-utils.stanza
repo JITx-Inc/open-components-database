@@ -113,20 +113,17 @@ public defn connect-gnd-pins ():
 ; Replace this once nets introspection is back
 public defn propagate-rail-voltage ():
   inside pcb-module :
-    val pins = to-tuple(seq-cat(pins, component-instances(self)))
-    for p1 in pins do :
-      if has-property?(p1.power-supply-pin) :
-        if property(p1.power-supply-pin) is PowerSupplyPin :
-          for p2 in pins do :
-            if p1 != p2 and connected?([p1, p2]) :
-              if has-property?(p2.rail-voltage) :
-                ; Override with higher voltage
-                if supply-voltage(property(p1.power-supply-pin)) as Double > property(p2.rail-voltage) as Double:
-                  property(p2.rail-voltage) = supply-voltage(property(p1.power-supply-pin))
-              else:
-                property(p2.rail-voltage) = supply-voltage(property(p1.power-supply-pin))
-              ; println("Supply %_ from %_ to %_" % [property(p2.rail-voltage) ref(p1) ref(p2)])
-              ; println(property(p2.rail-voltage))
+    for connected-group in populated-connected-groups(self) do :
+      val power-supply-voltages = to-tuple $
+        for pin in connected-group seq? :
+          val prop = property?(pin.power-supply-pin)
+          match(value?(prop)) :
+            (p:PowerSupplyPin) : One(supply-voltage(p) as Double)
+            (_) : None() 
+      if not empty?(power-supply-voltages) :
+        val max-v = maximum(power-supply-voltages)
+        for pin in connected-group do:
+          property(pin.rail-voltage) = max-v
 
 public defn calculate-operating-points ():
   defn get-other-pin (comp:JITXObject,  p:JITXObject) :
