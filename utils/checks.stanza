@@ -54,9 +54,10 @@ public defn erc-check-design (module:JITXObject):
   inside pcb-module:
     for i in populated-components(module) do :
       check rated-temperature(i)
-      check capacitor-component(i) when has-property?(i.capacitance)
-      check resistor-component(i)  when has-property?(i.resistance)
-      check inductor-component(i)  when has-property?(i.inductance)
+      check capacitor-component(i) when has-property?(i.capacitor)
+      check resistor-component(i)  when has-property?(i.resistor)
+      check inductor-component(i)  when has-property?(i.inductor)
+      check diode-component(i)     when has-property?(i.diode)
       
       for p in pins(i) do :
         check generic-pin-check(p) when has-property?(p.generic-pin)
@@ -954,6 +955,27 @@ public pcb-check voltage-levels (p:JITXObject, range:[Double,Double,Double]) :
 ; ====================================
 ; public pcb-check pull-up-check (p:JITXObject) :
 
+public pcb-check diode-component (d:JITXObject) :
+  val name = "Diode checks"
+  val description = "Check diode component properties"
+  val category = "component-check"
+
+  ; should check that pins of the resistor are connected (if they don't have a NC property)
+  for d-pin in pins(d) do :
+    if not no-connect?(d-pin) :
+      val conn-pin = populated-connected-pins(d-pin)
+      #CHECK(
+        condition =            not empty?(conn-pin),
+        name =                 "Diode checks"
+        description =          "Check that the diode pins are connected"
+        category =             "component-check"
+        subcheck-description = "Check diode component is connected property",
+        pass-message =         "Diode %_ pin %_ is connected properly" % [ref(d), ref(d-pin)],
+        fail-message =         "Diode %_ pin %_ is not connected properly" % [ref(d), ref(d-pin)],
+        locators =             [d]
+      )
+
+
 public pcb-check inductor-component (l:JITXObject) :
   val name = "Inductor checks"
   val description = "Check inductor component properties"
@@ -975,13 +997,13 @@ public pcb-check inductor-component (l:JITXObject) :
       )
 
   #CHECK(
-    condition =            has-property?(l.inductor),
+    condition =            has-property?(l.inductance),
     name =                 "Inductor checks"
     description =          "Check inductor component properties"
     category =             "component-check"
-    subcheck-description = "Check inductor component has the correct inductor property",
-    pass-message =         "Inductor %_ has the correct property for an inductor" % [ref(l)],
-    fail-message =         "Inductor %_ does not have the correct property for an inductor" % [ref(l)],
+    subcheck-description = "Check inductor component has the correct inductance property",
+    pass-message =         "Inductor %_ has the correct inductance property for an inductor" % [ref(l)],
+    fail-message =         "Inductor %_ does not have the correct inductance property for an inductor" % [ref(l)],
     locators =             [l]
   )
 
@@ -1055,16 +1077,14 @@ public pcb-check resistor-component (r:JITXObject) :
         locators =             [r]
       )
 
-
-
   #CHECK(
-    condition =            has-property?(r.resistor),
+    condition =            has-property?(r.resistance),
     name =                 "Resistor checks"
     description =          "Check resistor component properties"
     category =             "component-check"
-    subcheck-description = "Check resistor component has the correct resistor property",
-    pass-message =         "Resistor %_ has the correct property for resistor" % [ref(r)],
-    fail-message =         "Resistor %_ does not have the correct property for a resistor" % [ref(r)],
+    subcheck-description = "Check resistor component has the correct resistance property",
+    pass-message =         "Resistor %_ has the correct resistance property for resistor" % [ref(r)],
+    fail-message =         "Resistor %_ does not have the correct resistance property for a resistor" % [ref(r)],
     locators =             [r]
   )
   if has-property?(r.operating-point) :
@@ -1135,13 +1155,13 @@ public pcb-check capacitor-component (c:JITXObject) :
       )
 
   #CHECK(
-    condition =            has-property?(c.capacitor),
+    condition =            has-property?(c.capacitance),
     name =                 "Capacitor checks"
     description =          "Check capacitor component properties"
     category =             "component-check"
-    subcheck-description = "Check capacitor component has the correct capacitor property",
-    pass-message =         "Capacitor %_ has the correct property for a capacitor" % [ref(c)],
-    fail-message =         "Capacitor %_ does not have the correct property for a capacitor" % [ref(c)],
+    subcheck-description = "Check capacitor component has the correct capacitance property",
+    pass-message =         "Capacitor %_ has the correct capacitance property for a capacitor" % [ref(c)],
+    fail-message =         "Capacitor %_ does not have the correct capacitance property for a capacitor" % [ref(c)],
     locators =             [c]
   )
 
