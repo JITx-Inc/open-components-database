@@ -63,7 +63,6 @@ public defn erc-check-design (module:JITXObject):
         check generic-pin-check(p) when has-property?(p.generic-pin)
         check power-pin-check(p)   when has-property?(p.power-pin)
         check reset-pin-check(p)   when has-property?(p.reset-pin)
-
     check-io(module)
 
 public defn drc-check-design (module:JITXObject):
@@ -1769,23 +1768,25 @@ public defn propagate-power-states (module:JITXObject) :
   ; DFS walk of the netlist, to update power-states of 
   ; connected power-pins 
   val visited = HashSet<JITXObject>()
-  defn visit (pin:JITXObject, power-states:Tuple<PowerState>) :
+  defn visit-pins (pin:JITXObject, power-states-tuple:Tuple<PowerState>) :
     if not visited[pin] :
       add(visited, pin)
       if not has-property?(pin.power-states) :
-        set-property(pin, `power-states, power-states)
+        set-property(pin, `power-states, power-states-tuple)
         
       if has-property?(pin.power-pin) or
          has-property?(pin.power-supply-pin) :
-        do(visit{_, power-states}, connected-pins(pin))
+        do(visit-pins{_, power-states-tuple}, connected-pins(pin))
 
-      val instance = containing-instance!(pin)
-      if has-property?(instance.power-supply-component) and
-         property(instance.power-supply-component) : 
-        do(visit{_, power-states}, pins(instance))
+  defn visit-power-supply-components (pin:JITXObject, power-states-tuple:Tuple<PowerState>) :
+    val instance = containing-instance!(pin)
+    if has-property?(instance.power-supply-component) and
+        property(instance.power-supply-component) : 
+      do(visit-pins{_, power-states-tuple}, pins(instance))
 
   ; propagate the power-states to connected power-pins
-  do(visit{_0, property(_0.power-states)}, roots)
+  do(visit-pins{_0, property(_0.power-states)}, roots)
+  do(visit-power-supply-components{_0, property(_0.power-states)}, roots)
 
   ; propagate from power pins to io-pins
   for io-pin in filter(is-digital-pin?, all-pins) do :
@@ -1798,18 +1799,17 @@ public defn propagate-power-states (module:JITXObject) :
         vdd-pin(property(io-pin.digital-io))
       else : 
         fatal("Expected a digital io pin.")
-    
     if has-property?(vdd-pin.power-states) and 
        (not has-property?(io-pin.power-states)): 
       set-property(io-pin, `power-states, property(vdd-pin.power-states))
 
-defn check-has-power-states (p:JITXObject) : 
+defn check-has-power-states (p:JITXObject) :
   #CHECK(condition = has-property?(p.power-states)
          name        = "Check Power States"
          description = "Checks that all i/o pins have power states"
          category    = "power-states"
          subcheck-description = "Check that a pin has power states"
-         pass-message = "%_ has a valid .power-states property"    % [ref(p)]
+         pass-message = "%_ has a valid .power-states property" % [ref(p)]
          fail-message = "%_ is missing the .power-states property" % [ref(p)]
          locators = [p])
 
@@ -1820,6 +1820,7 @@ doc: "This check will make sure that components connected to each other \
                                                                         \
       - module: the module to check."
 public pcb-check power-states (module:JITXObject) :
+
   for connected-group in populated-connected-groups(module) do :
     val pin-categories = categorize-digital-pins(connected-group)
     val digital-pins = to-tuple $ cat-all([inputs(pin-categories),
@@ -1838,6 +1839,6 @@ public pcb-check power-states (module:JITXObject) :
             description = "Checks that all components have matching power states."
             category    = "power-states"
             subcheck-description = "Checking power states match on connected pins"
-            pass-message = "Connected pins %, do not have matching power states" % [pin-refs(digital-pins)]
+            pass-message = "Connected pins %, have matching power states" % [pin-refs(digital-pins)]
             fail-message = "Connected pins %_ and %_ do not have matching power states"  % [pin-refs(digital-pins)]
             locators = to-jitx-pins(digital-pins))
