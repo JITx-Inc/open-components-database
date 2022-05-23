@@ -1,0 +1,64 @@
+#use-added-syntax(jitx)
+defpackage hello-jitx : 
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+
+; A small script that sets up our design. Here we tell the JITX
+; library what the name of our design is, the root or "main" module
+; in the design hierarchy, the properties of the circuit board itself,
+; and the design rules for our project.
+defn create-design () : 
+  ; First, set our design
+  set-design("hello-jitx")
+
+  ; Set the main module
+  set-main-module(main-module)
+  
+  ; Set the board shape
+  set-board(main-board)
+  
+  ; And set the design rules. Here we import rules from ocdb/defaults.
+  set-rules(default-rules)
+
+
+; We need to define what our "main" module is, so we create a pcb-module
+; with some data in it. To start, we'll place some text on the front 
+; silkscreen.
+;
+pcb-module main-module : 
+  ; Place some text at the origin.
+  layer(Silkscreen("F-silk", Top)) = Text(text, size, anchor, pose) where : 
+    val text   = "Hello, JITX!"
+    val size   = 2.54
+    val anchor = C
+    val pose    = loc(0.0, 0.0)
+
+; We need board to place the text upon, so we define one here. A pcb-board
+; encapsulates the exterior geometry of the board itself and the stackup.
+pcb-board main-board : 
+  ; Define a board shape and assign the boundary and signal-boundary fields 
+  ; of the pcb-board.
+  val board-shape = Rectangle(60.0, 40.0)
+  boundary        = board-shape
+  signal-boundary = board-shape
+
+  ; Define the stackup. Here we choose to use the 
+  val num-layers = 2
+  stackup = default-stackup(num-layers) 
+
+; Finally, we're ready to define the "main" function of our design program, which
+; will drive the program. 
+defn main () : 
+  ; First create the design itself by calling our little helper
+  create-design()
+
+  ; And now we can poke at the design, for example viewing the board. 
+  ; We can also view a schematic, individual components, run checks, 
+  ; etc here.
+  view-board()
+
+; Launch!
+main()
