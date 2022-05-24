@@ -1,0 +1,112 @@
+#use-added-syntax(jitx, tests)
+defpackage ocdb/test/property-propagation : 
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/property-propagation 
+
+; Tests the 
+deftest test-unique-nets : 
+  val num-instances = 3
+
+  pcb-component Component : 
+    port p: pin[[1 2]]
+
+  pcb-module Module : 
+    public inst c : Component[num-instances]
+
+  pcb-module main-module : 
+    inst m1 : Module
+    inst m2 : Module
+
+    net GND ()
+    net (m2.c[1].p[2], m1.c[1].p[2])
+    for n in 0 to num-instances do : 
+      net (m1.c[n].p[1], m2.c[n].p[1])
+      net (m1.c[n].p[2], m2.c[n].p[2])
+      net (m1.c[n].p[2], GND)
+    
+    for net in unique-nets(self) do : 
+      val pins = connected-pins(net)
+      println("pins on net no: %," % [seq(ref, pins)])
+      false
+
+    #ASSERT(count(unique-nets(self)) == 4)
+
+  evaluate(main-module)
+
+deftest test-propagate-along-components : 
+  defn handle-instance (arg:JITXObject) : 
+    pins(arg)
+  
+  defn handle-conflict (s) : 
+    next(to-seq(s))
+  
+  pcb-component Component : 
+    port p : pin[[1 2]]
+
+  pcb-module MainModule : 
+    inst c : Component[3]
+    net (c[0].p[1])
+    for n in 1 to 3 do : 
+      net (c[n - 1].p[2], c[n].p[1])
+    
+    property(c[0].p[1].my-prop) = true
+    propagate-property-along-nets(self, `my-prop, handle-instance, handle-conflict)
+
+    for i in component-instances(self) do : 
+      for p in pins(i) do :
+        #EXPECT(has-property?(p.my-prop))
+  
+  evaluate(MainModule)
+
+deftest test-propagate-single-net :
+  defn handle-instance (arg:JITXObject) : pins(arg)
+  defn handle-conflict (s) : next(to-seq(s))
+  val num-instances = 10
+
+  pcb-component Component : 
+    pin p
+
+  pcb-module MainModule : 
+    inst i : Component[num-instances]
+    for n in 1 to num-instances do : 
+      net (i[n - 1].p, i[n].p)
+
+    property(i[0].p.my-prop) = true
+    propagate-property-along-nets(self, `my-prop, handle-instance, handle-conflict)
+
+    for inst_ in component-instances(self) do : 
+      for p in pins(inst_) do : 
+        #EXPECT(has-property?(p.my-prop))
+
+  evaluate(MainModule)
+
+deftest test-propagation-conflicts : 
+  defn handle-instance (arg:JITXObject) : 
+    pins(arg)
+
+  defn handle-conflict (s) : 
+    maximum(filter-by<Double>(s))
+
+  val num-instances = 10
+
+  pcb-component Component : 
+    pin p
+
+  pcb-module MainModule : 
+    inst i : Component[num-instances]
+    for n in 1 to num-instances do : 
+      net (i[n - 1].p, i[n].p)
+      property(i[n].p.my-prop) = to-double(rand(10))
+    
+    property(i[0].p.my-prop) = 100.0
+    propagate-property-along-nets(self, `my-prop, handle-instance, handle-conflict)
+
+    for inst_ in component-instances(self) do : 
+      for p in pins(inst_) do : 
+        #EXPECT(property(p.my-prop) == 100.0)
+
+  evaluate(MainModule)
+

@@ -1,0 +1,220 @@
+defpackage ocdb/property-propagation : 
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/property-structs
+  import ocdb/tolerance
+
+;==============================================================================
+;============================= Public API =====================================
+;==============================================================================
+; TODO: move to dedicated package, eg ocdb/introspection-utils? 
+doc: "Returns a list of unique nets within a module (nets that have a  \
+      unique set of pins associated with them)"
+public defn unique-nets (module:JITXObject) -> Seq<JITXObject> : 
+  val visited = HashSet<Tuple<Int>>()
+  for net in nets(module) filter : 
+    ; println("Checking if net (%_) is unique: %," % [net, seq(ref, connected-pins(net))])
+    val pin-hash = connected-pins(net)
+      $> seq{hash, _}
+      $> lazy-qsort
+      $> to-tuple
+    val result = not visited[pin-hash]
+    ; within indented() : 
+    ;   println(result)
+    if result :
+      add(visited, pin-hash)
+    result
+
+; TODO: bikeshed implementation of connected pins when a net is a single-pin-net
+defn pins-on-net (net:JITXObject) : 
+  val all-pins       = pins(net)
+  val connected-pins = connected-pins(net)
+  if length(all-pins) == 1 : 
+    all-pins
+  else : 
+    connected-pins
+
+doc:\<> Abstract algorithm for propagating properties along nets.
+
+ Propagate a property to pins that are connected
+                                                 
+ -property-name:     The name of the property to propagate
+
+ -handle-instance:   A callback that is passed the containing instance of a pin, and returns
+                     a list of additional pins to propagate along if necessary.
+
+ -handle-conflict:   A callback that is given a list of conflicting values of the same 
+                     property on the same net, and returns the negotiated property as 
+                     a result.
+
+ -updater:           A callback to update values once they have been propagated.
+<>
+public defn propagate-property-along-nets (root-module:JITXObject,
+                                           property-name:Symbol,
+                                           handle-instance: (JITXObject) -> Seqable<JITXObject>,
+                                           handle-conflict:(Seqable<jitx/client/JITXValue>) -> jitx/client/JITXValue, 
+                                           updater: (JITXObject, Symbol, jitx/client/JITXValue) -> False) :
+  ; A table of nets referenced by their connected pins.
+  ;
+  ; Note: since we look at flattened nets, a pin may only be connected to one net.
+  val nets-by-pin = HashTable<JITXObject, JITXObject>()
+  
+  ; A table of nets that have the property we are looking for.
+  val relevent-nets = HashSet<JITXObject>()
+  
+  ; First, we extract the nets-by-pin and relevant-nets tables.
+  for net in unique-nets(root-module) do :
+    ; println("Indexing net (%_): %," % [net, seq(ref, pins-on-net(net))])
+    ; TODO: handle DNP? 
+    for pin in filter({not dnp-pin?(_)}, pins-on-net(net)) do :
+      within indented() :
+        ; println("Indexing pin (%_): %_" % [pin, ref(pin)]) 
+        nets-by-pin[pin] = net
+        if has-property?(pin, property-name) : 
+          ; println("Net has property.")
+          add(relevent-nets, net)
+        ; else : 
+        ;   println("Net does not have property.")
+  
+  ; We convert the relevant nets to a stack, alternatively
+  ; we could use a queue or implement via recursion.
+  val net-stack = to-vector<JITXObject>(relevent-nets)
+
+  ; We want to make sure we don't infinitely recurse over
+  ; the design, so we arbitrarily forbid traversing the 
+  ; same pin twice when propagating across components.
+  val visited?  = HashSet<JITXObject>()
+
+  ; Now we pop the next nets off the stack.
+  while not empty?(net-stack) :
+    val net  = pop(net-stack)
+    ; println("visiting net(%_): %," % [net, seq(ref,pins-on-net(net))])
+    add(visited?, net)
+
+    val pins = to-tuple(filter({not dnp-pin?(_)}, pins-on-net(net)))
+    val [pins-with-property, pins-without-property] = 
+      fork-on-seq(pins, 
+        fn (ps) : 
+          to-tuple(filter(has-property?{_, property-name}, ps))
+        fn (ps) : 
+          filter({not has-property?(_, property-name)}, ps))
+
+    ; println("pins-with-prop: %," % [seq(ref, pins-with-property)])
+
+    ; Extract the value we want to use.
+    val prop-value = 
+      ; Case 1: there is no conflict 
+      if length(pins-with-property) == 1 : 
+        get-property(pins-with-property[0], property-name)
+      ; Case 2: we need to resolve any conflicting values
+      else :
+        ; Inform the user there is a conflict being resolved.
+        println("[WARN] Conflicting values for property \"%_\" along pins %,." % [
+          property-name,
+          seq(ref, pins-with-property)])
+        handle-conflict(seq(get-property{_, property-name}, pins-with-property))
+    
+    ; println("Prop value:%_" % [prop-value])
+    for next-pin in pins-with-property do : 
+      ; within indented() :
+      ;   println("Setting prop for %_" % [next-pin])
+      updater(next-pin, property-name, prop-value)
+    
+    ; println("Handling adjacencies: %," % [seq(ref{containing-instance(_) as Instance}, pins)])
+    ; Now we handle adjacencies (propagating across instances). 
+    ; For each pin, we check if we need to handle adjacent pins
+    ; across its containing instance, adding nets
+    ; 
+    ; Note: nets are forbidden from revisiting, even if propagation
+    ;       introduces new conflicts.
+    for adjacent-instance in seq(containing-instance, pins) do :
+      match(adjacent-instance:JITXObject) :
+        ; println("Handling adjacent instance:%_" % [ref(adjacent-instance)])
+        val adjacent-pins = handle-instance(adjacent-instance)
+        ; println("Adjacent-pins:%," % [seq(ref, adjacent-pins)])
+        for pin in adjacent-pins do :
+          if not has-property?(pin, property-name) : 
+            ; println("Updating: %_.%_" % [ref(pin), property-name])
+            set-property(pin, property-name, prop-value)
+          match(get?(nets-by-pin, pin)) : 
+            (f:False) : 
+              ; println("%_ is unconnected." % [ref(pin)])
+              ; the pin is unconnected, do nothing.
+              false 
+            (n:JITXObject) : 
+              ; println("%_ is connected to %_, which is visited?: %_" % [ref(pin), n, visited?[n]])
+              ; the pin is connected to a net we haven't visited yet.
+              add(net-stack, n) when not visited?[n]
+
+; same as above with default updater
+public defn propagate-property-along-nets (root-module:JITXObject,
+                                           property-name:Symbol,
+                                           handle-instance: (JITXObject) -> Seqable<JITXObject>,
+                                           handle-conflict:(Seqable<jitx/client/JITXValue>) -> jitx/client/JITXValue) :
+  propagate-property-along-nets(root-module, property-name, handle-instance, handle-conflict, default-updater)
+
+; same as above with default handlers
+public defn propagate-property-along-nets (root-module:JITXObject,
+                                           property-name:Symbol) :
+  propagate-property-along-nets(root-module, 
+                                property-name, 
+                                default-instance-handler, 
+                                default-conflict-handler)
+
+; WIP: new rail-voltage propagation based on a two-pass approach
+; 
+; Example: 
+;   Here we propagate the "power-supply-pin" property along nets
+;   connected to any pin marked with this property, but map the 
+;   maximum voltage of the psu-pin to a property called "rail-voltage."
+; 
+;   All we need to do is call the main driver and define our handlers, 
+;   in this case we can use the default-instance-handler (which does 
+;   not propagate across components), with a custom conflict handler 
+;   and custom updater.
+;
+public defn propagate-rail-voltage-2 (root-module:JITXObject) : 
+  propagate-property-along-nets(root-module,
+                                `power-supply-pin,
+                                default-instance-handler,
+                                handle-conflict,
+                                updater) where :
+    defn handle-conflict (xs) : 
+      maximum $ 
+        for psp in filter-by<PowerSupplyPin>(xs) seq : 
+          match(supply-voltage(psp)) : 
+            (d:Double)     : d
+            (t:Toleranced) : max-value(t)
+
+    defn updater (p:JITXObject, name:Symbol, value:jitx/client/JITXValue) : 
+      set-property(p, `rail-voltage, value)
+    
+;==============================================================================
+;============================= Helpers ========================================
+;==============================================================================
+; TODO: refactor not to use undocumented internal APIs
+
+doc:"Returns if an object has a property."
+defn has-property? (obj:JITXObject, prop:Symbol) -> True|False : 
+  ; TODO: introspection instead of using internal APIs explicitly
+  jitx/client/get-property?(jitx/commands/JITX-CLIENT, false, obj, prop) is One
+
+doc:"Returns if a pin is connected to a component marked DNP"
+defn dnp-pin? (pin:JITXObject) -> True|False : 
+  val inst = containing-instance(pin)
+  match(inst:JITXObject) :
+    has-property?(inst, `DNP)
+
+; Default instance handler. Do not propagate across components.
+defn default-instance-handler (obj:JITXObject) : 
+  pins(obj)
+
+; Default conflict handler. Select the first value.
+defn default-conflict-handler (values:Seqable<jitx/client/JITXValue>) : 
+  next(to-seq(values))
+
+; Default updater. Call `set-property`. 
+defn default-updater (obj:JITXObject, name:Symbol, value:jitx/client/JITXValue) : 
+  set-property(obj, name, value)
