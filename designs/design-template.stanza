@@ -1,0 +1,49 @@
+#use-added-syntax(jitx)
+defpackage design-template :
+  import core
+  import jitx
+  import jitx/commands
+
+; =========================
+; Module to run as a design
+; ==========================
+val board-shape = RoundedRectangle(30.0, 18.5, 0.25)
+pcb-module my-design :
+
+  inst version-label  : ocdb/board-text/version-silkscreen("REV 0.0.0")
+  place(version-label) at loc(0.0, height(board-shape) / 2.0 - 1.0) on Bottom
+  
+; ========================================
+; Configure the design and view the result
+; ========================================
+defn run-design (circuit:Instantiable, outline:Shape) :
+  set-design("CAD")
+
+  set-main-module(circuit) ; Treat the provided module as a design, and compile it.
+
+  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, outline))
+  set-rules(ocdb/rules/jlcpcb-rules)
+
+  run-checks("checks.txt")
+  view-board()
+  view-schematic()
+
+; ====================
+; Export design to CAD
+; ====================
+defn export-design () :
+  set-paper(ANSI-A4)
+  set-export-backend(`kicad)
+  export-cad()
+
+; ===================================
+; Update CAD, keeping layout progress
+; ===================================
+defn update-design () :
+  set-export-board?(false)
+  export-design()
+
+; ============
+; Run the code
+; ============
+run-design(my-design, board-shape)
