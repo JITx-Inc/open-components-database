@@ -68,7 +68,7 @@ public defn erc-check-design (module:JITXObject):
 public defn drc-check-design (module:JITXObject):
   inside pcb-module:
     check-all-landpatterns(module)
-    ; FIXME!: this needs to be added back when we are able to detect whether a board has been set
+    ; This needs to be added back when we are able to detect whether a board has been set
     ; if exists?(board) :
     ;   run-design-verification()
 
@@ -142,7 +142,7 @@ defn populated-components (module:JITXObject) -> Tuple<JITXObject> :
 defn all-populated-pins (module:JITXObject) -> Tuple<Pin> :
   populated-components(module)
     $> seq-cat{pins, _}
-    $> to-tuple ; FIXME! There can be a lot, do not to-tuple?
+    $> to-tuple
     $> {_ as Tuple<Pin>}
 
 defn all-pins (module:JITXObject) -> Tuple<JITXObject> :
@@ -368,7 +368,6 @@ pcb-check digital-io-levels (module:JITXObject) :
 defn cmos-and-ttl-checks (cmos-ttl-outputs:Tuple<DigitalPin>,
                           pin-categories:DigitalPinCategories) :
   val digital-pins = cat-all $ [ios(pin-categories), inputs(pin-categories), outputs(pin-categories)]
-  ; FIXME!: Triply nested loop, do we care about the order?
   for out-p in cmos-ttl-outputs do :
     for io-p in filter({_ != out-p}, ios(pin-categories)) do :
       check-single-push-pull-levels-with-ios(out-p, io-p)
@@ -404,7 +403,6 @@ defn collect-pull-up-resistors-and-their-rail-voltages (open-collectors:Tuple<Di
     has-property?(instance.resistance) and
     collect-rail-voltages-and-returns-if-any?(instance)
 
-  ; FIXME!: Bhusan said that sometimes we'd want to connect a rail? Just for board debugging?
   for p in seq(pin, open-collectors) do :
     #CHECK(
       condition =            not has-property?(p.rail-voltage),
@@ -1023,7 +1021,7 @@ public pcb-check inductor-component (l:JITXObject) :
                           max-value(peak-current(property(l.operating-point))),
                           OPERATING-TEMPERATURE[1]]
 
-    val power = property(l.dc-resistance) * pow(i, 2.0) ; FIXME! just using the DC formula
+    val power = property(l.dc-resistance) * pow(i, 2.0) ; just using the DC formula
     if has-property?(l.derating) and has-property?(l.rated-power):
       ; Derate the power based on the piecewise linear curve from MFG
       val derating = PWL(property(l.derating))[temp]
