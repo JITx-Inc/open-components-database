@@ -106,12 +106,38 @@ pcb-module regulator-fixture :
   net (gnd measure.gnd)
 
   add-testpoint([reg.adj gnd])
+; ========================================
+; Configure the design and view the result
+; ========================================
+defn run-design (circuit:Instantiable, outline:Shape) :
+  set-design("CAD")
 
-defn run-design (circuit:Instantiable) :
-  make-default-board(circuit, 2, board-shape)
+  set-main-module(circuit)
 
+  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, outline))
+  set-rules(ocdb/rules/jlcpcb-rules)
+
+  run-checks("checks.txt")
   view-board()
   view-schematic()
 
-run-design(simple-lm317a-regulator(12.0))
-; run-design(regulator-fixture)
+; ====================
+; Export design to CAD
+; ====================
+defn export-design () :
+  set-paper(ANSI-A4)
+  set-export-backend(`kicad)
+  export-cad()
+  export-bom()
+
+; ===================================
+; Update CAD, keeping layout progress
+; ===================================
+defn update-design () :
+  set-export-board?(false)
+  export-design()
+
+; ============
+; Run the code
+; ============
+run-design(regulator-fixture, board-shape)
