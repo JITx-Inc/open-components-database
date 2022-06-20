@@ -13,6 +13,7 @@ defpackage ocdb/designs/usb-light :
   import ocdb/symbols
   import ocdb/property-structs
   import ocdb/checks
+  import jitx/geometry/shapes/arc-utils
 
 val BOARD-SHAPE = RoundedRectangle(25.0, 25.0, 0.25)
 
@@ -73,7 +74,7 @@ pcb-module main-board:
       if i != 0 :
         copper(LayerIndex(0)) = Line(trace-thickness, [Point(led-5v-x1 - 2.0, led-5v-y1) Point(led-5v-x1 - 2.0, led-5v-y1 - 5.0) ])      
       else :
-        copper(LayerIndex(0)) = Line(trace-thickness, [Point(led-5v-x1 - 2.0, led-5v-y1) Point(-10.0, -10.0) ])      
+        copper(LayerIndex(0)) = Polyline(trace-thickness, [Arc(Point(led-5v-x1 - 2.0, led-5v-y1), Point(-9.5, -9.5), Point(-8.0, -10.0))])
 
     ; place track between the LEDs
     val led-5v-x2 = x(led-i-point) - y(center(get-pad-pose(((led[i])), "c")))
@@ -101,8 +102,10 @@ pcb-module main-board:
   val conn-p5v-y = y(conn-point) + x(center(get-pad-pose(((conn)), "p",1)))
   geom(p5v) :
     copper(LayerIndex(0)) = Line(trace-thickness, [ Point(5.7, conn-p5v-y), Point(conn-pin-x, conn-p5v-y) ])
-    copper(LayerIndex(0)) = Line(trace-thickness, [ Point(5.7, -10.0), Point(5.7, conn-p5v-y) ])
-    copper(LayerIndex(0)) = Line(trace-thickness, [ Point(5.7, -10.0), Point(-10.0, -10.0) ])
+    copper(LayerIndex(0)) = Line(trace-thickness, [ Point(5.7, -8.0), Point(5.7, conn-p5v-y) ])
+    ; copper(LayerIndex(0)) = Line(trace-thickness, [ Point(5.7, -10.0), Point(-8.0, -10.0) ])
+          copper(LayerIndex(0)) = Polyline(trace-thickness, [Point(-8.0, -10.0), Arc(Point(4.2, -10.0), Point(5.4, -9.0), Point(5.7, -8.0))])
+
   geom(gnd) :
     copper(LayerIndex(0)) = Line(trace-thickness, [ Point(5.0, conn-gnd-y), Point(conn-pin-x, conn-gnd-y) ])
     copper-pour(LayerIndex(0), isolate = 0.1, rank = 1) = RoundedRectangle(6.0, 6.5, 1.0, loc(conn-point,0.0))
