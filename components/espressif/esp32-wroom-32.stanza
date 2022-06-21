@@ -1,0 +1,200 @@
+; When renaming the stanza package name below, also rename it in the folder stanza.proj
+; See docs.jitx.com for help
+#use-added-syntax(jitx)
+defpackage ocdb/espressif/esp32-wroom-32:
+  import core
+  import collections
+  import jitx
+
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/tolerance
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import ocdb/land-protrusions
+  import ocdb/design-vars
+
+public pcb-enum ocdb/espressif/esp32-wroom-32/esp32-wroom-package-type :
+  esp32-type-E
+  esp32-type-UE
+
+pcb-pad esp32-edge :
+  smd-pad(0.85, 0.9)
+
+pcb-pad esp32-middle :
+  smd-pad(0.9, 0.9)
+
+pcb-landpattern esp32-wroom (package:ocdb/espressif/esp32-wroom-32/esp32-wroom-package-type) :
+  val num-pins = 38                 ; number of pins of the component
+  val pitch = 1.27                 ; pitch of the pins of the component
+  val lead-span = tol(18.0,0.15)  ; the overall length of the component, from terminal-edge to terminal-edge
+  val package-x = 18.0    ; the x of the package 
+  var package-y = 19.2     ; the y of the package
+  val terminal-x = tol(0.85,0.0)   ; the x of the terminals
+  val terminal-y = tol(0.9,0.0)    ; the y of the terminals
+  val lead-fillets = lead-fillets(LeadlessConcaveCastellated, DENSITY-LEVEL)
+  var offset = 0.0
+  if (package is esp32-type-E) : 
+    package-y = 25.5
+    offset = (25.5 - 19.2) / 2.0
+  inside pcb-landpattern:
+    ;----------------------------------------------------
+    ; Compute adjustments to dimensions using IPC formula
+    val ipc = ipc-formula(
+      lead-span, terminal-x, terminal-y, 
+      lead-fillets
+    )
+
+    ;----------------------------------------------------
+    ; compute our pad sizes
+    val pad-sz  = pad-size(ipc)
+    ;----------------------------------------------------
+    val grid-sz = Dims(Gmin(ipc) + x(pad-sz), pitch)
+    println("grid-sz %_ %_ offset %_" % [x(grid-sz) y(grid-sz) offset])
+    val edge-of-x = package-x / 2.0
+    val edge-of-y = package-y / 2.0
+    val x-loc = edge-of-x ;- x(grid-sz)
+    val neg-x-loc = -1.0 * x-loc
+    val y-loc = -1.0 * edge-of-y - offset ;- y(grid-sz) 
+    var pad-move = 6.5 * pitch - offset
+    ; draw the orientation marker
+    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
+    val pol-x = neg-x-loc - 0.5 * x(pad-sz) - 2.0 * solder-mask-registration
+    val line-width  = clearance(current-rules(), MinSilkscreenWidth)
+    layer(Silkscreen("pol", Top)) = loc(pol-x,pad-move) * Line(line-width, [Point(0.0, 0.0), Point(0.0, line-width * 3.0)])
+
+    ; place the pads
+    for i in 1 through 14 do : ; left side from top
+      pad p[i] : smd-pad(Rectangle(pad-sz)) at loc(neg-x-loc, pad-move)
+      println("[i %_ %_ %_]" % [i neg-x-loc pad-move])
+      pad-move = pad-move - pitch
+    pad-move = -4.5 * pitch
+    for i in 15 through 24 do : ; bottom side from left
+      pad p[i] : smd-pad(Rectangle(pad-sz)) at loc(pad-move, y-loc, 270.0)
+      println("[i %_ %_ %_]" % [i pad-move y-loc])
+      pad-move = pad-move + pitch
+    pad-move = -6.5 * pitch - offset
+    for i in 25 through 38 do : ; right side from bottom
+      pad p[i] : smd-pad(Rectangle(pad-sz)) at loc(x-loc, pad-move)
+      println("[i %_ %_ %_]" % [i x-loc, pad-move])
+      pad-move = pad-move + pitch
+
+    ; for i in 39 through 48 do : ; grid of 9 ground pads
+    ;----------------------------------------------------
+    ; compute the courtyard
+    val edge-of-artwork = Rectangle(package-x +  2.0 * (x(grid-sz) + solder-mask-registration + courtyard-excess(lead-fillets)), 
+      package-y + y(grid-sz) + solder-mask-registration + 2.0 * courtyard-excess(lead-fillets))
+    layer(Courtyard(Top)) = edge-of-artwork
+        
+    ;----------------------------------------------------
+    ; place the reference label    
+    val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
+    val text-y = 0.5 * package-y + min-silkscreen-text-height
+    ref-label(0.0, text-y)
+
+
+; ====================================================
+
+pcb-landpattern lp-esp32-wroom-32-E :
+  make-n-pin-soic-landpattern(number-of-leads, pitch, lead-span, package-length,
+      package-width, terminal-length, terminal-width) where :
+    val number-of-leads = 38
+    val pitch = 2.54
+    val lead-span = tol(9.5, 0.15)
+    val package-length = tol(8.75, 0.2)
+    val package-width = tol(15.24, 0.35)
+    val terminal-length = tol((9.5 - 2.54) / 2.0, 0.15),
+    val terminal-width = tol(0.64, 0.01)
+
+public defn component () :
+  component(4,esp32-type-E,false) 
+
+public defn component (high-temp:True|False) :
+  component(4,esp32-type-E,high-temp) 
+
+public defn component (memory:Int, package:esp32-wroom-package-type) :
+  component(memory, package, false) 
+
+public pcb-component component (memory:Int, package:ocdb/espressif/esp32-wroom-32/esp32-wroom-package-type, high-temp:True|False) :
+  var mem-text:String
+  switch {memory == _} :
+    4 : mem-text = ", 4MB"
+    8 : mem-text = ", 8MB"
+    16 : mem-text = ", 16MB"
+    else: fatal("Invalid memory size of %_ passed to esp32-wroom-32. Valid sizes are 4, 8, and 16" % [memory])
+
+  var package-string:String
+  var package-desc = ", PCB Antenna"
+  match(package) :
+    (package:esp32-type-E) : package-string = "E"
+    (package:esp32-type-UE) : 
+      package-string = "UE" 
+      package-desc = ", UMCX"
+
+  var temp-text = "N"
+  if high-temp:
+    if memory == 4 :
+      temp-text = "H"
+      mem-text = append(", High Temperature", mem-text)
+    else : fatal("Invalid memory size of %_ for high temp version passed to esp32-wroom-32. Valid high temp memory option is 4." % [memory])
+
+  name = string-join(["ESP32-WROOM-32" package-string "-" temp-text memory])
+  mpn = string-join(["ESP32-WROOM-32" package-string "-" temp-text memory])
+  println(string-join(["ESP32-WROOM-32" package-string "-" temp-text memory]))
+  description = string-join(["Module, ESP32, "package-desc mem-text ", WiFi 802.11b/g/n, Bluetooth v4.2 +EDR, Class 1, 2 and 3 Transceiver, Surface Mount"])
+  println(string-join(["Module, ESP32"package-desc mem-text ", WiFi 802.11b/g/n, Bluetooth v4.2 +EDR, Class 1, 2 and 3 Transceiver, Surface Mount"]))
+  manufacturer = "Espressif" 
+  reference-prefix = "U"
+
+  pin EN 
+  ; port SENSOR_V : diff-pair
+  port IO : pin[[0 2 4 5 12 13 14 15 16 17 18 19 21 22 23 25 26 27 32 33 34 35]]
+  pin RXD0 
+  pin TXD0 
+
+  pin-properties :
+    [pin:Ref      | pads:Int ... | side:Dir ]
+    [GND  |      1, 15, 38 |  Down ]
+    [P3V3  |      2       |  Up ]
+    [EN   |      3       |  Left ]
+    [SENSOR_VP | 4       |  Left ]
+    [SENSOR_VN | 5       |  Left ]
+    [IO[0]  |      25      |  Left ]
+    [IO[2]  |      24      |  Left ]
+    [IO[4]  |      26      |  Left ]
+    [IO[5]  |      29      |  Left ]
+    [IO[12] |      14      |  Right ]
+    [IO[13] |      16      |  Right ]
+    [IO[14] |      13      |  Right ]
+    [IO[15] |      23      |  Right ]
+    [IO[16] |      27      |  Right ]
+    [IO[17] |      28      |  Right ]
+    [IO[18] |      30      |  Right ]
+    [IO[19] |      31      |  Right ]
+    [IO[21] |      33      |  Right ]
+    [IO[22] |      36      |  Right ]
+    [IO[23] |      37      |  Right ]
+    [IO[25] |      10      |  Right ]
+    [IO[26] |      11      |  Right ]
+    [IO[27] |      12      |  Right ]
+    [IO[32] |      8       |  Right ]
+    [IO[33] |      9       |  Right ]
+    [IO[34] |      6       |  Right ]
+    [IO[35] |      7       |  Right ]
+    [RXD0 |      34      |  Left ]
+    [TXD0 |      35      |  Left ]
+    [NC | 17, 18, 19, 20, 21, 22, 32 |  Left ]
+
+  make-box-symbol()
+  assign-landpattern(esp32-wroom(package))
+
+  supports power:
+    power.vdd => self.P3V3
+    power.gnd => self.GND
+
+
+
+; Visualize the symbol and landpattern in the VSCode visualizer.
+; Remove before use of the component in a design
+view(component(16, esp32-type-UE))
