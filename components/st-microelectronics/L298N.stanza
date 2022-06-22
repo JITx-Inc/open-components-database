@@ -1,0 +1,110 @@
+; When renaming the stanza package name below, also rename it in the folder stanza.proj
+; See docs.jitx.com for help
+#use-added-syntax(jitx)
+defpackage ocdb/st-microelectronics/L298N:
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/tolerance
+  import ocdb/box-symbol
+  import ocdb/bundles
+  import math
+  import ocdb/generic-components
+  import ocdb/property-structs
+  
+pcb-landpattern lp-L298N :
+  make-n-pin-soic-landpattern(number-of-leads, pitch, lead-span, package-length,
+      package-width, terminal-length, terminal-width) where :
+    val number-of-leads = 6
+    val pitch = 2.54
+    val lead-span = tol(9.5, 0.15)
+    val package-length = tol(8.75, 0.2)
+    val package-width = tol(15.24, 0.35)
+    val terminal-length = tol((9.5 - 2.54) / 2.0, 0.15),
+    val terminal-width = tol(0.64, 0.01)
+
+pcb-landpattern multiwatt-15 :
+  val B = 2.65
+  val E = min-max(0.49, 0.55)
+  val F = min-max(0.66, 0.75)
+  val G = min-typ-max(1.02, 1.27, 1.52)
+  val G1 = min-typ-max(17.53, 17.78, 18.03)
+  val H2 = 20.2
+  val M = min-typ-max(4.25, 4.55, 4.85)
+  val M1 = min-typ-max(4.63, 5.08, 5.53)
+  val y-dim = (typ-value(M1) + typ-value(M)) 
+  val rowA = typ-value(M1) - typ-value(M)
+  val rowB = (typ-value(M1) + typ-value(M)) / -2.0
+  var col = typ-value(G1) / -2.0
+  val col-step = typ-value(G)
+  val pin-radius = sqrt(pow(max-value(E),2.0) + pow(max-value(F),2.0)) / 2.0
+  val hole-radius = pin-radius + 0.2
+  val line-width  = clearance(current-rules(), MinSilkscreenWidth)
+  val sm-reg = clearance(current-rules(), SolderMaskRegistration)
+  val the-pad = pth-pad(Circle(hole-radius + 0.25), Circle(hole-radius + 0.25 + sm-reg), false, Circle(hole-radius))
+  val silk-sm = clearance(current-rules(), MinSilkSolderMaskSpace)
+  for i in 1 through 15 do :
+    if (modulo(i,2) == 1) :
+      pad p[i] : the-pad at loc(col, rowB)
+    else:
+      pad p[i] : the-pad at loc(col, rowA)
+    col = col + col-step
+    (typ-value(M1) + typ-value(M) + 2.5 * hole-radius)
+  layer(Silkscreen("pol", Top)) = Line(line-width, [Point(H2 / -2.0 - silk-sm + 5.0 * line-width, y-dim / -2.0 - (hole-radius + 0.25 + sm-reg + silk-sm)) 
+    Point(H2 / -2.0 - silk-sm, y-dim / -2.0 - (hole-radius + 0.25 + sm-reg + silk-sm - 5.0 * line-width))] )
+  layer(Silkscreen("outline", Top)) = LineRectangle(H2 + 2.0 * silk-sm, y-dim + 2.0 * (hole-radius + 0.25 + sm-reg + silk-sm))
+  layer(Courtyard(Top)) = Rectangle(H2 + 2.0 * silk-sm, y-dim + 2.0 * (hole-radius + 0.25 + sm-reg + silk-sm))
+  ref-label()
+
+
+
+public pcb-component component :
+  name = "L298N"
+  description = "PART, DESCRIPTION, DETAILED"
+  mpn = "L298N"
+  manufacturer = "STMicroelectronics"
+  reference-prefix = "U"
+  property(self.rated-temperature) = RatedTemperature(min-max(-25.0, 130.0))
+
+  pin-properties :
+    [pin:Ref      | pads:Int ... | side:Dir ]
+    [VMOTOR       | 4            | Up       ]
+    [VLOGIC       | 9            | Up       ]
+    [AIN1         | 5            | Left     ]
+    [AIN2         | 7            | Left     ]
+    [ENA          | 6            | Left     ]
+    [AOUT1        | 2            | Right    ]
+    [AOUT2        | 3            | Right    ]
+    [BIN1         | 10           | Left     ]
+    [BIN2         | 12           | Left     ]
+    [ENB          | 11           | Left     ]
+    [BOUT1        | 13           | Right    ]
+    [BOUT2        | 14           | Right    ]
+    [GND          | 8            | Down     ]
+    [ARTN         | 1            | Down     ]
+    [BRTN         | 15           | Down     ]
+
+  make-box-symbol()
+  assign-landpattern(multiwatt-15)
+
+  supports power:
+    power.vdd => self.VLOGIC
+    power.gnd => self.GND
+
+public pcb-module module : 
+  port vmotor:power
+  port vlogic:power
+  public inst driver : ocdb/st-microelectronics/L298N/component
+  inst bulk : tantalum-cap(["capacitance" => 220.0e-6 "min-rated-voltage" => 35.0])
+  inst diode : ocdb/on-semiconductor/BAS21LT1G/component[8]
+  for i in 0 to 4 do:
+    net (vmotor.vdd diode[i].a)
+    net (vmotor.gnd diode[i + 4].c)
+  net (bulk.c vmotor.gnd vlogic.gnd)
+  net (bulk.a vmotor.vdd)
+; Visualize the symbol and landpattern in the VSCode visualizer.
+; Remove before use of the component in a design
+view(component)
