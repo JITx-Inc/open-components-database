@@ -14,109 +14,20 @@ defpackage ocdb/espressif/esp32-wroom-32:
   import ocdb/bundles
   import ocdb/land-protrusions
   import ocdb/design-vars
+  import ocdb/generic-components
+  import ocdb/property-structs
 
-public pcb-enum ocdb/espressif/esp32-wroom-32/esp32-wroom-package-type :
-  esp32-type-E
-  esp32-type-UE
-
-pcb-pad esp32-edge :
-  smd-pad(0.85, 0.9)
-
-pcb-pad esp32-middle :
-  smd-pad(0.9, 0.9)
-
-pcb-landpattern esp32-wroom (package:ocdb/espressif/esp32-wroom-32/esp32-wroom-package-type) :
-  val num-pins = 38                 ; number of pins of the component
-  val pitch = 1.27                 ; pitch of the pins of the component
-  val lead-span = tol(18.0,0.15)  ; the overall length of the component, from terminal-edge to terminal-edge
-  val package-x = 18.0    ; the x of the package 
-  var package-y = 19.2     ; the y of the package
-  val terminal-x = tol(0.85,0.0)   ; the x of the terminals
-  val terminal-y = tol(0.9,0.0)    ; the y of the terminals
-  val lead-fillets = lead-fillets(LeadlessConcaveCastellated, DENSITY-LEVEL)
-  var offset = 0.0
-  if (package is esp32-type-E) : 
-    package-y = 25.5
-    offset = (25.5 - 19.2) / 2.0
-  inside pcb-landpattern:
-    ;----------------------------------------------------
-    ; Compute adjustments to dimensions using IPC formula
-    val ipc = ipc-formula(
-      lead-span, terminal-x, terminal-y, 
-      lead-fillets
-    )
-
-    ;----------------------------------------------------
-    ; compute our pad sizes
-    val pad-sz  = pad-size(ipc)
-    ;----------------------------------------------------
-    val grid-sz = Dims(Gmin(ipc) + x(pad-sz), pitch)
-    println("grid-sz %_ %_ offset %_" % [x(grid-sz) y(grid-sz) offset])
-    val edge-of-x = package-x / 2.0
-    val edge-of-y = package-y / 2.0
-    val x-loc = edge-of-x ;- x(grid-sz)
-    val neg-x-loc = -1.0 * x-loc
-    val y-loc = -1.0 * edge-of-y - offset ;- y(grid-sz) 
-    var pad-move = 6.5 * pitch - offset
-    ; draw the orientation marker
-    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
-    val pol-x = neg-x-loc - 0.5 * x(pad-sz) - 2.0 * solder-mask-registration
-    val line-width  = clearance(current-rules(), MinSilkscreenWidth)
-    layer(Silkscreen("pol", Top)) = loc(pol-x,pad-move) * Line(line-width, [Point(0.0, 0.0), Point(0.0, line-width * 3.0)])
-
-    ; place the pads
-    for i in 1 through 14 do : ; left side from top
-      pad p[i] : smd-pad(Rectangle(pad-sz)) at loc(neg-x-loc, pad-move)
-      println("[i %_ %_ %_]" % [i neg-x-loc pad-move])
-      pad-move = pad-move - pitch
-    pad-move = -4.5 * pitch
-    for i in 15 through 24 do : ; bottom side from left
-      pad p[i] : smd-pad(Rectangle(pad-sz)) at loc(pad-move, y-loc, 270.0)
-      println("[i %_ %_ %_]" % [i pad-move y-loc])
-      pad-move = pad-move + pitch
-    pad-move = -6.5 * pitch - offset
-    for i in 25 through 38 do : ; right side from bottom
-      pad p[i] : smd-pad(Rectangle(pad-sz)) at loc(x-loc, pad-move)
-      println("[i %_ %_ %_]" % [i x-loc, pad-move])
-      pad-move = pad-move + pitch
-
-    ; for i in 39 through 48 do : ; grid of 9 ground pads
-    ;----------------------------------------------------
-    ; compute the courtyard
-    val edge-of-artwork = Rectangle(package-x +  2.0 * (x(grid-sz) + solder-mask-registration + courtyard-excess(lead-fillets)), 
-      package-y + y(grid-sz) + solder-mask-registration + 2.0 * courtyard-excess(lead-fillets))
-    layer(Courtyard(Top)) = edge-of-artwork
-        
-    ;----------------------------------------------------
-    ; place the reference label    
-    val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
-    val text-y = 0.5 * package-y + min-silkscreen-text-height
-    ref-label(0.0, text-y)
-
-
-; ====================================================
-
-pcb-landpattern lp-esp32-wroom-32-E :
-  make-n-pin-soic-landpattern(number-of-leads, pitch, lead-span, package-length,
-      package-width, terminal-length, terminal-width) where :
-    val number-of-leads = 38
-    val pitch = 2.54
-    val lead-span = tol(9.5, 0.15)
-    val package-length = tol(8.75, 0.2)
-    val package-width = tol(15.24, 0.35)
-    val terminal-length = tol((9.5 - 2.54) / 2.0, 0.15),
-    val terminal-width = tol(0.64, 0.01)
-
+; ================================================== Component ==================================================
 public defn component () :
-  component(4,esp32-type-E,false) 
+  component(4,true,false) 
 
-public defn component (high-temp:True|False) :
-  component(4,esp32-type-E,high-temp) 
+public defn component (pcb-antenna?:True|False) :
+  component(4,pcb-antenna?, false) 
 
-public defn component (memory:Int, package:esp32-wroom-package-type) :
-  component(memory, package, false) 
+public defn component (memory:Int, pcb-antenna?:True|False) :
+  component(memory, pcb-antenna?, false) 
 
-public pcb-component component (memory:Int, package:ocdb/espressif/esp32-wroom-32/esp32-wroom-package-type, high-temp:True|False) :
+public pcb-component component (memory:Int, pcb-antenna?:True|False, high-temp:True|False) :
   var mem-text:String
   switch {memory == _} :
     4 : mem-text = ", 4MB"
@@ -124,38 +35,36 @@ public pcb-component component (memory:Int, package:ocdb/espressif/esp32-wroom-3
     16 : mem-text = ", 16MB"
     else: fatal("Invalid memory size of %_ passed to esp32-wroom-32. Valid sizes are 4, 8, and 16" % [memory])
 
-  var package-string:String
-  var package-desc = ", PCB Antenna"
-  match(package) :
-    (package:esp32-type-E) : package-string = "E"
-    (package:esp32-type-UE) : 
-      package-string = "UE" 
-      package-desc = ", UMCX"
+  var package-string = "UE"
+  var package-desc = ", UMCX"
+  if pcb-antenna? :
+    package-string = "E" 
+    package-desc = ", PCB Antenna"
 
   var temp-text = "N"
   if high-temp:
     if memory == 4 :
       temp-text = "H"
       mem-text = append(", High Temperature", mem-text)
+      property(self.rated-temperature) = RatedTemperature(min-max(-40.0, 105.0))
     else : fatal("Invalid memory size of %_ for high temp version passed to esp32-wroom-32. Valid high temp memory option is 4." % [memory])
+  else:
+    property(self.rated-temperature) = RatedTemperature(min-max(-40.0, 85.0))
 
   name = string-join(["ESP32-WROOM-32" package-string "-" temp-text memory])
   mpn = string-join(["ESP32-WROOM-32" package-string "-" temp-text memory])
-  println(string-join(["ESP32-WROOM-32" package-string "-" temp-text memory]))
   description = string-join(["Module, ESP32, "package-desc mem-text ", WiFi 802.11b/g/n, Bluetooth v4.2 +EDR, Class 1, 2 and 3 Transceiver, Surface Mount"])
-  println(string-join(["Module, ESP32"package-desc mem-text ", WiFi 802.11b/g/n, Bluetooth v4.2 +EDR, Class 1, 2 and 3 Transceiver, Surface Mount"]))
   manufacturer = "Espressif" 
   reference-prefix = "U"
 
   pin EN 
-  ; port SENSOR_V : diff-pair
   port IO : pin[[0 2 4 5 12 13 14 15 16 17 18 19 21 22 23 25 26 27 32 33 34 35]]
   pin RXD0 
   pin TXD0 
 
   pin-properties :
     [pin:Ref      | pads:Int ... | side:Dir ]
-    [GND  |      1, 15, 38 |  Down ]
+    [GND  |      1, 15, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47 |  Down ]
     [P3V3  |      2       |  Up ]
     [EN   |      3       |  Left ]
     [SENSOR_VP | 4       |  Left ]
@@ -187,14 +96,182 @@ public pcb-component component (memory:Int, package:ocdb/espressif/esp32-wroom-3
     [NC | 17, 18, 19, 20, 21, 22, 32 |  Left ]
 
   make-box-symbol()
-  assign-landpattern(esp32-wroom(package))
+  assign-landpattern(esp32-wroom(pcb-antenna?))
+
+  ; ESP supports crossbarred IO, so use generic supports
+  val reserved-io = [IO[0] IO[16] IO[17] IO[32] IO[33] IO[34] IO[35]]
+  for IO-pin in ports(IO) do :
+    if not contains?(reserved-io, IO-pin) :
+      supports io-pin:
+        io-pin.p => IO-pin
 
   supports power:
     power.vdd => self.P3V3
     power.gnd => self.GND
+  supports reset:
+    reset.reset => self.EN
 
+; Generic digital pin
+pcb-bundle io-pin:
+  pin p
 
+; ================================================== Module ==================================================
+public defn module () :
+  module(4,true,false, true) 
+
+public defn module (pcb-antenna?:True|False) :
+  module(4,pcb-antenna?, false, true) 
+
+public defn module (memory:Int, pcb-antenna?:True|False) :
+  module(memory, pcb-antenna?, false, true) 
+
+public defn module (memory:Int, pcb-antenna?:True|False, serial-programming?:True|False) :
+  module(memory, pcb-antenna?, false, serial-programming?) 
+
+public pcb-module module (memory:Int, pcb-antenna?:True|False, high-temp:True|False, serial-programming?:True|False) :
+  public inst esp32 : ocdb/espressif/esp32-wroom-32/component(memory, pcb-antenna?, high-temp)
+  port power : power
+  pin boot
+  pin en
+
+; RC enable delay
+  inst en-r: chip-resistor(10.0e3)
+  inst en-c: ceramic-cap(1.0e-6)
+  net (power.gnd esp32.GND en-c.p[1])
+  net (power.vdd esp32.P3V3 en-r.p[1])
+  net (esp32.EN en-c.p[2] en-r.p[2])
+
+  ; supports power:
+  ;   power.vdd => esp32.P3V3
+  ;   power.gnd => esp32.GND
+  
+  supports reset:
+    reset.reset => esp32.EN
+
+  supports jtag([]) :
+    jtag([]).tms => esp32.IO[14]
+    jtag([]).tdi => esp32.IO[12]
+    jtag([]).tck => esp32.IO[13]
+    jtag([]).tdo => esp32.IO[15]
+
+  net (esp32.IO[0], boot)
+  net (esp32.EN en)
+  if serial-programming? :
+    port uart : uart([UART-DTR UART-RTS UART-RX UART-TX])
+    net ESP-RX (esp32.RXD0, uart.rx)
+    net ESP-TX (esp32.TXD0, uart.tx)
+    public inst q : ocdb/nexperia/PMBT3904/component[2]
+    res-strap(uart.dtr, q[0].b, 10.0e3)
+    res-strap(uart.rts, q[1].b, 10.0e3)
+    net ( q[1].c boot)
+    net ( q[0].c en)
+    net (uart.rts, q[0].e)
+    net (uart.dtr, q[1].e)
+
+  for i in 0 to 22 do:
+    supports gpio:
+      require io:io-pin from esp32
+      gpio.gpio => io.p
+      property(io.p.digital-io) = DigitalIO(CMOSOutput(min-max(0.0, 0.1 * 3.3), min-max(0.8 * 3.3, 3.3)), 0.25 * 3.3, 0.75 * 3.3, esp32.P3V3, esp32.GND, 50.0e-9)
+  for i in 0 to 16 do:
+    supports timer:
+      require io:io-pin from esp32
+      timer.timer => io.p
+      property(io.p.digital-io) = DigitalIO(CMOSOutput(min-max(0.0, 0.1 * 3.3), min-max(0.8 * 3.3, 3.3)), 0.25 * 3.3, 0.75 * 3.3, esp32.P3V3, esp32.GND, 50.0e-9)
+  for i in 0 to 2 do:
+    supports i2c:
+      require io:io-pin[2] from esp32
+      i2c.sda => io[0].p
+      i2c.scl => io[1].p
+      property(io[0].p.digital-io) = DigitalIO(OpenCollector(min-max(0.0, 0.1 * 3.3), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, esp32.P3V3, esp32.GND, 50.0e-9)
+      property(io[1].p.digital-io) = DigitalIO(OpenCollector(min-max(0.0, 0.1 * 3.3), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, esp32.P3V3, esp32.GND, 50.0e-9)
+  for i in 0 to 2 do:
+    val ocdb-uart = /uart()
+    supports ocdb-uart:
+      require io:io-pin[2] from esp32
+      ocdb-uart.tx => io[0].p
+      property(io[0].p.digital-output) = DigitalOutput(CMOSOutput(min-max(0.0, 0.1 * 3.3), min-max(0.8 * 3.3, 3.3)), false, esp32.P3V3, esp32.GND)
+      ocdb-uart.rx => io[1].p
+      property(io[1].p.digital-input) = DigitalInput(0.25 * 3.3, 0.75 * 3.3, esp32.P3V3, esp32.GND, 50.0e-9)  
+
+  schematic-group(self) = ESP32
+
+; ================================================== Land Pattern ==================================================
+pcb-landpattern esp32-wroom (pcb-antenna?:True|False) :
+  val num-pins = 38                 ; number of pins of the component
+  val pitch = 1.27                 ; pitch of the pins of the component
+  val lead-span = tol(18.0,0.15)  ; the overall length of the component, from terminal-edge to terminal-edge
+  val package-x = 18.0    ; the x of the package 
+  var package-y = 19.2     ; the y of the package
+  val terminal-x = tol(0.85,0.0)   ; the x of the terminals
+  val terminal-y = tol(0.9,0.0)    ; the y of the terminals
+  val lead-fillets = lead-fillets(LeadlessConcaveCastellated, DENSITY-LEVEL)
+  var offset = 0.0
+  if pcb-antenna? :
+    package-y = 25.5
+    offset = (25.5 - 19.2) / 2.0
+  inside pcb-landpattern:
+    ;----------------------------------------------------
+    ; Compute adjustments to dimensions using IPC formula
+    val ipc = ipc-formula(
+      lead-span, terminal-x, terminal-y, 
+      lead-fillets
+    )
+    ;Change to package layer, when added layer(Silkscreen("cmp", Top)) = Rectangle(package-x,package-y)
+    ;----------------------------------------------------
+    ; compute our pad sizes
+    val pad-sz  = pad-size(ipc)
+    ;----------------------------------------------------
+    val grid-sz = Dims(Gmin(ipc) + x(pad-sz), pitch)
+    val edge-of-x = package-x / 2.0
+    val edge-of-y = package-y / 2.0
+    val x-loc = edge-of-x
+    val neg-x-loc = -1.0 * x-loc
+    val y-loc = -1.0 * edge-of-y
+    var pad-move = 6.5 * pitch - offset
+    ; draw the orientation marker
+    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
+    val pol-x = neg-x-loc - 0.5 * x(pad-sz) - 2.0 * solder-mask-registration
+    val line-width  = clearance(current-rules(), MinSilkscreenWidth)
+    layer(Silkscreen("pol", Top)) = loc(pol-x,pad-move) * Line(line-width, [Point(0.0, 0.0), Point(0.0, line-width * 5.0)])
+
+    ; place the pads
+    for i in 1 through 14 do : ; left side from top
+      pad p[i] : smd-pad(Rectangle(pad-sz)) at loc(neg-x-loc, pad-move)
+      pad-move = pad-move - pitch
+    pad-move = -4.5 * pitch
+    for i in 15 through 24 do : ; bottom side from left
+      pad p[i] : smd-pad(Rectangle(pad-sz)) at loc(pad-move, y-loc, 270.0)
+      pad-move = pad-move + pitch
+    pad-move = -6.5 * pitch - offset
+    for i in 25 through 38 do : ; right side from bottom
+      pad p[i] : smd-pad(Rectangle(pad-sz)) at loc(x-loc, pad-move)
+      pad-move = pad-move + pitch
+
+; grid of 9 ground pads
+    val pin-array-x = 7.5 - edge-of-x 
+    val pin-array-y = 10.67 - edge-of-y
+    val pin-array-step = 0.9 + 0.5
+    var pad-num = 39
+    for i in -1 through 1 do:
+      for j in -1 through 1 do:
+        pad p[pad-num] : smd-pad( Rectangle(0.9, 0.9)) at 
+          loc(pin-array-x + to-double(i) * pin-array-step, pin-array-y + to-double(j) * pin-array-step)
+        pad-num = pad-num + 1
+
+    ;----------------------------------------------------
+    ; compute the courtyard
+    val courtyard-y = package-y + x(pad-sz) +  2.0 * (solder-mask-registration + courtyard-excess(lead-fillets)) ; pads are rotated 90, so use X here
+    val edge-of-artwork = Rectangle(package-x + x(pad-sz) + 2.0 * ( solder-mask-registration + courtyard-excess(lead-fillets)), 
+      courtyard-y)
+    layer(Courtyard(Top)) = edge-of-artwork
+        
+    ;----------------------------------------------------
+    ; place the reference label    
+    val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
+    val text-y = 0.5 * courtyard-y + min-silkscreen-text-height
+    ref-label(0.0, text-y)
 
 ; Visualize the symbol and landpattern in the VSCode visualizer.
 ; Remove before use of the component in a design
-view(component(16, esp32-type-UE))
+; view(component(16, true))
