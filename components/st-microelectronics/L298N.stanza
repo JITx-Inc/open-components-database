@@ -14,7 +14,8 @@ defpackage ocdb/st-microelectronics/L298N:
   import math
   import ocdb/generic-components
   import ocdb/property-structs
-  
+  import ocdb/rules
+
 pcb-landpattern lp-L298N :
   make-n-pin-soic-landpattern(number-of-leads, pitch, lead-span, package-length,
       package-width, terminal-length, terminal-width) where :
@@ -25,6 +26,9 @@ pcb-landpattern lp-L298N :
     val package-width = tol(15.24, 0.35)
     val terminal-length = tol((9.5 - 2.54) / 2.0, 0.15),
     val terminal-width = tol(0.64, 0.01)
+
+public defn abcdef () :
+    clearance(current-rules(),MinSilkSolderMaskSpace)
 
 pcb-landpattern multiwatt-15 :
   val B = 2.65
@@ -53,10 +57,10 @@ pcb-landpattern multiwatt-15 :
       pad p[i] : the-pad at loc(col, rowA)
     col = col + col-step
     (typ-value(M1) + typ-value(M) + 2.5 * hole-radius)
-  layer(Silkscreen("pol", Top)) = Line(line-width, [Point(H2 / -2.0 - silk-sm + 5.0 * line-width, y-dim / -2.0 - (hole-radius + 0.25 + sm-reg + silk-sm)) 
-    Point(H2 / -2.0 - silk-sm, y-dim / -2.0 - (hole-radius + 0.25 + sm-reg + silk-sm - 5.0 * line-width))] )
-  layer(Silkscreen("outline", Top)) = LineRectangle(H2 + 2.0 * silk-sm, y-dim + 2.0 * (hole-radius + 0.25 + sm-reg + silk-sm))
-  layer(Courtyard(Top)) = Rectangle(H2 + 2.0 * silk-sm, y-dim + 2.0 * (hole-radius + 0.25 + sm-reg + silk-sm))
+  layer(Silkscreen("pol", Top)) = Line(line-width, [Point(H2 / -2.0 - min-silk-soldermask() + 5.0 * line-width, y-dim / -2.0 - (hole-radius + 0.25 + sm-reg + min-silk-soldermask())) 
+    Point(H2 / -2.0 - min-silk-soldermask(), y-dim / -2.0 - (hole-radius + 0.25 + sm-reg + min-silk-soldermask() - 5.0 * line-width))] )
+  layer(Silkscreen("outline", Top)) = LineRectangle(H2 + 2.0 * min-silk-soldermask(), y-dim + 2.0 * (hole-radius + 0.25 + sm-reg + min-silk-soldermask()))
+  layer(Courtyard(Top)) = Rectangle(H2 + 2.0 * min-silk-soldermask(), y-dim + 2.0 * (hole-radius + 0.25 + sm-reg + min-silk-soldermask()))
   ref-label()
 
 
@@ -107,4 +111,4 @@ public pcb-module module :
   net (bulk.a vmotor.vdd)
 ; Visualize the symbol and landpattern in the VSCode visualizer.
 ; Remove before use of the component in a design
-view(component)
+; view(component)
