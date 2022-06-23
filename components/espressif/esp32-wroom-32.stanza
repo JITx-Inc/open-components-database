@@ -18,6 +18,7 @@ defpackage ocdb/espressif/esp32-wroom-32:
   import ocdb/property-structs
 
 ; ================================================== Component ==================================================
+; datasheet = https://www.espressif.com/sites/default/files/documentation/esp32-wroom-32e_esp32-wroom-32ue_datasheet_en.pdf
 public defn component () :
   component(4,true,false) 
 
@@ -28,12 +29,17 @@ public defn component (memory:Int, pcb-antenna?:True|False) :
   component(memory, pcb-antenna?, false) 
 
 public pcb-component component (memory:Int, pcb-antenna?:True|False, high-temp:True|False) :
-  var mem-text:String
-  switch {memory == _} :
-    4 : mem-text = ", 4MB"
-    8 : mem-text = ", 8MB"
-    16 : mem-text = ", 16MB"
-    else: fatal("Invalid memory size of %_ passed to esp32-wroom-32. Valid sizes are 4, 8, and 16" % [memory])
+  ; var mem-text:String
+  ; switch {memory == _} :
+  ;   4 : mem-text = ", 4MB"
+  ;   8 : mem-text = ", 8MB"
+  ;   16 : mem-text = ", 16MB"
+  ;   else: fatal("Invalid memory size of %_ passed to esp32-wroom-32. Valid sizes are 4, 8, and 16" % [memory])
+
+  val mem-sizes = [4, 8, 16]
+  if not contains?(mem-sizes, memory) : 
+    fatal("Invalid memory size of %_ passed to esp32-wroom w32. Valid sizes are: %," % [memory mem-sizes])
+  var mem-text:String = to-string(", %_MB" % [memory])
 
   var package-string = "UE"
   var package-desc = ", UMCX"
@@ -57,11 +63,7 @@ public pcb-component component (memory:Int, pcb-antenna?:True|False, high-temp:T
   manufacturer = "Espressif" 
   reference-prefix = "U"
 
-  pin EN 
   port IO : pin[[0 2 4 5 12 13 14 15 16 17 18 19 21 22 23 25 26 27 32 33 34 35]]
-  pin RXD0 
-  pin TXD0 
-
   pin-properties :
     [pin:Ref      | pads:Int ... | side:Dir ]
     [GND  |      1, 15, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47 |  Down ]
@@ -274,4 +276,4 @@ pcb-landpattern esp32-wroom (pcb-antenna?:True|False) :
 
 ; Visualize the symbol and landpattern in the VSCode visualizer.
 ; Remove before use of the component in a design
-; view(component(16, true))
+view(component(16, true))
