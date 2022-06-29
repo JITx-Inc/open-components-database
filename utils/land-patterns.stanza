@@ -32,8 +32,7 @@ defn ensure-divisible! (value:Int, divisor:Int, name: String):
 ; Creates a reference label from pose and anchor
 public defn ref-label (pose:Pose, anchor:Anchor):
   inside pcb-landpattern:
-    val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
-    layer(Silkscreen("values", Top)) = Text(">REF", min-silkscreen-text-height, anchor, pose)
+    layer(Silkscreen("values", Top)) = Text(">REF", min-silkscreen-text-height(), anchor, pose)
 
 ; Creates a reference label at a fixed pose
 public defn ref-label (pose:Pose):
@@ -129,7 +128,7 @@ public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double, line-w:Doub
 
 ; Create a rectangle with width, height, center x/y and default line width
 public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double) :
-  LineRectangle(w, h, xc, yc, clearance(current-rules(), MinSilkscreenWidth))
+  LineRectangle(w, h, xc, yc, min-silkscreen-width())
 
 ; Create a rectangle with width and height and default x/y position
 public defn LineRectangle (w:Double, h:Double) :
@@ -145,10 +144,9 @@ public defn outline-bounding-box (s:Shape):
 
 ; Create a "+" symbol with a fixed length at a center point
 public defn PlusSymbol (center:Point, l:Double) -> Shape:
-  val min-width = clearance(current-rules(), MinSilkscreenWidth)
   loc(x(center), y(center)) * 
-    Union([Line(min-width, [Point(-0.5 * l, 0.0), Point(0.5 * l, 0.0)])
-           Line(min-width, [Point(0.0, -0.5 * l), Point(0.0, 0.5 * l)])])
+    Union([Line(min-silkscreen-width(), [Point(-0.5 * l, 0.0), Point(0.5 * l, 0.0)])
+           Line(min-silkscreen-width(), [Point(0.0, -0.5 * l), Point(0.0, 0.5 * l)])])
 
 ; Create a 1mm x 1mm plus symbol at Point(x, y)
 public defn PlusSymbol (x:Double, y:Double) -> Shape:
@@ -182,7 +180,7 @@ public defn apply-soldermask (amount:Double):
 ; Apply a default soldermask layer to a pcb-pad, using the solder-mask-registration
 ; design rule and offset() method.
 public defn apply-soldermask ():
-  apply-soldermask(clearance(current-rules(), SolderMaskRegistration))
+  apply-soldermask(solder-mask-registration())
 
 ; A "solder mask defined pad" is one where the soldermask opening is smaller than 
 ; the pad shape. This method takes a pad as an argument and converts it into a 
@@ -196,11 +194,10 @@ public defn soldermask-defined (p:Pad):
      (min-width([pad-shape(p)]) > min-width([shape $ (mask? as LayerShape)])) :
     p
   else :
-    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
     pcb-pad SMD-p:
       name  = to-string("%_, SMD" % [name(p)])
       type  = pad-type(p)
-      shape = offset(pad-shape(p), solder-mask-registration)
+      shape = offset(pad-shape(p), solder-mask-registration())
       apply-soldermask(pad-shape(p))
       for layer_ in filter({specifier(_) is-not SolderMask}, layers(p)) do:
         layer(specifier(layer_)) = shape(layer_)
@@ -296,8 +293,7 @@ public defn pth-pad (anchor:Anchor, drill-radius:Double, pad-radius:Double) :
 
 ; Create a through hole circular pad with drill radius and anchor
 public defn pth-pad (anchor:Anchor, drill-radius:Double) :
-  val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
-  pth-pad(anchor, drill-radius, drill-radius + solder-mask-registration)
+  pth-pad(anchor, drill-radius, drill-radius + solder-mask-registration())
 
 public defn pth-pad (drill-radius:Double):
   pth-pad(C, drill-radius)
@@ -464,8 +460,7 @@ public pcb-landpattern non-plated-hole-landpattern (hole:Shape, mask:Shape):
 
 ; Create a non-plated hole landpattern with a hole shape
 public defn non-plated-hole-landpattern (hole:Shape):
-  val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
-  non-plated-hole-landpattern(hole, offset(hole,  solder-mask-registration))
+  non-plated-hole-landpattern(hole, offset(hole,  solder-mask-registration()))
 
 ; Create a circular non-plated hole landpattern with given drill radius and mask radius
 public defn non-plated-hole-landpattern (drill-r:Double, mask-r:Double) :
@@ -1241,18 +1236,15 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
     
     ;----------------------------------------------------------
     ; Compute the courtyard
-    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
     val part-sz = Dims(max-value(package-length), max-value(package-width))
-    val lp-sz   = enlarge(Dims(Zmax(ipc-ew), Zmax(ipc-ns)), 2.0 * solder-mask-registration)
+    val lp-sz   = enlarge(Dims(Zmax(ipc-ew), Zmax(ipc-ns)), 2.0 * solder-mask-registration())
     val cy-sz   = enlarge(max(part-sz, lp-sz), courtyard-excess(lead-fillets))
     layer(Courtyard(Top)) = Rectangle(cy-sz)
   
     ;----------------------------------------------------------
     ; Place the polarity marker
-    val silk-solder-mask-clearance = clearance(current-rules(), MinSilkSolderMaskSpace)
-    val line-width  = clearance(current-rules(), MinSilkscreenWidth)
-    val line-length = 3.0 * line-width - line-width
-    val dist  = solder-mask-registration + silk-solder-mask-clearance + line-width * 0.5 + 0.01
+    val line-length = 3.0 * min-silkscreen-width() - min-silkscreen-width()
+    val dist  = solder-mask-registration() + min-silk-soldermask() + min-silkscreen-width() * 0.5 + 0.01
     
     val pad-loc = center(pad-1-loc)
     val p1 = Point(
@@ -1260,18 +1252,17 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
       y(pad-loc) + 0.5 * y(pad-sz-ew) + dist
     )
     val p2 = Point(
-      -0.5 * x(part-sz) - line-width * 0.5,
-       0.5 * y(part-sz) - line-width * 0.5,
+      -0.5 * x(part-sz) - min-silkscreen-width() * 0.5,
+       0.5 * y(part-sz) - min-silkscreen-width() * 0.5,
     )
     val pol = max-distance(p1, p2)
-    layer(Silkscreen("pol", Top)) = Line(line-width, [
+    layer(Silkscreen("pol", Top)) = Line(min-silkscreen-width(), [
       pol, pol + Point(line-length, 0.0)
     ])
 
     ;----------------------------------------------------------
     ; Place the reference label
-    val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
-    val text-y = 0.5 * (y(cy-sz) + min-silkscreen-text-height)
+    val text-y = 0.5 * (y(cy-sz) + min-silkscreen-text-height())
     ref-label(0.0, text-y)
 
     make-thermal-pad(exposed-metal-heat-feature?, 
@@ -1510,29 +1501,25 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number 
 
     ;----------------------------------------------------
     ; compute the courtyard
-    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
     val [max-y, min-y] = fork-on-seq(seq(y{center(_)}, locs), maximum, minimum)
     val lp-y-dim = y(pad-sz) + max-y - min-y
-    val lp-sz   = enlarge(Dims(Zmax(ipc), y(pad-sz) + max-y - min-y), 2.0 * solder-mask-registration)
+    val lp-sz   = enlarge(Dims(Zmax(ipc), y(pad-sz) + max-y - min-y), 2.0 * solder-mask-registration())
     val part-sz = Dims(max-value(package-length), max-value(package-width))
     val cy-sz   = enlarge(max(lp-sz, part-sz), 2.0 * courtyard-excess(lead-fillets))
     layer(Courtyard(Top)) = Rectangle(cy-sz)
         
     ;----------------------------------------------------
     ; draw the orientation marker
-    val silk-solder-mask-clearance = clearance(current-rules(), MinSilkSolderMaskSpace)
     val pad-loc = center(locs[0])
     val pol-x = min(-0.5 * x(part-sz), x(pad-loc) - 0.5 * x(pad-sz))
     val pol-y = max( 0.5 * y(part-sz), y(pad-loc) + 0.5 * y(pad-sz))
-    val line-width  = clearance(current-rules(), MinSilkscreenWidth)
-    val line-length = 3.0 * line-width - line-width
-    val dist  = solder-mask-registration + silk-solder-mask-clearance + line-width * 0.5 + 0.01
-    layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * Line(line-width, [Point(0.0, 0.0), Point(line-length, 0.0)])
+    val line-length = 3.0 * min-silkscreen-width() - min-silkscreen-width()
+    val dist  = solder-mask-registration() + min-silk-soldermask() + min-silkscreen-width() * 0.5 + 0.01
+    layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * Line(min-silkscreen-width(), [Point(0.0, 0.0), Point(line-length, 0.0)])
     
     ;----------------------------------------------------
     ; place the reference label    
-    val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
-    val text-y = 0.5 * (y(cy-sz) + min-silkscreen-text-height)
+    val text-y = 0.5 * (y(cy-sz) + min-silkscreen-text-height())
     ref-label(0.0, text-y)
 
     ;----------------------------------------------------
@@ -1645,17 +1632,13 @@ public defn draw-pol-marker (locs:Tuple<Pose>,
                              pad-sz:Dims,
                              ) : 
   inside pcb-landpattern : 
-    val mask-reg        = clearance(SolderMaskRegistration)
-    val silk-mask-space = clearance(MinSilkSolderMaskSpace)
-    val min-silk        = clearance(MinSilkscreenWidth)
-
     val pad-loc = center(locs[0])
     val pol-x = min(-0.5 * x(part-sz), x(pad-loc) - 0.5 * x(pad-sz))
     val pol-y = max( 0.5 * y(part-sz), y(pad-loc) + 0.5 * y(pad-sz))
-    val line-length = 2.0 * min-silk
+    val line-length = 2.0 * min-silkscreen-width()
 
-    val dist = mask-reg + silk-mask-space + min-silk * 0.5 + 0.01
-    val line = Line(min-silk, [Point(-0.5 * line-length, 0.0), Point(0.5 * line-length, 0.0)])
+    val dist = solder-mask-registration() + min-silk-soldermask() + min-silkscreen-width() * 0.5 + 0.01
+    val line = Line(min-silkscreen-width(), [Point(-0.5 * line-length, 0.0), Point(0.5 * line-length, 0.0)])
     layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * line
     
 
@@ -1694,7 +1677,7 @@ public defn make-dual-row-smd-landpattern (primary-num-pins:    Int,    ; the nu
       pad p[i] : smd-pad(Rectangle(pad-sz)) at l
     
     val [max-y, min-y] = fork-on-seq(seq(y{center(_)}, locs), maximum, minimum)
-    val lp-sz = enlarge(Dims(Zmax(ipc), y(pad-sz) + max-y - min-y), 2.0 * clearance(SolderMaskRegistration))
+    val lp-sz = enlarge(Dims(Zmax(ipc), y(pad-sz) + max-y - min-y), 2.0 * solder-mask-registration())
     val part-sz = Dims(max-value(package-length), max-value(package-width))
     val cy-sz = enlarge(max(lp-sz, part-sz), 2.0 * courtyard-excess(fillets))
     layer(Courtyard(Top)) = Rectangle(cy-sz)
@@ -1703,7 +1686,7 @@ public defn make-dual-row-smd-landpattern (primary-num-pins:    Int,    ; the nu
     
     make-thermal-pad(exposed-metal-heat-feature?, length(locs))
     
-    val text-y = 0.5 * (y(cy-sz) + clearance(MinSilkscreenTextHeight))
+    val text-y = 0.5 * (y(cy-sz) + min-silkscreen-text-height())
     ref-label(0.0, text-y)
 
 public defn make-dual-row-smd-landpattern (primary-num-pins:    Int,     ; number of pins on one side of the land pattern
@@ -1854,8 +1837,7 @@ public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vert
     
     ; ----------------------------------------------------
     ; compute the courtyard
-    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
-    val lp-sz   = enlarge(Dims(x(pad-sz), Zmax), 2.0 * solder-mask-registration)
+    val lp-sz   = enlarge(Dims(x(pad-sz), Zmax), 2.0 * solder-mask-registration())
     val part-sz = Dims(max-value(width), max-value(length))
     val cy-sz   = enlarge(max(lp-sz, part-sz), 2.0 * courtyard-excess(lead-fillets))
     layer(Courtyard(Top)) = Rectangle(cy-sz)
@@ -1863,7 +1845,6 @@ public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vert
     ; ----------------------------------------------------
     ; draw the polarity marker
     if polarized?:
-      val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
       ; the formula for placing the polarity marker is:
       ;   for marker line M:
       ;   
@@ -1871,27 +1852,24 @@ public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vert
       ;   in the top-level corner, which is the corner of the land pattern 
       ;   closest to p[1]/a. 
       ; 
-      ;   - M_length = 3.0 * min-silk-width
-      ;   - M_width  = min-silk-width
+      ;   - M_length = 3.0 * min-silkscreen-width()
+      ;   - M_width  = min-silkscreen-width()
       ; 
-      ;   M_dist = solder-mask-registration + silk-solder-mask-clearance + min-silk-width * 0.5 + 0.01
+      ;   M_dist = solder-mask-registration() + min-silk-soldermask() + min-silkscreen-width() * 0.5 + 0.01
       ; 
       ; assumptions:
       ;   - the pad dimensions are outside the bounds of the part. This is guaranteed by the computation above.
       ;   - the land pattern is centered about the origin
       ;   - the pad corresponding to p[1] or a is centered about its origin.
       ; 
-      val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
-      val silk-solder-mask-clearance = clearance(current-rules(), MinSilkSolderMaskSpace)
-      val line = Line(min-silk-width, [Point(min-silk-width * 0.5, 0.0),
-                                       Point(3.5 * min-silk-width, 0.0)])
-      val dist = solder-mask-registration + silk-solder-mask-clearance + min-silk-width * 0.5 + 0.01
+      val line = Line(min-silkscreen-width(), [Point(min-silkscreen-width() * 0.5, 0.0),
+                                       Point(3.5 * min-silkscreen-width(), 0.0)])
+      val dist = solder-mask-registration() + min-silk-soldermask() + min-silkscreen-width() * 0.5 + 0.01
       val pol-x = -0.5 * max(x(lp-sz), x(part-sz))
       val pol-y =  0.5 * max(y(lp-sz), y(part-sz)) + dist
       layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y) * line
       
-    val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
-    val text-x = 0.5 * (x(cy-sz) + min-silkscreen-text-height)
+    val text-x = 0.5 * (x(cy-sz) + min-silkscreen-text-height())
     ref-label(loc(text-x, 0.0, -90.0), C)
 
 public defn make-two-pin-chip-landpattern (length:Toleranced,
@@ -2020,14 +1998,10 @@ defn pth-pad-sizes (lead-diameter:Toleranced, density-level:DensityLevel):
 ; Helper function for two-pin through-hole components, to place the polarity marker
 defn two-pin-th-polarity-marker (cmp-sz:Dims, pad-diameter:Double, lead-spacing:Double):
   inside pcb-landpattern:
-    val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
-    val min-silk-solder-mask-space = clearance(current-rules(), MinSilkSolderMaskSpace)
-    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
-
-    val line-length = 3.0 * min-silk-width
-    val line = Line(min-silk-width, [Point(0.0, 0.0),
+    val line-length = 3.0 * min-silkscreen-width()
+    val line = Line(min-silkscreen-width(), [Point(0.0, 0.0),
                                      Point(line-length, 0.0)])
-    val dist = solder-mask-registration + min-silk-solder-mask-space + min-silk-width * 0.5 + 0.01
+    val dist = solder-mask-registration() + min-silk-soldermask() + min-silkscreen-width() * 0.5 + 0.01
     val pad-x = -0.5 * pad-diameter
     val pad-y =  0.5 * pad-diameter + 0.5 * lead-spacing
     val cmp-x = -0.5 * x(cmp-sz)
@@ -2036,7 +2010,7 @@ defn two-pin-th-polarity-marker (cmp-sz:Dims, pad-diameter:Double, lead-spacing:
     val pol-x = min(pad-x, cmp-x)
     val pol-y = max(pad-y, cmp-y) + dist
     layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y) * line
-    val pol-x-2 = pol-x - line-length * 0.5 + 1.5 * min-silk-width
+    val pol-x-2 = pol-x - line-length * 0.5 + 1.5 * min-silkscreen-width()
     layer(Silkscreen("pol", Top)) = loc(pol-x-2, pol-y, -90.0) * line
 
 ; Helper function for two-pin through hole components, controlling where they get placed
@@ -2076,8 +2050,7 @@ public defn make-two-pin-radial-landpattern (component-length:Toleranced, ; the 
 
     layer(Courtyard(Top))    = Rectangle(cy-sz)
     layer(Courtyard(Bottom)) = Rectangle(cy-sz)
-    val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
-    ref-label(loc(0.5 * x(cy-sz) + min-silkscreen-text-height, 0.0, 270.0))
+    ref-label(loc(0.5 * x(cy-sz) + min-silkscreen-text-height(), 0.0, 270.0))
 
     ; place the polarity marker, if necessary
     if polarized?:
@@ -2107,22 +2080,20 @@ public defn make-two-pin-axial-landpattern (component-length:Toleranced,   ; The
     ;------------------------------------------------------------
     ; Compute the courtyard
     val courtyard-excess = 0.75
-    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
-    val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
 
     val max-x-dim = max(
       max-value(component-diameter),
-      pad-diameter + 2.0 * solder-mask-registration
+      pad-diameter + 2.0 * solder-mask-registration()
     )
     val max-y-dim = max(
       max-value(component-length)
-      pad-diameter + 2.0 * solder-mask-registration + lead-spacing
+      pad-diameter + 2.0 * solder-mask-registration() + lead-spacing
     )
     val max-dims = Dims(max-x-dim, max-y-dim)
     val cy-sz = enlarge(max-dims, courtyard-excess)
     layer(Courtyard(Top))    = Rectangle(cy-sz)
     layer(Courtyard(Bottom)) = Rectangle(cy-sz)
-    ref-label(loc(0.5 * x(cy-sz) + min-silkscreen-text-height, 0.0, 270.0))
+    ref-label(loc(0.5 * x(cy-sz) + min-silkscreen-text-height(), 0.0, 270.0))
 
     ; place the polarity label, if necessary
     if polarized?:
@@ -2242,7 +2213,7 @@ defn bga-pad (typical-ball-diameter:Double, ; the typical/nominal size of the bg
               pad-type:BGAPadType):
   bga-pad(typical-ball-diameter, 
           pad-type,
-          clearance(current-rules(), SolderMaskRegistration),
+          solder-mask-registration(),
           DENSITY-LEVEL)
 
 ; A BGAModifier is an abstract type representing a class of BGA Components. It is used to 
@@ -2365,19 +2336,16 @@ public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
 
     ;-------------------------------------------------------------
     ; Compute the orientation marker
-    val silk-solder-mask-clearance = clearance(current-rules(), MinSilkSolderMaskSpace)
-    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
-    val line-width = clearance(current-rules(), MinSilkscreenWidth)
     val pad-loc = center(pad-locs[0])
-    val pol-x = x(pad-loc) - ball-diameter * 0.5 - solder-mask-registration
-    val pol-y = y(pad-loc) + ball-diameter * 0.5 + solder-mask-registration
-    val line-length = 3.0 * line-width
-    val dist  = solder-mask-registration + silk-solder-mask-clearance + line-width * 0.5 + 0.01
-    layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * Line(line-width, [Point(0.0, 0.0), Point(line-length, 0.0)])
+    val pol-x = x(pad-loc) - ball-diameter * 0.5 - solder-mask-registration()
+    val pol-y = y(pad-loc) + ball-diameter * 0.5 + solder-mask-registration()
+    val line-length = 3.0 * min-silkscreen-width()
+    val dist  = solder-mask-registration() + min-silk-soldermask() + min-silkscreen-width() * 0.5 + 0.01
+    layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * Line(min-silkscreen-width(), [Point(0.0, 0.0), Point(line-length, 0.0)])
     
     ;-------------------------------------------------------------
     ; Add the reference label 
-    ref-label(0.0, 0.5 * (y(cy-sz) - clearance(current-rules(), MinSilkscreenTextHeight)))
+    ref-label(0.0, 0.5 * (y(cy-sz) - min-silkscreen-text-height()))
     
 public defn make-bga-landpattern (num-rows:Int,
                                   num-cols:Int,
