@@ -136,13 +136,12 @@ public defn calculate-operating-points ():
       for i in component-instances(self) do :
         if has-property?(i.resistance) or has-property?(i.capacitance) :
           for p in pins(i) do :
-            if has-property?(p.rail-voltage) and connected?([get-other-pin(i,p), property(self.gnd)])
-              if connected?([get-other-pin(i,p), property(self.gnd)]):
-                val voltage = property(p.rail-voltage)
-                if has-property?(i.resistance) :
-                  property(i.operating-point) = OperatingPoint(min-max(0.0, voltage), min-max(0.0, voltage / property(i.resistance)))
-                else if has-property?(i.capacitance) :
-                  property(i.operating-point) = OperatingPoint(min-max(0.0, voltage), min-max(0.0, 0.0))
+            if has-property?(p.rail-voltage) and connected?([get-other-pin(i,p), property(self.gnd)]) :
+              val voltage = property(p.rail-voltage)
+              if has-property?(i.resistance) :
+                property(i.operating-point) = OperatingPoint(min-max(0.0, voltage), min-max(0.0, voltage / property(i.resistance)))
+              else if has-property?(i.capacitance) :
+                property(i.operating-point) = OperatingPoint(min-max(0.0, voltage), min-max(0.0, 0.0))
 
 
 ; =======================================
@@ -189,14 +188,14 @@ public defn run-final-passes (module:Instantiable) -> Instantiable :
   transform-module{calculate-operating-points, _} $
     let loop (design: Instantiable = module, i: Int = 0) :
       if i == 5 :
-        throw(Exception("A loop executing eval-whens and propagating rail voltages has been encountered: 5 iterations \
-                         reached. Check that no eval-when generate other eval-whens in an infinite loop, or that there \
-                         is no infinite loop of 2nd order between eval-when execution and rail voltage propagation.")
+        throw $ Exception("A loop executing eval-whens and propagating rail voltages has been encountered: 5 iterations \
+                           reached. Check that no eval-when generate other eval-whens in an infinite loop, or that there \
+                           is no infinite loop of 2nd order between eval-when execution and rail voltage propagation.")
       val propagated-design = transform-module(propagate-rail-voltage, design)
       set-main-module(propagated-design)
       val assigned-design = assign-pins()
       val evaluated-design = run-evals?(assigned-design)
-      match(evaluated-design: DefID) :
+      match(evaluated-design: Instantiable) :
         loop(evaluated-design, i + 1)
       else :
         assigned-design
