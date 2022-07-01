@@ -126,16 +126,17 @@ public defn propagate-rail-voltage ():
           property(pin.rail-voltage) = max-v
 
 public defn calculate-operating-points ():
+  ; FIXME!: This function is highly suspicious / unoptimal, what do we actually want to do ?
   defn get-other-pin (comp:JITXObject,  p:JITXObject) :
     for ps in pins(comp) find! :
       ps != p
 
   inside pcb-module :
-    for i in component-instances(self) do :
-      if has-property?(i.resistance) or has-property?(i.capacitance) :
-        for p in pins(i) do :
-          if has-property?(p.rail-voltage) : ;and connected?([get-other-pin(i,p), property(self.gnd)])
-            if has-property?(self.gnd) :
+    if has-property?(self.gnd) :
+      for i in component-instances(self) do :
+        if has-property?(i.resistance) or has-property?(i.capacitance) :
+          for p in pins(i) do :
+            if has-property?(p.rail-voltage) and connected?([get-other-pin(i,p), property(self.gnd)])
               if connected?([get-other-pin(i,p), property(self.gnd)]):
                 val voltage = property(p.rail-voltage)
                 if has-property?(i.resistance) :
@@ -184,15 +185,18 @@ public defn set-power-source (pos:JITXObject, neg:JITXObject, v-in:Double):
 ; =======================================
 ; Run transformations to propagate voltages from sources, and run delayed evaluations
 ; =======================================
-public defn run-final-passes (module:Instantiable) :
-  var intermediate-design = transform-module(propagate-rail-voltage, module)
-  set-main-module(intermediate-design)
-  intermediate-design = run-evals(intermediate-design)
-  intermediate-design = transform-module(propagate-rail-voltage, intermediate-design)
-  intermediate-design = run-evals(intermediate-design)
-  intermediate-design = transform-module(propagate-rail-voltage, intermediate-design)
-  intermediate-design = run-evals(intermediate-design)
-  val assigned-pins = assign-pins()
-  var final = run-evals(assigned-pins)
-  final = transform-module(calculate-operating-points, final)
-  final
+public defn run-final-passes (module:Instantiable) -> Instantiable :
+  transform-module{calculate-operating-points, _} $
+    let loop (design: Instantiable = module, i: Int = 0) :
+      if i == 5 :
+        throw(Exception("A loop executing eval-whens and propagating rail voltages has been encountered: 5 iterations \
+                         reached. Check that no eval-when generate other eval-whens in an infinite loop, or that there \
+                         is no infinite loop of 2nd order between eval-when execution and rail voltage propagation.")
+      val propagated-design = transform-module(propagate-rail-voltage, design)
+      set-main-module(propagated-design)
+      val assigned-design = assign-pins()
+      val evaluated-design = run-evals?(assigned-design)
+      match(evaluated-design: DefID) :
+        loop(evaluated-design, i + 1)
+      else :
+        assigned-design
