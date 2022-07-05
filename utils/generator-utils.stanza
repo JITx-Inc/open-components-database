@@ -225,7 +225,7 @@ public defn set-power-source (pos:JITXObject, neg:JITXObject, v-in:Double):
 ; Run transformations to propagate voltages from sources, and run delayed evaluations
 ; =======================================
 public defn run-final-passes (module:Instantiable) -> Instantiable :
-  val module = transform-module{calculate-operating-points, _} $
+  val result-module = transform-module{calculate-operating-points, _} $
     let loop (design: Instantiable = module, i: Int = 0) :
       defn run-eval-loop (design: Instantiable) :
         val design* = run-evals?(design)
@@ -246,8 +246,8 @@ public defn run-final-passes (module:Instantiable) -> Instantiable :
   ; If we did not set the main module, a user forgetting to set it himself on the new module would be exporting
   ; the module before adding operating points (the main module is set in the loop to be able to assign pins).
   ; Such bug would be invisible.
-  set-main-module(module)
-  module
+  set-main-module(result-module)
+  result-module
 
 ; FIXME: assign-pins was obviously not meant to be used like this, it depends on the flattening
 ; Is run-evals? actually accessing the information resulting from the pin assignment?
