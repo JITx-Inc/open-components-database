@@ -52,7 +52,6 @@ public defn check-design (module:JITXObject):
 
 public defn erc-check-design (module:JITXObject):
   inside pcb-module:
-    calculate-operating-points()
     for i in populated-components(module) do :
       check rated-temperature(i)
       check capacitor-component(i) when has-property?(i.capacitor)
@@ -306,8 +305,8 @@ defn categorize-digital-pins (pins: Seqable<Pin>) -> DigitalPinCategories :
 
   for p in pins do :
     ; TODO: Checking that rail-voltage propagation is correct for collector check, can remove later
-    if has-property?(p.power-pin) and not has-property?(p.rail-voltage) :
-      fatal("Power pin %_ does not have a rail voltage property" % [ref(p)])
+    if has-property?(p.power-pin) and not has-property?(p.net-voltage) :
+      fatal("Power pin %_ does not have a net voltage property" % [ref(p)])
 
     val io? = property?(p.digital-io)
     val i? = property?(p.digital-input)
@@ -394,7 +393,7 @@ defn collect-pull-up-resistors-and-their-rail-voltages (open-collectors:Tuple<Di
   defn collect-rail-voltages-and-returns-if-any? (instance: Instance) -> True|False :
     val voltages = to-tuple $
       for p in pins(instance) seq? :
-        property?(p.rail-voltage)
+        property?(p.net-voltage)
 
     add-all(collected-rail-voltages, voltages as Tuple<Double>)
     not empty?(voltages)
@@ -406,7 +405,7 @@ defn collect-pull-up-resistors-and-their-rail-voltages (open-collectors:Tuple<Di
 
   for p in seq(pin, open-collectors) do :
     #CHECK(
-      condition =            not has-property?(p.rail-voltage),
+      condition =            not has-property?(p.net-voltage),
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "Pin Checks"
@@ -741,7 +740,7 @@ public pcb-check generic-pin-check (p:JITXObject):
   val name = "Generic pin checks"
   val description = "Check generic pin properties"
   val category = "Pin Checks"
-  if (has-property?(p.rail-voltage)) :
+  if (has-property?(p.net-voltage)) :
     val p-props = property(p.generic-pin)
     ; Check that the maxima are never crossed
     #CHECK(
@@ -755,13 +754,13 @@ public pcb-check generic-pin-check (p:JITXObject):
       locators =             [p]
     )
     #CHECK(
-      condition =            in-range?(max-voltage(p-props), property(p.rail-voltage)),
+      condition =            in-range?(max-voltage(p-props), property(p.net-voltage)),
       name =                 "Generic pin checks"
       description =          "Check generic pin properties"
       category =             "Pin Checks"
       subcheck-description = "Verify generic pin is compatible with the design supply voltage range",
-      pass-message =         "Generic pin %_ max-voltage %_ is compatible with the supply voltage range %_" % [ref(p), max-voltage(p-props), property(p.rail-voltage)],
-      fail-message =         "Generic pin %_ max-voltage %_ is not compatible with the supply voltage range %_" % [ref(p), max-voltage(p-props), property(p.rail-voltage)],
+      pass-message =         "Generic pin %_ max-voltage %_ is compatible with the supply voltage range %_" % [ref(p), max-voltage(p-props), property(p.net-voltage)],
+      fail-message =         "Generic pin %_ max-voltage %_ is not compatible with the supply voltage range %_" % [ref(p), max-voltage(p-props), property(p.net-voltage)],
       locators =             [p]
     )
 
@@ -794,24 +793,24 @@ public pcb-check power-pin-check (p:JITXObject) :
   )
   ; println("%_ has power" % [ref(p)])
   #CHECK(
-    condition =            has-property?(p.rail-voltage),
+    condition =            has-property?(p.net-voltage),
     name =                 "Power pin checks"
     description =          "Check power pin properties"
     category =             "Pin Checks"
     subcheck-description = "Verify power pins have the correct rail-voltage property",
-    pass-message =         "Pin %_ has the correct rail-voltage property attached of %_V" % [ref(p), property(p.rail-voltage)],
+    pass-message =         "Pin %_ has the correct rail-voltage property attached of %_V" % [ref(p), property(p.net-voltage)],
     fail-message =         "Pin %_ does not have the correct rail-voltage property attached" % [ref(p)],
     locators =             [p]
   )
   ; println("%_ has %_" % [ref(p) property(p.rail-voltage)])
   #CHECK(
-    condition =            in-range?(recommended-voltage(p-props), property(p.rail-voltage)),
+    condition =            in-range?(recommended-voltage(p-props), property(p.net-voltage)),
     name =                 "Power pin checks"
     description =          "Check power pin properties"
     category =             "Pin Checks"
     subcheck-description = "Check power pin rail-voltage property is within the design specification",
-    pass-message =         "Power pin %_ rail voltage %_V is correctly within the design specification %_V" % [ref(p),property(p.rail-voltage),recommended-voltage(p-props)],
-    fail-message =         "Power pin %_ rail voltage %_V is not correctly within the design specification %_V" % [ref(p),property(p.rail-voltage),recommended-voltage(p-props)],
+    pass-message =         "Power pin %_ rail voltage %_V is correctly within the design specification %_V" % [ref(p),property(p.net-voltage),recommended-voltage(p-props)],
+    fail-message =         "Power pin %_ rail voltage %_V is not correctly within the design specification %_V" % [ref(p),property(p.net-voltage),recommended-voltage(p-props)],
     locators =             [p]
   )
 
