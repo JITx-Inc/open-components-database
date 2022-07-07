@@ -109,23 +109,6 @@ public defn connect-gnd-pins ():
         if port-name == Ref("gnd") :
           net (self.gnd, p)
 
-
-; Replace this once nets introspection is back
-public defn propagate-rail-voltage () :
-  ; println("Propagating rail voltages...")
-  inside pcb-module :
-    for connected-group in populated-connected-groups(self) do :
-      val power-supply-voltages = to-tuple $
-        for pin in connected-group seq? :
-          val prop = property?(pin.power-supply-pin)
-          match(value?(prop)) :
-            (p:PowerSupplyPin) : One(supply-voltage(p) as Double)
-            (_) : None() 
-      if not empty?(power-supply-voltages) :
-        val max-v = maximum(power-supply-voltages)
-        for pin in connected-group do:
-          property(pin.rail-voltage) = max-v
-
 public defn calculate-operating-points ()  :
   defn get-other-pin (comp:JITXObject,  p:JITXObject) :
     ; Used on 2-pin components to get the single other pin
@@ -214,18 +197,20 @@ public defn set-power-source (pos:JITXObject, neg:JITXObject, v-in:Double):
 
 public defn propagate-net-voltages () :
   inside pcb-module:
-    for n in nets(self) do :
-      if has-property?(n.net-voltage) :
-        for r in refs(n) do :
-          property(r.net-voltage) = property(n.net-voltage)
-    for connected-group in populated-connected-groups(self) do :
-      var voltage-of-group:Toleranced|False = false
-      for p in connected-group do :
-        if has-property?(p.net-voltage) :
-          voltage-of-group = property(p.net-voltage)
-      if voltage-of-group is Toleranced :
-        for p in connected-group do :
-          property(p.net-voltage) = voltage-of-group
+    for item in all-connected-items(self) do :
+      
+      ;First gather all the voltages on all connected nets.
+      val voltages = Vector<Toleranced>()
+      for n in nets(item) do :
+        if has-property?(n.net-voltage) :      
+          add(voltages, property(n.net-voltage))
+      ;If at least one net has a voltage property.
+      if not empty?(voltages) :
+            
+        ;Now assign the voltage to all of the component pins in 
+        ;the module.
+        for p in module-pins(item) do :
+          property(p.net-voltage) = voltages[0]
         
 ; =======================================
 ; Run transformations to propagate voltages from sources, and run delayed evaluations
