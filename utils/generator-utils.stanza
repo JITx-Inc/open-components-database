@@ -111,7 +111,8 @@ public defn connect-gnd-pins ():
 
 
 ; Replace this once nets introspection is back
-public defn propagate-rail-voltage ():
+public defn propagate-rail-voltage () :
+  ; println("Propagating rail voltages...")
   inside pcb-module :
     for connected-group in populated-connected-groups(self) do :
       val power-supply-voltages = to-tuple $
@@ -125,23 +126,62 @@ public defn propagate-rail-voltage ():
         for pin in connected-group do:
           property(pin.rail-voltage) = max-v
 
-public defn calculate-operating-points ():
+public defn calculate-operating-points ()  :
   defn get-other-pin (comp:JITXObject,  p:JITXObject) :
+    ; Used on 2-pin components to get the single other pin
     for ps in pins(comp) find! :
       ps != p
 
+  defn gnd-type-error! (inst, gnd) :
+    throw $ Exception("The gnd property of module %_ must be of type Pin or Net, got: '%_'." % [ref(inst), gnd])
+
+  defn resistor-operating-point (v: Double, r: Double) :
+    OperatingPoint(min-max(0.0, v), min-max(0.0, v / r))
+
+  defn capacitor-operating-point (v: Double) :
+    OperatingPoint(min-max(0.0, v), min-max(0.0, 0.0))
+
+  defn is-resistor? (i: Instance) :
+    has-property?(i.resistance)
+
+  defn is-capacitor? (i: Instance) :
+    has-property?(i.capacitance)
+
+  defn resistance! (i: Instance) :
+    property(i.resistance)
+
   inside pcb-module :
-    for i in component-instances(self) do :
-      if has-property?(i.resistance) or has-property?(i.capacitance) :
-        for p in pins(i) do :
-          if has-property?(p.rail-voltage) : ;and connected?([get-other-pin(i,p), property(self.gnd)])
-            if has-property?(self.gnd) :
-              if connected?([get-other-pin(i,p), property(self.gnd)]):
-                val voltage = property(p.rail-voltage)
-                if has-property?(i.resistance) :
-                  property(i.operating-point) = OperatingPoint(min-max(0.0, voltage), min-max(0.0, voltage / property(i.resistance)))
-                else if has-property?(i.capacitance) :
-                  property(i.operating-point) = OperatingPoint(min-max(0.0, voltage), min-max(0.0, 0.0))
+    val gnd = value? $ property?(self.gnd)
+
+    match(gnd: Pin|Net) :
+      ; println("Calculating operating points...")
+      val gnd-pins = connected-group(gnd)
+      for gnd-pin in gnd-pins do :
+        val inst = containing-instance!(gnd-pin)
+        if is-resistor?(inst) or is-capacitor?(inst) :
+          val other-pin = get-other-pin(inst, gnd-pin)
+          val voltage = value? $ property?(other-pin.rail-voltage)
+          match(voltage: Double) :
+            if is-resistor?(inst) :
+              property(inst.operating-point) = resistor-operating-point(voltage, resistance!(inst))
+            if is-capacitor?(inst) :
+              property(inst.operating-point) = capacitor-operating-point(voltage)
+    else :
+      gnd-type-error!(self, gnd) when gnd is-not False
+
+
+; - jitx/commands/connected-pins(p) result does not contain p.
+; - connected-group(p) contains p if it is a component pin (not net or module pin)
+defn connected-group (obj: Pin|Net) :
+  defn is-component-pin? (pin: Pin) :
+    containing-instance(pin) is Instance
+
+  val extra-pins =
+    match(obj) :
+      (pin: Pin) : [pin] when is-component-pin?(pin) else []
+      (net: Net) : []
+
+  to-tuple $ cat(extra-pins, connected-pins(obj))
 
 
 ; =======================================
@@ -184,15 +224,33 @@ public defn set-power-source (pos:JITXObject, neg:JITXObject, v-in:Double):
 ; =======================================
 ; Run transformations to propagate voltages from sources, and run delayed evaluations
 ; =======================================
-public defn run-final-passes (module:Instantiable) :
-  var intermediate-design = transform-module(propagate-rail-voltage, module)
-  set-main-module(intermediate-design)
-  intermediate-design = run-evals(intermediate-design)
-  intermediate-design = transform-module(propagate-rail-voltage, intermediate-design)
-  intermediate-design = run-evals(intermediate-design)
-  intermediate-design = transform-module(propagate-rail-voltage, intermediate-design)
-  intermediate-design = run-evals(intermediate-design)
-  val assigned-pins = assign-pins()
-  var final = run-evals(assigned-pins)
-  final = transform-module(calculate-operating-points, final)
-  final
+public defn run-final-passes (module:Instantiable) -> Instantiable :
+  val result-module = transform-module{calculate-operating-points, _} $
+    let loop (design: Instantiable = module, i: Int = 0) :
+      defn run-eval-loop (design: Instantiable) :
+        val design* = run-evals?(design)
+        match(design*: Instantiable) : loop(design*, i + 1)
+        else : design
+
+      if i == 5 :
+        throw $ Exception("A loop executing eval-whens, propagating rail voltages and assigning pins has been \
+                           encountered: 5 iterations reached. Check that no eval-when generate other eval-whens in an \
+                           infinite loop, or that there is no infinite loop of 2nd order between eval-when execution \
+                           and rail voltage propagation or pin assignment.")
+
+      ;TODO: Review the order and necessity of those algos
+      design $> transform-module{propagate-rail-voltage, _}
+             $> assign-pins
+             $> run-eval-loop
+
+  ; If we did not set the main module, a user forgetting to set it himself on the new module would be exporting
+  ; the module before adding operating points (the main module is set in the loop to be able to assign pins).
+  ; Such bug would be invisible.
+  set-main-module(result-module)
+  result-module
+
+; FIXME: assign-pins was obviously not meant to be used like this, it depends on the flattening
+; Is run-evals? actually accessing the information resulting from the pin assignment?
+defn assign-pins (design: Instantiable) -> Instantiable :
+  set-main-module(design)
+  assign-pins()
