@@ -22,6 +22,7 @@ defpackage ocdb/checks:
   category = "Pin Checks",                               ; Category for the check              (Printable)
   subcheck-description = "sub-check detail description",; The description of the sub check    (Printable)
   pass-message = "pass printable %_" % [ref(p)],        ; What is printed if the check passes (Printable)
+  info-message = "info printable %_ " % [ref(p)],       ; What is printed if the check needs more info  (Printable)
   fail-message = "fail printable %_ " % [ref(p)],       ; What is printed if the check fails  (Printable)
   locators = [p]                                        ; Locators                            (Tuple<JITXObject|JITXDef>)
 )
@@ -191,17 +192,8 @@ public pcb-check rated-temperature (component:JITXObject):
     fail-message =         "%_ does not have a property for rated-temperature" % [ref(component)],
     locators =             [component]
   )
-    ; {
-    ;   type: "instance-of-component"
-    ;   info: {
-    ;     file: "myfile.stanza"
-    ;     line: 18
-    ;     column: 20
-    ;   }
-    ; }
 
   val temp = operating-temperature(property(component.rated-temperature))
-  ; println("Rating %_" % [temp])
   #CHECK(
     condition =            in-range?(temp, OPERATING-TEMPERATURE[0]),
     name =                 "Rated temperature check"
@@ -229,17 +221,17 @@ defn no-connect? (p:JITXObject) -> True|False :
   has-property?(p.nc) or 
   has-property?(p.NC)
 
-; Returns if a pin is a digital-io pin
+; Returns if a pin is a digital-output pin or capable of being one
 defn is-digital-output? (p:JITXObject) -> True|False : 
   has-property?(p.digital-io) or 
   has-property?(p.digital-output)
 
-; Returns if a pin is a digital-input pin
+; Returns if a pin is a digital-input pin or capable of being one
 defn is-digital-input? (p:JITXObject) -> True|False : 
   has-property?(p.digital-io) or 
   has-property?(p.digital-input)
 
-; Returns if a pin is a digital i/o pin 
+; Returns if a pin is a digital input or output pin
 defn is-digital-pin? (p:JITXObject) -> True|False :
   has-property?(p.digital-io) or
   has-property?(p.digital-input) or
@@ -397,7 +389,7 @@ defn collect-pull-up-resistors-and-their-net-voltages (open-collectors:Tuple<Dig
     add-all(collected-net-voltages, voltages as Tuple<Toleranced>)
     not empty?(voltages)
 
-  ; lazy 'and', connected-to-rail? can be heavy
+  ; lazy 'and', connected-to-net? can be heavy
   defn pull-up? (instance) :
     has-property?(instance.resistance) and
     collect-net-voltages-and-returns-if-any?(instance)
@@ -408,9 +400,9 @@ defn collect-pull-up-resistors-and-their-net-voltages (open-collectors:Tuple<Dig
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "Pin Checks"
-      subcheck-description = "Check that io pins marked OpenCollector are not connected to a rail",
-      pass-message =         "Open collector pin %_ is not directly connected to a rail." % [ref(p)],
-      fail-message =         "Open collector pin %_ is directly connected to a rail." % [ref(p)],
+      subcheck-description = "Check that io pins marked OpenCollector are not connected to a voltage-set net",
+      pass-message =         "Open collector pin %_ is not directly connected to a voltage-set net." % [ref(p)],
+      fail-message =         "Open collector pin %_ is directly connected to a voltage-set net." % [ref(p)],
       locators =             [p])
 
   ; First, we search for the pull-up-resistors that might be connected to this pin
@@ -451,12 +443,12 @@ defn check-and-return-unique-net-voltage (net-voltages: Tuple<Toleranced>, pull-
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
-    subcheck-description = "Check that io pins marked OpenCollector have pull-up resistors connected to the same rail voltage",
-    pass-message =         open-collector-pass-message(open-collectors, "all pull-up resistors with the same rail voltage"),
-    fail-message =         open-collector-fail-message(open-collectors, "all pull-up resistors %, with the same rail voltage" % [seq(ref, pull-up-resistors)]),
+    subcheck-description = "Check that io pins marked OpenCollector have pull-up resistors connected to the same net voltage",
+    pass-message =         open-collector-pass-message(open-collectors, "all pull-up resistors with the same net voltage"),
+    fail-message =         open-collector-fail-message(open-collectors, "all pull-up resistors %, with the same net voltage" % [seq(ref, pull-up-resistors)]),
     locators =             pull-up-resistors)
 
-  ; Here we find the value of the rail voltage
+  ; Here we find the value of the net voltage
   net-voltages[0]
 
 defn check-pull-up-resistor-does-not-have-0-ohm-resistance (resistor: JITXObject) -> Double :
@@ -484,10 +476,10 @@ defn compute-equivalent-resistance (pull-up-resistors: Tuple<Instance>) :
 
 defn check-sink-current-meets-collector-ratings (net-voltage: Toleranced, pull-up-resistors: Tuple<Instance>, open-collectors: Tuple<DigitalPin>) :
   val equivalent-resistance = compute-equivalent-resistance(pull-up-resistors)
-  ; Next, compute the sink current (V / R) and check if it is in spec for the driver.
-  val sink-current = max-value(net-voltage) / equivalent-resistance
+  ; Next, compute the sink current (V / R) and check if it is in spec for each driver.
   for open-collector in open-collectors do :
     val driver = driver $ prop(open-collector)
+    val sink-current = (max-value(net-voltage) - min-value(vol(driver))) / equivalent-resistance
     #CHECK(condition =            sink-current < iol(driver),
            name =                 "IO pin checks"
            description =          "Check io pin properties"
@@ -503,19 +495,19 @@ defn check-input-and-generic-pin-max-voltage-rating (net-voltage: Toleranced, pi
   for p in input-pins do :
     val pin = pin(p)
     val input-prop = prop(p)
-    ; Check that the max voltage rating of the input pin is below that of the rail voltage
+    ; Check that the min net voltage is above the rating of the input pin
     match(input-prop: DigitalInput|DigitalIO) :
       val vih-v = vih(input-prop)
-      #CHECK(condition =            max-value(net-voltage) > vih-v,
+      #CHECK(condition =            min-value(net-voltage) > vih-v,
              name =                 "IO pin checks"
              description =          "Check io pin properties"
              category =             "Pin Checks"
-             subcheck-description = "Check power supply rail is higher than the vih pin specification",
-             pass-message =         "Input pin %_ vih specification %_V is correctly lower than the power supply rail %_V"    % [ref $ pin, vih-v, net-voltage],
-             fail-message =         "Input pin %_ vih specification %_V is incorrectly higher than the power supply rail %_V" % [ref $ pin, vih-v, net-voltage],
+             subcheck-description = "Check voltage-set net is higher than the vih pin specification",
+             pass-message =         "Input pin %_ vih specification %_V is correctly lower than the voltage-set net %_V"    % [ref $ pin, vih-v, net-voltage],
+             fail-message =         "Input pin %_ vih specification %_V is incorrectly higher than the voltage-set net %_V" % [ref $ pin, vih-v, net-voltage],
              locators =             [pin])
 
-    ; If the pin has generic pin props, check that rail voltage is in range.
+    ; If the pin has generic pin props, check that net voltage is in range.
     val generic-pin = property?(pin.generic-pin)
     match(generic-pin:One<GenericPin>) :
       val max-voltage = max-voltage(value(generic-pin))
@@ -808,8 +800,8 @@ public pcb-check power-pin-check (p:JITXObject) :
     description =          "Check power pin properties"
     category =             "Pin Checks"
     subcheck-description = "Check power pin net-voltage property is within the design specification",
-    pass-message =         "Power pin %_ rail voltage %_V is correctly within the design specification %_V" % [ref(p),property(p.net-voltage),recommended-voltage(p-props)],
-    fail-message =         "Power pin %_ rail voltage %_V is not correctly within the design specification %_V" % [ref(p),property(p.net-voltage),recommended-voltage(p-props)],
+    pass-message =         "Pin %_ net voltage %_V is correctly within the design specification %_V" % [ref(p),property(p.net-voltage),recommended-voltage(p-props)],
+    fail-message =         "Pin %_ net voltage %_V is not correctly within the design specification %_V" % [ref(p),property(p.net-voltage),recommended-voltage(p-props)],
     locators =             [p]
   )
 
