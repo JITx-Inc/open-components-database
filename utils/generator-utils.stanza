@@ -2,14 +2,15 @@
 defpackage ocdb/generator-utils:
   import core
   import collections
+  import lang-utils with :
+    prefix(min-max) => lang-
+
   import jitx
   import jitx/commands
+  import jitx/powergen/gen
 
   import ocdb/checks
   import ocdb/generic-components
-
-  import jitx/powergen/gen
-
   import ocdb/design-vars
   import ocdb/property-structs
   import ocdb/power-regulators
@@ -212,35 +213,30 @@ public defn set-power-source (pos:JITXObject, neg:JITXObject, v-in:Double):
 public defn propagate-net-voltages () :
   inside pcb-module:
     for item in all-connected-items(self) do :
-      
       ;First gather all the voltages on all connected nets.
       val voltages = to-tuple $ seq?({property?(_.net-voltage)}, nets(item))
-      ; val voltages = Vector<Toleranced>()
-      ; for n in nets(item) do :
-      ;   if has-property?(n.net-voltage) :      
-      ;     add(voltages, property(n.net-voltage))
       ;If at least one net has a voltage property.
       if not empty?(voltages) :
-
-        ;Gather all the net names (some nets don't have names.).
-        val net-names = Vector<String|Ref>()
-        for (net in nets(item), c in 0 to false) do :
-          match(ref?(net)) :
-            (f:False) : add(net-names, to-string("unnamed-net-%_" % [c]))
-            (r:Ref) : add(net-names, r)
-
-        ;Let's check that all the voltages happen to be the same.
-        ;If they are different, then something has gone wrong.
-        if length(voltages) > 1 :
-          for i in 1 to length(nets(item)) do :
-            if voltages[i] != voltages[0] :
-              fatal("Mismatched net-voltage on net(s) %," % [net-names])
-
-        ;Now assign the voltage to all of the component pins in 
-        ;the module.
+        val voltage = net-voltage!(voltages, item)
+        ;Now assign the voltage to all of the component pins in the module.
         for p in component-pins(item) do :
-          property(p.net-voltage) = voltages[0]
-        
+          property(p.net-voltage) = voltage
+
+defn net-voltage! (voltages: Tuple<Toleranced>, item: ConnectedItems) -> Toleranced :
+  defn unnamed (idx: Int) -> Ref :
+    Ref $ to-string("unnamed-net-%_" % [idx])
+
+  ;Let's check that all the voltages happen to be the same.
+  ;If they are different, then something has gone wrong.
+  if length(voltages) > 1 and length(unique(voltages)) != 1 :
+    fatal("Mismatched voltages %_ on nets %_" % [voltages, net-names]) where :
+      ;Gather all the net names (some nets don't have names.).
+      val net-names = to-tuple $
+        for (net in nets(item), idx in 0 to false) seq :
+          call-if-false?(unnamed{idx}, ref?(net))
+
+  voltages[0]
+
 ; =======================================
 ; Run transformations to propagate voltages from sources, and run delayed evaluations
 ; =======================================
