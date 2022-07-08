@@ -219,25 +219,22 @@ public defn propagate-net-voltages () :
       ; for n in nets(item) do :
       ;   if has-property?(n.net-voltage) :      
       ;     add(voltages, property(n.net-voltage))
-      ;If at least one net has a voltage property.
+      ; If at least one net has a voltage property.
       if not empty?(voltages) :
-
-        ;Gather all the net names (some nets don't have names.).
+        ; Gather all the net names (some nets don't have names so placeholder).
         val net-names = Vector<String|Ref>()
         for (net in nets(item), c in 0 to false) do :
           match(ref?(net)) :
             (f:False) : add(net-names, to-string("unnamed-net-%_" % [c]))
             (r:Ref) : add(net-names, r)
 
-        ;Let's check that all the voltages happen to be the same.
-        ;If they are different, then something has gone wrong.
-        if length(voltages) > 1 :
-          for i in 1 to length(nets(item)) do :
-            if voltages[i] != voltages[0] :
-              fatal("Mismatched net-voltage on net(s) %," % [net-names])
+        ; Let's check that all the voltages happen to be the same.
+        ; If they are different, then something has gone wrong.
+        if length(unique(voltages)) > 1 :
+          fatal("Mismatched voltages %, on nets %," % [voltages, net-names])
 
-        ;Now assign the voltage to all of the component pins in 
-        ;the module.
+        ; Now assign the voltage to all of the component pins in 
+        ; the module.
         for p in component-pins(item) do :
           property(p.net-voltage) = voltages[0]
         
@@ -253,10 +250,10 @@ public defn run-final-passes (module:Instantiable) -> Instantiable :
         else : design
 
       if i == 5 :
-        throw $ Exception("A loop executing eval-whens, propagating rail voltages and assigning pins has been \
+        throw $ Exception("A loop executing eval-whens, propagating net voltages and assigning pins has been \
                            encountered: 5 iterations reached. Check that no eval-when generate other eval-whens in an \
                            infinite loop, or that there is no infinite loop of 2nd order between eval-when execution \
-                           and rail voltage propagation or pin assignment.")
+                           and net voltage propagation or pin assignment.")
 
       ;TODO: Review the order and necessity of those algos
       design $> transform-module{propagate-net-voltages, _}
