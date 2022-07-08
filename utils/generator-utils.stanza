@@ -121,19 +121,32 @@ public defn calculate-operating-points ()  :
   defn capacitor-operating-point (v: Double) :
     OperatingPoint(min-max(0.0, v), min-max(0.0, 0.0))
 
+  defn inductor-operating-point (v: Double, i: Double) :
+    OperatingPoint(min-max(0.0, v), min-max(0.0, i))
+
   defn is-resistor? (i: JITXObject) :
     has-property?(i.resistance)
 
   defn is-capacitor? (i: JITXObject) :
     has-property?(i.capacitance)
 
+  defn is-inductor? (i: JITXObject) :
+    has-property?(i.inductance)
+
   defn resistance! (i: JITXObject) :
     property(i.resistance)
 
+  defn dc-resistance! (i: JITXObject) :
+    property(i.dc-resistance)
+
+  defn check-dual-pin-count! (i: JITXObject) : 
+    val pin-count = length(pins(i)) 
+    fatal("Resistor, capacitor or inductor %_ has %_ pins instead of 2." % [ref(i), pin-count]) when pin-count != 2
+
   inside pcb-module :
     for i in component-instances(self) do :
-      if has-property?(i.resistance) or has-property?(i.capacitance) or has-property?(i.inductance):
-        if length(pins(i)) == 2 :
+      if is-resistor?(i) or is-capacitor?(i) or is-inductor?(i):
+        if check-dual-pin-count!(i) :
           if has-property?(pins(i)[0].net-voltage) and has-property?(pins(i)[1].net-voltage) :
             val p1 = property(pins(i)[0].net-voltage)
             val p2 = property(pins(i)[1].net-voltage)
@@ -142,7 +155,8 @@ public defn calculate-operating-points ()  :
               property(i.operating-point) = resistor-operating-point(voltage, resistance!(i))
             if is-capacitor?(i) :
               property(i.operating-point) = capacitor-operating-point(voltage)
-
+            if is-inductor?(i) :
+              property(i.operating-point) = inductor-operating-point(voltage, voltage / dc-resistance!(i))
 
 ; - jitx/commands/connected-pins(p) result does not contain p.
 ; - connected-group(p) contains p if it is a component pin (not net or module pin)
@@ -200,10 +214,11 @@ public defn propagate-net-voltages () :
     for item in all-connected-items(self) do :
       
       ;First gather all the voltages on all connected nets.
-      val voltages = Vector<Toleranced>()
-      for n in nets(item) do :
-        if has-property?(n.net-voltage) :      
-          add(voltages, property(n.net-voltage))
+      val voltages = to-tuple $ seq?({property?(_.net-voltage)}, nets(item))
+      ; val voltages = Vector<Toleranced>()
+      ; for n in nets(item) do :
+      ;   if has-property?(n.net-voltage) :      
+      ;     add(voltages, property(n.net-voltage))
       ;If at least one net has a voltage property.
       if not empty?(voltages) :
         for i in 1 to length(nets(item)) do :
