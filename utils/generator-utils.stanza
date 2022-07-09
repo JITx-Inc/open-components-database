@@ -2,14 +2,15 @@
 defpackage ocdb/generator-utils:
   import core
   import collections
+  import lang-utils with :
+    prefix(min-max) => lang-
+
   import jitx
   import jitx/commands
+  import jitx/powergen/gen
 
   import ocdb/checks
   import ocdb/generic-components
-
-  import jitx/powergen/gen
-
   import ocdb/design-vars
   import ocdb/property-structs
   import ocdb/power-regulators
@@ -109,31 +110,11 @@ public defn connect-gnd-pins ():
         if port-name == Ref("gnd") :
           net (self.gnd, p)
 
-
-; Replace this once nets introspection is back
-public defn propagate-rail-voltage () :
-  ; println("Propagating rail voltages...")
-  inside pcb-module :
-    for connected-group in populated-connected-groups(self) do :
-      val power-supply-voltages = to-tuple $
-        for pin in connected-group seq? :
-          val prop = property?(pin.power-supply-pin)
-          match(value?(prop)) :
-            (p:PowerSupplyPin) : One(supply-voltage(p) as Double)
-            (_) : None() 
-      if not empty?(power-supply-voltages) :
-        val max-v = maximum(power-supply-voltages)
-        for pin in connected-group do:
-          property(pin.rail-voltage) = max-v
-
 public defn calculate-operating-points ()  :
   defn get-other-pin (comp:JITXObject,  p:JITXObject) :
     ; Used on 2-pin components to get the single other pin
     for ps in pins(comp) find! :
       ps != p
-
-  defn gnd-type-error! (inst, gnd) :
-    throw $ Exception("The gnd property of module %_ must be of type Pin or Net, got: '%_'." % [ref(inst), gnd])
 
   defn resistor-operating-point (v: Double, r: Double) :
     OperatingPoint(min-max(0.0, v), min-max(0.0, v / r))
@@ -141,34 +122,42 @@ public defn calculate-operating-points ()  :
   defn capacitor-operating-point (v: Double) :
     OperatingPoint(min-max(0.0, v), min-max(0.0, 0.0))
 
-  defn is-resistor? (i: Instance) :
+  defn inductor-operating-point (v: Double, i: Double) :
+    OperatingPoint(min-max(0.0, v), min-max(0.0, i))
+
+  defn is-resistor? (i: JITXObject) :
     has-property?(i.resistance)
 
-  defn is-capacitor? (i: Instance) :
+  defn is-capacitor? (i: JITXObject) :
     has-property?(i.capacitance)
 
-  defn resistance! (i: Instance) :
+  defn is-inductor? (i: JITXObject) :
+    has-property?(i.inductance)
+
+  defn resistance! (i: JITXObject) :
     property(i.resistance)
 
+  defn dc-resistance! (i: JITXObject) :
+    property(i.dc-resistance)
+
+  defn check-dual-pin-count! (i: JITXObject) : 
+    val pin-count = length(pins(i)) 
+    fatal("Resistor, capacitor or inductor %_ has %_ pins instead of 2." % [ref(i), pin-count]) when pin-count != 2
+
   inside pcb-module :
-    val gnd = value? $ property?(self.gnd)
-
-    match(gnd: Pin|Net) :
-      ; println("Calculating operating points...")
-      val gnd-pins = connected-group(gnd)
-      for gnd-pin in gnd-pins do :
-        val inst = containing-instance!(gnd-pin)
-        if is-resistor?(inst) or is-capacitor?(inst) :
-          val other-pin = get-other-pin(inst, gnd-pin)
-          val voltage = value? $ property?(other-pin.rail-voltage)
-          match(voltage: Double) :
-            if is-resistor?(inst) :
-              property(inst.operating-point) = resistor-operating-point(voltage, resistance!(inst))
-            if is-capacitor?(inst) :
-              property(inst.operating-point) = capacitor-operating-point(voltage)
-    else :
-      gnd-type-error!(self, gnd) when gnd is-not False
-
+    for i in component-instances(self) do :
+      if is-resistor?(i) or is-capacitor?(i) or is-inductor?(i):
+        if check-dual-pin-count!(i) :
+          if has-property?(pins(i)[0].net-voltage) and has-property?(pins(i)[1].net-voltage) :
+            val p1 = property(pins(i)[0].net-voltage)
+            val p2 = property(pins(i)[1].net-voltage)
+            val voltage = abs(max((max-value(p1) - min-value(p2)), (max-value(p2) - min-value(p1))))
+            if is-resistor?(i) :
+              property(i.operating-point) = resistor-operating-point(voltage, resistance!(i))
+            if is-capacitor?(i) :
+              property(i.operating-point) = capacitor-operating-point(voltage)
+            if is-inductor?(i) :
+              property(i.operating-point) = inductor-operating-point(voltage, voltage / dc-resistance!(i))
 
 ; - jitx/commands/connected-pins(p) result does not contain p.
 ; - connected-group(p) contains p if it is a component pin (not net or module pin)
@@ -221,6 +210,33 @@ public defn set-power-source (pos:JITXObject, neg:JITXObject, v-in:Double):
     property(pos.gnd-ref) = neg
     property(pos.power-supply-pin) = PowerSupplyPin(v-in, 0.3) 
 
+public defn propagate-net-voltages () :
+  inside pcb-module:
+    for item in all-connected-items(self) do :
+      ;First gather all the voltages on all connected nets.
+      val voltages = to-tuple $ seq?({property?(_.net-voltage)}, nets(item))
+      ;If at least one net has a voltage property.
+      if not empty?(voltages) :
+        val voltage = net-voltage!(voltages, item)
+        ;Now assign the voltage to all of the component pins in the module.
+        for p in component-pins(item) do :
+          property(p.net-voltage) = voltage
+
+defn net-voltage! (voltages: Tuple<Toleranced>, item: ConnectedItems) -> Toleranced :
+  defn unnamed (idx: Int) -> Ref :
+    Ref $ to-string("unnamed-net-%_" % [idx])
+
+  ;Let's check that all the voltages happen to be the same.
+  ;If they are different, then something has gone wrong.
+  if length(voltages) > 1 and length(unique(voltages)) != 1 :
+    fatal("Mismatched voltages %_ on nets %_" % [voltages, net-names]) where :
+      ;Gather all the net names (some nets don't have names.).
+      val net-names = to-tuple $
+        for (net in nets(item), idx in 0 to false) seq :
+          call-if-false?(unnamed{idx}, ref?(net))
+
+  voltages[0]
+
 ; =======================================
 ; Run transformations to propagate voltages from sources, and run delayed evaluations
 ; =======================================
@@ -233,13 +249,13 @@ public defn run-final-passes (module:Instantiable) -> Instantiable :
         else : design
 
       if i == 5 :
-        throw $ Exception("A loop executing eval-whens, propagating rail voltages and assigning pins has been \
+        throw $ Exception("A loop executing eval-whens, propagating net voltages and assigning pins has been \
                            encountered: 5 iterations reached. Check that no eval-when generate other eval-whens in an \
                            infinite loop, or that there is no infinite loop of 2nd order between eval-when execution \
-                           and rail voltage propagation or pin assignment.")
+                           and net voltage propagation or pin assignment.")
 
       ;TODO: Review the order and necessity of those algos
-      design $> transform-module{propagate-rail-voltage, _}
+      design $> transform-module{propagate-net-voltages, _}
              $> assign-pins
              $> run-eval-loop
 
