@@ -61,9 +61,8 @@ public defn erc-check-design (module:JITXObject):
       check diode-component(i)     when has-property?(i.diode)
       
       for p in pins(i) do :
-        check generic-pin-check(p) when has-property?(p.generic-pin)
-        check power-pin-check(p)   when has-property?(p.power-pin)
-        check reset-pin-check(p)   when has-property?(p.reset-pin)
+        check generic-pin-check(p) 
+        check power-pin-check(p)
     check-io(module)
 
 public defn drc-check-design (module:JITXObject):
@@ -303,21 +302,6 @@ defn categorize-digital-pins (pins: Seqable<Pin>) -> DigitalPinCategories :
     val io? = property?(p.digital-io)
     val i? = property?(p.digital-input)
     val o? = property?(p.digital-output)
-    if has-property?(p.power-pin):
-      #CHECK(
-        condition =            has-property?(p.net-voltage),
-        name =                 "IO pin checks"
-        description =          "Check power pin has net-voltage property"
-        category =             "Pin Checks"
-        subcheck-description = "Check that a power pin has the net-voltage property attached",
-        pass-message =         "Power pin %_ has valid net-voltage property (%_) attached" % [ref(p), property(p.net-voltage)],
-        fail-message =         "Power pin %_ does not have a valid net-voltage property attached" % [ref(p)],
-        locators =             [p]
-      )
-      ; leaving this commented out to explain that we don't want to throw a fatal here?
-      ; if has-property?(p.power-pin) and not has-property?(p.net-voltage) :
-      ;   fatal("Power pin %_ does not have a net voltage property" % [ref(p)])
-
 
     var count = 0
     if not empty?(io?) :
@@ -746,78 +730,80 @@ public pcb-check generic-pin-check (p:JITXObject):
   val name = "Generic pin checks"
   val description = "Check generic pin properties"
   val category = "Pin Checks"
-  val p-props = property(p.generic-pin)
-  ; Check that the maxima are never crossed
-  #CHECK(
-    condition =            p-props is GenericPin,
-    name =                 "Generic pin checks"
-    description =          "Check generic pin properties"
-    category =             "Pin Checks"
-    subcheck-description = "Verify the generic pin has the GenericPin property attached",
-    pass-message =         "Generic pin %_ has the correct GenericPin property attached" % [ref(p)],
-    fail-message =         "Generic pin %_ does not have the correct GenericPin property attached" % [ref(p)],
-    locators =             [p]
-  )
-  #CHECK(
-    condition =            has-property?(p.net-voltage),
-    name =                 "Generic pin checks"
-    description =          "Check net-voltage property on generic pin"
-    category =             "Pin Checks"
-    subcheck-description = "Verify the generic pin has a net-voltage property attached",
-    pass-message =         "Pin %_ has the net-voltage property (%_V) attached" % [ref(p), property(p.net-voltage)],
-    info-message =         "Pin %_ does not have the net-voltage property attached" % [ref(p)],
-    locators =             [p]
-  )
-  if (has-property?(p.net-voltage)) :
+  if has-property?(p.generic-pin) :
+    val p-props = property(p.generic-pin)
+    ; Check that the maxima are never crossed
     #CHECK(
-      condition =            in-range?(max-voltage(p-props), property(p.net-voltage)),
+      condition =            p-props is GenericPin,
       name =                 "Generic pin checks"
       description =          "Check generic pin properties"
       category =             "Pin Checks"
-      subcheck-description = "Verify the max voltage of a generic pin is within the designs' supply voltage range",
-      pass-message =         "Generic pin %_ max-voltage %_ is compatible with the supply voltage range %_" % [ref(p), max-voltage(p-props), property(p.net-voltage)],
-      fail-message =         "Generic pin %_ max-voltage %_ is not compatible with the supply voltage range %_" % [ref(p), max-voltage(p-props), property(p.net-voltage)],
+      subcheck-description = "Verify the generic pin has the GenericPin property attached",
+      pass-message =         "Generic pin %_ has the correct GenericPin property attached" % [ref(p)],
+      fail-message =         "Generic pin %_ does not have the correct GenericPin property attached" % [ref(p)],
       locators =             [p]
     )
+    #CHECK(
+      condition =            has-property?(p.net-voltage),
+      name =                 "Generic pin checks"
+      description =          "Check net-voltage property on generic pin"
+      category =             "Pin Checks"
+      subcheck-description = "Verify the generic pin has a net-voltage property attached",
+      pass-message =         "Pin %_ has the net-voltage property (%_V) attached" % [ref(p), property(p.net-voltage)],
+      info-message =         "Pin %_ does not have the net-voltage property attached" % [ref(p)],
+      locators =             [p]
+    )
+    if (has-property?(p.net-voltage)) :
+      #CHECK(
+        condition =            in-range?(max-voltage(p-props), property(p.net-voltage)),
+        name =                 "Generic pin checks"
+        description =          "Check generic pin properties"
+        category =             "Pin Checks"
+        subcheck-description = "Verify the max voltage of a generic pin is within the designs' supply voltage range",
+        pass-message =         "Generic pin %_ max-voltage %_ is compatible with the supply voltage range %_" % [ref(p), max-voltage(p-props), property(p.net-voltage)],
+        fail-message =         "Generic pin %_ max-voltage %_ is not compatible with the supply voltage range %_" % [ref(p), max-voltage(p-props), property(p.net-voltage)],
+        locators =             [p]
+      )
 
 ; Checks a power pin located on an active component
 public pcb-check power-pin-check (p:JITXObject) :
   val name = "Power pin checks"
   val description = "Check power pin properties"
   val category = "Pin Checks"
-  val p-props = property(p.power-pin)
-  #CHECK(
-    condition =            p-props is PowerPin,
-    name =                 "Power pin checks"
-    description =          "Check power pin properties"
-    category =             "Pin Checks"
-    subcheck-description = "Verify the power pin has the correct PowerPin property attached",
-    pass-message =         "Pin %_ has the correct PowerPin property attached" % [ref(p)],
-    fail-message =         "Pin %_ does not have the correct PowerPin property attached" % [ref(p)],
-    locators =             [p]
-  )
+  if has-property?(p.power-pin):
+    val p-props = property(p.power-pin)
+    #CHECK(
+      condition =            p-props is PowerPin,
+      name =                 "Power pin checks"
+      description =          "Check power pin properties"
+      category =             "Pin Checks"
+      subcheck-description = "Verify the power pin has the correct PowerPin property attached",
+      pass-message =         "Pin %_ has the correct PowerPin property attached" % [ref(p)],
+      fail-message =         "Pin %_ does not have the correct PowerPin property attached" % [ref(p)],
+      locators =             [p]
+    )
 
-  #CHECK(
-    condition =            has-property?(p.net-voltage),
-    name =                 "Power pin checks"
-    description =          "Check power pin properties"
-    category =             "Pin Checks"
-    subcheck-description = "Verify the power pin has the correct net-voltage property attached",
-    pass-message =         "Pin %_ has the correct net-voltage property attached of %_V" % [ref(p), property(p.net-voltage)],
-    fail-message =         "Pin %_ does not have the correct net-voltage property attached" % [ref(p)],
-    locators =             [p]
-  )
+    #CHECK(
+      condition =            has-property?(p.net-voltage),
+      name =                 "Power pin checks"
+      description =          "Check power pin properties"
+      category =             "Pin Checks"
+      subcheck-description = "Verify the power pin has the correct net-voltage property attached",
+      pass-message =         "Pin %_ has the correct net-voltage property attached of %_V" % [ref(p), property(p.net-voltage)],
+      fail-message =         "Pin %_ does not have the correct net-voltage property attached" % [ref(p)],
+      locators =             [p]
+    )
 
-  #CHECK(
-    condition =            in-range?(recommended-voltage(p-props), property(p.net-voltage)),
-    name =                 "Power pin checks"
-    description =          "Check power pin properties"
-    category =             "Pin Checks"
-    subcheck-description = "Check the power pin's net-voltage property is within the design specification",
-    pass-message =         "Pin %_ net voltage %_V is correctly within the design specification %_V" % [ref(p),property(p.net-voltage),recommended-voltage(p-props)],
-    fail-message =         "Pin %_ net voltage %_V is not correctly within the design specification %_V" % [ref(p),property(p.net-voltage),recommended-voltage(p-props)],
-    locators =             [p]
-  )
+    #CHECK(
+      condition =            in-range?(recommended-voltage(p-props), property(p.net-voltage)),
+      name =                 "Power pin checks"
+      description =          "Check power pin properties"
+      category =             "Pin Checks"
+      subcheck-description = "Check the power pin's net-voltage property is within the design specification",
+      pass-message =         "Pin %_ net voltage %_V is correctly within the design specification %_V" % [ref(p),property(p.net-voltage),recommended-voltage(p-props)],
+      fail-message =         "Pin %_ net voltage %_V is not correctly within the design specification %_V" % [ref(p),property(p.net-voltage),recommended-voltage(p-props)],
+      locators =             [p]
+    )
 
 public pcb-check reset-pin-check (p:JITXObject) :
   val name = "Reset pin checks"
@@ -1089,52 +1075,40 @@ public pcb-check resistor-component (r:JITXObject) :
     locators =             [r]
   )
 
-  if has-property?(r.operating-point) :
-    val [vpk, i, temp] = [[min-value(peak-voltage(property(r.operating-point)))
-                          max-value(peak-voltage(property(r.operating-point)))],
-                          max-value(peak-current(property(r.operating-point))),
-                          OPERATING-TEMPERATURE[1]]
+  val [vpk, i, temp] = [[min-value(peak-voltage(property(r.operating-point)))
+                        max-value(peak-voltage(property(r.operating-point)))],
+                        max-value(peak-current(property(r.operating-point))),
+                        OPERATING-TEMPERATURE[1]]
 
+  val power = property(r.resistance) * pow(i, 2.0)
+  if has-property?(r.derating) :
+    ; Derate the power based on the piecewise linear curve from MFG
+    val derating = PWL(property(r.derating))[temp]
+    val pwr = derating * property(r.rated-power)
     #CHECK(
-      condition =            has-property?(r.derating),
+      condition =            pwr * DERATE-RESISTOR-POWER > power,
       name =                 "Resistor checks"
       description =          "Check resistor component properties"
       category =             "Component Checks"
-      subcheck-description = "Check the resistor component has a derating property attached",
-      pass-message =         "Resistor %_ has a property for derating (%_)" % [ref(r), property(r.derating)],
-      info-message =         "Resistor %_ does not a property for derating, defaults will be used" % [ref(r)],
+      subcheck-description = "Check the resistor power derating meets the design requirements",
+      pass-message =         "Resistor %_ power derating %_W meets the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
+      fail-message =         "Resistor %_ power derating %_W does not meet the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
       locators =             [r]
     )
-
-    val power = property(r.resistance) * pow(i, 2.0)
-    if has-property?(r.derating) :
-      ; Derate the power based on the piecewise linear curve from MFG
-      val derating = PWL(property(r.derating))[temp]
-      val pwr = derating * property(r.rated-power)
-      #CHECK(
-        condition =            pwr * DERATE-RESISTOR-POWER > power,
-        name =                 "Resistor checks"
-        description =          "Check resistor component properties"
-        category =             "Component Checks"
-        subcheck-description = "Check the resistor power derating meets the design requirements",
-        pass-message =         "Resistor %_ power derating %_W meets the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
-        fail-message =         "Resistor %_ power derating %_W does not meet the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
-        locators =             [r]
-      )
-    else :
-      ; Derate the power if MFG derating is missing
-      val derating = PWL([[0.0 1.0] [70.0 1.0] [110.0 0.8] [150.0 0.6] [190.0 0.4] [240.0 0.2] [260.0 0.1]])[temp]
-      val pwr = derating * property(r.rated-power)
-      #CHECK(
-        condition =            pwr * DERATE-RESISTOR-POWER > power,
-        name =                 "Resistor checks"
-        description =          "Check resistor component properties"
-        category =             "Component Checks"
-        subcheck-description = "Check the default resistor power derating meets the design requirements",
-        pass-message =         "Resistor %_ default power derating %_W meets the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
-        fail-message =         "Resistor %_ default power derating %_W does not meet the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
-        locators =             [r]
-      )
+  else :
+    ; Derate the power if MFG derating is missing
+    val derating = PWL([[0.0 1.0] [70.0 1.0] [110.0 0.8] [150.0 0.6] [190.0 0.4] [240.0 0.2] [260.0 0.1]])[temp]
+    val pwr = derating * property(r.rated-power)
+    #CHECK(
+      condition =            pwr * DERATE-RESISTOR-POWER > power,
+      name =                 "Resistor checks"
+      description =          "Check resistor component properties"
+      category =             "Component Checks"
+      subcheck-description = "Check the default resistor power derating meets the design requirements",
+      pass-message =         "Resistor %_ default power derating %_W meets the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
+      fail-message =         "Resistor %_ default power derating %_W does not meet the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
+      locators =             [r]
+    )
 
 public pcb-check capacitor-component (c:JITXObject) :
   val name = "Capacitor checks"
