@@ -178,42 +178,45 @@ public pcb-check within? (t:Toleranced, value:Toleranced) :
     locators =             []
     )
 
-public pcb-check rated-temperature (component:JITXObject):
+pcb-check rated-temperature (component:JITXObject):
   val name = "Rated temperature check"
-  val description = "Check rated temperatures for components versus design constraints"
+  val description = "Check rated temperature property for components versus design constraints"
   val category = "Component Checks"
   #CHECK(
     condition =            has-property?(component.rated-temperature),
     name =                 "Rated temperature check"
     description =          "Check rated temperatures for components versus design constraints"
     category =             "Component Checks"
-    subcheck-description = "Check rated temperature of component versus design constraints",
+    subcheck-description = "Check the rated-temperature of component versus the design constraints",
     pass-message =         "%_ has a property for rated-temperature of %_C" % [ref(component) property(component.rated-temperature)],
-    fail-message =         "%_ does not have a property for rated-temperature" % [ref(component)],
+    info-message =         "%_ does not have the rated-temperature property attached" % [ref(component)],
     locators =             [component]
   )
-
-  val temp = operating-temperature(property(component.rated-temperature))
-  #CHECK(
-    condition =            in-range?(temp, OPERATING-TEMPERATURE[0]),
-    name =                 "Rated temperature check"
-    description =          "Check rated temperatures for components versus design constraints"
-    category =             "Component Checks"
-    subcheck-description = "Check rated temperature (low) of component versus design constraints",
-    pass-message =         "%_ has an acceptable lower operating temperature versus design target (%_C <= %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[0]],
-    fail-message =         "%_ does not have an acceptable lower operating temperature versus design target (%_C > %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[0]],
-    locators =             [component]
-  )
-  #CHECK(
-    condition =            in-range?(temp, OPERATING-TEMPERATURE[1]),
-    name =                 "Rated temperature check"
-    description =          "Check rated temperatures for components versus design constraints"
-    category =             "Component Checks"
-    subcheck-description = "Check rated temperature (high) of component versus design constraints",
-    pass-message =         "%_ has higher operating temperature that is compatible with the design target(%_C >= %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[1]],
-    fail-message =         "%_ does not have an acceptable higher operating temperature versus design target (%_C < %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[1]],
-    locators =             [component]  
-  )
+  if has-property?(component.rated-temperature):
+    val name = "Rated temperature check"
+    val description = "Check rated temperatures for components versus design constraints"
+    val category = "Component Checks"
+    val temp = operating-temperature(property(component.rated-temperature))
+    #CHECK(
+      condition =            in-range?(temp, OPERATING-TEMPERATURE[0]),
+      name =                 "Rated temperature check"
+      description =          "Check rated temperatures for components versus design constraints"
+      category =             "Component Checks"
+      subcheck-description = "Check the min rated-temperature of a component versus min design constraint",
+      pass-message =         "%_ has an acceptable lower operating temperature versus design target (%_C <= %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[0]],
+      fail-message =         "%_ does not have an acceptable lower operating temperature versus design target (%_C > %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[0]],
+      locators =             [component]
+    )
+    #CHECK(
+      condition =            in-range?(temp, OPERATING-TEMPERATURE[1]),
+      name =                 "Rated temperature check"
+      description =          "Check rated temperatures for components versus design constraints"
+      category =             "Component Checks"
+      subcheck-description = "Check rated temperature (high) of component versus design constraints",
+      pass-message =         "%_ has higher operating temperature that is compatible with the design target(%_C >= %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[1]],
+      fail-message =         "%_ does not have an acceptable higher operating temperature versus design target (%_C < %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[1]],
+      locators =             [component]  
+    )
   
 ; Checks if a pin is marked "no-connect"
 defn no-connect? (p:JITXObject) -> True|False : 
@@ -297,12 +300,24 @@ defn categorize-digital-pins (pins: Seqable<Pin>) -> DigitalPinCategories :
 
   for p in pins do :
     ; TODO: Checking that net-voltage propagation is correct for collector check, can remove later
-    if has-property?(p.power-pin) and not has-property?(p.net-voltage) :
-      fatal("Power pin %_ does not have a net voltage property" % [ref(p)])
-
     val io? = property?(p.digital-io)
     val i? = property?(p.digital-input)
     val o? = property?(p.digital-output)
+    if has-property?(p.power-pin):
+      #CHECK(
+        condition =            has-property?(p.net-voltage),
+        name =                 "IO pin checks"
+        description =          "Check power pin has net-voltage property"
+        category =             "Pin Checks"
+        subcheck-description = "Check that a power pin has the net-voltage property attached",
+        pass-message =         "Power pin %_ has valid net-voltage property (%_) attached" % [ref(p), property(p.net-voltage)],
+        fail-message =         "Power pin %_ does not have a valid net-voltage property attached" % [ref(p)],
+        locators =             [p]
+      )
+      ; leaving this commented out to explain that we don't want to throw a fatal here?
+      ; if has-property?(p.power-pin) and not has-property?(p.net-voltage) :
+      ;   fatal("Power pin %_ does not have a net voltage property" % [ref(p)])
+
 
     var count = 0
     if not empty?(io?) :
@@ -321,7 +336,7 @@ defn categorize-digital-pins (pins: Seqable<Pin>) -> DigitalPinCategories :
         name =                 "IO pin checks"
         description =          "Check io pin properties"
         category =             "Pin Checks"
-        subcheck-description = "Check that pins have at most 1 property amongst: digital-io, digital-input, digital-output",
+        subcheck-description = "Check that io pins have at most 1 property amongst: digital-io, digital-input, digital-output",
         pass-message =         "Pin %_ has valid digital properties" % [ref(p)],
         fail-message =         "Pin %_ has invalid digital properties: digital-io=%_, digital-input=%_, digital-output=%_" % [ref(p), io?, i?, o?],
         locators =             [p])
@@ -391,7 +406,7 @@ defn collect-pull-up-resistors-and-their-net-voltages (open-collectors:Tuple<Dig
 
   ; lazy 'and', connected-to-net? can be heavy
   defn pull-up? (instance) :
-    has-property?(instance.resistance) and
+    is-resistor?(instance) and
     collect-net-voltages-and-returns-if-any?(instance)
 
   for p in seq(pin, open-collectors) do :
@@ -400,9 +415,9 @@ defn collect-pull-up-resistors-and-their-net-voltages (open-collectors:Tuple<Dig
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "Pin Checks"
-      subcheck-description = "Check that io pins marked OpenCollector are not connected to a voltage-set net",
-      pass-message =         "Open collector pin %_ is not directly connected to a voltage-set net." % [ref(p)],
-      fail-message =         "Open collector pin %_ is directly connected to a voltage-set net." % [ref(p)],
+      subcheck-description = "Check that io pins marked OpenCollector are not connected to a net with a set net-voltage",
+      pass-message =         "Open collector pin %_ is not directly connected to a net with a net-voltage property." % [ref(p)],
+      fail-message =         "Open collector pin %_ is directly connected to a net with a net-voltage property." % [ref(p)],
       locators =             [p])
 
   ; First, we search for the pull-up-resistors that might be connected to this pin
@@ -484,7 +499,7 @@ defn check-sink-current-meets-collector-ratings (net-voltage: Toleranced, pull-u
            name =                 "IO pin checks"
            description =          "Check io pin properties"
            category =             "Pin Checks"
-           subcheck-description = "Check open collector pin sink current requirement versus resistance specification",
+           subcheck-description = "Check the open collector pin sink current versus resistance specification",
            pass-message =         "Open collector pin %_ current sink specification %_A satisfies the design requirement %_A" %   [ref $ pin(open-collector), iol(driver), sink-current],
            fail-message =         "Open collector pin %_ current specification %_A does not satisfy the design requirement %_A" % [ref $ pin(open-collector), iol(driver), sink-current],
            locators =             [pin(open-collector)])
@@ -502,7 +517,7 @@ defn check-input-and-generic-pin-max-voltage-rating (net-voltage: Toleranced, pi
              name =                 "IO pin checks"
              description =          "Check io pin properties"
              category =             "Pin Checks"
-             subcheck-description = "Check voltage-set net is higher than the vih pin specification",
+             subcheck-description = "Check the net with a net-voltage property is higher than the vih pin specification",
              pass-message =         "Input pin %_ vih specification %_V is correctly lower than the voltage-set net %_V"    % [ref $ pin, vih-v, net-voltage],
              fail-message =         "Input pin %_ vih specification %_V is incorrectly higher than the voltage-set net %_V" % [ref $ pin, vih-v, net-voltage],
              locators =             [pin])
@@ -516,7 +531,7 @@ defn check-input-and-generic-pin-max-voltage-rating (net-voltage: Toleranced, pi
         name =                 "IO pin checks"
         description =          "Check io pin properties"
         category =             "Pin Checks"
-        subcheck-description = "Check pin maximum voltage is within the design specification",
+        subcheck-description = "Check the pin's maximum voltage is within the design specification",
         pass-message =         "Generic pin %_ maximum voltage %_V is correctly within the power supply specification %_V"    % [ref $ pin, max-voltage, net-voltage],
         fail-message =         "Generic pin %_ maximum voltage %_V is incorrectly outside the power supply specification %_V" % [ref $ pin, max-voltage, net-voltage],
         locators =             [pin]
@@ -545,7 +560,7 @@ public defn check-single-push-pull-levels-with-inputs (out-p:DigitalPin, in-p:Di
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
-    subcheck-description = "Verify input pin is referenced to ground of the output driver",
+    subcheck-description = "Verify the input pin is referenced to same ground as the output driver",
     pass-message =         "Gnd of the input pin %_ is correctly referenced to the ground net of the driver pin %_" % [ref(in-pin), ref(out-pin)],
     fail-message =         "Gnd of the input pin %_ is not correctly referenced to the ground net of the driver pin %_" % [ref(in-pin), ref(out-pin)],
     locators =             [out-pin, in-pin]
@@ -555,7 +570,7 @@ public defn check-single-push-pull-levels-with-inputs (out-p:DigitalPin, in-p:Di
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
-    subcheck-description = "Verify min voh of output driver is higher than the vih of the input pin",
+    subcheck-description = "Verify min voh of output driver is greater than the vih of the input pin",
     pass-message =         "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-pin), min-value(driver-voh), ref(in-pin), vih],
     fail-message =         "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-pin), min-value(driver-voh), ref(in-pin), vih],
     locators =             [out-pin, in-pin]
@@ -565,7 +580,7 @@ public defn check-single-push-pull-levels-with-inputs (out-p:DigitalPin, in-p:Di
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
-    subcheck-description = "Verify max vol of output driver is compatible with the vil of the input pin",
+    subcheck-description = "Verify max vol of output driver is lower than the vil of the input pin",
     pass-message =         "Output pin %_ max vol %_ is compatible with the input pin %_ vil %_" % [ref(out-pin), max-value(driver-vol), ref(in-pin), vil],
     fail-message =         "Output pin %_ max vol %_ is not compatible with the input pin %_ vil %_" % [ref(out-pin), max-value(driver-vol), ref(in-pin), vil],
     locators =             [out-pin, in-pin]
@@ -579,7 +594,7 @@ public defn check-single-push-pull-levels-with-inputs (out-p:DigitalPin, in-p:Di
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "Pin Checks"
-      subcheck-description = "Verify voh of output driver is compatible with voltage range of a generic pin",
+      subcheck-description = "Verify voh of output driver is within the voltage range of a generic pin",
       pass-message =         "Output pin %_ max voh %_ is compatible with the voltage range of the generic pin %_ of %_" % [ref(out-pin), driver-voh, ref(in-pin), max-input-voltage],
       fail-message =         "Output pin %_ max voh %_ is not compatible with the voltage range of the generic pin %_ of %_" % [ref(out-pin), driver-voh, ref(in-pin), max-input-voltage],
       locators =             [out-pin, in-pin]
@@ -600,7 +615,7 @@ public defn check-single-push-pull-levels-with-ios (out-p:DigitalPin, io-p:Digit
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
-    subcheck-description = "Verify the digital io pin is referenced to the ground of the output driver",
+    subcheck-description = "Verify the ground of a digital io pin is the same ground as the output driver",
     pass-message =         "Gnd of the io pin %_ is correctly referenced to the ground net of the driver pin %_" % [ref(io-pin), ref(out-pin)],
     fail-message =         "Gnd of the io pin %_ is not correctly referenced to the ground net of the driver pin %_" % [ref(io-pin), ref(out-pin)],
     locators =             [io-pin]
@@ -611,7 +626,7 @@ public defn check-single-push-pull-levels-with-ios (out-p:DigitalPin, io-p:Digit
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
-    subcheck-description = "Verify io driver is either CMOS or TTL",
+    subcheck-description = "Verify io driver type is either CMOS or TTL",
     pass-message =         "IO pin %_ has the correct driver property property attached" % [ref(io-pin)],
     fail-message =         "IO pin %_ does not have the correct driver property property attached" % [ref(io-pin)],
     locators =             [io-pin]
@@ -622,7 +637,7 @@ public defn check-single-push-pull-levels-with-ios (out-p:DigitalPin, io-p:Digit
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
-    subcheck-description = "Verify min voh of output driver is higher than the vih of the input pin",
+    subcheck-description = "Verify min voh of output driver is greater than the vih of the input pin",
     pass-message =         "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-pin), min-value(driver-voh), ref(io-pin), vih-v],
     fail-message =         "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-pin), min-value(driver-voh), ref(io-pin), vih-v],
     locators =             [out-pin, io-pin]
@@ -632,7 +647,7 @@ public defn check-single-push-pull-levels-with-ios (out-p:DigitalPin, io-p:Digit
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
-    subcheck-description = "Verify max vol of output driver is compatible with the vil of the input pin",
+    subcheck-description = "Verify max vol of output driver is lower than the vil of the input pin",
     pass-message =         "Output pin %_ max vol %_ is compatible with the input pin %_ vil %_" % [ref(out-pin), max-value(driver-vol), ref(io-pin), vil-v],
     fail-message =         "Output pin %_ max vol %_ is not compatible with the input pin %_ vil %_" % [ref(out-pin), max-value(driver-vol), ref(io-pin), vil-v],
     locators =             [out-pin, io-pin]
@@ -643,7 +658,7 @@ public defn check-single-push-pull-levels-with-ios (out-p:DigitalPin, io-p:Digit
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "Pin Checks"
-      subcheck-description = "Verify min voh of io driver is higher than the vih of the io pin",
+      subcheck-description = "Verify min voh of io driver is greater than the vih of the io pin",
       pass-message =         "IO pin %_ min voh %_ is compatible with the io pin %_ vih %_" % [ref(io-pin), min-value(voh(io-driver)), ref(out-pin), vih(out-prop)],
       fail-message =         "IO pin %_ min voh %_ is not compatible with the io pin %_ vih %_" % [ref(io-pin), min-value(voh(io-driver)), ref(out-pin), vih(out-prop)],
       locators =             [io-pin]
@@ -653,7 +668,7 @@ public defn check-single-push-pull-levels-with-ios (out-p:DigitalPin, io-p:Digit
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "Pin Checks"
-      subcheck-description = "Verify max vol of io driver is compatible with the vil of the io pin",
+      subcheck-description = "Verify max vol of io driver is lower than the vil of the io pin",
       pass-message =         "IO pin %_ max vol %_ is compatible with the io pin %_ vil %_" % [ref(io-pin), max-value(vol(io-driver)), ref(out-pin), vil(out-prop)],
       fail-message =         "IO pin %_ max vol %_ is not compatible with the io pin %_ vil %_" % [ref(io-pin), max-value(vol(io-driver)), ref(out-pin), vil(out-prop)],
       locators =             [out-pin, io-pin]
@@ -667,7 +682,7 @@ public defn check-single-push-pull-levels-with-ios (out-p:DigitalPin, io-p:Digit
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "Pin Checks"
-      subcheck-description = "Verify voh of output driver is compatible with voltage range of a generic pin",
+      subcheck-description = "Verify voh of output driver is within the voltage range of a generic pin",
       pass-message =         "Output pin %_ max voh %_ is compatible with the voltage range of the generic pin %_ of %_" % [ref(out-pin), driver-voh, ref(io-pin), max-input-voltage],
       fail-message =         "Output pin %_ max voh %_ is not compatible with the voltage range of the generic pin %_ of %_" % [ref(out-pin), driver-voh, ref(io-pin), max-input-voltage],
       locators =             [out-pin, io-pin]
@@ -681,7 +696,7 @@ public defn check-single-push-pull-levels-with-ios (out-p:DigitalPin, io-p:Digit
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "Pin Checks"
-      subcheck-description = "Verify voh of output driver is compatible with voltage range of a generic pin",
+      subcheck-description = "Verify voh of output driver is within the voltage range of a generic pin",
       pass-message =         "IO pin %_ max voh %_ is compatible with the voltage range of the generic pin %_ of %_" % [ref(io-pin), voh(io-driver), ref(out-pin), max-input-voltage],
       fail-message =         "IO pin %_ max voh %_ is not compatible with the voltage range of the generic pin %_ of %_" % [ref(io-pin), voh(io-driver), ref(out-pin), max-input-voltage],
       locators =             [out-pin, io-pin]
@@ -720,7 +735,7 @@ public pcb-check connected (p:JITXObject|Tuple<JITXObject>) :
     name =                 "connected net checks"
     description =          "Check that the object(s) are connected"
     category =             "Net Checks"
-    subcheck-description = "Verify object is connected",
+    subcheck-description = "Verify the design object is connected",
     pass-message =         pass-message,
     fail-message =         fail-message,
     locators =             locators
@@ -731,25 +746,35 @@ public pcb-check generic-pin-check (p:JITXObject):
   val name = "Generic pin checks"
   val description = "Check generic pin properties"
   val category = "Pin Checks"
+  val p-props = property(p.generic-pin)
+  ; Check that the maxima are never crossed
+  #CHECK(
+    condition =            p-props is GenericPin,
+    name =                 "Generic pin checks"
+    description =          "Check generic pin properties"
+    category =             "Pin Checks"
+    subcheck-description = "Verify the generic pin has the GenericPin property attached",
+    pass-message =         "Generic pin %_ has the correct GenericPin property attached" % [ref(p)],
+    fail-message =         "Generic pin %_ does not have the correct GenericPin property attached" % [ref(p)],
+    locators =             [p]
+  )
+  #CHECK(
+    condition =            has-property?(p.net-voltage),
+    name =                 "Generic pin checks"
+    description =          "Check net-voltage property on generic pin"
+    category =             "Pin Checks"
+    subcheck-description = "Verify the generic pin has a net-voltage property attached",
+    pass-message =         "Pin %_ has the net-voltage property (%_V) attached" % [ref(p), property(p.net-voltage)],
+    info-message =         "Pin %_ does not have the net-voltage property attached" % [ref(p)],
+    locators =             [p]
+  )
   if (has-property?(p.net-voltage)) :
-    val p-props = property(p.generic-pin)
-    ; Check that the maxima are never crossed
-    #CHECK(
-      condition =            p-props is GenericPin,
-      name =                 "Generic pin checks"
-      description =          "Check generic pin properties"
-      category =             "Pin Checks"
-      subcheck-description = "Verify pin has the generic pin property expected",
-      pass-message =         "Pin %_ is marked correctly as a generic pin" % [ref(p)],
-      fail-message =         "Pin %_ is not marked as a generic pin" % [ref(p)],
-      locators =             [p]
-    )
     #CHECK(
       condition =            in-range?(max-voltage(p-props), property(p.net-voltage)),
       name =                 "Generic pin checks"
       description =          "Check generic pin properties"
       category =             "Pin Checks"
-      subcheck-description = "Verify generic pin is compatible with the design supply voltage range",
+      subcheck-description = "Verify the max voltage of a generic pin is within the designs' supply voltage range",
       pass-message =         "Generic pin %_ max-voltage %_ is compatible with the supply voltage range %_" % [ref(p), max-voltage(p-props), property(p.net-voltage)],
       fail-message =         "Generic pin %_ max-voltage %_ is not compatible with the supply voltage range %_" % [ref(p), max-voltage(p-props), property(p.net-voltage)],
       locators =             [p]
@@ -760,46 +785,35 @@ public pcb-check power-pin-check (p:JITXObject) :
   val name = "Power pin checks"
   val description = "Check power pin properties"
   val category = "Pin Checks"
-  #CHECK(
-    condition =            has-property?(p.power-pin),
-    name =                 "Power pin checks"
-    description =          "Check power pin properties"
-    category =             "Pin Checks"
-    subcheck-description = "Verify power pins have the correct power-pin property",
-    pass-message =         "Pin %_ has the correct power-pin property attached" % [ref(p)],
-    fail-message =         "Pin %_ does not have the correct power-pin property attached" % [ref(p)],
-    locators =             [p]
-  )
-
   val p-props = property(p.power-pin)
   #CHECK(
     condition =            p-props is PowerPin,
     name =                 "Power pin checks"
     description =          "Check power pin properties"
     category =             "Pin Checks"
-    subcheck-description = "Verify power pins have the correct power-pin type property",
-    pass-message =         "Pin %_ has the correct power-pin type property attached" % [ref(p)],
-    fail-message =         "Pin %_ does not have the correct power-pin type property attached" % [ref(p)],
+    subcheck-description = "Verify the power pin has the correct PowerPin property attached",
+    pass-message =         "Pin %_ has the correct PowerPin property attached" % [ref(p)],
+    fail-message =         "Pin %_ does not have the correct PowerPin property attached" % [ref(p)],
     locators =             [p]
   )
-  ; println("%_ has power" % [ref(p)])
+
   #CHECK(
     condition =            has-property?(p.net-voltage),
     name =                 "Power pin checks"
     description =          "Check power pin properties"
     category =             "Pin Checks"
-    subcheck-description = "Verify power pins have the correct net-voltage property",
+    subcheck-description = "Verify the power pin has the correct net-voltage property attached",
     pass-message =         "Pin %_ has the correct net-voltage property attached of %_V" % [ref(p), property(p.net-voltage)],
     fail-message =         "Pin %_ does not have the correct net-voltage property attached" % [ref(p)],
     locators =             [p]
   )
-  ; println("%_ has %_" % [ref(p) property(p.net-voltage)])
+
   #CHECK(
     condition =            in-range?(recommended-voltage(p-props), property(p.net-voltage)),
     name =                 "Power pin checks"
     description =          "Check power pin properties"
     category =             "Pin Checks"
-    subcheck-description = "Check power pin net-voltage property is within the design specification",
+    subcheck-description = "Check the power pin's net-voltage property is within the design specification",
     pass-message =         "Pin %_ net voltage %_V is correctly within the design specification %_V" % [ref(p),property(p.net-voltage),recommended-voltage(p-props)],
     fail-message =         "Pin %_ net voltage %_V is not correctly within the design specification %_V" % [ref(p),property(p.net-voltage),recommended-voltage(p-props)],
     locators =             [p]
@@ -809,24 +823,13 @@ public pcb-check reset-pin-check (p:JITXObject) :
   val name = "Reset pin checks"
   val description = "Check reset pin properties"
   val category = "Pin Checks"
-  #CHECK(
-    condition =            has-property?(p.reset-pin),
-    name =                 "Reset pin checks"
-    description =          "Check reset pin properties"
-    category =             "Pin Checks"
-    subcheck-description = "Verify reset pins have the correct reset-pin property",
-    pass-message =         "Reset pin %_ has the correct reset-pin property attached" % [ref(p)],
-    fail-message =         "Reset pin %_ does not have the correct reset-pin property attached" % [ref(p)],
-    locators =             [p]
-  )
-
   val p-props = property(p.reset-pin)
   #CHECK(
     condition =            p-props is ResetPin,
     name =                 "Reset pin checks"
     description =          "Check reset pin properties"
     category =             "Pin Checks"
-    subcheck-description = "Verify reset pins have the correct reset-pin type property",
+    subcheck-description = "Verify the reset pin has the ResetPin property attached",
     pass-message =         "Reset pin %_ has the correct reset-pin type property attached" % [ref(p)],
     fail-message =         "Reset pin %_ does not have the correct reset-pin type property attached" % [ref(p)],
     locators =             [p]
@@ -837,9 +840,9 @@ public pcb-check reset-pin-check (p:JITXObject) :
     name =                 "Reset pin checks"
     description =          "Check reset pin properties"
     category =             "Pin Checks"
-    subcheck-description = "Verify reset pins have the correct connectivity",
-    pass-message =         "Reset pin %_ has the correct connectivity" % [ref(p)],
-    fail-message =         "Reset pin %_ does not have the correct connectivity" % [ref(p)],
+    subcheck-description = "Verify the reset pin is connected",
+    pass-message =         "Reset pin %_ is connected" % [ref(p)],
+    fail-message =         "Reset pin %_ is not connected" % [ref(p)],
     locators =             [p]
   )
 
@@ -853,7 +856,7 @@ defn check-rated-voltage (p:JITXObject) :
                               name =                 "Check rated-voltage property"
                               description =          "Check design for the correct rated-voltage value"
                               category =             "rated-voltage"
-                              subcheck-description = "Check pin rated voltage is within the design voltage specification",
+                              subcheck-description = "Check the pin's rated-voltage property is within the design voltage specification",
                               pass-message =         "Pin %_ rated voltage %_V is correctly within the design supply specification %_V" % [ref(p),property(p.rated-voltage),v],
                               fail-message =         "Pin %_ rated voltage %_V is incorrectly outside the design supply specification %_V" % [ref(p),property(p.rated-voltage),v],
                               locators =             [p]
@@ -864,7 +867,7 @@ defn check-rated-voltage (p:JITXObject) :
         name =                 "Check rated-voltage property"
         description =          "Check design for the correct rated-voltage value"
         category =             "rated-voltage"
-        subcheck-description = "Check pin rated voltage is within the design voltage specification",
+        subcheck-description = "Check the pin's rated-voltage property is within the design voltage specification",
         pass-message =         "Pin %_ rated voltage %_V high is correctly within the design supply specification %_V" % [ref(p),property(p.rated-voltage)[1],v],
         fail-message =         "Pin %_ rated voltage %_V high is incorrectly outside the design supply specification %_V" % [ref(p),property(p.rated-voltage)[1],v],
         locators =             [p]
@@ -874,7 +877,7 @@ defn check-rated-voltage (p:JITXObject) :
         name =                 "Check rated-voltage property"
         description =          "Check design for the correct rated-voltage value"
         category =             "rated-voltage"
-        subcheck-description = "Check pin rated voltage is within the design voltage specification",
+        subcheck-description = "Check the pin's rated-voltage property is within the design voltage specification",
         pass-message =         "Pin %_ rated voltage %_V low is correctly within the design supply specification %_V" % [ref(p),property(p.rated-voltage)[0],v],
         fail-message =         "Pin %_ rated voltage %_V low is incorrectly outside the design supply specification %_V" % [ref(p),property(p.rated-voltage)[0],v],
         locators =             [p]
@@ -885,7 +888,7 @@ defn check-rated-voltage (p:JITXObject) :
         name =                 "Check rated-voltage property"
         description =          "Check design for the correct rated-voltage value"
         category =             "rated-voltage"
-        subcheck-description = "Check pin rated voltage is within the design voltage specification",
+        subcheck-description = "Check the pin's rated-voltage property is within the design voltage specification",
         pass-message =         "Pin %_ rated voltage %_V high is correctly within the design supply specification %_V" % [ref(p),property(p.rated-voltage)[1],v[2]],
         fail-message =         "Pin %_ rated voltage %_V high is incorrectly outside the design supply specification %_V" % [ref(p),property(p.rated-voltage)[1],v[2]],
         locators =             [p]
@@ -895,7 +898,7 @@ defn check-rated-voltage (p:JITXObject) :
         name =                 "Check rated-voltage property"
         description =          "Check design for the correct rated-voltage value"
         category =             "rated-voltage"
-        subcheck-description = "Check pin rated voltage is within the design voltage specification",
+        subcheck-description = "Check the pin's rated-voltage property is within the design voltage specification",
         pass-message =         "Pin %_ rated voltage %_V low is correctly within the design supply specification %_V" % [ref(p),property(p.rated-voltage)[0],v[0]],
         fail-message =         "Pin %_ rated voltage %_V low is incorrectly outside the design supply specification %_V" % [ref(p),property(p.rated-voltage)[0],v[0]],
         locators =             [p]
@@ -909,35 +912,36 @@ public pcb-check voltage-levels (p:JITXObject, range:[Double,Double,Double]) :
   val category = "Pin Checks"
 
   #CHECK(
-    condition =            has-property?(p.voltage),
+    condition =            has-property?(p.net-voltage),
     name =                 "Voltage level pin checks"
     description =          "Check voltage pin properties"
     category =             "Pin Checks"
-    subcheck-description = "Check pin has voltage property",
-    pass-message =         "Pin %_ has a property for voltage" % [ref(p)],
-    fail-message =         "Pin %_ does not have a property for voltage" % [ref(p)],
+    subcheck-description = "Check the pin has the net-voltage property attached",
+    pass-message =         "Pin %_ has a property for net-voltage of %_V" % [ref(p), property(p.net-voltage)],
+    info-message =         "Pin %_ does not have a property for net-voltage" % [ref(p)],
     locators =             [p]
   )
-  #CHECK(
-    condition =            property(p.voltage)[0] >= range[0],
-    name =                 "Voltage level pin checks"
-    description =          "Check voltage pin properties"
-    category =             "Pin Checks"
-    subcheck-description = "Check pin voltage is within the design voltage specification",
-    pass-message =         "Pin %_ rated voltage %_V low is correctly within the design range specification %_V" % [ref(p),property(p.voltage)[0],range[0]],
-    fail-message =         "Pin %_ rated voltage %_V low is incorrectly outside the design range specification %_V" % [ref(p),property(p.voltage)[0],range[0]],
-    locators =             [p]
-  )
-  #CHECK(
-    condition =            property(p.voltage)[2] <= range[2],
-    name =                 "Voltage level pin checks"
-    description =          "Check voltage pin properties"
-    category =             "Pin Checks"
-    subcheck-description = "Check pin rated voltage is within the design voltage specification",
-    pass-message =         "Pin %_ rated voltage %_V high is correctly within the design range specification %_V" % [ref(p),property(p.voltage)[2],range[2]],
-    fail-message =         "Pin %_ rated voltage %_V high is incorrectly outside the design range specification %_V" % [ref(p),property(p.voltage)[2],range[2]],
-    locators =             [p]
-  )
+  if has-property?(p.voltage):
+    #CHECK(
+      condition =            property(p.voltage)[0] >= range[0],
+      name =                 "Voltage level pin checks"
+      description =          "Check voltage pin properties"
+      category =             "Pin Checks"
+      subcheck-description = "Check the pin's voltage is within the design voltage specification",
+      pass-message =         "Pin %_ rated voltage %_V low is correctly within the design range specification %_V" % [ref(p),property(p.voltage)[0],range[0]],
+      fail-message =         "Pin %_ rated voltage %_V low is incorrectly outside the design range specification %_V" % [ref(p),property(p.voltage)[0],range[0]],
+      locators =             [p]
+    )
+    #CHECK(
+      condition =            property(p.voltage)[2] <= range[2],
+      name =                 "Voltage level pin checks"
+      description =          "Check voltage pin properties"
+      category =             "Pin Checks"
+      subcheck-description = "Check pin's rated voltage is within the design voltage specification",
+      pass-message =         "Pin %_ rated voltage %_V high is correctly within the design range specification %_V" % [ref(p),property(p.voltage)[2],range[2]],
+      fail-message =         "Pin %_ rated voltage %_V high is incorrectly outside the design range specification %_V" % [ref(p),property(p.voltage)[2],range[2]],
+      locators =             [p]
+    )
 
 ; ====== Component-level checks ======
 ; ====================================
@@ -957,12 +961,11 @@ public pcb-check diode-component (d:JITXObject) :
         name =                 "Diode checks"
         description =          "Check that the diode pins are connected"
         category =             "Component Checks"
-        subcheck-description = "Check diode component is connected property",
+        subcheck-description = "Check the diode component is connected properly",
         pass-message =         "Diode %_ pin %_ is connected properly" % [ref(d), ref(d-pin)],
         fail-message =         "Diode %_ pin %_ is not connected properly" % [ref(d), ref(d-pin)],
         locators =             [d]
       )
-
 
 public pcb-check inductor-component (l:JITXObject) :
   val name = "Inductor checks"
@@ -978,7 +981,7 @@ public pcb-check inductor-component (l:JITXObject) :
         name =                 "Inductor checks"
         description =          "Check that the inductor pins are connected"
         category =             "Component Checks"
-        subcheck-description = "Check inductor component is connected property",
+        subcheck-description = "Check the inductor component is connected properly",
         pass-message =         "Inductor %_ pin %_ is connected properly" % [ref(l), ref(l-pin)],
         fail-message =         "Inductor %_ pin %_ is not connected properly" % [ref(l), ref(l-pin)],
         locators =             [l]
@@ -989,7 +992,7 @@ public pcb-check inductor-component (l:JITXObject) :
     name =                 "Inductor checks"
     description =          "Check inductor component properties"
     category =             "Component Checks"
-    subcheck-description = "Check inductor component has the correct inductance property",
+    subcheck-description = "Check the inductor component has the correct inductance property",
     pass-message =         "Inductor %_ has the correct inductance property for an inductor" % [ref(l)],
     fail-message =         "Inductor %_ does not have the correct inductance property for an inductor" % [ref(l)],
     locators =             [l]
@@ -1001,7 +1004,7 @@ public pcb-check inductor-component (l:JITXObject) :
       name =                 "Inductor checks"
       description =          "Check inductor component properties"
       category =             "Component Checks"
-      subcheck-description = "Check inductor component has the correct inductor property",
+      subcheck-description = "Check the inductor component has the correct operating-point property",
       pass-message =         "Inductor %_ has the correct property for operating-point" % [ref(l)],
       fail-message =         "Inductor %_ does not have the correct property for the operating-point" % [ref(l)],
       locators =             [l]
@@ -1022,7 +1025,7 @@ public pcb-check inductor-component (l:JITXObject) :
         name =                 "Inductor checks"
         description =          "Check inductor component properties"
         category =             "Component Checks"
-        subcheck-description = "Check inductor power derating meets the design requirements",
+        subcheck-description = "Check the inductor power derating meets the design requirements",
         pass-message =         "Inductor %_ power derating %_W meets the design requirements of %_W" % [ref(l), pwr * DERATE-RESISTOR-POWER, power],
         fail-message =         "Inductor %_ power derating %_W does not meet the design requirements of %_W" % [ref(l), pwr * DERATE-RESISTOR-POWER, power],
         locators =             [l]
@@ -1037,7 +1040,7 @@ public pcb-check inductor-component (l:JITXObject) :
         name =                 "Inductor checks"
         description =          "Check inductor component properties"
         category =             "Component Checks"
-        subcheck-description = "Check inductor default power derating meets the design requirements",
+        subcheck-description = "Check the default inductor power derating meets the design requirements",
         pass-message =         "Inductor %_ default power derating %_W meets the design requirements of %_W" % [ref(l), pwr * DERATE-RESISTOR-POWER, power],
         fail-message =         "Inductor %_ default power derating %_W does not meet the design requirements of %_W" % [ref(l), pwr * DERATE-RESISTOR-POWER, power],
         locators =             [l]
@@ -1059,7 +1062,7 @@ public pcb-check resistor-component (r:JITXObject) :
         name =                 "Resistor checks"
         description =          "Check that the resistor pins are connected"
         category =             "Component Checks"
-        subcheck-description = "Check resistor component is connected property",
+        subcheck-description = "Check the resistor component is connected properly",
         pass-message =         "Resistor %_ pin %_ is connected properly" % [ref(r), ref(r-pin)],
         fail-message =         "Resistor %_ pin %_ is not connected properly" % [ref(r), ref(r-pin)],
         locators =             [r]
@@ -1070,27 +1073,38 @@ public pcb-check resistor-component (r:JITXObject) :
     name =                 "Resistor checks"
     description =          "Check resistor component properties"
     category =             "Component Checks"
-    subcheck-description = "Check resistor component has the correct resistance property",
+    subcheck-description = "Check the resistor component has the correct resistance property",
     pass-message =         "Resistor %_ has the correct resistance property for resistor" % [ref(r)],
     fail-message =         "Resistor %_ does not have the correct resistance property for a resistor" % [ref(r)],
     locators =             [r]
   )
-  if has-property?(r.operating-point) :
-    #CHECK(
-      condition =            has-property?(r.operating-point),
-      name =                 "Resistor checks"
-      description =          "Check resistor component properties"
-      category =             "Component Checks"
-      subcheck-description = "Check resistor component has the correct operating-point property",
-      pass-message =         "Resistor %_ has the correct property for operating-point" % [ref(r)],
-      fail-message =         "Resistor %_ does not have the correct property for the operating-point" % [ref(r)],
-      locators =             [r]
-    )
+  #CHECK(
+    condition =            has-property?(r.operating-point),
+    name =                 "Resistor checks"
+    description =          "Check resistor component properties"
+    category =             "Component Checks"
+    subcheck-description = "Check the resistor component has an operating-point property",
+    pass-message =         "Resistor %_ has a property for operating-point (%_)" % [ref(r), property(r.operating-point)],
+    info-message =         "Resistor %_ does not have the operating-point property attached" % [ref(r)],
+    locators =             [r]
+  )
 
+  if has-property?(r.operating-point) :
     val [vpk, i, temp] = [[min-value(peak-voltage(property(r.operating-point)))
                           max-value(peak-voltage(property(r.operating-point)))],
                           max-value(peak-current(property(r.operating-point))),
                           OPERATING-TEMPERATURE[1]]
+
+    #CHECK(
+      condition =            has-property?(r.derating),
+      name =                 "Resistor checks"
+      description =          "Check resistor component properties"
+      category =             "Component Checks"
+      subcheck-description = "Check the resistor component has a derating property attached",
+      pass-message =         "Resistor %_ has a property for derating (%_)" % [ref(r), property(r.derating)],
+      info-message =         "Resistor %_ does not a property for derating, defaults will be used" % [ref(r)],
+      locators =             [r]
+    )
 
     val power = property(r.resistance) * pow(i, 2.0)
     if has-property?(r.derating) :
@@ -1102,7 +1116,7 @@ public pcb-check resistor-component (r:JITXObject) :
         name =                 "Resistor checks"
         description =          "Check resistor component properties"
         category =             "Component Checks"
-        subcheck-description = "Check resistor power derating meets the design requirements",
+        subcheck-description = "Check the resistor power derating meets the design requirements",
         pass-message =         "Resistor %_ power derating %_W meets the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
         fail-message =         "Resistor %_ power derating %_W does not meet the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
         locators =             [r]
@@ -1116,7 +1130,7 @@ public pcb-check resistor-component (r:JITXObject) :
         name =                 "Resistor checks"
         description =          "Check resistor component properties"
         category =             "Component Checks"
-        subcheck-description = "Check resistor default power derating meets the design requirements",
+        subcheck-description = "Check the default resistor power derating meets the design requirements",
         pass-message =         "Resistor %_ default power derating %_W meets the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
         fail-message =         "Resistor %_ default power derating %_W does not meet the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
         locators =             [r]
@@ -1136,7 +1150,7 @@ public pcb-check capacitor-component (c:JITXObject) :
         name =                 "Capacitor checks"
         description =          "Check that the capacitor pins are connected"
         category =             "Component Checks"
-        subcheck-description = "Check capacitor component is connected property",
+        subcheck-description = "Check the capacitor component is connected properly",
         pass-message =         "Capacitor %_ pin %_ is connected properly" % [ref(c), ref(c-pin)],
         fail-message =         "Capacitor %_ pin %_ is not connected properly" % [ref(c), ref(c-pin)],
         locators =             [c]
@@ -1147,23 +1161,23 @@ public pcb-check capacitor-component (c:JITXObject) :
     name =                 "Capacitor checks"
     description =          "Check capacitor component properties"
     category =             "Component Checks"
-    subcheck-description = "Check capacitor component has the correct capacitance property",
+    subcheck-description = "Check the capacitor component for a capacitance property",
     pass-message =         "Capacitor %_ has the correct capacitance property for a capacitor" % [ref(c)],
     fail-message =         "Capacitor %_ does not have the correct capacitance property for a capacitor" % [ref(c)],
     locators =             [c]
   )
+  #CHECK(
+    condition =            has-property?(c.operating-point),
+    name =                 "Capacitor checks"
+    description =          "Check capacitor component properties"
+    category =             "Component Checks"
+    subcheck-description = "Check the capacitor component for an operating-point property",
+    pass-message =         "Capacitor %_ has a property for operating-point (%_)" % [ref(c), property(c.operating-point)],
+    info-message =         "Capacitor %_ does not have the operating-point property attached" % [ref(c)],
+    locators =             [c]
+  )
 
   if has-property?(c.operating-point) :
-    #CHECK(
-      condition =            has-property?(c.operating-point),
-      name =                 "Capacitor checks"
-      description =          "Check capacitor component properties"
-      category =             "Component Checks"
-      subcheck-description = "Check capacitor component has the correct operating-point property",
-      pass-message =         "Capacitor %_ has the correct property for operating-point" % [ref(c)],
-      fail-message =         "Capacitor %_ does not have the correct property for the operating-point" % [ref(c)],
-      locators =             [c]
-    )
     val [vpk temp] = [[min-value(peak-voltage(property(c.operating-point))) max-value(peak-voltage(property(c.operating-point)))] OPERATING-TEMPERATURE[1]]
     val max-temp = max-value(operating-temperature(property(c.rated-temperature)))
     switch(property(c.type)) :
@@ -1174,7 +1188,7 @@ public pcb-check capacitor-component (c:JITXObject) :
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
-          subcheck-description = "Check ceramic capacitor voltage derating matches the operating-point voltage",
+          subcheck-description = "Check the ceramic capacitor voltage derating matches the operating-point voltage",
           pass-message =         "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[0],(vpk-derate-wc * property(c.rated-voltage))],
           fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[0],(vpk-derate-wc * property(c.rated-voltage))],
           locators =             [c]
@@ -1185,7 +1199,7 @@ public pcb-check capacitor-component (c:JITXObject) :
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
-          subcheck-description = "Check ceramic capacitor voltage derating matches the operating-point voltage",
+          subcheck-description = "Check the ceramic capacitor voltage derating matches the operating-point voltage",
           pass-message =         "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
           fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
           locators =             [c]
@@ -1197,7 +1211,7 @@ public pcb-check capacitor-component (c:JITXObject) :
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
-          subcheck-description = "Check ceramic capacitor voltage derating matches the operating-point voltage",
+          subcheck-description = "Check the ceramic capacitor voltage derating matches the operating-point voltage",
           pass-message =         "Capacitor %_ voltage derating %_V is compatible with the nominal design constraint %_V" % [ref(c),vpk[0],(vpk-derate-nom * property(c.rated-voltage))],
           fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the nominal design constraint %_V" % [ref(c),vpk[0],(vpk-derate-nom * property(c.rated-voltage))],
           locators =             [c]
@@ -1208,7 +1222,7 @@ public pcb-check capacitor-component (c:JITXObject) :
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
-          subcheck-description = "Check ceramic capacitor voltage derating matches the operating-point voltage",
+          subcheck-description = "Check the ceramic capacitor voltage derating matches the operating-point voltage",
           pass-message =         "Capacitor %_ voltage derating %_V is compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
           fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
           locators =             [c]
@@ -1219,7 +1233,7 @@ public pcb-check capacitor-component (c:JITXObject) :
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
-          subcheck-description = "Check ceramic capacitor de-rated temperature operating point versus design constraints",
+          subcheck-description = "Check the ceramic capacitor de-rated temperature operating point meets the design constraints",
           pass-message =         "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MLCC-TEMP, max-temp)],
           fail-message =         "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MLCC-TEMP, max-temp)],
           locators =             [c]
@@ -1231,7 +1245,7 @@ public pcb-check capacitor-component (c:JITXObject) :
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
-          subcheck-description = "Check electrolytic capacitor component has the anode property",
+          subcheck-description = "Check the electrolytic capacitor component has an anode property",
           pass-message =         "Electrolytic capacitor %_ has the correct anode property" % [ref(c)],
           fail-message =         "Electrolytic capacitor %_ does not have the correct anode property" % [ref(c)],
           locators =             [c]
@@ -1242,7 +1256,7 @@ public pcb-check capacitor-component (c:JITXObject) :
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
-          subcheck-description = "Check electrolytic capacitor component has the electrolyte property",
+          subcheck-description = "Check te electrolytic capacitor component has an electrolyte property",
           pass-message =         "Electrolytic capacitor %_ has the correct electrolyte property" % [ref(c)],
           fail-message =         "Electrolytic capacitor %_ does not have the correct electrolyte property" % [ref(c)],
           locators =             [c]
@@ -1257,7 +1271,7 @@ public pcb-check capacitor-component (c:JITXObject) :
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
-            subcheck-description = "Check polymer tantalum capacitor voltage derating matches the operating-point voltage",
+            subcheck-description = "Check the polymer tantalum capacitor voltage derating matches the operating-point voltage",
             pass-message =         "Capacitor %_ voltage operating point %_V is compatible with the constraint %_V" % [ref(c),vpk[1],(DERATE-CAPACITOR-ETANTPOLY-VPK * property(c.rated-voltage))],
             fail-message =         "Capacitor %_ voltage operating point %_V is not compatible with the constraint %_V" % [ref(c),vpk[1],(DERATE-CAPACITOR-ETANTPOLY-VPK * property(c.rated-voltage))],
             locators =             [c]
@@ -1268,7 +1282,7 @@ public pcb-check capacitor-component (c:JITXObject) :
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
-            subcheck-description = "Check capacitor de-rated temperature operating point versus design constraints",
+            subcheck-description = "Check the capacitor de-rated temperature operating point versus design constraints",
             pass-message =         "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp)],
             fail-message =         "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp)],
             locators =             [c]
@@ -1279,7 +1293,7 @@ public pcb-check capacitor-component (c:JITXObject) :
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
-            subcheck-description = "Check capacitor peak current matches the rated peak current",
+            subcheck-description = "Check the capacitor peak current matches the rated peak current",
             pass-message =         "Capacitor %_ peak current %_A is compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
             fail-message =         "Capacitor %_ peak current %_A is not compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
             locators =             [c]
@@ -1290,7 +1304,7 @@ public pcb-check capacitor-component (c:JITXObject) :
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
-            subcheck-description = "Check capacitor rms current matches the rated rms current",
+            subcheck-description = "Check the capacitor rms current matches the rated rms current",
             pass-message =         "Capacitor %_ rms current %_A is compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
             fail-message =         "Capacitor %_ rms current %_A is not compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
             locators =             [c]
@@ -1301,7 +1315,7 @@ public pcb-check capacitor-component (c:JITXObject) :
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
-            subcheck-description = "Check capacitor has min peak voltage greater than 0V",
+            subcheck-description = "Check the capacitor has min peak voltage greater than 0.0V",
             pass-message =         "Capacitor %_ min peak voltage %_V is greater than or equal to 0V" % [ref(c),vpk[0]],
             fail-message =         "Capacitor %_ min peak voltage %_V is less than 0V" % [ref(c),vpk[0]],
             locators =             [c]
@@ -1313,7 +1327,7 @@ public pcb-check capacitor-component (c:JITXObject) :
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
-            subcheck-description = "Check manganese-dioxide tantalum capacitor peak current matches the rated peak current",
+            subcheck-description = "Check the manganese-dioxide tantalum capacitor peak current matches the rated peak current",
             pass-message =         "Capacitor %_ peak current %_A is compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
             fail-message =         "Capacitor %_ peak current %_A is not compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
             locators =             [c]
@@ -1324,7 +1338,7 @@ public pcb-check capacitor-component (c:JITXObject) :
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
-            subcheck-description = "Check manganese-dioxide tantalum capacitor rms current matches the rated rms current",
+            subcheck-description = "Check the manganese-dioxide tantalum capacitor rms current matches the rated rms current",
             pass-message =         "Capacitor %_ rms current %_A is compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
             fail-message =         "Capacitor %_ rms current %_A is not compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
             locators =             [c]
@@ -1335,7 +1349,7 @@ public pcb-check capacitor-component (c:JITXObject) :
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
-            subcheck-description = "Check manganese-dioxide tantalum capacitor has min peak voltage greater than 0V",
+            subcheck-description = "Check the manganese-dioxide tantalum capacitor has min peak voltage greater than 0.0V",
             pass-message =         "Capacitor %_ min peak voltage %_V is greater than or equal to 0V" % [ref(c),vpk[0]],
             fail-message =         "Capacitor %_ min peak voltage %_V is less than 0V" % [ref(c),vpk[0]],
             locators =             [c]
@@ -1349,7 +1363,7 @@ public pcb-check capacitor-component (c:JITXObject) :
               name =                 "Capacitor checks"
               description =          "Check capacitor component properties"
               category =             "Component Checks"
-              subcheck-description = "Check capacitor voltage derating matches the wc operating-point voltage",
+              subcheck-description = "Check the capacitor voltage derating matches the wc operating-point voltage",
               pass-message =         "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
               fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
               locators =             [c]
@@ -1360,7 +1374,7 @@ public pcb-check capacitor-component (c:JITXObject) :
               name =                 "Capacitor checks"
               description =          "Check capacitor component properties"
               category =             "Component Checks"
-              subcheck-description = "Check capacitor voltage derating matches the operating-point voltage",
+              subcheck-description = "Check the capacitor voltage derating matches the operating-point voltage",
               pass-message =         "Capacitor %_ voltage derating %_V is compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
               fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
               locators =             [c]
@@ -1371,7 +1385,7 @@ public pcb-check capacitor-component (c:JITXObject) :
               name =                 "Capacitor checks"
               description =          "Check capacitor component properties"
               category =             "Component Checks"
-              subcheck-description = "Check capacitor de-rated nominal temperature operating point versus design constraints",
+              subcheck-description = "Check the capacitor de-rated nominal temperature operating point meets the design constraints",
               pass-message =         "Capacitor %_ operating temp %_C satisfies the nominal temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
               fail-message =         "Capacitor %_ operating temp %_C does not satisfy the nominal temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
               locators =             [c]
@@ -1382,7 +1396,7 @@ public pcb-check capacitor-component (c:JITXObject) :
               name =                 "Capacitor checks"
               description =          "Check capacitor component properties"
               category =             "Component Checks"
-              subcheck-description = "Check capacitor de-rated wc temperature operating point versus design constraints",
+              subcheck-description = "Check the capacitor de-rated wc temperature operating point meets the design constraints",
               pass-message =         "Capacitor %_ operating temp %_C satisfies the wc temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp)],
               fail-message =         "Capacitor %_ operating temp %_C does not satisfy the wc temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp)],
               locators =             [c]
@@ -1394,19 +1408,18 @@ public pcb-check capacitor-component (c:JITXObject) :
               name =                 "Capacitor checks"
               description =          "Check capacitor component properties"
               category =             "Component Checks"
-              subcheck-description = "Check capacitor voltage derating matches the wc operating-point voltage",
+              subcheck-description = "Check the capacitor voltage derating matches the wc operating-point voltage",
               pass-message =         "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
               fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
               locators =             [c]
             )
-
 
             #CHECK(
               condition =            temp <= min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp),
               name =                 "Capacitor checks"
               description =          "Check capacitor component properties"
               category =             "Component Checks"
-              subcheck-description = "Check capacitor de-rated nominal temperature operating point versus design constraints",
+              subcheck-description = "Check the capacitor de-rated nominal temperature operating point meets the design constraints",
               pass-message =         "Capacitor %_ operating temp %_C satisfies the nominal temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
               fail-message =         "Capacitor %_ operating temp %_C does not satisfy the nominal temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
               locators =             [c]
@@ -1421,7 +1434,7 @@ public pcb-check capacitor-component (c:JITXObject) :
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
-          subcheck-description = "Check mica capacitor voltage derating matches the operating-point voltage",
+          subcheck-description = "Check the mica capacitor voltage derating matches the operating-point voltage",
           pass-message =         "Capacitor %_ voltage operating point %_V is compatible with the constraint %_V" % [ref(c),vpk[0],(DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage))],
           fail-message =         "Capacitor %_ voltage operating point %_V is not compatible with the constraint %_V" % [ref(c),vpk[0],(DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage))],
           locators =             [c]
@@ -1443,24 +1456,23 @@ public pcb-check capacitor-component (c:JITXObject) :
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
-            subcheck-description = "Check capacitor de-rated temperature operating point versus design constraints",
+            subcheck-description = "Check the capacitor de-rated temperature operating point meets the design constraints",
             pass-message =         "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MICA-TEMP, max-temp)],
             fail-message =         "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MICA-TEMP, max-temp)],
             locators =             [c]
           )
 
-      else : println("Unhandled type for capacitor check on %_" % [c])
-
-  #CHECK(
-    condition =            OPERATING-TEMPERATURE[0] >= min-value(operating-temperature(property(c.rated-temperature))),
-    name =                 "Capacitor checks"
-    description =          "Check capacitor component properties"
-    category =             "Component Checks"
-    subcheck-description = "Check capacitor operating temperature versus design constraints",
-    pass-message =         "Capacitor %_ has an acceptable operating temperature %_C versus design target %_C" % [ref(c), min-value(operating-temperature(property(c.rated-temperature))), OPERATING-TEMPERATURE[0]],
-    fail-message =         "Capacitor %_ does not have an acceptable operating temperature %_C versus design target %_C" % [ref(c), min-value(operating-temperature(property(c.rated-temperature))), OPERATING-TEMPERATURE[0]],
-    locators =             [c]
-  )
+      else : 
+        ; property(c.type) != "ceramic", "electrolytic", "mica"
+        #CHECK(
+          condition =            false,
+          name =                 "Capacitor checks"
+          description =          "Check capacitor component properties"
+          category =             "Component Checks"
+          subcheck-description = "Check capacitor type",
+          info-message =         "Capacitor %_ does not have a recognized type (%_)" % [ref(c), property(c.type)],
+          locators =             [c]
+        )
 
 ; Checks the frequency of an oscillator (o) against an interface on an IC (intf)
 public pcb-check resonator-property-check (o:JITXObject) :
@@ -1473,9 +1485,9 @@ public pcb-check resonator-property-check (o:JITXObject) :
     name =                 "Crystal resonator checks"
     description =          "Check crystal resonator property"
     category =             "resonator-check"
-    subcheck-description = "Check crystal component has the correct crystal-resonator property",
-    pass-message =         "Component %_ has the correct property for a crystal-resonator" % [ref(o)],
-    fail-message =         "Component %_ does not have the correct property for a crystal-resonator" % [ref(o)],
+    subcheck-description = "Check the crystal component has the correct crystal-resonator property attached",
+    pass-message =         "Component %_ has the correct property for a crystal-resonator (%_)" % [ref(o), property(o.crystal-resonator)],
+    info-message =         "Component %_ does not have the correct property for a crystal-resonator" % [ref(o)],
     locators =             [o]
   )
 
@@ -1490,7 +1502,7 @@ public pcb-check resonator-frequency-check (o:JITXObject, intf:CrystalOscillator
     name =                 "Crystal resonator checks"
     description =          "Check crystal resonator frequency"
     category =             "resonator-check"
-    subcheck-description = "Check crystal has the correct frequency meeting design specs",
+    subcheck-description = "Check the crystal has the correct frequency which meets the design specs",
     pass-message =         "Crystal %_ does have the correct frequency %_ to meet design specs %_" % [ref(o),frequency(property(o.crystal-resonator)),frequency(intf)],
     fail-message =         "Crystal %_ does not have the correct frequency %_ to meet design specs %_" % [ref(o),frequency(property(o.crystal-resonator)),frequency(intf)],
     locators =             [o]
@@ -1509,7 +1521,7 @@ public pcb-check resonator-gain-check (o:JITXObject, intf:CrystalOscillator, loa
     name =                 "Crystal resonator checks"
     description =          "Check crystal resonator gain"
     category =             "resonator-check"
-    subcheck-description = "Check crystal circuit gain meets the design criteria for max-critical-gain",
+    subcheck-description = "Check the crystal circuit gain meets the design criteria for max-critical-gain",
     pass-message =         "Crystal %_ gain %_ meets the design criteria for max-critical-gain %_" % [ref(o), gain, max-critical-gain(intf)],
     fail-message =         "Crystal %_ gain %_ does not meet the design criteria for max-critical-gain %_" % [ref(o), gain, max-critical-gain(intf)],
     locators =             [o]
@@ -1526,7 +1538,7 @@ public pcb-check resonator-drive-check (o:JITXObject, intf:CrystalOscillator, lo
     name =                 "Crystal resonator checks"
     description =          "Check crystal resonator drive level"
     category =             "resonator-check"
-    subcheck-description = "Check crystal resonator circuit has the correct drive-level property to match crystal",
+    subcheck-description = "Check the crystal resonator circuit has the correct drive-level property to match crystal",
     pass-message =         "Crystal circuit %_ has the correct drive-level property %_ that matches the crystal spec %_" % [ref(o),drive-level(intf),max-drive-level(property(o.crystal-resonator))],
     fail-message =         "Crystal circuit %_ does not have the correct drive-level property %_ that matches the crystal spec %_" % [ref(o),drive-level(intf),max-drive-level(property(o.crystal-resonator))],
     locators =             [o]
@@ -1544,7 +1556,7 @@ public pcb-check resonator-pullability-check (o:JITXObject, intf:CrystalOscillat
     name =                 "Crystal resonator checks"
     description =          "Check crystal resonator pullability"
     category =             "resonator-check"
-    subcheck-description = "Check crystal tuning capacitor has the correct tolerance property",
+    subcheck-description = "Check the crystal-tuning capacitor has the correct tolerance property",
     pass-message =         "Capacitor %_ has the correct tolerance property for crystal tuning" % [ref(load-cap)],
     fail-message =         "Capacitor %_ does not have the correct tolerance property for crystal tuning" % [ref(load-cap)],
     locators =             [load-cap]
@@ -1554,7 +1566,7 @@ public pcb-check resonator-pullability-check (o:JITXObject, intf:CrystalOscillat
     name =                 "Crystal resonator checks"
     description =          "Check crystal resonator pullability"
     category =             "resonator-check"
-    subcheck-description = "Check crystal tuning capacitor has the correct capacitance property",
+    subcheck-description = "Check the crystal-tuning capacitor has the correct capacitance property",
     pass-message =         "Capacitor %_ has the correct capacitance property for crystal tuning" % [ref(load-cap)],
     fail-message =         "Capacitor %_ does not have the correct capacitance property for crystal tuning" % [ref(load-cap)],
     locators =             [load-cap]
@@ -1567,7 +1579,7 @@ public pcb-check resonator-pullability-check (o:JITXObject, intf:CrystalOscillat
     name =                 "Crystal resonator checks"
     description =          "Check crystal resonator pullability"
     category =             "resonator-check"
-    subcheck-description = "Check crystal frequency tolerance with pullability meets the design specification",
+    subcheck-description = "Check the crystal frequency tolerance with pullability meets the design specification",
     pass-message =         "Crystal %_ has the correct frequency tolerance %_ that meets the design spec %_" % [ref(load-cap),frequency-tolerance(op) + freq-error,frequency-tolerance(intf)],
     fail-message =         "Crystal %_ does not have the correct frequency tolerance %_ that meets the design spec %_" % [ref(load-cap),frequency-tolerance(op) + freq-error,frequency-tolerance(intf)],
     locators =             [load-cap]
