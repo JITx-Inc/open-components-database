@@ -32,7 +32,6 @@ defpackage ocdb/checks:
 ; ==== Check convenience functions ===
 ; ====================================
 
-
 doc: \<S>
 Set of standard checks to run on a top-level-module.
  - Component instances marked DNP are skipped
@@ -984,39 +983,58 @@ public pcb-check inductor-component (l:JITXObject) :
     locators =             [l]
   )
 
-  if has-property?(l.operating-point) :
+  #CHECK(
+    condition =            has-property?(l.operating-point),
+    name =                 "Inductor checks"
+    description =          "Check inductor component properties"
+    category =             "Component Checks"
+    subcheck-description = "Check the inductor component has the correct operating-point property",
+    pass-message =         "Inductor %_ has the correct property for operating-point" % [ref(l)],
+    info-message =         "Inductor %_ does not have the correct operating-point property" % [ref(l)],
+    locators =             [l]
+  )
+  #CHECK(
+    condition =            has-property?(l.dc-resistance),
+    name =                 "Inductor checks"
+    description =          "Check inductor component properties"
+    category =             "Component Checks"
+    subcheck-description = "Check the inductor component has the correct dc-resistance property",
+    pass-message =         "Inductor %_ has the correct property for dc-resistance (%_)" % [ref(l), property(l.dc-resistance)],
+    info-message =         "Inductor %_ does not have the correct dc-resistance property" % [ref(l)],
+    locators =             [l]
+  )
+  #CHECK(
+    condition =            has-property?(l.rated-power),
+    name =                 "Inductor checks"
+    description =          "Check inductor component properties"
+    category =             "Component Checks"
+    subcheck-description = "Check the inductor component has the correct rated-power property",
+    pass-message =         "Inductor %_ has the correct property for rated-power (%_)" % [ref(l), property(l.rated-power)],
+    info-message =         "Inductor %_ does not have the correct rated-power property" % [ref(l)],
+    locators =             [l]
+  )
+
+  val [vpk, i, temp] = [[min-value(peak-voltage(property(l.operating-point)))
+                        max-value(peak-voltage(property(l.operating-point)))],
+                        max-value(peak-current(property(l.operating-point))),
+                        OPERATING-TEMPERATURE[1]]
+
+  val power = property(l.dc-resistance) * pow(i, 2.0) ; just using the DC formula
+  if has-property?(l.derating):
+    ; Derate the power based on the piecewise linear curve from MFG
+    val derating = PWL(property(l.derating))[temp]
+    val pwr = derating * property(l.rated-power)
     #CHECK(
-      condition =            has-property?(l.operating-point),
+      condition =            pwr * DERATE-INDUCTOR-POWER > power,
       name =                 "Inductor checks"
       description =          "Check inductor component properties"
       category =             "Component Checks"
-      subcheck-description = "Check the inductor component has the correct operating-point property",
-      pass-message =         "Inductor %_ has the correct property for operating-point" % [ref(l)],
-      fail-message =         "Inductor %_ does not have the correct property for the operating-point" % [ref(l)],
+      subcheck-description = "Check the inductor power derating meets the design requirements",
+      pass-message =         "Inductor %_ power derating %_W meets the design requirements of %_W" % [ref(l), pwr * DERATE-RESISTOR-POWER, power],
+      fail-message =         "Inductor %_ power derating %_W does not meet the design requirements of %_W" % [ref(l), pwr * DERATE-RESISTOR-POWER, power],
       locators =             [l]
     )
-
-    val [vpk, i, temp] = [[min-value(peak-voltage(property(l.operating-point)))
-                          max-value(peak-voltage(property(l.operating-point)))],
-                          max-value(peak-current(property(l.operating-point))),
-                          OPERATING-TEMPERATURE[1]]
-
-    val power = property(l.dc-resistance) * pow(i, 2.0) ; just using the DC formula
-    if has-property?(l.derating) and has-property?(l.rated-power):
-      ; Derate the power based on the piecewise linear curve from MFG
-      val derating = PWL(property(l.derating))[temp]
-      val pwr = derating * property(l.rated-power)
-      #CHECK(
-        condition =            pwr * DERATE-INDUCTOR-POWER > power,
-        name =                 "Inductor checks"
-        description =          "Check inductor component properties"
-        category =             "Component Checks"
-        subcheck-description = "Check the inductor power derating meets the design requirements",
-        pass-message =         "Inductor %_ power derating %_W meets the design requirements of %_W" % [ref(l), pwr * DERATE-RESISTOR-POWER, power],
-        fail-message =         "Inductor %_ power derating %_W does not meet the design requirements of %_W" % [ref(l), pwr * DERATE-RESISTOR-POWER, power],
-        locators =             [l]
-      )
-    else :
+  else:
       ; Derate the power if MFG derating is missing
       ; adapted from http://www.interfacebus.com/Component_Derating_Guide_line.html but substituting r for l-dc-resistance
       val derating = PWL([[0.0 1.0] [70.0 1.0] [110.0 0.8] [150.0 0.6] [190.0 0.4] [240.0 0.2] [260.0 0.1]])[temp]
@@ -1031,7 +1049,6 @@ public pcb-check inductor-component (l:JITXObject) :
         fail-message =         "Inductor %_ default power derating %_W does not meet the design requirements of %_W" % [ref(l), pwr * DERATE-RESISTOR-POWER, power],
         locators =             [l]
       )
-
 
 ; Checks resistors against operating point and environment
 public pcb-check resistor-component (r:JITXObject) :
@@ -1074,6 +1091,16 @@ public pcb-check resistor-component (r:JITXObject) :
     info-message =         "Resistor %_ does not have the operating-point property attached" % [ref(r)],
     locators =             [r]
   )
+  #CHECK(
+    condition =            has-property?(r.rated-power),
+    name =                 "Resistor checks"
+    description =          "Check resistor component properties"
+    category =             "Component Checks"
+    subcheck-description = "Check the resistor component has a rated-power property",
+    pass-message =         "Resistor %_ has a property for rated-power (%_)" % [ref(r), property(r.rated-power)],
+    info-message =         "Resistor %_ does not have the rated-power property attached" % [ref(r)],
+    locators =             [r]
+  )
 
   val [vpk, i, temp] = [[min-value(peak-voltage(property(r.operating-point)))
                         max-value(peak-voltage(property(r.operating-point)))],
@@ -1081,10 +1108,15 @@ public pcb-check resistor-component (r:JITXObject) :
                         OPERATING-TEMPERATURE[1]]
 
   val power = property(r.resistance) * pow(i, 2.0)
-  if has-property?(r.derating) :
-    ; Derate the power based on the piecewise linear curve from MFG
-    val derating = PWL(property(r.derating))[temp]
-    val pwr = derating * property(r.rated-power)
+  val derating = 
+    if has-property?(r.derating):
+      ; Derate the power based on the piecewise linear curve from MFG
+      PWL(property(r.derating))[temp]
+    else:
+      ; Derate the power if MFG derating is missing by using default table
+      PWL([[0.0 1.0] [70.0 1.0] [110.0 0.8] [150.0 0.6] [190.0 0.4] [240.0 0.2] [260.0 0.1]])[temp]
+  val pwr = derating * property(r.rated-power)
+  if has-property?(r.derating):
     #CHECK(
       condition =            pwr * DERATE-RESISTOR-POWER > power,
       name =                 "Resistor checks"
@@ -1095,10 +1127,7 @@ public pcb-check resistor-component (r:JITXObject) :
       fail-message =         "Resistor %_ power derating %_W does not meet the design requirements of %_W" % [ref(r), pwr * DERATE-RESISTOR-POWER, power],
       locators =             [r]
     )
-  else :
-    ; Derate the power if MFG derating is missing
-    val derating = PWL([[0.0 1.0] [70.0 1.0] [110.0 0.8] [150.0 0.6] [190.0 0.4] [240.0 0.2] [260.0 0.1]])[temp]
-    val pwr = derating * property(r.rated-power)
+  else:
     #CHECK(
       condition =            pwr * DERATE-RESISTOR-POWER > power,
       name =                 "Resistor checks"
@@ -1147,306 +1176,326 @@ public pcb-check capacitor-component (c:JITXObject) :
     category =             "Component Checks"
     subcheck-description = "Check the capacitor component for an operating-point property",
     pass-message =         "Capacitor %_ has a property for operating-point (%_)" % [ref(c), property(c.operating-point)],
-    info-message =         "Capacitor %_ does not have the operating-point property attached" % [ref(c)],
+    info-message =         "Capacitor %_ does not have an operating-point property" % [ref(c)],
     locators =             [c]
   )
 
-  if has-property?(c.operating-point) :
-    val [vpk temp] = [[min-value(peak-voltage(property(c.operating-point))) max-value(peak-voltage(property(c.operating-point)))] OPERATING-TEMPERATURE[1]]
-    val max-temp = max-value(operating-temperature(property(c.rated-temperature)))
-    switch(property(c.type)) :
-      "ceramic" :
-        val vpk-derate-wc = PWL(DERATE-CAPACITOR-MLCC-VPK-WC)[temp]
+  #CHECK(
+    condition =            has-property?(c.rated-voltage),
+    name =                 "Capacitor checks"
+    description =          "Check capacitor component properties"
+    category =             "Component Checks"
+    subcheck-description = "Check the capacitor component for a rated-voltage property",
+    pass-message =         "Capacitor %_ has a property for rated-voltage (%_)" % [ref(c), property(c.rated-voltage)],
+    info-message =         "Capacitor %_ does not have a rated-voltage property" % [ref(c)],
+    locators =             [c]
+  )
+  #CHECK(
+    condition =            has-property?(c.rated-temperature),
+    name =                 "Capacitor checks"
+    description =          "Check capacitor component properties"
+    category =             "Component Checks"
+    subcheck-description = "Check the capacitor component for a rated-temperature property",
+    pass-message =         "Capacitor %_ has a property for rated-temperature (%_)" % [ref(c), property(c.rated-voltage)],
+    info-message =         "Capacitor %_ does not have a rated-temperature property" % [ref(c)],
+    locators =             [c]
+  )
+
+  val [vpk temp] = [[min-value(peak-voltage(property(c.operating-point))) max-value(peak-voltage(property(c.operating-point)))] OPERATING-TEMPERATURE[1]]
+  val max-temp = max-value(operating-temperature(property(c.rated-temperature)))
+  switch(property(c.type)) :
+    "ceramic" :
+      val vpk-derate-wc = PWL(DERATE-CAPACITOR-MLCC-VPK-WC)[temp]
+      #CHECK(
+        condition =            vpk[0] <= (vpk-derate-wc * property(c.rated-voltage)),
+        name =                 "Capacitor checks"
+        description =          "Check capacitor component properties"
+        category =             "Component Checks"
+        subcheck-description = "Check the ceramic capacitor voltage derating matches the operating-point voltage",
+        pass-message =         "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[0],(vpk-derate-wc * property(c.rated-voltage))],
+        fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[0],(vpk-derate-wc * property(c.rated-voltage))],
+        locators =             [c]
+      )
+
+      #CHECK(
+        condition =            vpk[1] <= (vpk-derate-wc * property(c.rated-voltage)),
+        name =                 "Capacitor checks"
+        description =          "Check capacitor component properties"
+        category =             "Component Checks"
+        subcheck-description = "Check the ceramic capacitor voltage derating matches the operating-point voltage",
+        pass-message =         "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
+        fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
+        locators =             [c]
+      )
+
+      val vpk-derate-nom = PWL(DERATE-CAPACITOR-MLCC-VPK-NOM)[temp]
+      #CHECK(
+        condition =            vpk[0] <= (vpk-derate-nom * property(c.rated-voltage)),
+        name =                 "Capacitor checks"
+        description =          "Check capacitor component properties"
+        category =             "Component Checks"
+        subcheck-description = "Check the ceramic capacitor voltage derating matches the operating-point voltage",
+        pass-message =         "Capacitor %_ voltage derating %_V is compatible with the nominal design constraint %_V" % [ref(c),vpk[0],(vpk-derate-nom * property(c.rated-voltage))],
+        fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the nominal design constraint %_V" % [ref(c),vpk[0],(vpk-derate-nom * property(c.rated-voltage))],
+        locators =             [c]
+      )
+
+      #CHECK(
+        condition =            vpk[1] <= (vpk-derate-nom * property(c.rated-voltage)),
+        name =                 "Capacitor checks"
+        description =          "Check capacitor component properties"
+        category =             "Component Checks"
+        subcheck-description = "Check the ceramic capacitor voltage derating matches the operating-point voltage",
+        pass-message =         "Capacitor %_ voltage derating %_V is compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
+        fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
+        locators =             [c]
+      )
+
+      #CHECK(
+        condition =            temp <= min-value(DERATE-CAPACITOR-MLCC-TEMP, max-temp),
+        name =                 "Capacitor checks"
+        description =          "Check capacitor component properties"
+        category =             "Component Checks"
+        subcheck-description = "Check the ceramic capacitor de-rated temperature operating point meets the design constraints",
+        pass-message =         "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MLCC-TEMP, max-temp)],
+        fail-message =         "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MLCC-TEMP, max-temp)],
+        locators =             [c]
+      )
+
+    "electrolytic" :
+      #CHECK(
+        condition =            has-property?(c.anode),
+        name =                 "Capacitor checks"
+        description =          "Check capacitor component properties"
+        category =             "Component Checks"
+        subcheck-description = "Check that the electrolytic capacitor component has an anode property",
+        pass-message =         "Electrolytic capacitor %_ has the correct anode property" % [ref(c)],
+        fail-message =         "Electrolytic capacitor %_ does not have the correct anode property" % [ref(c)],
+        locators =             [c]
+      )
+
+      #CHECK(
+        condition =            has-property?(c.electrolyte),
+        name =                 "Capacitor checks"
+        description =          "Check capacitor component properties"
+        category =             "Component Checks"
+        subcheck-description = "Check that the electrolytic capacitor component has an electrolyte property",
+        pass-message =         "Electrolytic capacitor %_ has the correct electrolyte property" % [ref(c)],
+        fail-message =         "Electrolytic capacitor %_ does not have the correct electrolyte property" % [ref(c)],
+        locators =             [c]
+      )
+
+      val [i-pk, i-rms] = [lookup(property(c.operating-point), `current-pk),
+                          lookup(property(c.operating-point), `current-rms)]
+
+      if (property(c.anode) == "tantalum" and property(c.electrolyte) == "polymer") :
         #CHECK(
-          condition =            vpk[0] <= (vpk-derate-wc * property(c.rated-voltage)),
+          condition =            vpk[1]   <= (DERATE-CAPACITOR-ETANTPOLY-VPK * property(c.rated-voltage)),
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
-          subcheck-description = "Check the ceramic capacitor voltage derating matches the operating-point voltage",
-          pass-message =         "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[0],(vpk-derate-wc * property(c.rated-voltage))],
-          fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[0],(vpk-derate-wc * property(c.rated-voltage))],
+          subcheck-description = "Check the polymer tantalum capacitor voltage derating matches the operating-point voltage",
+          pass-message =         "Capacitor %_ voltage operating point %_V is compatible with the constraint %_V" % [ref(c),vpk[1],(DERATE-CAPACITOR-ETANTPOLY-VPK * property(c.rated-voltage))],
+          fail-message =         "Capacitor %_ voltage operating point %_V is not compatible with the constraint %_V" % [ref(c),vpk[1],(DERATE-CAPACITOR-ETANTPOLY-VPK * property(c.rated-voltage))],
           locators =             [c]
         )
 
         #CHECK(
-          condition =            vpk[1] <= (vpk-derate-wc * property(c.rated-voltage)),
+          condition =            temp  <= min-value(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp),
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
-          subcheck-description = "Check the ceramic capacitor voltage derating matches the operating-point voltage",
-          pass-message =         "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
-          fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
-          locators =             [c]
-        )
-
-        val vpk-derate-nom = PWL(DERATE-CAPACITOR-MLCC-VPK-NOM)[temp]
-        #CHECK(
-          condition =            vpk[0] <= (vpk-derate-nom * property(c.rated-voltage)),
-          name =                 "Capacitor checks"
-          description =          "Check capacitor component properties"
-          category =             "Component Checks"
-          subcheck-description = "Check the ceramic capacitor voltage derating matches the operating-point voltage",
-          pass-message =         "Capacitor %_ voltage derating %_V is compatible with the nominal design constraint %_V" % [ref(c),vpk[0],(vpk-derate-nom * property(c.rated-voltage))],
-          fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the nominal design constraint %_V" % [ref(c),vpk[0],(vpk-derate-nom * property(c.rated-voltage))],
+          subcheck-description = "Check the capacitor de-rated temperature operating point versus design constraints",
+          pass-message =         "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp)],
+          fail-message =         "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp)],
           locators =             [c]
         )
 
         #CHECK(
-          condition =            vpk[1] <= (vpk-derate-nom * property(c.rated-voltage)),
+          condition =            i-pk  <= property(c.rated-current-pk),
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
-          subcheck-description = "Check the ceramic capacitor voltage derating matches the operating-point voltage",
-          pass-message =         "Capacitor %_ voltage derating %_V is compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
-          fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
+          subcheck-description = "Check the capacitor peak current matches the rated peak current",
+          pass-message =         "Capacitor %_ peak current %_A is compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
+          fail-message =         "Capacitor %_ peak current %_A is not compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
           locators =             [c]
         )
 
         #CHECK(
-          condition =            temp <= min-value(DERATE-CAPACITOR-MLCC-TEMP, max-temp),
+          condition =            i-rms <= PWL(property(c.rated-current-rms))[temp],
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
-          subcheck-description = "Check the ceramic capacitor de-rated temperature operating point meets the design constraints",
-          pass-message =         "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MLCC-TEMP, max-temp)],
-          fail-message =         "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MLCC-TEMP, max-temp)],
-          locators =             [c]
-        )
-
-      "electrolytic" :
-        #CHECK(
-          condition =            has-property?(c.anode),
-          name =                 "Capacitor checks"
-          description =          "Check capacitor component properties"
-          category =             "Component Checks"
-          subcheck-description = "Check the electrolytic capacitor component has an anode property",
-          pass-message =         "Electrolytic capacitor %_ has the correct anode property" % [ref(c)],
-          fail-message =         "Electrolytic capacitor %_ does not have the correct anode property" % [ref(c)],
+          subcheck-description = "Check the capacitor rms current matches the rated rms current",
+          pass-message =         "Capacitor %_ rms current %_A is compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
+          fail-message =         "Capacitor %_ rms current %_A is not compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
           locators =             [c]
         )
 
         #CHECK(
-          condition =            has-property?(c.electrolyte),
+          condition =            vpk[0]  >= 0.0,
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
-          subcheck-description = "Check te electrolytic capacitor component has an electrolyte property",
-          pass-message =         "Electrolytic capacitor %_ has the correct electrolyte property" % [ref(c)],
-          fail-message =         "Electrolytic capacitor %_ does not have the correct electrolyte property" % [ref(c)],
+          subcheck-description = "Check the capacitor has min peak voltage greater than 0.0V",
+          pass-message =         "Capacitor %_ min peak voltage %_V is greater than or equal to 0V" % [ref(c),vpk[0]],
+          fail-message =         "Capacitor %_ min peak voltage %_V is less than 0V" % [ref(c),vpk[0]],
           locators =             [c]
         )
 
-        val [i-pk, i-rms] = [lookup(property(c.operating-point), `current-pk),
-                            lookup(property(c.operating-point), `current-rms)]
+      else if (property(c.anode) == "tantalum" and property(c.electrolyte) == "manganese-dioxide") :
+        #CHECK(
+          condition =            i-pk <= property(c.rated-current-pk),
+          name =                 "Capacitor checks"
+          description =          "Check capacitor component properties"
+          category =             "Component Checks"
+          subcheck-description = "Check the manganese-dioxide tantalum capacitor peak current matches the rated peak current",
+          pass-message =         "Capacitor %_ peak current %_A is compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
+          fail-message =         "Capacitor %_ peak current %_A is not compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
+          locators =             [c]
+        )
 
-        if (property(c.anode) == "tantalum" and property(c.electrolyte) == "polymer") :
+        #CHECK(
+          condition =            i-rms <= PWL(property(c.rated-current-rms))[temp],
+          name =                 "Capacitor checks"
+          description =          "Check capacitor component properties"
+          category =             "Component Checks"
+          subcheck-description = "Check the manganese-dioxide tantalum capacitor rms current matches the rated rms current",
+          pass-message =         "Capacitor %_ rms current %_A is compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
+          fail-message =         "Capacitor %_ rms current %_A is not compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
+          locators =             [c]
+        )
+
+        #CHECK(
+          condition =            vpk[0]  >= 0.0,
+          name =                 "Capacitor checks"
+          description =          "Check capacitor component properties"
+          category =             "Component Checks"
+          subcheck-description = "Check the manganese-dioxide tantalum capacitor has min peak voltage greater than 0.0V",
+          pass-message =         "Capacitor %_ min peak voltage %_V is greater than or equal to 0V" % [ref(c),vpk[0]],
+          fail-message =         "Capacitor %_ min peak voltage %_V is less than 0V" % [ref(c),vpk[0]],
+          locators =             [c]
+        )
+
+        val vpk-derate-wc = PWL(DERATE-CAPACITOR-ETANTMNO2-VPK-WC)[temp]
+        val vpk-derate-nom = PWL(DERATE-CAPACITOR-ETANTMNO2-VPK-NOM)[temp]
+        if i-pk <= 2.0 :
           #CHECK(
-            condition =            vpk[1]   <= (DERATE-CAPACITOR-ETANTPOLY-VPK * property(c.rated-voltage)),
+            condition =            vpk[1]  <= (vpk-derate-wc * property(c.rated-voltage)),
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
-            subcheck-description = "Check the polymer tantalum capacitor voltage derating matches the operating-point voltage",
-            pass-message =         "Capacitor %_ voltage operating point %_V is compatible with the constraint %_V" % [ref(c),vpk[1],(DERATE-CAPACITOR-ETANTPOLY-VPK * property(c.rated-voltage))],
-            fail-message =         "Capacitor %_ voltage operating point %_V is not compatible with the constraint %_V" % [ref(c),vpk[1],(DERATE-CAPACITOR-ETANTPOLY-VPK * property(c.rated-voltage))],
+            subcheck-description = "Check the capacitor voltage derating matches the wc operating-point voltage",
+            pass-message =         "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
+            fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
             locators =             [c]
           )
 
           #CHECK(
-            condition =            temp  <= min-value(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp),
+            condition =            vpk[1]  <= (vpk-derate-nom * property(c.rated-voltage)),
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
-            subcheck-description = "Check the capacitor de-rated temperature operating point versus design constraints",
-            pass-message =         "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp)],
-            fail-message =         "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp)],
+            subcheck-description = "Check the capacitor voltage derating matches the operating-point voltage",
+            pass-message =         "Capacitor %_ voltage derating %_V is compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
+            fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
             locators =             [c]
           )
 
           #CHECK(
-            condition =            i-pk  <= property(c.rated-current-pk),
+            condition =            temp <= min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp),
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
-            subcheck-description = "Check the capacitor peak current matches the rated peak current",
-            pass-message =         "Capacitor %_ peak current %_A is compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
-            fail-message =         "Capacitor %_ peak current %_A is not compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
+            subcheck-description = "Check the capacitor de-rated nominal temperature operating point meets the design constraints",
+            pass-message =         "Capacitor %_ operating temp %_C satisfies the nominal temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
+            fail-message =         "Capacitor %_ operating temp %_C does not satisfy the nominal temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
             locators =             [c]
           )
 
           #CHECK(
-            condition =            i-rms <= PWL(property(c.rated-current-rms))[temp],
+            condition =            temp <= min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp),
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
-            subcheck-description = "Check the capacitor rms current matches the rated rms current",
-            pass-message =         "Capacitor %_ rms current %_A is compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
-            fail-message =         "Capacitor %_ rms current %_A is not compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
+            subcheck-description = "Check the capacitor de-rated wc temperature operating point meets the design constraints",
+            pass-message =         "Capacitor %_ operating temp %_C satisfies the wc temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp)],
+            fail-message =         "Capacitor %_ operating temp %_C does not satisfy the wc temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp)],
+            locators =             [c]
+          )
+
+        else if i-pk > 2.0 :
+          #CHECK(
+            condition =            vpk[1]  <= (DERATE-CAPACITOR-ETANTMNO2-VPK * property(c.rated-voltage)),
+            name =                 "Capacitor checks"
+            description =          "Check capacitor component properties"
+            category =             "Component Checks"
+            subcheck-description = "Check the capacitor voltage derating matches the wc operating-point voltage",
+            pass-message =         "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
+            fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
             locators =             [c]
           )
 
           #CHECK(
-            condition =            vpk[0]  >= 0.0,
+            condition =            temp <= min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp),
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
-            subcheck-description = "Check the capacitor has min peak voltage greater than 0.0V",
-            pass-message =         "Capacitor %_ min peak voltage %_V is greater than or equal to 0V" % [ref(c),vpk[0]],
-            fail-message =         "Capacitor %_ min peak voltage %_V is less than 0V" % [ref(c),vpk[0]],
+            subcheck-description = "Check the capacitor de-rated nominal temperature operating point meets the design constraints",
+            pass-message =         "Capacitor %_ operating temp %_C satisfies the nominal temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
+            fail-message =         "Capacitor %_ operating temp %_C does not satisfy the nominal temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
             locators =             [c]
           )
 
-        else if (property(c.anode) == "tantalum" and property(c.electrolyte) == "manganese-dioxide") :
-          #CHECK(
-            condition =            i-pk <= property(c.rated-current-pk),
-            name =                 "Capacitor checks"
-            description =          "Check capacitor component properties"
-            category =             "Component Checks"
-            subcheck-description = "Check the manganese-dioxide tantalum capacitor peak current matches the rated peak current",
-            pass-message =         "Capacitor %_ peak current %_A is compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
-            fail-message =         "Capacitor %_ peak current %_A is not compatible with the rated peak current %_A" % [ref(c),i-pk,property(c.rated-current-pk)],
-            locators =             [c]
-          )
+      else :
+        println("Unhandled electrolytic type for capacitor check on %_" % [c])
 
-          #CHECK(
-            condition =            i-rms <= PWL(property(c.rated-current-rms))[temp],
-            name =                 "Capacitor checks"
-            description =          "Check capacitor component properties"
-            category =             "Component Checks"
-            subcheck-description = "Check the manganese-dioxide tantalum capacitor rms current matches the rated rms current",
-            pass-message =         "Capacitor %_ rms current %_A is compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
-            fail-message =         "Capacitor %_ rms current %_A is not compatible with the rated rms current %_A" % [ref(c),i-rms,PWL(property(c.rated-current-rms))[temp]],
-            locators =             [c]
-          )
+    "mica" :
+      #CHECK(
+        condition =            vpk[0] <= (DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage)),
+        name =                 "Capacitor checks"
+        description =          "Check capacitor component properties"
+        category =             "Component Checks"
+        subcheck-description = "Check the mica capacitor voltage derating matches the operating-point voltage",
+        pass-message =         "Capacitor %_ voltage operating point %_V is compatible with the constraint %_V" % [ref(c),vpk[0],(DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage))],
+        fail-message =         "Capacitor %_ voltage operating point %_V is not compatible with the constraint %_V" % [ref(c),vpk[0],(DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage))],
+        locators =             [c]
+      )
 
-          #CHECK(
-            condition =            vpk[0]  >= 0.0,
-            name =                 "Capacitor checks"
-            description =          "Check capacitor component properties"
-            category =             "Component Checks"
-            subcheck-description = "Check the manganese-dioxide tantalum capacitor has min peak voltage greater than 0.0V",
-            pass-message =         "Capacitor %_ min peak voltage %_V is greater than or equal to 0V" % [ref(c),vpk[0]],
-            fail-message =         "Capacitor %_ min peak voltage %_V is less than 0V" % [ref(c),vpk[0]],
-            locators =             [c]
-          )
+      #CHECK(
+        condition =            vpk[1] <= (DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage)),
+        name =                 "Capacitor checks"
+        description =          "Check capacitor component properties"
+        category =             "Component Checks"
+        subcheck-description = "Check mica capacitor voltage derating matches the operating-point voltage",
+        pass-message =         "Capacitor %_ voltage operating point %_V is compatible with the constraint %_V" % [ref(c),vpk[1],(DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage))],
+        fail-message =         "Capacitor %_ voltage operating point %_V is not compatible with the constraint %_V" % [ref(c),vpk[1],(DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage))],
+        locators =             [c]
+      )
 
-          val vpk-derate-wc = PWL(DERATE-CAPACITOR-ETANTMNO2-VPK-WC)[temp]
-          val vpk-derate-nom = PWL(DERATE-CAPACITOR-ETANTMNO2-VPK-NOM)[temp]
-          if i-pk <= 2.0 :
-            #CHECK(
-              condition =            vpk[1]  <= (vpk-derate-wc * property(c.rated-voltage)),
-              name =                 "Capacitor checks"
-              description =          "Check capacitor component properties"
-              category =             "Component Checks"
-              subcheck-description = "Check the capacitor voltage derating matches the wc operating-point voltage",
-              pass-message =         "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
-              fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
-              locators =             [c]
-            )
-
-            #CHECK(
-              condition =            vpk[1]  <= (vpk-derate-nom * property(c.rated-voltage)),
-              name =                 "Capacitor checks"
-              description =          "Check capacitor component properties"
-              category =             "Component Checks"
-              subcheck-description = "Check the capacitor voltage derating matches the operating-point voltage",
-              pass-message =         "Capacitor %_ voltage derating %_V is compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
-              fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the nominal design constraint %_V" % [ref(c),vpk[1],(vpk-derate-nom * property(c.rated-voltage))],
-              locators =             [c]
-            )
-
-            #CHECK(
-              condition =            temp <= min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp),
-              name =                 "Capacitor checks"
-              description =          "Check capacitor component properties"
-              category =             "Component Checks"
-              subcheck-description = "Check the capacitor de-rated nominal temperature operating point meets the design constraints",
-              pass-message =         "Capacitor %_ operating temp %_C satisfies the nominal temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
-              fail-message =         "Capacitor %_ operating temp %_C does not satisfy the nominal temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
-              locators =             [c]
-            )
-
-            #CHECK(
-              condition =            temp <= min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp),
-              name =                 "Capacitor checks"
-              description =          "Check capacitor component properties"
-              category =             "Component Checks"
-              subcheck-description = "Check the capacitor de-rated wc temperature operating point meets the design constraints",
-              pass-message =         "Capacitor %_ operating temp %_C satisfies the wc temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp)],
-              fail-message =         "Capacitor %_ operating temp %_C does not satisfy the wc temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp)],
-              locators =             [c]
-            )
-
-          else if i-pk > 2.0 :
-            #CHECK(
-              condition =            vpk[1]  <= (DERATE-CAPACITOR-ETANTMNO2-VPK * property(c.rated-voltage)),
-              name =                 "Capacitor checks"
-              description =          "Check capacitor component properties"
-              category =             "Component Checks"
-              subcheck-description = "Check the capacitor voltage derating matches the wc operating-point voltage",
-              pass-message =         "Capacitor %_ voltage derating %_V is compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
-              fail-message =         "Capacitor %_ voltage derating %_V is not compatible with the wc design constraint %_V" % [ref(c),vpk[1],(vpk-derate-wc * property(c.rated-voltage))],
-              locators =             [c]
-            )
-
-            #CHECK(
-              condition =            temp <= min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp),
-              name =                 "Capacitor checks"
-              description =          "Check capacitor component properties"
-              category =             "Component Checks"
-              subcheck-description = "Check the capacitor de-rated nominal temperature operating point meets the design constraints",
-              pass-message =         "Capacitor %_ operating temp %_C satisfies the nominal temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
-              fail-message =         "Capacitor %_ operating temp %_C does not satisfy the nominal temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
-              locators =             [c]
-            )
-
-        else :
-          println("Unhandled electrolytic type for capacitor check on %_" % [c])
-
-      "mica" :
-        #CHECK(
-          condition =            vpk[0] <= (DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage)),
+      #CHECK(
+          condition =            temp <= min-value(DERATE-CAPACITOR-MICA-TEMP, max-temp),
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
-          subcheck-description = "Check the mica capacitor voltage derating matches the operating-point voltage",
-          pass-message =         "Capacitor %_ voltage operating point %_V is compatible with the constraint %_V" % [ref(c),vpk[0],(DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage))],
-          fail-message =         "Capacitor %_ voltage operating point %_V is not compatible with the constraint %_V" % [ref(c),vpk[0],(DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage))],
+          subcheck-description = "Check the capacitor de-rated temperature operating point meets the design constraints",
+          pass-message =         "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MICA-TEMP, max-temp)],
+          fail-message =         "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MICA-TEMP, max-temp)],
           locators =             [c]
         )
 
-        #CHECK(
-          condition =            vpk[1] <= (DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage)),
-          name =                 "Capacitor checks"
-          description =          "Check capacitor component properties"
-          category =             "Component Checks"
-          subcheck-description = "Check mica capacitor voltage derating matches the operating-point voltage",
-          pass-message =         "Capacitor %_ voltage operating point %_V is compatible with the constraint %_V" % [ref(c),vpk[1],(DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage))],
-          fail-message =         "Capacitor %_ voltage operating point %_V is not compatible with the constraint %_V" % [ref(c),vpk[1],(DERATE-CAPACITOR-MICA-VPK * property(c.rated-voltage))],
-          locators =             [c]
-        )
-
-        #CHECK(
-            condition =            temp <= min-value(DERATE-CAPACITOR-MICA-TEMP, max-temp),
-            name =                 "Capacitor checks"
-            description =          "Check capacitor component properties"
-            category =             "Component Checks"
-            subcheck-description = "Check the capacitor de-rated temperature operating point meets the design constraints",
-            pass-message =         "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MICA-TEMP, max-temp)],
-            fail-message =         "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MICA-TEMP, max-temp)],
-            locators =             [c]
-          )
-
-      else : 
-        ; property(c.type) != "ceramic", "electrolytic", "mica"
-        #CHECK(
-          condition =            false,
-          name =                 "Capacitor checks"
-          description =          "Check capacitor component properties"
-          category =             "Component Checks"
-          subcheck-description = "Check capacitor type",
-          info-message =         "Capacitor %_ does not have a recognized type (%_)" % [ref(c), property(c.type)],
-          locators =             [c]
-        )
+    else:
+      ; property(c.type) != "ceramic", "electrolytic", "mica"
+      #CHECK(
+        condition =            false,
+        name =                 "Capacitor checks"
+        description =          "Check capacitor component properties"
+        category =             "Component Checks"
+        subcheck-description = "Check capacitor type",
+        info-message =         "Capacitor %_ does not have a recognized type (%_)" % [ref(c), property(c.type)],
+        locators =             [c]
+      )
 
 ; Checks the frequency of an oscillator (o) against an interface on an IC (intf)
 public pcb-check resonator-property-check (o:JITXObject) :
