@@ -4,131 +4,128 @@ defpackage ocdb/designs/tutorial :
   import collections
   import jitx
   import jitx/commands
-  import ocdb/defaults
   import ocdb/generic-components
-  import ocdb/bundles
-  import ocdb/design-vars
-  import ocdb/generator-utils
   import ocdb/tolerance
-  import ocdb/checks
 
 val board-shape = RoundedRectangle(35.0, 30.0, 0.5)
 
-; this is a simple usage of the LM317A LDO where the component is instantiated with a simple
-; resistor divider feedback 
-pcb-module simple-lm317a-regulator (output-voltage:Double) :
-  pin vin
-  pin vout
-  pin gnd
-
-  inst lm317a : ocdb/unisonic/LM317A/component
-  net (vin  lm317a.input)
-  net (vout lm317a.output)
-  
-  cap-strap(lm317a.input, gnd, 0.1e-6)
-  cap-strap(lm317a.output, gnd, 1.0e-6)
-  
-  inst output-voltage-divider : ocdb/passive-circuits/voltage-divider(high-voltage, adj-voltage, tolerance, current) where :
-    val high-voltage = output-voltage
-    val adj-voltage = 1.25
-    val tolerance = 1.0
-    val current = 5.0e-3
-
-  net (output-voltage-divider.in lm317a.output) 
-  net (output-voltage-divider.out lm317a.adj) 
-  net (output-voltage-divider.lo gnd)
-
-; more sophisticated use of resistor divider solver taking into account variability
-; using the same LM317A LDO component
-pcb-module lm317a-regulator (v-out:Toleranced) :
+pcb-module lm317a-regulator (output-voltage:Toleranced) :
   pin vin 
   pin vout 
   pin adj 
   pin gnd 
 
-  inst ldo : ocdb/unisonic/LM317A/component
+  inst lm317a : ocdb/unisonic/LM317A/component
+  net (lm317a.input vin)
+  net (lm317a.output vout)
 
-  ; connect input and output nets
-  net (ldo.input vin)
-  net (ldo.output vout)
-  net (ldo.adj adj)
-
-  ; add bypass capacitors to input and output
   cap-strap(vin, gnd, 0.1e-6)
   cap-strap(vout, gnd, 1.0e-6)
 
-  val inherent-variance = tol+%(property(ldo.reference-voltage))
-  println("Inherent variance of the LDO reference voltage is %_%%" % [inherent-variance])
-  if inherent-variance > tol+%(v-out):
-    fatal("Target regulator accuracy infeasible with LM317A %_ > %_" % [inherent-variance tol+%(v-out)])
-  val target-variance = tol+%(v-out) - inherent-variance
+  ; How much variability can we expect from the regulator alone?
+  val inherent-variance = tol+%(property(lm317a.reference-voltage))
+  if inherent-variance > tol+%(output-voltage):
+    fatal("Target regulator accuracy infeasible with LM317A %_ > %_" % [inherent-variance tol+%(output-voltage)])
+
+  ; Budget variability for the voltage divider
+  val target-variance = tol+%(output-voltage) - inherent-variance
+  ; 5mA of voltage-divider current to compensate for regulator adj current
   val divider-current = 5.0e-3
-  val est-v-adj-offset = (typ-value(v-out) - typ-value(property(ldo.reference-voltage))) / divider-current * property(ldo.adj-current)
-  ; from passive-circuits.stanza, the voltage-divider() function has the following arguments:
-  ; (input-voltage:Toleranced, output-voltage:Toleranced, current:Double)
-  inst output-voltage-divider : ocdb/passive-circuits/voltage-divider(tol%(center-value(v-out) - est-v-adj-offset, 0.0),
-                                                        tol%(typ-value(property(ldo.reference-voltage)),target-variance),
-                                                        divider-current)
+  ; Estimate offset voltage caused by current sourced from adj pin
+  val est-v-adj-offset = (typ-value(output-voltage) - typ-value(property(lm317a.reference-voltage))) / divider-current * property(lm317a.adj-current)
 
-  ; connect input, output and ground nets
-  net (output-voltage-divider.in vout)
-  net (output-voltage-divider.out ldo.adj)
+  inst output-voltage-divider : ocdb/passive-circuits/voltage-divider(high-voltage, adj-voltage, current) where :
+    val high-voltage = tol%(center-value(output-voltage) - est-v-adj-offset, 0.0)
+    val adj-voltage = tol%(typ-value(property(lm317a.reference-voltage)),target-variance)
+    val current = divider-current                                                
+
+  net (output-voltage-divider.in lm317a.output)
+  net (output-voltage-divider.out lm317a.adj adj)
   net (output-voltage-divider.lo gnd)
+  schematic-group(self) = lm317a
 
-  ; calculate the actual offset now that we know the optimized value of the resistors
-  val true-adj-offset = property(ldo.adj-current) * (property(output-voltage-divider.r-lo.resistance) as Double)
+  ; Calculate the actual offset now that we know the optimized value of the resistors
+  val true-adj-offset = property(lm317a.adj-current) * (property(output-voltage-divider.r-lo.resistance) as Double)
+  val vref = property(output-voltage-divider.output-voltage)
 
-  ; calculate the possible min and max values for the output voltage
-  val out = min-typ-max(min-value(property(ldo.reference-voltage)) * typ-value(v-out) / max-value(property(output-voltage-divider.output-voltage)) + true-adj-offset,
-                        typ-value(property(ldo.reference-voltage)) * typ-value(v-out) / typ-value(property(output-voltage-divider.output-voltage)) + true-adj-offset,
-                        max-value(property(ldo.reference-voltage)) * typ-value(v-out) / min-value(property(output-voltage-divider.output-voltage)) + true-adj-offset)
-  ; make sure that the voltage specification is met
-  check within?(v-out, out)
+  ; Calculate the possible min and max values for the output voltage
+  val out = min-typ-max(min-value(property(lm317a.reference-voltage)) * typ-value(output-voltage) / max-value(vref) + true-adj-offset,
+                        typ-value(property(lm317a.reference-voltage)) * typ-value(output-voltage) / typ-value(vref) + true-adj-offset,
+                        max-value(property(lm317a.reference-voltage)) * typ-value(output-voltage) / min-value(vref) + true-adj-offset)
+  ; Make sure that the voltage specification is met
+  check ocdb/checks/within?(output-voltage, out)
 
 pcb-module regulator-fixture :
-  val target-current = 1000.0e-3
-  val target-voltage = 3.3
-  val target-load = closest-std-val(target-voltage / target-current, 5.0)
-  inst load : chip-resistor(["resistance" => target-load "min-rated-power" => target-voltage * target-current * 2.0 ])
+  val target-voltage = tol%(3.3, 10.0)
   
-  inst reg : lm317a-regulator(tol%(target-voltage, 10.0))
+  inst reg : lm317a-regulator(target-voltage)
+
   inst source : banana-plug-power
-
   net gnd (reg.gnd source.power.gnd)
-  symbol(gnd) = ocdb/symbols/ground-sym
   net vin (reg.vin source.power.vdd)
+  symbol(gnd) = ocdb/symbols/ground-sym
 
+  inst measure : sma-connector()
+  net vout (reg.vout measure.sig)
+  net (gnd measure.gnd)
+
+  val test-points = add-testpoint([reg.adj gnd])
+
+  val target-current = 1000.0e-3
+  val target-load = closest-std-val(typ-value(target-voltage) / target-current, 5.0)
+  inst load : chip-resistor(["resistance" => target-load "min-rated-power" => typ-value(target-voltage) * target-current * 2.0 ])
+  
   net (load.p[1] reg.vout)
   net (load.p[2] gnd)
 
-  inst measure : sma-connector()
-  net (reg.vout measure.sig)
-  net (gnd measure.gnd)
+  schematic-group([test-points measure]) = test
+  schematic-group(load) = schematic-group(reg)
 
-  add-testpoint([reg.adj gnd])
-; ========================================
-; Configure the design and view the result
-; ========================================
-defn run-design (circuit:Instantiable, outline:Shape) :
+  property(gnd.net-voltage) = typ(0.0)
+  property(vout.net-voltage) = target-voltage
+  property(vin.net-voltage) = typ(10.0)
+
+  ocdb/checks/check-design(self)
+
+; ==========================================
+; Configure the design, then run or check it
+; ==========================================
+defn run-design (circuit:Instantiable, run-checks?:True|False) :
   set-design-directory("CAD")
-
-  set-main-module(circuit)
-
-  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, outline))
+  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, board-shape))
   set-rules(ocdb/rules/jlcpcb-rules)
 
-  run-checks("checks.txt")
-  view-board()
-  view-schematic()
+  var main-module = circuit
+  if run-checks? :
+    main-module = ocdb/generator-utils/run-final-passes(circuit) ; Analyze design with a pass
+  
+  set-main-module(main-module) ; Treat the provided module as a design, and compile it.
+  
+  if run-checks? :
+    run-checks("checks.txt")
+  else:  
+    view-board()
+    view-schematic()
+
+; ====================================
+; Compile the design, view the results
+; ====================================
+defn compile-design (circuit:Instantiable) :
+  run-design(circuit, false)
+
+; =====================
+; Run the design checks
+; =====================
+defn check-design (circuit:Instantiable) :
+  run-design(circuit, true)
 
 ; ====================
 ; Export design to CAD
 ; ====================
 defn export-design () :
   set-paper(ANSI-A4)
-  set-export-backend(`kicad)
+  set-export-backend(`altium)
   export-cad()
-  export-bom()
 
 ; ===================================
 ; Update CAD, keeping layout progress
@@ -137,7 +134,15 @@ defn update-design () :
   set-export-board?(false)
   export-design()
 
+; =================
+; Export BOM to csv
+; =================
+defn export-bill-of-materials () :
+  set-bom-vendors(ocdb/design-vars/APPROVED-DISTRIBUTOR-LIST)
+  set-bom-design-quantity(ocdb/design-vars/DESIGN-QUANTITY)
+  export-bom()
+
 ; ============
 ; Run the code
 ; ============
-run-design(regulator-fixture, board-shape)
+check-design(regulator-fixture)
