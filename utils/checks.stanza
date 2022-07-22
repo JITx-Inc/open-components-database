@@ -151,6 +151,11 @@ defn all-pins (module:JITXObject) -> Tuple<JITXObject> :
     $> seq-cat{pins, _}
     $> to-tuple
 
+; Returns whether `p` has connected pins not marked DNP
+defn has-populated-connected-pins? (p: JITXObject) :
+  for connected-pin in connected-pins(p) any? :
+    not dnp-pin?(connected-pin)
+
 ; Returns connected pins to `p` not marked DNP
 defn populated-connected-pins (p: JITXObject) :
   connected-pins(p) $> filter{{not dnp-pin?(_)}, _}
@@ -942,9 +947,8 @@ public pcb-check diode-component (d:JITXObject) :
   ; should check that pins of the diode are connected (if they don't have a NC property)
   for d-pin in pins(d) do :
     if not no-connect?(d-pin) :
-      val conn-pin = populated-connected-pins(d-pin)
       #CHECK(
-        condition =            not empty?(conn-pin),
+        condition =            has-populated-connected-pins?(d-pin),
         name =                 "Diode checks"
         description =          "Check that the diode pins are connected"
         category =             "Component Checks"
@@ -962,9 +966,8 @@ public pcb-check inductor-component (l:JITXObject) :
   ; should check that pins of the resistor are connected (if they don't have a NC property)
   for l-pin in pins(l) do :
     if not no-connect?(l-pin) :
-      val conn-pin = populated-connected-pins(l-pin)
       #CHECK(
-        condition =            not empty?(conn-pin),
+        condition =            has-populated-connected-pins?(l-pin),
         name =                 "Inductor checks"
         description =          "Check that the inductor pins are connected"
         category =             "Component Checks"
@@ -1061,9 +1064,8 @@ public pcb-check resistor-component (r:JITXObject) :
   ; should check that pins of the resistor are connected (if they don't have a NC property)
   for r-pin in pins(r) do :
     if not no-connect?(r-pin) :
-      val conn-pin = populated-connected-pins(r-pin)
       #CHECK(
-        condition =            not empty?(conn-pin),
+        condition =            has-populated-connected-pins?(r-pin),
         name =                 "Resistor checks"
         description =          "Check that the resistor pins are connected"
         category =             "Component Checks"
@@ -1149,9 +1151,8 @@ public pcb-check capacitor-component (c:JITXObject) :
   ; should check that pins of the cap are connected (if they don't have a NC property)
   for c-pin in pins(c) do :
     if not no-connect?(c-pin) :
-      val conn-pin = populated-connected-pins(c-pin)
       #CHECK(
-        condition =            not empty?(conn-pin),
+        condition =            has-populated-connected-pins?(c-pin),
         name =                 "Capacitor checks"
         description =          "Check that the capacitor pins are connected"
         category =             "Component Checks"
