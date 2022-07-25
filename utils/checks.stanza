@@ -48,9 +48,7 @@ Set of standard checks to run on a top-level-module.
 
 public defn check-design (module:JITXObject):
   erc-check-design(module)
-  ; commenting out the land pattern checks from the default check run
-  ; can be added back when they are optimized
-  ; drc-check-design(module)
+  drc-check-design(module)
 
 public defn erc-check-design (module:JITXObject):
   inside pcb-module:
@@ -1764,18 +1762,12 @@ public defn check-landpattern (component:JITXObject|JITXDef) :
 ; Runs landpattern checks recursively on all the lands in a module
 public defn check-all-landpatterns (module:JITXObject) : 
   inside pcb-module :
-    val components = to-tuple(component-instances(module))
-    val modules    = filter({not contains?(components, _)}, instances(module))
-    for component in components do :
-      check-landpattern(component)
-    for module in modules do :
-      check-all-landpatterns(module)
+    do(check-landpattern, component-instances(module))
     
 ; Runs landpattern checks recursively starting from self.
 public defn check-all-landpatterns () : 
   inside pcb-module: 
     check-all-landpatterns(self)
-
 
 
 doc: "Helper to force power-states property to propagate through \
