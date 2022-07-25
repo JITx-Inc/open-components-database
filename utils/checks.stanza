@@ -1734,16 +1734,17 @@ public pcb-check check-min-solder-mask-sliver (lp:LandPattern, shapes:Seqable<Sh
       locators =             [lp]
     )
 
-; Runs all the land pattern checks on either an instance or definition. 
-public defn check-landpattern (component:JITXObject|JITXDef) :
+; Runs all the land pattern checks on either an instance or definition.
+; Not currently used in the design checks
+public defn check-landpattern (obj:JITXObject|JITXDef) :
   ; extract the land pattern
-  val lp = 
-    match(component) :
+  val lp =
+    match(obj) :
       (landpattern:LandPattern) :
         landpattern
       (d:JITXDef) :
         landpattern(d)
-      (i:JITXObject) : 
+      (i:JITXObject) :
         landpattern(instance-definition(i))
 
   ; perform the checks
@@ -1753,16 +1754,47 @@ public defn check-landpattern (component:JITXObject|JITXDef) :
       check check-min-copper-width(lp, side)
       check check-min-solder-mask-sliver(lp, layer(lp, SolderMask(side)))
 
-    if has-property?(component.bga) and property(component.bga):
+    if property?(obj.bga, false):
       check check-bga-pitch(lp)
 
-    if has-property?(component.leaded) and property(component.leaded):
+    if property?(obj.leaded, false):
+      check check-leaded-pitch(lp)
+
+defstruct LandpatternCheckInfo <: Equalable&Hashable :
+  landpattern: LandPattern
+  bga: True|False
+  leaded: True|False
+with :
+  equalable => true
+  hashable => true
+
+defn check-landpattern (info:LandpatternCheckInfo) :
+  val lp = landpattern(info)
+
+  ; perform the checks
+  inside pcb-module :
+    for side in [Top, Bottom] do :
+      check check-min-copper-copper-space(lp, side)
+      check check-min-copper-width(lp, side)
+      check check-min-solder-mask-sliver(lp, layer(lp, SolderMask(side)))
+
+    if bga(info) :
+      check check-bga-pitch(lp)
+
+    if leaded(info) :
       check check-leaded-pitch(lp)
 
 ; Runs landpattern checks recursively on all the lands in a module
-public defn check-all-landpatterns (module:JITXObject) : 
+public defn check-all-landpatterns (module:JITXObject) :
+  defn info (inst: JITXObject) :
+    LandpatternCheckInfo(landpattern $ instance-definition(inst),
+                         property?(inst.bga, false),
+                         property?(inst.leaded, false))
+
   inside pcb-module :
-    do(check-landpattern, component-instances(module))
+    val instance-infos = unique $ seq(info, component-instances(module))
+
+    do(check-landpattern, instance-infos)
     
 ; Runs landpattern checks recursively starting from self.
 public defn check-all-landpatterns () : 
