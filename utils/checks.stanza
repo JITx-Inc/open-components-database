@@ -1734,6 +1734,14 @@ public pcb-check check-min-solder-mask-sliver (lp:LandPattern, shapes:Seqable<Sh
       locators =             [lp]
     )
 
+defstruct LandpatternCheckInfo <: Equalable&Hashable :
+  landpattern: LandPattern
+  bga: True|False
+  leaded: True|False
+with :
+  equalable => true
+  hashable => true
+
 ; Runs all the land pattern checks on either an instance or definition.
 ; Not currently used in the design checks
 public defn check-landpattern (obj:JITXObject|JITXDef) :
@@ -1747,26 +1755,7 @@ public defn check-landpattern (obj:JITXObject|JITXDef) :
       (i:JITXObject) :
         landpattern(instance-definition(i))
 
-  ; perform the checks
-  inside pcb-module :
-    for side in [Top, Bottom] do :
-      check check-min-copper-copper-space(lp, side)
-      check check-min-copper-width(lp, side)
-      check check-min-solder-mask-sliver(lp, layer(lp, SolderMask(side)))
-
-    if property?(obj.bga, false):
-      check check-bga-pitch(lp)
-
-    if property?(obj.leaded, false):
-      check check-leaded-pitch(lp)
-
-defstruct LandpatternCheckInfo <: Equalable&Hashable :
-  landpattern: LandPattern
-  bga: True|False
-  leaded: True|False
-with :
-  equalable => true
-  hashable => true
+  check-landpattern $ LandpatternCheckInfo(lp, property?(lp.bga, false), property?(lp.leaded, false))
 
 defn check-landpattern (info:LandpatternCheckInfo) :
   val lp = landpattern(info)
