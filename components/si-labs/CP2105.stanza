@@ -78,9 +78,8 @@ public pcb-component component :
   assign-landpattern(qfn-landpattern(0.5, 4.0, 24, 0.25, 0.4, [2.7 2.7]))
 
   property(REGIN.power-pin) = PowerPin(min-max(3.0, 5.25))
-  property(VDD.power-pin) = PowerPin(min-max(3.0, 3.6))
-  eval-when has-property?(VDD.net-voltage) :
-    property(VIO.power-pin) = PowerPin(min-max(1.8, max-value(property(VDD.net-voltage))))
+  eval-when has-property?(REGIN.net-voltage) :
+    property(VIO.power-pin) = PowerPin(min-max(1.8, max-value(property(REGIN.net-voltage))))
   eval-when has-property?(VIO.net-voltage) :
     val vdd  = max-value(property(VIO.net-voltage))
     val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.4), min-max(vdd - 0.2, vdd)), false, VIO, GND)
@@ -91,7 +90,6 @@ public pcb-component component :
       property(i.digital-input) = input-props
 
 public pcb-module module :
-  port power : power
   port usb-2 : usb-2
   port e-uart : uart([UART-DTR, UART-RTS, UART-RX, UART-TX])
   port s-uart : uart([UART-DTR, UART-RTS, UART-RX, UART-TX])
@@ -100,9 +98,9 @@ public pcb-module module :
   pin gnd
   
   public inst xcvr : ocdb/si-labs/CP2105/component
-  net (usb-2.vbus.vdd xcvr.VBUS)
-  net (power.vdd, xcvr.REGIN, xcvr.VDD)
-  net (usb-2.vbus.gnd xcvr.GND xcvr.EPAD power.gnd gnd)
+  net (usb-2.vbus.vdd xcvr.VBUS xcvr.REGIN)
+  cap-strap(xcvr.REGIN, gnd, 1.0e-6)
+  net (usb-2.vbus.gnd xcvr.GND xcvr.EPAD gnd)
   net (xcvr.VIO vio)
   net (xcvr.nRST reset)
   net (usb-2.data.P xcvr.D+)
