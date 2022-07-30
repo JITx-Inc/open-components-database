@@ -12,6 +12,7 @@ defpackage ocdb/terminations:
   import ocdb/design-vars
   import ocdb/bundles
   import ocdb/property-structs
+  import ocdb/tolerance
 
 public pcb-enum ocdb/terminations/CANTerminationMethod :
   CANTerminationParallel
@@ -35,7 +36,17 @@ public pcb-enum ocdb/terminations/USB-C-ConfigurationChannel :
   SinkDefault
 
 ; Terminates USB-C based on pull voltage and USB-C configuration
-public defn terminate-usb-c (usb-c-bundle:JITXObject, pull-up-net:JITXObject, pull-up-voltage:Double, method:USB-C-ConfigurationChannel) :
+public defn terminate-usb-c (usb-c-bundle:JITXObject, pull-up-net:JITXObject, pull-voltage:Double|Toleranced, method:USB-C-ConfigurationChannel) :
+  var pull-up-voltage:Double
+  match(pull-voltage) :
+    (pull-voltage : Toleranced) : 
+      pull-up-voltage = typ(pull-voltage)
+      if min-value(pull-voltage) < 0.41 :
+        fatal("Minimum pull up voltage of %_ is less than minimum allowed in usb-c specification." % [pull-up-voltage])
+    (pull-voltage : Double) : 
+      pull-up-voltage = pull-voltage
+      if pull-up-voltage < 0.41 :
+        fatal("Pull up voltage of %_ is less than minimum allowed in usb-c specification." % [pull-up-voltage])
   if port-type(usb-c-bundle) != usb-c :
     fatal("Bundle type passed into terminate-usb-c must be bundle type usb-c.")
   var termination-resistor-value:Double = 5.1e3 ; Default Sink termination value
