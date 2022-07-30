@@ -18,6 +18,7 @@ defpackage ocdb/generic-components:
   import ocdb/symbol-utils
   import ocdb/checks
   import ocdb/tolerance
+  import ocdb/terminations
 
 ; ========================================================
 ; ====== Standard packages for the passive solver ========
@@ -98,7 +99,7 @@ std-vals[0.25] = e192-list
 std-vals[0.1]  = e192-list
 
 ; Read more http://www.resistorguide.com/resistor-values/
-defn union-std-vals (tol:Double) :
+public defn union-std-vals (tol:Double) :
   val union = Vector<Double>()
   for std-tol in std-tols do :
     if std-tol >= tol :
@@ -130,6 +131,52 @@ public defn closest-std-val (v:Double, tol:Double) :
 
   match-val * pow(10.0, expon)
 
+; Returns n closest value to v in the tolerance range specified by tol
+public defn closest-std-val-range (v:Double, tol:Double, list-length: Int) :
+  val expansion-factor = list-length / 2
+  val odd = modulo(list-length, 2)
+  var expon:Double = floor(log10(v))
+  val signif = v / (pow(10.0,expon))
+  
+  var match-diff = 100.0
+  var match-val = -1.0
+  var match-index = 0
+
+  if key?(cumulative-std-vals, tol) :
+    for (std-val in cumulative-std-vals[tol], index in 0 to false) do :
+      val diff = abs(signif - std-val)
+      if diff < match-diff :
+        match-diff = diff
+        match-val = std-val
+        match-index = index
+  else :
+    fatal("Tolerance %_ not found in standard tolerances." % [tol])
+  val standard-val-list = Vector<Double>()
+  val table-length = length(cumulative-std-vals[tol])
+
+  var neg-loop-expon:Double = expon
+  var loop-expon:Double = expon
+  var neg-index = match-index - 1
+  var pos-index = match-index
+  for index in 0 to expansion-factor do :
+    if neg-index == -1 :
+      neg-index = table-length - 1
+      neg-loop-expon = neg-loop-expon - 1.0
+    if pos-index == table-length :
+      pos-index = 0
+      loop-expon = loop-expon + 1.0
+    add(standard-val-list, cumulative-std-vals[tol][pos-index] * pow(10.0, loop-expon))
+    add(standard-val-list, cumulative-std-vals[tol][neg-index] * pow(10.0, neg-loop-expon))
+    neg-index = neg-index - 1
+    pos-index = pos-index + 1
+
+  if odd == 1 :
+    if pos-index == table-length :
+      pos-index = 0
+      loop-expon = loop-expon + 1.0
+    add(standard-val-list, cumulative-std-vals[tol][pos-index] * pow(10.0, loop-expon))
+
+  standard-val-list
 
 ; ========================================================
 ; ========== Generic passive components ==================
@@ -654,22 +701,34 @@ public pcb-module micro-usb-connector :
 ; USB2 device connection via USBC connector
 public pcb-module usb2-on-a-usb-c-connector :
   port usb-2 : usb-2
+  port usb-c : usb-c
   public inst con : ocdb/belfuse/SS-52400-003/component
 
   net VBUS (usb-2.vbus.vdd con.vbus)
   net (usb-2.vbus.gnd con.GND)
+  net (usb-c.vbus usb-2.vbus)
 
   net D- (usb-2.data.N con.DN1, con.DN2)
   net D+ (usb-2.data.P con.DP1, con.DP2)
-
+  net (usb-c.data[1] usb-2.data)
   ; RC filter connection for chassis gnd
   res-strap(con.SHIELD, con.GND, 100.0e3)
   cap-strap(con.SHIELD, con.GND, 0.1e-6)
+  net (con.SBU1 usb-c.sbu[1])
+  net (con.SBU2 usb-c.sbu[2])
 
+  net (con.SSRXN1 usb-c.rx[1].N)
+  net (con.SSRXN2 usb-c.rx[2].N)
+  net (con.SSRXP1 usb-c.rx[1].P)
+  net (con.SSRXP2 usb-c.rx[2].P)
+  net (con.SSTXN1 usb-c.tx[1].N)
+  net (con.SSTXN2 usb-c.tx[2].N)
+  net (con.SSTXP1 usb-c.tx[1].P)
+  net (con.SSTXP2 usb-c.tx[2].P)
   ; 5V Downstream USBC device configuration
-  res-strap(con.CC1, con.GND, 5.1e3)
-  res-strap(con.CC2, con.GND, 5.1e3)
-
+  net (con.CC1, usb-c.cc[1])
+  net (con.CC2, usb-c.cc[2])
+  ocdb/terminations/terminate-usb-c(usb-c, usb-c.vbus.vdd, 5.0, SinkDefault)
   property(con.vbus) = PowerSupplyPin(5.0, 0.5)
   
 ; Add a tag-connect landing pattern to a processor
