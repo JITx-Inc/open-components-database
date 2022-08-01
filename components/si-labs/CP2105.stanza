@@ -83,9 +83,9 @@ public pcb-component component :
 
   ; assume that REGIN has some power input in either mode
   property(REGIN.power-pin) = PowerPin(min-max(3.0, 5.25))
-  ; when REGIN is powered, then VDD can be active (either mode)
-  eval-when has-property?(REGIN.net-voltage) : 
-    property(VDD.power-pin) = PowerPin(min-typ-max(3.3, 3.45, 3.6))
+  ; when REGIN is powered, then check to see if VDD already has a net-voltage property
+  eval-when has-property?(REGIN.net-voltage) and not has-property?(VDD.net-voltage) :
+    property(VDD.power-pin) = PowerPin(min-max(3.3, 3.6))
   ; VIO can be independent of VDD/REGIN/VBUS
   eval-when has-property?(VIO.net-voltage) :
     val vdd  = max-value(property(VIO.net-voltage))
@@ -102,6 +102,7 @@ public pcb-module module :
   port s-uart : uart([UART-DTR, UART-RTS, UART-RX, UART-TX])
   pin reset
   pin vio
+  pin vdd
   pin gnd
   
   public inst xcvr : ocdb/si-labs/CP2105/component
@@ -109,7 +110,8 @@ public pcb-module module :
   net (usb-2.vbus.vdd xcvr.VBUS xcvr.REGIN)
   cap-strap(xcvr.REGIN, gnd, 1.0e-6)
   net (usb-2.vbus.gnd xcvr.GND xcvr.EPAD gnd)
-  net (xcvr.VIO xcvr.VDD vio) ; connect VDD and VIO together
+  net (xcvr.VIO vio) ; separate VDD and VIO
+  net (xcvr.VDD vdd)
   net (xcvr.nRST reset)
   net (usb-2.data.P xcvr.D+)
   net (usb-2.data.N xcvr.D-)
