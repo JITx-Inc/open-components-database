@@ -50,6 +50,33 @@ public defn add-open-drain-pullups (bus:JITXObject, vio:JITXObject, clk-rate:Dou
 public defn add-open-drain-pullups (bus:JITXObject, vio:JITXObject) :
   add-open-drain-pullups(bus, vio, 100.0e3, 100.0e-12)
 
+public pcb-enum ocdb/generator-utils/USB-C-ConfigurationChannel :
+  SourceDefault
+  Source5V-1A5
+  Source5V-3A0
+  SinkDefault
+
+; Creates and attached USB-C configuration resistors
+public defn usb-c-configuration-channel (usb-c-bundle:JITXObject, method:USB-C-ConfigurationChannel) :
+  if port-type(usb-c-bundle) != usb-c :
+    fatal("Bundle type passed to usb-c-configuration-channel must be bundle type usb-c.")
+  var configuration-resistor-value:Double = 5.1e3 ; Default Sink configuration value
+  var configuration-net = usb-c-bundle.vbus.vdd
+  inside pcb-module:
+    switch(method) :
+      SourceDefault:
+        configuration-resistor-value = closest-std-val((5.0 / 80.0e-6) - 5.1e3, 5.0)
+      Source5V-1A5:
+        configuration-resistor-value = closest-std-val((5.0 / 180.0e-6) - 5.1e3, 5.0)
+      Source5V-3A0:
+        configuration-resistor-value = closest-std-val((5.0 / 330.0e-6) - 5.1e3, 5.0)
+      SinkDefault:
+        configuration-net = usb-c-bundle.vbus.gnd
+    public inst term : chip-resistor(configuration-resistor-value)[2]
+    net (configuration-net term[0].p[2] term[1].p[2])
+    net (term[0].p[1] usb-c-bundle.cc[1])
+    net (term[1].p[1] usb-c-bundle.cc[2])
+
 ; =======================================
 ; Piecewise linear functions
 ; Example call : PWL([[x0 y0] [x1 y1] ... [xn yn])[x]. Returns interpolated value of y at x

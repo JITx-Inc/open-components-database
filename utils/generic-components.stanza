@@ -18,7 +18,6 @@ defpackage ocdb/generic-components:
   import ocdb/symbol-utils
   import ocdb/checks
   import ocdb/tolerance
-  import ocdb/terminations
 
 ; ========================================================
 ; ====== Standard packages for the passive solver ========
@@ -130,53 +129,6 @@ public defn closest-std-val (v:Double, tol:Double) :
     fatal("Tolerance %_ not found in standard tolerances." % [tol])
 
   match-val * pow(10.0, expon)
-
-; Returns n closest value to v in the tolerance range specified by tol
-public defn closest-std-val-range (v:Double, tol:Double, list-length: Int) :
-  val expansion-factor = list-length / 2
-  val odd = modulo(list-length, 2)
-  var expon:Double = floor(log10(v))
-  val signif = v / (pow(10.0,expon))
-  
-  var match-diff = 100.0
-  var match-val = -1.0
-  var match-index = 0
-
-  if key?(cumulative-std-vals, tol) :
-    for (std-val in cumulative-std-vals[tol], index in 0 to false) do :
-      val diff = abs(signif - std-val)
-      if diff < match-diff :
-        match-diff = diff
-        match-val = std-val
-        match-index = index
-  else :
-    fatal("Tolerance %_ not found in standard tolerances." % [tol])
-  val standard-val-list = Vector<Double>()
-  val table-length = length(cumulative-std-vals[tol])
-
-  var neg-loop-expon:Double = expon
-  var loop-expon:Double = expon
-  var neg-index = match-index - 1
-  var pos-index = match-index
-  for index in 0 to expansion-factor do :
-    if neg-index == -1 :
-      neg-index = table-length - 1
-      neg-loop-expon = neg-loop-expon - 1.0
-    if pos-index == table-length :
-      pos-index = 0
-      loop-expon = loop-expon + 1.0
-    add(standard-val-list, cumulative-std-vals[tol][pos-index] * pow(10.0, loop-expon))
-    add(standard-val-list, cumulative-std-vals[tol][neg-index] * pow(10.0, neg-loop-expon))
-    neg-index = neg-index - 1
-    pos-index = pos-index + 1
-
-  if odd == 1 :
-    if pos-index == table-length :
-      pos-index = 0
-      loop-expon = loop-expon + 1.0
-    add(standard-val-list, cumulative-std-vals[tol][pos-index] * pow(10.0, loop-expon))
-
-  standard-val-list
 
 ; ========================================================
 ; ========== Generic passive components ==================
@@ -728,7 +680,7 @@ public pcb-module usb2-on-a-usb-c-connector :
   ; 5V Downstream USBC device configuration
   net (con.CC1, usb-c.cc[1])
   net (con.CC2, usb-c.cc[2])
-  ocdb/terminations/terminate-usb-c(usb-c, usb-c.vbus.vdd, 5.0, SinkDefault)
+  ocdb/generator-utils/usb-c-configuration-channel(usb-c, SinkDefault)
   property(con.vbus) = PowerSupplyPin(5.0, 0.5)
   
 ; Add a tag-connect landing pattern to a processor

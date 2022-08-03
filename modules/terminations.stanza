@@ -12,7 +12,6 @@ defpackage ocdb/terminations:
   import ocdb/design-vars
   import ocdb/bundles
   import ocdb/property-structs
-  import ocdb/tolerance
 
 public pcb-enum ocdb/terminations/CANTerminationMethod :
   CANTerminationParallel
@@ -28,53 +27,6 @@ public pcb-enum ocdb/terminations/LVDSTerminationMethod :
   LVDSTerminationACIntegratedTermDualResistor
   LVDSTerminationACDualResistorSplitCap
   LVDSTerminationACDualResistorSplitReduced
-
-public pcb-enum ocdb/terminations/USB-C-ConfigurationChannel :
-  SourceDefault
-  Source5V-1A5
-  Source5V3A0
-  SinkDefault
-
-; Terminates USB-C based on pull voltage and USB-C configuration
-public defn terminate-usb-c (usb-c-bundle:JITXObject, pull-up-net:JITXObject, pull-voltage:Double|Toleranced, method:USB-C-ConfigurationChannel) :
-  var pull-up-voltage:Double
-  match(pull-voltage) :
-    (pull-voltage : Toleranced) : 
-      pull-up-voltage = typ(pull-voltage)
-      if min-value(pull-voltage) < 0.41 :
-        fatal("Minimum pull up voltage of %_ is less than minimum allowed in usb-c specification." % [pull-up-voltage])
-    (pull-voltage : Double) : 
-      pull-up-voltage = pull-voltage
-      if pull-up-voltage < 0.41 :
-        fatal("Pull up voltage of %_ is less than minimum allowed in usb-c specification." % [pull-up-voltage])
-  if port-type(usb-c-bundle) != usb-c :
-    fatal("Bundle type passed into terminate-usb-c must be bundle type usb-c.")
-  var termination-resistor-value:Double = 5.1e3 ; Default Sink termination value
-  inside pcb-module:
-    switch(method) :
-      SourceDefault:
-        termination-resistor-value = closest-std-val((pull-up-voltage / 80.0e-6) - 5.1e3, 5.0)
-        public inst term : chip-resistor(termination-resistor-value)[2]
-        net (usb-c-bundle.vbus.vdd term[0].p[2] term[1].p[2])
-        net (term[0].p[1] usb-c-bundle.cc[1])
-        net (term[1].p[1] usb-c-bundle.cc[2])
-      Source5V-1A5:
-        termination-resistor-value = closest-std-val((pull-up-voltage / 180.0e-6) - 5.1e3, 5.0)
-        public inst term : chip-resistor(termination-resistor-value)[2]
-        net (usb-c-bundle.vbus.vdd term[0].p[2] term[1].p[2])
-        net (term[0].p[1] usb-c-bundle.cc[1])
-        net (term[1].p[1] usb-c-bundle.cc[2])
-      Source5V3A0:
-        termination-resistor-value = closest-std-val((pull-up-voltage / 330.0e-6) - 5.1e3, 5.0)
-        public inst term : chip-resistor(termination-resistor-value)[2]
-        net (usb-c-bundle.vbus.vdd term[0].p[2] term[1].p[2])
-        net (term[0].p[1] usb-c-bundle.cc[1])
-        net (term[1].p[1] usb-c-bundle.cc[2])
-      SinkDefault:
-        public inst term : chip-resistor(termination-resistor-value)[2]
-        net (usb-c-bundle.vbus.gnd term[0].p[2] term[1].p[2])
-        net (term[0].p[1] usb-c-bundle.cc[1])
-        net (term[1].p[1] usb-c-bundle.cc[2])
 
 ; Adds termination circuitry for a can bus based on method
 public defn terminate-can (bus:JITXObject, gnd:JITXObject, method:CANTerminationMethod, ctrl:JITXObject|False) :
