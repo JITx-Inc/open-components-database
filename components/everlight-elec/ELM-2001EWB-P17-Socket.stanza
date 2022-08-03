@@ -1,0 +1,117 @@
+#use-added-syntax(jitx)
+defpackage ocdb/everlight-elec/ELM-2001EWB-P17-Socket :
+  import core
+  import collections
+  import math
+
+  import jitx
+  import jitx/commands
+
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/symbol-utils
+  import ocdb/generic-components
+
+  import ocdb/bundles
+  import ocdb/box-symbol
+  import ocdb/property-structs
+  import ocdb/generator-utils
+  import ocdb/checks
+  import ocdb/tolerance
+
+public pcb-pad my-pth-rectangle-pad :
+  type = TH
+  shape = Rectangle(1.0, 2.0)
+  layer(Cutout()) = Circle(0.55)
+  layer(SolderMask(Top)) = Rectangle(1.0, 2.0)
+  layer(SolderMask(Bottom)) = Rectangle(1.0, 2.0)
+
+public pcb-landpattern receptacle-7-pth :
+  val pin-col-space = 2.54
+  for j in 0 to 7 do :
+      pad p[j + 1] : my-pth-rectangle-pad at loc(pin-col-space * (to-double(j) - 3.0), 0.0, 0.0)
+  layer(Courtyard(Top)) = Rectangle(2.54 * 6.0 + 2.0, pin-col-space)
+  layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+  ;layer(Silkscreen("F-SilkS", Top)) = Circle(Point(-7.62 * 2.0, -55.0), 0.1)
+
+public pcb-component ELM-2001EWB-P17-Row1 :
+  port C : pin[[2 3 5]]
+  port A : pin[[4 5 6 7]]
+  val generic-props = GenericPin(min-max(-0.3, 3.6), 1500.0)
+
+  pin-properties :
+    [pin:Ref  | pads:Int ... | side:Dir| generic-pin:GenericPin]
+    [C[2]     | 3            | Up      | generic-props ]
+    [C[3]     | 4            | Up      | generic-props ]
+    [C[5]     | 6            | Up      | generic-props ]
+    [A[4]     | 5            | Left    | generic-props ]
+    [A[5]     | 1            | Left    | generic-props ]
+    [A[6]     | 7            | Left    | generic-props ]
+    [A[7]     | 2            | Left    | generic-props ]
+    
+  name = "ELM-2001EWB/P17 Row 1"
+  reference-prefix = "J"
+  mpn = "B-2200S07P-A120"
+  description = "ELM-2001EWB/P17 Row 1"
+  make-box-symbol()
+  assign-landpattern(receptacle-7-pth)
+  property(self.rated-temperature) = RatedTemperature(min-max(-40.0, 125.0))
+
+public pcb-component ELM-2001EWB-P17-Row2 :
+  port C : pin[[1 3 4]]
+  port A : pin[[1 2 3 4]]
+  val generic-props = GenericPin(min-max(-0.3, 3.6), 1500.0)
+
+  pin-properties :
+    [pin:Ref  | pads:Int ... | side:Dir| generic-pin:GenericPin]
+    [C[1]     | 2           | Up      | generic-props ]
+    [C[3]     | 4           | Up      | generic-props ]
+    [C[4]     | 5           | Up      | generic-props ]
+    [A[1]     | 6           | Left    | generic-props ]
+    [A[2]     | 1           | Left    | generic-props ]
+    [A[3]     | 7           | Left    | generic-props ]
+    [A[4]     | 3           | Left    | generic-props ]
+    
+  name = "ELM-2001EWB/P17 Row 2"
+  reference-prefix = "J"
+  mpn = "B-2200S07P-A120"
+  description = "ELM-2001EWB/P17 Row 2"
+  make-box-symbol()
+  assign-landpattern(receptacle-7-pth)
+  property(self.rated-temperature) = RatedTemperature(min-max(-20.0, 70.0))
+
+public pcb-module module :
+  port C : pin[[1 through 5]]
+  port A : pin[[1 through 7]]
+  
+  val c-lab = [1 2 3 3 4 5]
+  val c-con = [13 3 4 11 10 6]
+  val a-lab = [1 2 3 4 4 5 6 7]
+  val a-con = [9 14 8 5 12 1 7 2]
+  val pin-row-space = 38.3
+
+  inst r1 : ELM-2001EWB-P17-Row1
+  inst r2 : ELM-2001EWB-P17-Row2
+;   place(r1) at loc(0.0, (- pin-row-space), 0.0) on Top
+;   place(r2) at loc(0.0,    pin-row-space , 0.0) on Top
+  place(r1) at loc(0.0, (- pin-row-space / 2.0), 0.0) on Top
+  place(r2) at loc(0.0, pin-row-space , 0.0) on Top (relative-to r1)
+
+  for (i in c-lab, j in c-con) do :
+    if j < 8 :
+      net (C[i] r1.C[i])
+    else :
+      net (C[i] r2.C[i]) ; on second row connector
+
+  for (i in a-lab, j in a-con) do :
+    if j < 8 :
+      net (A[i] r1.A[i])
+    else :
+      net (A[i] r2.A[i]) ; on second row connector
+
+  layer(Silkscreen("F-SilkS", Top)) = Circle(Point(-2.54 * 3.0 * 2.0, (- pin-row-space / 2.0) - 3.0), 0.1)
+  
+  property(self.forward-voltage) = 2.1 ; [1.6 2.0 2.2]
+  property(self.color) = "orange"
+  property(self.iv-curve) = [[0.0 0.0] [10.0e-6 1.6] [30.0e-3 2.2]] ; voltage/current pairs
