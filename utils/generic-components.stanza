@@ -651,37 +651,27 @@ public pcb-module micro-usb-connector :
   schematic-group(self) = micro-usb
 
 ; USB2 device connection via USBC connector
-public pcb-module usb2-on-a-usb-c-connector :
+public pcb-enum ocdb/generic-components/usb-c-connector:
+  Belfuse-SS-52400-003
+  korean-hroparts-elec-TYPE-C-31-M-12
+
+public defn  usb2-on-a-usb-c-connector ():
+  usb2-on-a-usb-c-connector(Belfuse-SS-52400-003)
+public pcb-module usb2-on-a-usb-c-connector (conn-mpn:ocdb/generic-components/usb-c-connector):
   port usb-2 : usb-2
   port usb-c : usb-c
-  public inst con : ocdb/belfuse/SS-52400-003/component
-
-  net VBUS (usb-2.vbus.vdd con.vbus)
-  net (usb-2.vbus.gnd con.GND)
-  net (usb-c.vbus usb-2.vbus)
-
-  net D- (usb-2.data.N con.DN1, con.DN2)
-  net D+ (usb-2.data.P con.DP1, con.DP2)
-  net (usb-c.data[1] usb-2.data)
-  ; RC filter connection for chassis gnd
-  res-strap(con.SHIELD, con.GND, 100.0e3)
-  cap-strap(con.SHIELD, con.GND, 0.1e-6)
-  net (con.SBU1 usb-c.sbu[1])
-  net (con.SBU2 usb-c.sbu[2])
-
-  net (con.SSRXN1 usb-c.rx[1].N)
-  net (con.SSRXN2 usb-c.rx[2].N)
-  net (con.SSRXP1 usb-c.rx[1].P)
-  net (con.SSRXP2 usb-c.rx[2].P)
-  net (con.SSTXN1 usb-c.tx[1].N)
-  net (con.SSTXN2 usb-c.tx[2].N)
-  net (con.SSTXP1 usb-c.tx[1].P)
-  net (con.SSTXP2 usb-c.tx[2].P)
-  ; 5V Downstream USBC device configuration
-  net (con.CC1, usb-c.cc[1])
-  net (con.CC2, usb-c.cc[2])
-  ocdb/generator-utils/usb-c-configuration-channel(usb-c, SinkDefault)
-  property(con.vbus) = PowerSupplyPin(5.0, 0.5)
+  var conref:Instantiable
+  switch(conn-mpn) : 
+    Belfuse-SS-52400-003: 
+      conref = ocdb/belfuse/SS-52400-003/usb2(SinkDefault)
+    korean-hroparts-elec-TYPE-C-31-M-12 :
+      conref = ocdb/korean-hroparts-elec/TYPE-C-31-M-12/usb2(SinkDefault)
+  public inst con : conref
+  net (usb-2 con.usb-2)
+  net (usb-c con.usb-c)
+  property(usb-2.vbus.vdd) = PowerSupplyPin(5.0, 0.5)
+  res-strap(con.conn.SHIELD, con.conn.GND, 100.0e3)
+  cap-strap(con.conn.SHIELD, con.conn.GND, 0.1e-6)
   
 ; Add a tag-connect landing pattern to a processor
 public defn attach-programming-connector (proc:JITXObject, vio:JITXObject, intf:String):
