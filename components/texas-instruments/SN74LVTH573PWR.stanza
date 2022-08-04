@@ -1,0 +1,111 @@
+#use-added-syntax(jitx)
+defpackage ocdb/texas-instruments/SN74LVTH573PWR :
+
+  import core
+  import collections
+  import math
+
+  import jitx
+  import jitx/commands
+
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/symbol-utils
+  import ocdb/generic-components
+
+  import ocdb/bundles
+  import ocdb/box-symbol
+  import ocdb/property-structs
+  import ocdb/generator-utils
+  import ocdb/checks
+  import ocdb/tolerance
+
+public pcb-landpattern SN74LVTH573PWR-TSSOP-landpattern :
+  make-n-pin-soic-landpattern(20,                ;Number of pins
+                              0.65,              ;Pitch:                      e
+                              tol(6.4, 0.2),     ;Lead span:                  E
+                              tol(4.4, 0.1),     ;Package length:             E1
+                              tol(6.5, 0.1),     ;Package width:              D
+                              tol(0.6, 0.15),    ;Lead size in x direction:   L
+                              tol(0.245, 0.055)) ;Lead size in y direction:   b
+;   layer(Courtyard(Top)) = Rectangle(38.4, 53.2)
+;   layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+;   layer(Silkscreen("F-SilkS", Top)) = Circle(Point(-7.62 * 2.0, -55.0), 0.1)
+
+
+
+public pcb-component component :
+  name = "SN74LVTH573PWR"
+  manufacturer = "Texas Instruments"
+  description = "3.3-V ABT Octal Transparent D-Type Latches with 3-State Outputs"
+  reference-prefix = "U"
+  mpn = "SN74LVTH573PWR"
+  pin  LE
+  pin  nOE
+  port D : pin[[1 through 8]]
+  port Q : pin[[1 through 8]]
+  pin  VCC
+  pin  GND
+
+  val d-p = [2 3 4 5 6 7 8 9]
+  val q-p = [19 18 17 16 15 14 13 12]
+  val vcc-p = 20
+  val gnd-p = 10
+  val noe-p = 1
+  val le-p = 11
+
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir]
+    [nOE     | noe-p        | Left    ]
+    [LE      | le-p         | Left    ]
+    for (p in d-p, i in 1 to false) do :
+      [D[i]  | p            | Left    ]
+    for (p in q-p, i in 1 to false) do :
+      [Q[i]  | p            | Right   ]
+    [VCC     | vcc-p        | Up      ]
+    [GND     | gnd-p        | Down    ]
+
+  make-box-symbol()
+  assign-landpattern(SN74LVTH573PWR-TSSOP-landpattern)
+  property(self.rated-temperature) = RatedTemperature(min-max(-40.0, 85.0))
+  
+  eval-when has-property?(VCC.voltage) :
+    val v = property(VCC.voltage)
+    property(VCC.power-pin) = true
+    property(VCC.vVxx-absmax) = [-0.5 4.6]
+    property(VCC.vVxx-op) = [2.7 3.6]
+    ; TODO: Evaluate max or min or both voltage cases
+
+    property(VCC.iOH) = PWL([[1.65 -4.0e-3], [2.30 -8.0e-3], [2.70 -12.0e-3], [3.0 -24.0e-3], [3.6 -24.0e-3]])[v[0]]
+    property(VCC.iOL) = PWL([[1.65  4.0e-3], [2.30  8.0e-3], [2.70  12.0e-3], [3.0  24.0e-3], [3.6  24.0e-3]])[v[0]]
+   
+  ; eval-when connected-table-calculated?() :
+  ;   val v = property(VCC.voltage)
+  ;   if connected?(DIR, VCC) :
+  ;     for i in 1 through 8 do :
+  ;       property(B[i].digital-io) = true
+  ;       property(B[i].type) = "o"
+  ;       property(B[i].vOH) = v[0] - 0.2
+  ;       property(B[i].vOL) = 0.1
+  ;       property(B[i].rated-voltage) = [0.0 v[0]]
+  ;       property(A[i].digital-io) = true
+  ;       property(A[i].type) = "i"
+  ;       property(A[i].vIH) = PWL([[1.65 0.65 * v[0]] [1.95 0.65 * v[0]] [2.3 1.7] [2.7 2.0]])[v[0]]
+  ;       property(A[i].vIL) = PWL([[1.65 0.35 * v[0]] [1.95 0.35 * v[0]] [2.3 0.7] [2.7 0.8]])[v[0]]
+  ;       property(A[i].rated-voltage) = [0.0 5.5]
+  ;   else if connected?(DIR, GND) :
+  ;     for i in 1 through 8 do :
+  ;       property(A[i].digital-io) = true
+  ;       property(A[i].type) = "o"
+  ;       property(A[i].vOH) = v[0] - 0.2
+  ;       property(A[i].vOL) = 0.1
+  ;       property(A[i].rated-voltage) = [0.0 v[0]]
+  ;       property(B[i].digital-io) = true
+  ;       property(B[i].type) = "i"
+  ;       property(B[i].vIH) = PWL([[1.65 0.65 * v[0]] [1.95 0.65 * v[0]] [2.3 1.7] [2.7 2.0]])[v[0]]
+  ;       property(B[i].vIL) = PWL([[1.65 0.35 * v[0]] [1.95 0.35 * v[0]] [2.3 0.7] [2.7 0.8]])[v[0]]
+  ;       property(B[i].rated-voltage) = [0.0 5.5]
+
+; public pcb-module module :
+;   inst c : SN74LVTH573PWR()
