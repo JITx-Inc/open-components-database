@@ -60,18 +60,21 @@ public pcb-enum ocdb/generator-utils/USB-C-ConfigurationChannel :
 public defn usb-c-configuration-channel (usb-c-bundle:JITXObject, method:USB-C-ConfigurationChannel) :
   if port-type(usb-c-bundle) != usb-c :
     fatal("Bundle type passed to usb-c-configuration-channel must be bundle type usb-c.")
-  var configuration-resistor-value:Double = 5.1e3 ; Default Sink configuration value
-  var configuration-net = usb-c-bundle.vbus.vdd
+
   inside pcb-module:
     switch(method) :
-      SourceDefault: configuration-resistor-value = closest-std-val((5.0 / 80.0e-6) - 5.1e3, 5.0)
-      Source5V-1A5: configuration-resistor-value = closest-std-val((5.0 / 180.0e-6) - 5.1e3, 5.0)
-      Source5V-3A0: configuration-resistor-value = closest-std-val((5.0 / 330.0e-6) - 5.1e3, 5.0)
-      SinkDefault: configuration-net = usb-c-bundle.vbus.gnd
-    public inst config : chip-resistor(configuration-resistor-value)[2]
-    net (configuration-net config[0].p[2] config[1].p[2])
-    net (config[0].p[1] usb-c-bundle.cc[1])
-    net (config[1].p[1] usb-c-bundle.cc[2])
+      SourceDefault:
+        res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 80.0e-6) - 5.1e3, 5.0))
+        res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 80.0e-6) - 5.1e3, 5.0))
+      Source5V-1A5: 
+        res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 180.0e-6) - 5.1e3, 5.0))
+        res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 180.0e-6) - 5.1e3, 5.0))
+      Source5V-3A0: 
+        res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 330.0e-6) - 5.1e3, 5.0))
+        res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 330.0e-6) - 5.1e3, 5.0))
+      SinkDefault: 
+        res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.gnd, 5.1e3)
+        res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.gnd, 5.1e3)
 
 ; =======================================
 ; Piecewise linear functions
