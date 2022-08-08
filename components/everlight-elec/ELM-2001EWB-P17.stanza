@@ -1,0 +1,71 @@
+#use-added-syntax(jitx)
+defpackage ocdb/everlight-elec/ELM-2001EWB-P17 :
+  import core
+  import collections
+  import math
+
+  import jitx
+  import jitx/commands
+
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/symbols
+  import ocdb/symbol-utils
+  import ocdb/generic-components
+
+  import ocdb/bundles
+  import ocdb/box-symbol
+  import ocdb/property-structs
+  import ocdb/generator-utils
+  import ocdb/checks
+  import ocdb/tolerance
+
+public pcb-pad my-pth-rectangle-pad :
+  type = TH
+  shape = Rectangle(1.0, 2.0)
+  layer(Cutout()) = Circle(0.65)
+  layer(SolderMask(Top)) = Rectangle(1.0, 2.0)
+  layer(SolderMask(Bottom)) = Rectangle(1.0, 2.0)
+
+public pcb-landpattern ELM-2001EWB-P17-landpattern :
+  val pin-col-space = 2.54
+  val pin-row-space = 38.3 / 2.0
+  for (i in 0 to 2) do :
+    for j in 0 to 7 do :
+      pad p[i * 7 + j + 1] : my-pth-rectangle-pad at loc(
+                                                        (-2.0 * to-double(i) + 1.0) * pin-col-space * (to-double(j) - 3.0), 
+                                                        (2.0 * to-double(i) - 1.0) * pin-row-space)
+  layer(Courtyard(Top)) = Rectangle(38.4, 53.2)
+  layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+  layer(Silkscreen("F-SilkS", Top)) = Circle(Point(-7.62 * 2.0, -55.0), 0.1)
+
+public pcb-component component :
+  port C : pin[[1 through 5]]
+  port A : pin[[1 through 7]]
+  val generic-props = GenericPin(min-max(-0.3, 3.6), 1500.0)
+
+  pin-properties :
+    [pin:Ref  | pads:Int ... | side:Dir| generic-pin:GenericPin]
+    [C[1]     | 13           | Up      | generic-props ]
+    [C[2]     | 3            | Up      | generic-props ]
+    [C[3]     | 4 11         | Up      | generic-props ]
+    [C[4]     | 10           | Up      | generic-props ]
+    [C[5]     | 6            | Up      | generic-props ]
+    [A[1]     | 9            | Left    | generic-props ]
+    [A[2]     | 14           | Left    | generic-props ]
+    [A[3]     | 8            | Left    | generic-props ]
+    [A[4]     | 5 12         | Left    | generic-props ]
+    [A[5]     | 1            | Left    | generic-props ]
+    [A[6]     | 7            | Left    | generic-props ]
+    [A[7]     | 2            | Left    | generic-props ]
+    
+  name = "ELM-2001EWB/P17"
+  reference-prefix = "DA"
+  mpn = "ELM-2001EWB/P17"
+  make-box-symbol()
+  val landpattern = ELM-2001EWB-P17-landpattern
+  assign-landpattern(landpattern)
+  property(self.forward-voltage) = 2.1 ; [1.6 2.0 2.2]
+  property(self.color) = "orange"
+  property(self.iv-curve) = [[0.0 0.0] [10.0e-6 1.6] [30.0e-3 2.2]] ; voltage/current pairs
+  property(self.rated-temperature) = RatedTemperature(min-max(-20.0, 70.0))
