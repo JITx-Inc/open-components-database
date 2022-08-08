@@ -1,5 +1,3 @@
-; When renaming the stanza package name below, also rename it in the folder stanza.proj
-; See docs.jitx.com for help
 #use-added-syntax(jitx)
 defpackage ocdb/korean-hroparts-elec/TYPE-C-31-M-12:
   import core
@@ -12,6 +10,7 @@ defpackage ocdb/korean-hroparts-elec/TYPE-C-31-M-12:
   import ocdb/box-symbol
   import ocdb/bundles
   import ocdb/generic-components
+  import ocdb/generator-utils
 
 pcb-landpattern lp-TYPE-C-31-M-12 :
   pad A1-B12 : smd-pad(0.6, 1.64) at loc(0.0, 0.0) on Top
@@ -88,59 +87,33 @@ public pcb-component component :
   mpn = "TYPE-C-31-M-12"
   manufacturer = "Korean Hroparts Elec"
   reference-prefix = "J"
+  ; datasheet = "https://datasheet.lcsc.com/lcsc/2205251630_Korean-Hroparts-Elec-TYPE-C-31-M-12_C165948.pdf"
   pin-properties :
     [pin:Ref | pads:Ref ... | Side:Dir]
-    [A4-B9 | A4-B9 | Right]
-    [B5 | B5 | Right]
-    [B4-A9 | B4-A9 | Right]
-    [A5 | A5 | Right]
-    [B6 | B6 | Right]
-    [B1-A12 | B1-A12 | Right]
-    [A6 | A6 | Right]
-    [B7 | B7 | Right]
-    [A7 | A7 | Right]
-    [B8 | B8 | Right]
-    [A1-B12 | A1-B12 | Right]
-    [A8 | A8 | Right]
-    [p[13] | p[13] | Left]
-    [p[14] | p[14] | Left]
-    [p[15] | p[15] | Left]
-    [p[16] | p[16] | Left]
-    [p[17] | p[17] | Left]
-    [p[18] | p[18] | Left]
-
+    [VBUS | A4-B9 B4-A9 | Right]
+    [CC1 | A5 | Right]
+    [CC2 | B5 | Right]
+    [D+ | A6 B6 | Right]
+    [D- | A7 B7 | Right]
+    [SBU1 | A8 | Right]
+    [SBU2 | B8 | Right]
+    [GND | A1-B12 B1-A12 | Right]
+    [SHIELD | p[13] p[14] p[15] p[16] p[17] p[18] | Left]
   make-box-symbol()
   assign-landpattern(lp-TYPE-C-31-M-12)
 
-public defn usb2 (pull-up:True|False ) :
-  usb2(pull-up, 5.1e3) 
-
-public defn usb2 () :
-  usb2(false, 5.1e3) 
-
-public pcb-module usb2 (pull-up:True|False, termination-resistor-value:Double) :
-  ; port vbus : power
-  ; port data : usb-2-data
+public pcb-module usb2 (configuration:USB-C-ConfigurationChannel|False):
+  port usb-c : usb-c
   port usb-2 : usb-2
+  pin SHIELD
   public inst conn : ocdb/korean-hroparts-elec/TYPE-C-31-M-12/component
-  public inst term : chip-resistor(termination-resistor-value)[2]
-  net (usb-2.data.N conn.A7 conn.B7 )
-  net (usb-2.data.P conn.A6 conn.B6 )
-  net (usb-2.vbus.gnd conn.p[13] conn.p[14] conn.p[16] conn.p[17] conn.p[18])
-  net (usb-2.vbus.gnd conn.A1-B12 conn.B1-A12)
-  net (usb-2.vbus.vdd conn.A4-B9 conn.B4-A9)
-  if pull-up :
-    net (usb-2.vbus.vdd term[0].p[2] term[1].p[2])
-  else: ; pull down
-    net (usb-2.vbus.gnd term[0].p[2] term[1].p[2])
-  net (term[0].p[1] conn.A5)
-  net (term[1].p[1] conn.B5)
-  
-  ; supports usb-2 :
-  ; data : usb-2-data
-  ; port vbus : power
-  ; pin id
-; Visualize the symbol and landpattern in the VSCode visualizer.
-; Remove before use of the component in a design
-view(component)
-; view(usb2())
+  net (SHIELD conn.SHIELD)
+  net (usb-2.data.N usb-c.data[1].N usb-c.data[2].N conn.D-)
+  net (usb-2.data.P usb-c.data[1].P usb-c.data[2].P conn.D+)
+  net (usb-2.vbus.gnd usb-c.vbus.gnd conn.GND)
+  net (usb-2.vbus.vdd usb-c.vbus.vdd conn.VBUS)
+  net (usb-c.cc[1] conn.CC1)
+  net (usb-c.cc[2] conn.CC2)
+  net (usb-c.sbu[1] conn.SBU1)
+  net (usb-c.sbu[2] conn.SBU2)
+  match(configuration:USB-C-ConfigurationChannel) : ocdb/generator-utils/usb-c-configuration-channel(usb-c, configuration) 

@@ -98,7 +98,7 @@ std-vals[0.25] = e192-list
 std-vals[0.1]  = e192-list
 
 ; Read more http://www.resistorguide.com/resistor-values/
-defn union-std-vals (tol:Double) :
+public defn union-std-vals (tol:Double) :
   val union = Vector<Double>()
   for std-tol in std-tols do :
     if std-tol >= tol :
@@ -129,7 +129,6 @@ public defn closest-std-val (v:Double, tol:Double) :
     fatal("Tolerance %_ not found in standard tolerances." % [tol])
 
   match-val * pow(10.0, expon)
-
 
 ; ========================================================
 ; ========== Generic passive components ==================
@@ -651,26 +650,20 @@ public pcb-module micro-usb-connector :
 
   schematic-group(self) = micro-usb
 
-; USB2 device connection via USBC connector
-public pcb-module usb2-on-a-usb-c-connector :
+public defn  usb2-on-a-usb-c-connector ():
+  usb2-on-a-usb-c-connector(ocdb/belfuse/SS-52400-003/module(SinkDefault))
+
+public pcb-module usb2-on-a-usb-c-connector (conref:Instantiable):
   port usb-2 : usb-2
-  public inst con : ocdb/belfuse/SS-52400-003/component
-
-  net VBUS (usb-2.vbus.vdd con.vbus)
-  net (usb-2.vbus.gnd con.GND)
-
-  net D- (usb-2.data.N con.DN1, con.DN2)
-  net D+ (usb-2.data.P con.DP1, con.DP2)
-
-  ; RC filter connection for chassis gnd
-  res-strap(con.SHIELD, con.GND, 100.0e3)
-  cap-strap(con.SHIELD, con.GND, 0.1e-6)
-
-  ; 5V Downstream USBC device configuration
-  res-strap(con.CC1, con.GND, 5.1e3)
-  res-strap(con.CC2, con.GND, 5.1e3)
-
-  property(con.vbus) = PowerSupplyPin(typ(5.0), 0.5)
+  port usb-c : usb-c
+  public inst con : conref
+  net (usb-c con.usb-c)
+  net (usb-2.data.N con.usb-c.data[1].N con.usb-c.data[2].N)
+  net (usb-2.data.P con.usb-c.data[1].P con.usb-c.data[2].P)
+  net (usb-2.vbus con.usb-c.vbus)
+  property(usb-2.vbus.vdd) = PowerSupplyPin(typ(5.0), 0.5)
+  res-strap(con.conn.SHIELD, usb-2.vbus.gnd, 100.0e3)
+  cap-strap(con.conn.SHIELD, usb-2.vbus.gnd, 0.1e-6)
   
 ; Add a tag-connect landing pattern to a processor
 public defn attach-programming-connector (proc:JITXObject, vio:JITXObject, intf:String):
