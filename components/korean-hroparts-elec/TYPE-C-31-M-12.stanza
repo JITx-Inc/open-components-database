@@ -11,6 +11,7 @@ defpackage ocdb/korean-hroparts-elec/TYPE-C-31-M-12:
   import ocdb/bundles
   import ocdb/generic-components
   import ocdb/generator-utils
+  import ocdb/property-structs
 
 pcb-landpattern lp-TYPE-C-31-M-12 :
   pad A1-B12 : smd-pad(0.6, 1.64) at loc(0.0, 0.0) on Top
@@ -81,6 +82,7 @@ pcb-landpattern lp-TYPE-C-31-M-12 :
   layer(Silkscreen("F-SilkS", Top)) = Line(0.12, [Point(-1.42, -2.28), Point(-1.42, -4.0)])
   layer(Silkscreen("F-SilkS", Top)) = Circle(-2.5, 0.0, 0.2)
   ref-label()
+
 public pcb-component component :
   name = "USB-C"
   description = "250mA 1 16 Female Type-C SMD  USB Connectors ROHS"
@@ -93,27 +95,33 @@ public pcb-component component :
     [VBUS | A4-B9 B4-A9 | Right]
     [CC1 | A5 | Right]
     [CC2 | B5 | Right]
-    [D+ | A6 B6 | Right]
-    [D- | A7 B7 | Right]
+    [DP1 | A6 | Right]
+    [DN1 | A7 | Right]
+    [DP2 |  B6 | Right]
+    [DN2 | B7 | Right]
     [SBU1 | A8 | Right]
     [SBU2 | B8 | Right]
     [GND | A1-B12 B1-A12 | Right]
-    [SHIELD | p[13] p[14] p[15] p[16] p[17] p[18] | Left]
+    [SHIELD | p[13] p[14] p[15] p[16] p[17] p[18] | Down]
   make-box-symbol()
   assign-landpattern(lp-TYPE-C-31-M-12)
+  property(self.rated-temperature) = RatedTemperature(ocdb/tolerance/min-max(-30.0, 80.0))
 
-public pcb-module usb2 (configuration:USB-C-ConfigurationChannel|False):
+public pcb-module module (configuration:USB-C-ConfigurationChannel|False):
   port usb-c : usb-c
-  port usb-2 : usb-2
   pin SHIELD
   public inst conn : ocdb/korean-hroparts-elec/TYPE-C-31-M-12/component
+  place(conn) at loc(0.0, 0.0) on Top
   net (SHIELD conn.SHIELD)
-  net (usb-2.data.N usb-c.data[1].N usb-c.data[2].N conn.D-)
-  net (usb-2.data.P usb-c.data[1].P usb-c.data[2].P conn.D+)
-  net (usb-2.vbus.gnd usb-c.vbus.gnd conn.GND)
-  net (usb-2.vbus.vdd usb-c.vbus.vdd conn.VBUS)
+  net (usb-c.data[1].N conn.DN1)
+  net (usb-c.data[2].N conn.DN2)
+  net (usb-c.data[1].P conn.DP1)
+  net (usb-c.data[2].P conn.DP2)
+  net (usb-c.vbus.gnd conn.GND)
+  net (usb-c.vbus.vdd conn.VBUS)
   net (usb-c.cc[1] conn.CC1)
   net (usb-c.cc[2] conn.CC2)
   net (usb-c.sbu[1] conn.SBU1)
   net (usb-c.sbu[2] conn.SBU2)
+
   match(configuration:USB-C-ConfigurationChannel) : ocdb/generator-utils/usb-c-configuration-channel(usb-c, configuration) 
