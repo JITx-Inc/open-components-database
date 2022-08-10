@@ -23,7 +23,6 @@ OPTIMIZE-FOR = ["cost"]
 MIN-PKG = "0402"
 MIN-CAP-VOLTAGE = 12.0
 
-val board-shape = Rectangle(30.0, 20.0)
 
 ; PMS7003 particle counter interface via header pins
 pcb-bundle pms7003-interface :
@@ -52,31 +51,6 @@ pcb-module pms7003 :
   property(header.p[6].digital-input) = DigitalInput(0.8, 2.6, header.p[1], header.p[3], 1.0e-6)
   property(header.p[9].digital-input) = DigitalInput(0.8, 2.6, header.p[1], header.p[3], 1.0e-6)
 
-  ; ; Add a Bluetooth SoC
-  ; public inst proc : controller
-  ; public inst ant : inverted-f-antenna
-  ; net (proc.ant, ant.rf-in)
-  ; net (ant.gnd gnd)
-  ; place(ant) at loc(9.0, 5.0, -90.0) on Top
-  ; ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
-  ; val rgb = add-rgb-indicator(60.0, proc, P3V3)
-  ; Add a ground plane
-;   geom(gnd):
-;     copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = board-shape
-;     copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = board-shape
-
-; ; Add artwork
-;   inst pcb-name: ocdb/board-text/text("Air quality sesnor", 1.5, clearance(current-rules(), MinSilkscreenWidth) )
-;   inst ver-rev : ocdb/board-text/text("v0 rev0", 1.0, 0.0)
-;   inst logo : ocdb/jitx-logo/small(Silkscreen("artwork", Top),true)
-;   place(pcb-name) at loc(0.0,-0.5) on Bottom
-;   place(ver-rev) at loc(7.0, 1.5) on Bottom
-;   place(logo) at loc(15.0,0.0, 0.0) on Bottom
-  ; Apply groups to sub-circuits for schematic and layout
-  ; schematic-group([proc, ant, debug-tps rgb, i2c-pullups]) = esp32
-  ; layout-group([proc, ant]) = proc
-
-
 pcb-module sensors :
   port power-3v3 : power
   port debug : uart([UART-DTR UART-RTS UART-RX UART-TX])
@@ -85,7 +59,7 @@ pcb-module sensors :
 
   ; Add USB connector
   public inst usb : usb2-on-a-usb-c-connector(ocdb/korean-hroparts-elec/TYPE-C-31-M-12/module(SinkDefault))
-  place(usb) at loc(-11.0, -2.2) on Top
+  place(usb) at loc(-11.0, -3.0) on Top
 
   ; Define ground net and assign symbol
   public net gnd (usb.usb-2.vbus.gnd)
@@ -164,12 +138,35 @@ pcb-module sensors :
   for n in [D- D+] do :
     property(n.net-class) = usb-net-class
 
+
+val pico-board-shape = Rectangle(30.0, 20.0)
+pcb-module pico-version :
+  inst sensors : sensors
+  place(sensors) at loc(0.0, 0.0) on Top
+
+  public inst proc : ocdb/espressif/ESP32-PICO-D4/module
+  public inst ant : inverted-f-antenna
+  net (proc.ant, ant.rf-in)
+  net gnd (ant.gnd proc.gnd)
+  place(ant) at loc(9.0, 5.0, -90.0) on Top
+
+  ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
+  val rgb = add-rgb-indicator(60.0, proc, sensors.power-3v3.vdd)
+  ; Add a ground plane
+  geom(gnd):
+    copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = pico-board-shape
+    copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = pico-board-shape
+
+  inst logo : ocdb/jitx-logo/small(Silkscreen("artwork", Top),true)
+  place(logo) at loc(16.0, -10.0, 0.0) on Bottom
+
+
 ; ==========================================
 ; Configure the design, then run or check it
 ; ==========================================
 defn run-design (circuit:Instantiable, run-checks?:True|False) :
   set-design-directory("ble-mote")
-  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, board-shape))
+  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, pico-board-shape))
   set-rules(ocdb/rules/jlcpcb-rules)
 
   var main-module = circuit
@@ -222,4 +219,4 @@ defn export-bill-of-materials () :
 ; ============
 ; Run the code
 ; ============
-compile-design(sensors)
+compile-design(pico-version)
