@@ -59,7 +59,6 @@ pcb-module sensors :
 
   ; Add USB connector
   public inst usb : usb2-on-a-usb-c-connector(ocdb/korean-hroparts-elec/TYPE-C-31-M-12/module(SinkDefault))
-  place(usb) at loc(-11.0, -3.0) on Top
 
   ; Define ground net and assign symbol
   public net gnd (usb.usb-2.vbus.gnd)
@@ -93,7 +92,6 @@ pcb-module sensors :
 
   ; Add the particle counter interface and place on bottom, and connect
   public inst particle-counter : pms7003
-  place(particle-counter) at loc(-10.0,5.0, 180.0) on Bottom
 
   net (particle-counter.interface particle-counter-interface) 
   net (protected-usb.vbus particle-counter.interface.vin)
@@ -139,16 +137,36 @@ pcb-module sensors :
     property(n.net-class) = usb-net-class
 
 
-val pico-board-shape = Rectangle(30.0, 20.0)
-pcb-module pico-version :
-  inst sensors : sensors
-  place(sensors) at loc(0.0, 0.0) on Top
+; val pico-board-shape = Rectangle(30.0, 20.0)
+val pico-board-shape = Rectangle(45.0, 25.0)
 
-  public inst proc : ocdb/espressif/ESP32-PICO-D4/module
-  public inst ant : inverted-f-antenna
-  net (proc.ant, ant.rf-in)
-  net gnd (ant.gnd proc.gnd)
-  place(ant) at loc(9.0, 5.0, -90.0) on Top
+pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
+  inst sensors : sensors
+  
+  val x = width(board-outline) / 2.0
+  val y = height(board-outline) / 2.0
+  place(sensors.usb) at loc(4.0 - x, 7.0 - y) on Top
+  place(sensors.particle-counter) at loc(5.0 - x, y - 5.0, 180.0) on Bottom
+
+  inst proc : processor
+  net gnd (proc.gnd)
+
+  ; Add an antenna for the PICO-D4
+  if processor == ocdb/espressif/ESP32-PICO-D4/module :
+    inst ant : inverted-f-antenna
+    net (proc.ant, ant.rf-in)
+    net (gnd ant.gnd)
+    place(ant) at loc(x - 6.0, 14.0 - y, -90.0) on Top
+
+  require i2c:i2c from proc
+  require pc-uart:uart() from proc
+  require pc-ctrl:gpio[2] from proc
+  net (sensors.debug, proc.uart)
+  net (sensors.power-3v3, proc.power)
+  net (sensors.humidity-i2c i2c)
+  net (sensors.particle-counter-interface.uart  pc-uart)
+  net (sensors.particle-counter-interface.set   pc-ctrl[0].gpio)
+  net (sensors.particle-counter-interface.reset pc-ctrl[1].gpio)
 
   ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
   val rgb = add-rgb-indicator(60.0, proc, sensors.power-3v3.vdd)
@@ -158,8 +176,9 @@ pcb-module pico-version :
     copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = pico-board-shape
 
   inst logo : ocdb/jitx-logo/small(Silkscreen("artwork", Top),true)
-  place(logo) at loc(16.0, -10.0, 0.0) on Bottom
+  place(logo) at loc(x + 1.0, 0.0 - y, 0.0) on Bottom
 
+  check-design(self)
 
 ; ==========================================
 ; Configure the design, then run or check it
@@ -219,4 +238,4 @@ defn export-bill-of-materials () :
 ; ============
 ; Run the code
 ; ============
-compile-design(pico-version)
+compile-design(sensor-system(ocdb/espressif/esp32-wroom-32/module(ocdb/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), pico-board-shape))
