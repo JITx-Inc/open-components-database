@@ -137,9 +137,6 @@ pcb-module sensors :
     property(n.net-class) = usb-net-class
 
 
-; val pico-board-shape = Rectangle(30.0, 20.0)
-val pico-board-shape = Rectangle(45.0, 25.0)
-
 pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
   inst sensors : sensors
   
@@ -172,8 +169,8 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
   val rgb = add-rgb-indicator(60.0, proc, sensors.power-3v3.vdd)
   ; Add a ground plane
   geom(gnd):
-    copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = pico-board-shape
-    copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = pico-board-shape
+    copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = board-outline
+    copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = board-outline
 
   inst logo : ocdb/jitx-logo/small(Silkscreen("artwork", Top),true)
   place(logo) at loc(x + 1.0, 0.0 - y, 0.0) on Bottom
@@ -183,9 +180,11 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
 ; ==========================================
 ; Configure the design, then run or check it
 ; ==========================================
-defn run-design (circuit:Instantiable, run-checks?:True|False) :
+defn run-design (run-checks?:True|False) :
+  val outline = Rectangle(30.0, 20.0)
+  val circuit = sensor-system(ocdb/espressif/ESP32-PICO-D4/module, outline)
   set-design-directory("ble-mote")
-  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, pico-board-shape))
+  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, outline))
   set-rules(ocdb/rules/jlcpcb-rules)
 
   var main-module = circuit
@@ -203,29 +202,43 @@ defn run-design (circuit:Instantiable, run-checks?:True|False) :
 ; ====================================
 ; Compile the design, view the results
 ; ====================================
-defn compile-design (circuit:Instantiable) :
-  run-design(circuit, false)
+defn compile-design () :
+  run-design(false)
 
 ; =====================
 ; Run the design checks
 ; =====================
-defn check-design (circuit:Instantiable) :
-  run-design(circuit, true)
+defn check-design () :
+  run-design(true)
 
-; ====================
-; Export design to CAD
-; ====================
-defn export-design () :
-  set-paper(ANSI-A4)
+; ===============================================
+; Export two versions of the sensor-system to CAD
+; ===============================================
+defn export-designs () :
   set-export-backend(`altium)
+
+  val pico-board-shape = Rectangle(30.0, 20.0)
+  set-design-directory("air-quality-sensor-pico")
+  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, pico-board-shape))
+  set-rules(ocdb/rules/jlcpcb-rules)
+  set-main-module(sensor-system(ocdb/espressif/ESP32-PICO-D4/module, pico-board-shape))
+  export-bill-of-materials()
   export-cad()
 
+  val wroom-board-shape = Rectangle(45.0, 25.0)
+  set-design-directory("air-quality-sensor-wroom")
+  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, wroom-board-shape))
+  set-rules(ocdb/rules/jlcpcb-rules)
+  set-main-module(sensor-system(ocdb/espressif/esp32-wroom-32/module(ocdb/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), wroom-board-shape))
+  export-bill-of-materials()
+  export-cad()
+  
 ; ===================================
 ; Update CAD, keeping layout progress
 ; ===================================
-defn update-design () :
+defn update-designs () :
   set-export-board?(false)
-  export-design()
+  export-designs()
 
 ; =================
 ; Export BOM to tsv
@@ -238,4 +251,4 @@ defn export-bill-of-materials () :
 ; ============
 ; Run the code
 ; ============
-compile-design(sensor-system(ocdb/espressif/esp32-wroom-32/module(ocdb/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), pico-board-shape))
+compile-design()
