@@ -77,8 +77,8 @@ pcb-module sensors :
   symbol(P3V3) = ocdb/symbols/supply-sym
 
   property(VBUS.net-voltage) = min-max(4.8, 5.2)
-  property(P5V0.net-voltage) = min-max(4.9, 5.1)
-  property(P3V3.net-voltage) = typ(3.3)
+  property(P5V0.net-voltage) = min-max(4.7, 5.1)
+  property(P3V3.net-voltage) = tol%(3.3, 1.5)
   property(gnd.net-voltage) = typ(0.0)
 
   ; Use a connect statement to interface USB-2 to UART with bus-powered xcvr
@@ -211,34 +211,20 @@ defn compile-design () :
 defn check-design () :
   run-design(true)
 
+
 ; ===============================================
 ; Export two versions of the sensor-system to CAD
 ; ===============================================
-defn export-designs () :
+defn export-design (module:Instantiable, shape:Rectangle, directory:String) :
   set-export-backend(`altium)
 
-  val pico-board-shape = Rectangle(30.0, 20.0)
-  set-design-directory("air-quality-sensor-pico")
-  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, pico-board-shape))
+  set-design-directory(directory)
+  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, shape))
   set-rules(ocdb/rules/jlcpcb-rules)
-  set-main-module(sensor-system(ocdb/espressif/ESP32-PICO-D4/module, pico-board-shape))
+  set-main-module(module)
   export-bill-of-materials()
+  set-config-sets([`groups])
   export-cad()
-
-  val wroom-board-shape = Rectangle(45.0, 25.0)
-  set-design-directory("air-quality-sensor-wroom")
-  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, wroom-board-shape))
-  set-rules(ocdb/rules/jlcpcb-rules)
-  set-main-module(sensor-system(ocdb/espressif/esp32-wroom-32/module(ocdb/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), wroom-board-shape))
-  export-bill-of-materials()
-  export-cad()
-  
-; ===================================
-; Update CAD, keeping layout progress
-; ===================================
-defn update-designs () :
-  set-export-board?(false)
-  export-designs()
 
 ; =================
 ; Export BOM to tsv
@@ -251,4 +237,12 @@ defn export-bill-of-materials () :
 ; ============
 ; Run the code
 ; ============
-compile-design()
+; compile-design()
+
+export-design(sensor-system(ocdb/espressif/ESP32-PICO-D4/module, Rectangle(30.0, 20.0))
+              Rectangle(30.0, 20.0), 
+              "air-quality-sensor-pico")
+
+export-design(sensor-system(ocdb/espressif/esp32-wroom-32/module(ocdb/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), Rectangle(45.0, 25.0))
+              Rectangle(45.0, 25.0), 
+              "air-quality-sensor-wroom")
