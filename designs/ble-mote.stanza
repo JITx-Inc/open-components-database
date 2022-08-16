@@ -103,18 +103,18 @@ pcb-module sensors :
   val debug-tps = add-testpoint([ debug.tx
                                   debug.rx
                                   debug.dtr
-                                  debug.rts], Testpoint-SMDLoop)
+                                  debug.rts], ocdb/keystone/5017/component)
 
   val power-tps = add-testpoint([ P5V0
                                   P3V3
-                                  gnd ], Testpoint-SMDLoop)
+                                  gnd ], ocdb/keystone/5017/component)
 
   val hum-tps = add-testpoint([   hum.i2c.sda
-                                  hum.i2c.scl], Testpoint-SMDLoop)
+                                  hum.i2c.scl], ocdb/keystone/5017/component)
 
   val pms-tps = add-testpoint([   particle-counter-interface.uart.tx
                                   particle-counter-interface.uart.tx
-                                  gnd ], Testpoint-SMDLoop)
+                                  gnd ], ocdb/keystone/5017/component)
 
   schematic-group([usb, ldo, cp2105, power-tps containing-instance(protected-usb) as JITXObject]) = power
   schematic-group([hum hum-tps]) = humidity-sensor
@@ -154,6 +154,8 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
     net (proc.ant, ant.rf-in)
     net (gnd ant.gnd)
     place(ant) at loc(x - 6.0, 14.0 - y, -90.0) on Top
+  else :
+    place(proc) at loc(x - 6.0, y - 12.0, -90.0) on Top
 
   require i2c:i2c from proc
   require pc-uart:uart() from proc
@@ -181,8 +183,8 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
 ; Configure the design, then run or check it
 ; ==========================================
 defn run-design (run-checks?:True|False) :
-  val outline = Rectangle(30.0, 20.0)
-  val circuit = sensor-system(ocdb/espressif/ESP32-PICO-D4/module, outline)
+  val outline = Rectangle(45.0, 30.0)
+  val circuit = sensor-system(ocdb/espressif/esp32-wroom-32/module(ocdb/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), outline)
   set-design-directory("ble-mote")
   set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, outline))
   set-rules(ocdb/rules/jlcpcb-rules)
@@ -239,10 +241,12 @@ defn export-bill-of-materials () :
 ; ============
 ; compile-design()
 
-export-design(sensor-system(ocdb/espressif/ESP32-PICO-D4/module, Rectangle(30.0, 20.0))
-              Rectangle(30.0, 20.0), 
+val pico-shape = Rectangle(35.0, 20.0)
+export-design(sensor-system(ocdb/espressif/ESP32-PICO-D4/module, pico-shape)
+              pico-shape, 
               "air-quality-sensor-pico")
 
-export-design(sensor-system(ocdb/espressif/esp32-wroom-32/module(ocdb/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), Rectangle(45.0, 25.0))
-              Rectangle(45.0, 25.0), 
+val wroom-shape = Rectangle(45.0, 30.0)
+export-design(sensor-system(ocdb/espressif/esp32-wroom-32/module(ocdb/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), wroom-shape)
+              wroom-shape, 
               "air-quality-sensor-wroom")

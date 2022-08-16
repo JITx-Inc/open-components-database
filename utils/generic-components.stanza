@@ -687,7 +687,7 @@ public pcb-enum ocdb/generic-components/Testpoint :
   Testpoint-SMDPad
   Testpoint-PTHLoop
 
-pcb-module test-points (count:Int, method:ocdb/generic-components/Testpoint) :
+pcb-module test-points (count:Int, method:ocdb/generic-components/Testpoint|Instantiable) :
   port tp : pin[count]
   val points = match(method) :
     (method:Testpoint-PTHLoop) :
@@ -702,10 +702,13 @@ pcb-module test-points (count:Int, method:ocdb/generic-components/Testpoint) :
     (method:Testpoint-SMDPad) :
       inst point : gen-testpad(2.0)[count]
       point
+    (method:Instantiable) :
+      inst point : method[count]
+      point
   for i in 0 to count do :
     net (tp[i] points[i].p)
 
-public defn add-testpoint (rs:Tuple<JITXObject>, method:ocdb/generic-components/Testpoint) :
+public defn add-testpoint (rs:Tuple<JITXObject>, method:ocdb/generic-components/Testpoint|Instantiable) :
   inside pcb-module :
     inst test-points:test-points(length(rs), method)
     for (r in rs, i in 0 to false) do :
