@@ -1,0 +1,79 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/raspberry-pi/gpio-header:
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import ocdb/bundles
+  import ocdb/symbols
+  import ocdb/box-symbol
+  import ocdb/property-structs
+
+public pcb-module module : 
+  port BCM : pin[28]
+  pin gnd
+  port p3v3 : power
+  port p5v0 : power 
+  inst header : pin-header(40,2)
+  place(header) at loc(0.0,0.0) on Top
+
+  net (BCM[0], header.p[27])
+  net (BCM[1], header.p[28])
+  net (BCM[2], header.p[3])
+  net (BCM[3], header.p[5])
+  net (BCM[4], header.p[7])
+  net (BCM[5], header.p[29])
+  net (BCM[6], header.p[31])
+  net (BCM[7], header.p[26])
+  net (BCM[8], header.p[24])
+  net (BCM[9], header.p[21])
+  net (BCM[10], header.p[19])
+  net (BCM[11], header.p[23])
+  net (BCM[12], header.p[32])
+  net (BCM[13], header.p[33])
+  net (BCM[14], header.p[8])
+  net (BCM[15], header.p[10])
+  net (BCM[16], header.p[36])
+  net (BCM[17], header.p[11])
+  net (BCM[18], header.p[12])
+  net (BCM[19], header.p[35])
+  net (BCM[20], header.p[38])
+  net (BCM[21], header.p[40])
+  net (BCM[22], header.p[15])
+  net (BCM[23], header.p[16])
+  net (BCM[24], header.p[18])
+  net (BCM[25], header.p[22])
+  net (BCM[26], header.p[37])
+  net (BCM[27], header.p[13])
+  net (p3v3.vdd header.p[1] header.p[17])
+  net (gnd, header.p[6], header.p[9], header.p[14], header.p[20], header.p[25], header.p[30], header.p[34], header.p[39], p3v3.gnd, p5v0.gnd)
+  net (p5v0.vdd, header.p[2], header.p[4])
+
+  supports i2c :
+    i2c.sda => BCM[0]
+    i2c.scl => BCM[1]
+  supports i2c :
+    i2c.sda => BCM[2]
+    i2c.scl => BCM[5]
+;SPI0 overlaps with SD card interface
+;  supports spi :
+;    spi.sdo => BCM[19]
+;    spi.sdi => BCM[21]
+;    spi.sck => BCM[23]
+;    spi.cs => BCM[18]
+  supports spi-controller() :
+    spi-controller().copi => BCM[20]
+    spi-controller().cipo => BCM[19]
+    spi-controller().sck => BCM[21]
+    spi-controller().cs => BCM[17]
+  supports uart() :
+    uart().tx => BCM[14]
+    uart().rx => BCM[15]
+  for i in 0 to 22 do:
+    supports gpio :
+      gpio.gpio => BCM[i]
