@@ -16,10 +16,11 @@ export JITX_RUN_TEST="jitx run-test /app/open-components-database/stanza.proj"
 #==============================================
 #=========== Component Models test ============
 #==============================================
-echo "Checking that ocdb/components files conform \
-      to spec and compile."
+echo "Checking that ocdb/components files conform to spec and compile."
+cd open-components-database
 scripts/gen-components-file.sh
 jitx run components.stanza
+cd ..
 
 #==============================================
 #==== public pcb-* macro evaluation tests =====
