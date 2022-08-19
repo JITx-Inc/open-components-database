@@ -4,8 +4,8 @@ defpackage ocdb/designs/tutorial :
   import collections
   import jitx
   import jitx/commands
-  import ocdb/generic-components
-  import ocdb/tolerance
+  import ocdb/utils/generic-components
+  import ocdb/utils/tolerance
 
 val board-shape = RoundedRectangle(35.0, 30.0, 0.5)
 
@@ -34,7 +34,7 @@ pcb-module lm317a-regulator (output-voltage:Toleranced) :
   ; Estimate offset voltage caused by current sourced from adj pin
   val est-v-adj-offset = (typ-value(output-voltage) - typ-value(property(lm317a.reference-voltage))) / divider-current * property(lm317a.adj-current)
 
-  inst output-voltage-divider : ocdb/passive-circuits/voltage-divider(high-voltage, adj-voltage, current) where :
+  inst output-voltage-divider : ocdb/modules/passive-circuits/voltage-divider(high-voltage, adj-voltage, current) where :
     val high-voltage = tol%(center-value(output-voltage) - est-v-adj-offset, 0.0)
     val adj-voltage = tol%(typ-value(property(lm317a.reference-voltage)),target-variance)
     val current = divider-current                                                
@@ -53,7 +53,7 @@ pcb-module lm317a-regulator (output-voltage:Toleranced) :
                         typ-value(property(lm317a.reference-voltage)) * typ-value(output-voltage) / typ-value(vref) + true-adj-offset,
                         max-value(property(lm317a.reference-voltage)) * typ-value(output-voltage) / min-value(vref) + true-adj-offset)
   ; Make sure that the voltage specification is met
-  check ocdb/checks/within?(output-voltage, out)
+  check ocdb/utils/checks/within?(output-voltage, out)
 
 pcb-module regulator-fixture :
   val target-voltage = tol%(3.3, 10.0)
@@ -63,7 +63,7 @@ pcb-module regulator-fixture :
   inst source : banana-plug-power
   net gnd (reg.gnd source.power.gnd)
   net vin (reg.vin source.power.vdd)
-  symbol(gnd) = ocdb/symbols/ground-sym
+  symbol(gnd) = ocdb/utils/symbols/ground-sym
 
   inst measure : sma-connector()
   net vout (reg.vout measure.sig)
@@ -85,19 +85,19 @@ pcb-module regulator-fixture :
   property(vout.net-voltage) = target-voltage
   property(vin.net-voltage) = typ(10.0)
 
-  ocdb/checks/check-design(self)
+  ocdb/utils/checks/check-design(self)
 
 ; ==========================================
 ; Configure the design, then run or check it
 ; ==========================================
 defn run-design (circuit:Instantiable, run-checks?:True|False) :
   set-design-directory("CAD")
-  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, board-shape))
-  set-rules(ocdb/rules/jlcpcb-rules)
+  set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-jlc2313, board-shape))
+  set-rules(ocdb/manufacturers/rules/jlcpcb-rules)
 
   var main-module = circuit
   if run-checks? :
-    main-module = ocdb/generator-utils/run-final-passes(circuit) ; Analyze design with a pass
+    main-module = ocdb/utils/generator-utils/run-final-passes(circuit) ; Analyze design with a pass
   
   set-main-module(main-module) ; Treat the provided module as a design, and compile it.
   
@@ -138,8 +138,8 @@ defn update-design () :
 ; Export BOM to csv
 ; =================
 defn export-bill-of-materials () :
-  set-bom-vendors(ocdb/design-vars/APPROVED-DISTRIBUTOR-LIST)
-  set-bom-design-quantity(ocdb/design-vars/DESIGN-QUANTITY)
+  set-bom-vendors(ocdb/utils/design-vars/APPROVED-DISTRIBUTOR-LIST)
+  set-bom-design-quantity(ocdb/utils/design-vars/DESIGN-QUANTITY)
   export-bom()
 
 ; ============

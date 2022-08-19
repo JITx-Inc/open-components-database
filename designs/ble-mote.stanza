@@ -6,16 +6,16 @@ defpackage ocdb/designs/ble-mote :
   import jitx
   import jitx/commands
 
-  import ocdb/bundles
-  import ocdb/connects
-  import ocdb/defaults
-  import ocdb/design-vars
-  import ocdb/generator-utils
-  import ocdb/generic-components
-  import ocdb/property-structs
-  import ocdb/checks
-  import ocdb/rules
-  import ocdb/tolerance
+  import ocdb/utils/bundles
+  import ocdb/utils/connects
+  import ocdb/utils/defaults
+  import ocdb/utils/design-vars
+  import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/property-structs
+  import ocdb/utils/checks
+  import ocdb/manufacturers/rules
+  import ocdb/utils/tolerance
 
 
 OPERATING-TEMPERATURE = [-20.0 70.0]
@@ -54,18 +54,18 @@ pcb-module sensor-mote :
 
   ; Define ground net and assign symbol
   public net gnd (usb.usb-2.vbus.gnd)
-  symbol(gnd) = ocdb/symbols/ground-sym
+  symbol(gnd) = ocdb/utils/symbols/ground-sym
 
   ; Create a protected power and data interface for USB-2
-  val protected-usb = ocdb/protection/esd-clamp(usb.usb-2, gnd) as JITXObject
+  val protected-usb = ocdb/modules/protection/esd-clamp(usb.usb-2, gnd) as JITXObject
 
   ; Specify a power regulator and name power nets
   public inst ldo : ocdb/components/diodes-incorporated/AP2112/module
   net (ldo.vin protected-usb.vbus)
   net P5V0 (ldo.vin.vdd ldo.en)
   net P3V3 (ldo.vout.vdd)
-  symbol(P5V0) = ocdb/symbols/supply-sym
-  symbol(P3V3) = ocdb/symbols/supply-sym
+  symbol(P5V0) = ocdb/utils/symbols/supply-sym
+  symbol(P3V3) = ocdb/utils/symbols/supply-sym
 
   ; Add a Bluetooth SoC
   public inst proc : ocdb/components/espressif/ESP32-PICO-D4/module
@@ -129,10 +129,10 @@ pcb-module sensor-mote :
     copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = board-shape
 
 ; Add artwork
-  inst pcb-name: ocdb/board-text/text("PCB, BLE MOTE", 1.5, clearance(current-rules(), MinSilkscreenWidth) )
-  inst ver-rev : ocdb/board-text/text("v0 rev0", 1.0, 0.0)
-  inst logo : ocdb/jitx-logo/small(Silkscreen("artwork", Top),true)
-  inst assy-label : ocdb/mechanical/gen-label()
+  inst pcb-name: ocdb/artwork/board-text/text("PCB, BLE MOTE", 1.5, clearance(current-rules(), MinSilkscreenWidth) )
+  inst ver-rev : ocdb/artwork/board-text/text("v0 rev0", 1.0, 0.0)
+  inst logo : ocdb/artwork/jitx-logo/small(Silkscreen("artwork", Top),true)
+  inst assy-label : ocdb/utils/mechanical/gen-label()
   place(pcb-name) at loc(0.0,-0.5) on Bottom
   place(ver-rev) at loc(10.0,3.0) on Bottom
   place(logo) at loc(6.0,0.0, 0.0) on Bottom

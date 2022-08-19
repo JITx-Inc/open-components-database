@@ -1,14 +1,13 @@
 #use-added-syntax(jitx, tests)
-defpackage ocdb/test/part-query :
+defpackage ocdb/tests/part-query :
   import core
   import collections
-  import ocdb/db-parts
+  import ocdb/utils/db-parts
   import json
-  import ocdb/generic-components
+  import ocdb/utils/generic-components
   import jitx/commands
 
-
-deftest resistors :
+deftest(odcb, part-query) resistors :
   for attribute in ["manufacturer", "mpn", "resistance", "trust", "dimensions", "mounting", "case", "stock", "price", "minimum_quantity", "type", "composition", "rated-power", "tcr", "metadata.datasheets", "metadata.image", "metadata.digi-key-part-number", "metadata.description", "metadata.packaging", "metadata.series", "metadata.features", "metadata.supplier-device-package", "metadata.number-of-terminations"] do :
     val values = look-up-resistors(attribute)
     if length(values) <= 150 :
@@ -30,7 +29,7 @@ deftest resistors :
     else :
       println("| %_ | %_ values |" % [attribute, length(values)])
 
-deftest inductors :
+deftest(odcb, part-query) inductors :
   for attribute in ["manufacturer", "mpn", "inductance", "trust", "dimensions", "mounting", "case", "stock", "price", "minimum_quantity", "type", "material-core", "shielding", "current-rating", "saturation-current", "dc-resistance", "quality-factor", "self-resonant-frequency", "metadata.datasheets", "metadata.image", "metadata.digi-key-part-number", "metadata.description", "metadata.packaging"] do :
     val values = look-up-inductors(attribute)
     if length(values) <= 250 :
@@ -45,7 +44,7 @@ deftest inductors :
     else :
       println("| %_ | %_ values |" % [attribute, length(values)])
 
-deftest capacitors :
+deftest(odcb, part-query) capacitors :
   for attribute in ["manufacturer", "mpn", "capacitance", "trust", "dimensions", "mounting", "case", "stock", "price", "minimum_quantity", "type", "anode", "electrolyte", "esr", "esr_frequency", "rated-voltage", "rated-voltage-ac", "rated-current-pk", "rated-current-rms", "temperature-coefficient.code", "temperature-coefficient.lower-temperature", "temperature-coefficient.raw_data", "temperature-coefficient.tolerance", "temperature-coefficient.upper-temperature", "temperature-coefficient.value", "metadata.datasheets", "metadata.image", "metadata.digi-key-part-number", "metadata.description", "metadata.packaging", "metadata.lifetime-temp", "metadata.applications", "metadata.ripple-current-low-frequency", "metadata.ripple-current-high-frequency", "metadata.lead-spacing"] do :
     val values = look-up-capacitors(attribute)
     if length(values) <= 200 :
@@ -59,13 +58,13 @@ deftest capacitors :
     else :
       println("| %_ | %_ values |" % [attribute, length(values)])
 
-deftest tantalum-cap-instantiation-1uf : 
+deftest(odcb, part-query) tantalum-cap-instantiation-1uf : 
   pcb-module module : 
     inst cap : tantalum-cap(1.0e-6)
     #EXPECT(property(cap.capacitance) == 1.0e-6)
     #EXPECT(property(cap.anode) == "tantalum")
   evaluate(module)
    
-deftest tantalum-cap-lookup-1uf : 
+deftest(odcb, part-query) tantalum-cap-lookup-1uf : 
   val caps = look-up-tantalum-caps("rated-voltage",["capacitance" => 1.0e-6])
   #ASSERT(not empty?(caps))

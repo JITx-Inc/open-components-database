@@ -1,5 +1,5 @@
-#use-added-syntax(jitx)
-defpackage ocdb/tests/test-stm32-mcu-props :
+#use-added-syntax(jitx, tests)
+defpackage ocdb/tests/stm32-mcu-props :
 
   import core
   import collections
@@ -10,22 +10,22 @@ defpackage ocdb/tests/test-stm32-mcu-props :
   import jitx
   import jitx/commands
 
-  import ocdb/defaults
-  import ocdb/land-patterns
-  import ocdb/symbols
-  import ocdb/symbol-utils
-  import ocdb/generic-components
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/symbol-utils
+  import ocdb/utils/generic-components
 
-  import ocdb/bundles
-  import ocdb/box-symbol
-  import ocdb/property-structs
-  import ocdb/generator-utils
-  import ocdb/checks
-  import ocdb/tolerance
-  import ocdb/micro-controllers
-  import ocdb/design-vars
+  import ocdb/utils/bundles
+  import ocdb/utils/box-symbol
+  import ocdb/utils/property-structs
+  import ocdb/utils/generator-utils
+  import ocdb/utils/checks
+  import ocdb/utils/tolerance
+  import ocdb/utils/micro-controllers
+  import ocdb/utils/design-vars
 
-  import ocdb/db-parts 
+  import ocdb/utils/db-parts 
   import ocdb/components/st-microelectronics/generate-ioc
 
 public pcb-module test-stm32-mcu-props :
@@ -148,17 +148,17 @@ public pcb-module test-stm32-mcu-props :
   ; schematic-group(self) = control
   ; layout-group(self) = control
 
-println $ get-time-string("%H:%M:%S")
+deftest(ocdb, stm32-mcu-props, design) test-muc-props-in-design :
+  println $ get-time-string("%H:%M:%S")
+  val final-design = run-final-passes(test-stm32-mcu-props)
+  set-design-directory("test-stm32-mcu-props")
+  set-main-module(final-design)
+  val assigned-pins = assign-pins()
+  val interim = transform-module(generate-ioc-file, assigned-pins)
 
-val final-design = run-final-passes(test-stm32-mcu-props)
-set-design-directory("test-stm32-mcu-props")
-set-main-module(final-design)
-val assigned-pins = assign-pins()
-val interim = transform-module(generate-ioc-file, assigned-pins)
+  set-board(default-board(4, Rectangle(50.0,50.0)))
+  set-config-sets([`groups])
+  run-checks("test-stm32-mcu-props.txt")
+  set-paper(ANSI-E)
 
-set-board(default-board(4, Rectangle(50.0,50.0)))
-set-config-sets([`groups])
-run-checks("test-stm32-mcu-props.txt")
-set-paper(ANSI-E)
-
-println $ get-time-string("%H:%M:%S")
+  println $ get-time-string("%H:%M:%S")
