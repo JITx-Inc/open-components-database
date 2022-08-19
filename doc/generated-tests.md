@@ -27,13 +27,13 @@ public pcb-component component (n-pins:Int) :
 In this example 3 tests will be generated:
 ```
 deftest test-ocdb_amphenol_minitek127_component:
-  print-def(ocdb/amphenol/minitek127/component(value1))
+  print-def(ocdb/components/amphenol/minitek127/component(value1))
 
 deftest test-ocdb_amphenol_minitek127_component:
-  print-def(ocdb/amphenol/minitek127/component(value2))
+  print-def(ocdb/components/amphenol/minitek127/component(value2))
 
 deftest test-ocdb_amphenol_minitek127_component:
-  print-def(ocdb/amphenol/minitek127/component(value3))
+  print-def(ocdb/components/amphenol/minitek127/component(value3))
 ```
 
 To use a random even integer between 2 and 100 use:

@@ -18,20 +18,20 @@ public defn esd-clamp (bundle:JITXObject, gnd:JITXObject) -> JITXObject :
     match(port-type(bundle)) :
       (pb:Bundle) :
         if pb == can :
-          inst clamp : ocdb/nexperia/PESD1CAN/component
+          inst clamp : ocdb/components/nexperia/PESD1CAN/component
           net (clamp.c[1] bundle.canh)
           net (clamp.c[2] bundle.canl)
           net (clamp.common gnd)
           bundle
         ; ESD clamp and power protection for usb
         else if pb == usb-2 :
-          inst clamp : ocdb/texas-instruments/TPD3S0x4/module
+          inst clamp : ocdb/components/texas-instruments/TPD3S0x4/module
           net (bundle, clamp.usb-in)
           net (clamp.usb-in.vbus.vdd, clamp.en)
           ; Return protected port
           clamp.usb-out
         else if pb == gpio :
-          inst tvs : ocdb/toshiba/DF2B6M4ASL-L3F/component
+          inst tvs : ocdb/components/toshiba/DF2B6M4ASL-L3F/component
           net (tvs.p[1] bundle.gpio)
           net (tvs.p[2] gnd)
           bundle
@@ -61,7 +61,7 @@ public defn isolate-logic (pins:Tuple<[JITXObject JITXObject]>, pwr-A:JITXObject
 
     ; Instantiate Si86xx logic isolators
     if length(pins) == 1:
-      inst iso : ocdb/si-labs/Si862x/module(0)  
+      inst iso : ocdb/components/si-labs/Si862x/module(0)  
       if length(outputs) == 1:
         net (pwr-A iso.vdd1)
         net (pwr-B iso.vdd2)
@@ -74,7 +74,7 @@ public defn isolate-logic (pins:Tuple<[JITXObject JITXObject]>, pwr-A:JITXObject
         net (inputs[0][0] iso.vdd2-out[0])
     else if length(pins) == 2:
       if length(outputs) == 2:
-        inst iso : ocdb/si-labs/Si862x/module(0)  
+        inst iso : ocdb/components/si-labs/Si862x/module(0)  
         net (outputs[0][0] iso.vdd1-in[0])
         net (outputs[1][0] iso.vdd1-in[1])
         net (pwr-A iso.vdd1)
@@ -82,7 +82,7 @@ public defn isolate-logic (pins:Tuple<[JITXObject JITXObject]>, pwr-A:JITXObject
         net (outputs[1][1] iso.vdd2-out[1])
         net (pwr-B iso.vdd2)
       else if length(inputs) == 2:
-        inst iso : ocdb/si-labs/Si862x/module(0)  
+        inst iso : ocdb/components/si-labs/Si862x/module(0)  
         net (inputs[0][0] iso.vdd1-in[0])
         net (inputs[1][0] iso.vdd1-in[1])
         net (pwr-B iso.vdd1)
@@ -90,7 +90,7 @@ public defn isolate-logic (pins:Tuple<[JITXObject JITXObject]>, pwr-A:JITXObject
         net (inputs[1][1] iso.vdd2-out[1])
         net (pwr-A iso.vdd2)
       else if length(outputs) == 1 and length(inputs) == 1 :
-        inst iso : ocdb/si-labs/Si862x/module(1)  
+        inst iso : ocdb/components/si-labs/Si862x/module(1)  
         net (outputs[0][0] iso.vdd1-in[0])
         net (outputs[0][1] iso.vdd2-out[0])
         net (pwr-A iso.vdd1)
@@ -99,7 +99,7 @@ public defn isolate-logic (pins:Tuple<[JITXObject JITXObject]>, pwr-A:JITXObject
         net (pwr-B iso.vdd2)
     else if length(pins) > 2 and length(pins) <= 4:
       if length(outputs) >= length(inputs):
-        inst iso : ocdb/si-labs/Si864x/module(length(inputs))  
+        inst iso : ocdb/components/si-labs/Si864x/module(length(inputs))  
         net (pwr-A iso.vdd1)
         net (pwr-B iso.vdd2)
         for (o in outputs, idx in 0 to length(outputs)) do :
@@ -109,7 +109,7 @@ public defn isolate-logic (pins:Tuple<[JITXObject JITXObject]>, pwr-A:JITXObject
           net (i[0] iso.vdd1-out[idx])
           net (i[1] iso.vdd2-in[idx])
       else if length(outputs) < length(inputs):
-        inst iso : ocdb/si-labs/Si864x/module(length(outputs))  
+        inst iso : ocdb/components/si-labs/Si864x/module(length(outputs))  
         net (pwr-B iso.vdd1)
         net (pwr-A iso.vdd2)
         for (i in inputs, idx in 0 to length(inputs)) do :
@@ -123,6 +123,6 @@ public defn isolate-logic (pins:Tuple<[JITXObject JITXObject]>, pwr-A:JITXObject
 ; Given input rail, returns isolated power rail
 public defn isolate-power (pwr-in:JITXObject):
   inside pcb-module:
-    inst iso : ocdb/texas-instruments/SN6501/module
+    inst iso : ocdb/components/texas-instruments/SN6501/module
     net (pwr-in iso.vin)
   iso.vout
