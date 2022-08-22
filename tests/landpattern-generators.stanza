@@ -1,0 +1,56 @@
+#use-added-syntax(tests, jitx)
+defpackage ocdb/tests/landpattern-generators :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/landpatterns
+  import ocdb/components/st-microelectronics/landpatterns
+  import ocdb/utils/defaults 
+  import ocdb/manufacturers/rules
+  import ocdb/tests/design
+  
+deftest bga-pad-names :
+  val s = "ABCDEFGHJKLMNPRTUVWY"
+  val pin-names = BGAPadNames(length(s), length(s), false)
+  for (ch in s, r in 0 to false) do:
+    #EXPECT(pin-names[r, 0] == Ref(to-string(ch))[1])
+
+defn find-silkscreen (x, name) :
+  for layer in layers(x) find :
+    val spec = specifier(layer)
+    match(spec:Silkscreen):
+      /name(spec) == name
+
+defn test-landpattern-in-design (lp:LandPattern) : 
+  pcb-module module : 
+    inst i: default-component(lp)
+  test-design(name(lp), module, 4, Rectangle(20.0, 20.0), sierra-adv-rules)
+
+defn basic-landpattern-test (lp:LandPattern, expect-pol?:True) : 
+  val name = to-string $ "basic-landpattern-test-%_" % [name(lp)]
+  deftest(ocdb, landpattern) (name) :
+    ; check that it has a courtyard
+    val courtyard = find({specifier(_) is Courtyard}, layers(lp))
+    #EXPECT(courtyard is-not False)
+
+    ; check that there is an indicator, if necessary
+    if expect-pol?:
+      #EXPECT(find-silkscreen(lp, "pol") is-not False)
+
+    ; check that the reference label exists
+    val ref-label = find-silkscreen(lp, "values")
+    #EXPECT(ref-label is-not False)
+
+for landpattern in STM32-LAND-PATTERNS do :
+  basic-landpattern-test(landpattern, true)
+  test-landpattern-in-design(landpattern)
+
+deftest(ocdb, landpattern) sot : 
+  pcb-module main-module : 
+    inst c1 : ocdb/utils/defaults/default-component(SOT23-3)
+    inst c2 : ocdb/utils/defaults/default-component(TO-236)
+    inst c3 : ocdb/utils/defaults/default-component(SOT23())
+
+  make-default-board(main-module, 4, Rectangle(10.0, 10.0))
+  view(TO-236)

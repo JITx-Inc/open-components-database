@@ -1,17 +1,17 @@
 #use-added-syntax(jitx)
-defpackage ocdb/connects :
+defpackage ocdb/utils/connects :
   import core
   import collections
   import math
   import jitx
   import jitx/commands
-  import ocdb/defaults
-  import ocdb/land-patterns
-  import ocdb/generator-utils
-  import ocdb/generic-components
-  import ocdb/bundles
-  import ocdb/symbols
-  import ocdb/box-symbol
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/bundles
+  import ocdb/utils/symbols
+  import ocdb/utils/box-symbol
   import lang-utils
 
 ; [TODO]: remove has-pin? from here and clean up connect-spi
@@ -46,7 +46,7 @@ public defn connect-i2c-isolation (x:JITXObject,
 ; Connect to i2c lines with a buffer, using a default component (TI ISO1540)
 public defn connect-i2c-isolation (x:JITXObject, y:JITXObject) -> Instance :
   inside pcb-module:
-    val buf = connect-i2c-isolation(x, y, ocdb/texas-instruments/ISO1540/component)
+    val buf = connect-i2c-isolation(x, y, ocdb/components/texas-instruments/ISO1540/component)
     property(buf.VCC1.requires-power) = true
     property(buf.VCC1.power-request)  = [3.3 0.3 0.05]
     buf
@@ -60,7 +60,7 @@ public defn connect-phy (x:JITXObject, y:JITXObject) -> Instance :
   ensure-bundle-port!(x, rgmii)
   ensure-bundle-port!(y, ethernet-1000)
   inside pcb-module:
-    inst phy : ocdb/marvell/88E1510-A0-NNB2C000/module
+    inst phy : ocdb/components/marvell/88E1510-A0-NNB2C000/module
     net (x, phy.rgmii)
     net (y.mdi, phy.mdi)
     schematic-group(phy) = phy
@@ -71,7 +71,7 @@ public defn connect-ft232 (x:JITXObject, y:JITXObject) -> Instance :
   ensure-bundle-port!(x, usb-2)
   ensure-bundle-port!(y, uart([UART-DTR, UART-RTS, UART-RX, UART-TX]))
   inside pcb-module :
-    inst xcvr : ocdb/future-designs/FT232RL/module
+    inst xcvr : ocdb/components/future-designs/FT232RL/module
     net (x, xcvr.usb-2)
     net (y.tx, xcvr.uart.rx)
     net (y.rx, xcvr.uart.tx)
@@ -84,7 +84,7 @@ public defn connect-ft232 (x:JITXObject, y:JITXObject) -> Instance :
 ; Connect USB-2 over UART using CP2105 
 public defn connect-cp2105 (bus-powered?:True|False, usb:JITXObject, uart:JITXObject) -> Instance  :
   inside pcb-module :
-    public inst xcvr : ocdb/si-labs/CP2105/module(bus-powered?)
+    public inst xcvr : ocdb/components/si-labs/CP2105/module(bus-powered?)
     net (usb, xcvr.usb-2)
     net (uart.tx,  xcvr.e-uart.rx)
     net (uart.rx,  xcvr.e-uart.tx)

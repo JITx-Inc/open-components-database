@@ -1,5 +1,5 @@
 #use-added-syntax(jitx)
-defpackage ocdb/generic-components:
+defpackage ocdb/utils/generic-components:
   import core
   import collections
   import math
@@ -7,17 +7,17 @@ defpackage ocdb/generic-components:
   import jitx
   import jitx/commands
 
-  import ocdb/bundles
-  import ocdb/land-patterns
-  import ocdb/generator-utils
-  import ocdb/db-parts
-  import ocdb/design-vars
-  import ocdb/symbols
-  import ocdb/box-symbol
-  import ocdb/property-structs
-  import ocdb/symbol-utils
-  import ocdb/checks
-  import ocdb/tolerance
+  import ocdb/utils/bundles
+  import ocdb/utils/landpatterns
+  import ocdb/utils/generator-utils
+  import ocdb/utils/db-parts
+  import ocdb/utils/design-vars
+  import ocdb/utils/symbols
+  import ocdb/utils/box-symbol
+  import ocdb/utils/property-structs
+  import ocdb/utils/symbol-utils
+  import ocdb/utils/checks
+  import ocdb/utils/tolerance
 
 ; ========================================================
 ; ====== Standard packages for the passive solver ========
@@ -577,12 +577,12 @@ public defn block-cap (in:JITXObject, out:JITXObject) :
 ; ========================================================
 
 public defn banana-plug (color:String) :
-  ocdb/pomona/1581/component(color)
+  ocdb/components/pomona/1581/component(color)
 
 public pcb-module banana-plug-power :
   port power : power
-  inst vdd-plug : ocdb/pomona/1581/component("red")
-  inst gnd-plug : ocdb/pomona/1581/component("black")
+  inst vdd-plug : ocdb/components/pomona/1581/component("red")
+  inst gnd-plug : ocdb/components/pomona/1581/component("black")
   net (power.vdd vdd-plug.p)
   net (power.gnd gnd-plug.p)
   val pitch = 0.75 / 2.0 * 25.4
@@ -625,18 +625,18 @@ public defn pin-header (n-pin: Int, n-row: Int, pin-pitch:Double) :
   pin-header(n-pin, n-row, pin-pitch, pin-pitch)
 
 public defn sma-connector ():
-  ocdb/johnson/142-0761-881/component
+  ocdb/components/johnson/142-0761-881/component
 
 public defn bnc-connector () :
-  ocdb/amphenol/112640/component
+  ocdb/components/amphenol/112640/component
 
 public defn ethernet-jack ():
-  ocdb/pulse-electronics/J0G-0009NL/component
+  ocdb/components/pulse-electronics/J0G-0009NL/component
 
 ; USB2 device connection via USBA MicroB
 public pcb-module micro-usb-connector :
   port usb-2 : usb-2
-  public inst con : ocdb/amphenol/10103594-0001LF/component
+  public inst con : ocdb/components/amphenol/10103594-0001LF/component
   net VBUS (usb-2.vbus.vdd con.VCC)
   net (usb-2.vbus.gnd con.GND)
   ; RC filter connection for chassis gnd
@@ -651,7 +651,7 @@ public pcb-module micro-usb-connector :
   schematic-group(self) = micro-usb
 
 public defn  usb2-on-a-usb-c-connector ():
-  usb2-on-a-usb-c-connector(ocdb/belfuse/SS-52400-003/module(SinkDefault))
+  usb2-on-a-usb-c-connector(ocdb/components/belfuse/SS-52400-003/module(SinkDefault))
 
 public pcb-module usb2-on-a-usb-c-connector (conref:Instantiable):
   port usb-2 : usb-2
@@ -668,7 +668,7 @@ public pcb-module usb2-on-a-usb-c-connector (conref:Instantiable):
 ; Add a tag-connect landing pattern to a processor
 public defn attach-programming-connector (proc:JITXObject, vio:JITXObject, intf:String):
   inside pcb-module:
-    public inst tag : ocdb/tag-connect/TC2050-IDC-NL/module
+    public inst tag : ocdb/components/tag-connect/TC2050-IDC-NL/module
     net (vio, tag.pwr)
     if intf == "swd" :
       require swd:swd() from proc
@@ -681,22 +681,22 @@ public defn attach-programming-connector (proc:JITXObject, vio:JITXObject, intf:
 ; ================== Testpoint functions =================
 ; ========================================================
 
-public pcb-enum ocdb/generic-components/Testpoint :
+public pcb-enum ocdb/utils/generic-components/Testpoint :
   Testpoint-SMDLoop
   Testpoint-SMDPad
   Testpoint-PTHLoop
 
-pcb-module test-points (count:Int, method:ocdb/generic-components/Testpoint) :
+pcb-module test-points (count:Int, method:ocdb/utils/generic-components/Testpoint) :
   port tp : pin[count]
   val points = match(method) :
     (method:Testpoint-PTHLoop) :
       var color = "yellow"
       ; if r == #R(gnd):
       ;   color = "black"
-      inst point : ocdb/keystone/500xx/component(color)[count]
+      inst point : ocdb/components/keystone/500xx/component(color)[count]
       point
     (method:Testpoint-SMDLoop) :
-      inst point : ocdb/te-connectivity/RC/component[count]
+      inst point : ocdb/components/te-connectivity/RC/component[count]
       point
     (method:Testpoint-SMDPad) :
       inst point : gen-testpad(2.0)[count]
@@ -704,7 +704,7 @@ pcb-module test-points (count:Int, method:ocdb/generic-components/Testpoint) :
   for i in 0 to count do :
     net (tp[i] points[i].p)
 
-public defn add-testpoint (rs:Tuple<JITXObject>, method:ocdb/generic-components/Testpoint) :
+public defn add-testpoint (rs:Tuple<JITXObject>, method:ocdb/utils/generic-components/Testpoint) :
   inside pcb-module :
     inst test-points:test-points(length(rs), method)
     for (r in rs, i in 0 to false) do :
@@ -739,7 +739,7 @@ public defn smd-testpoint-cmp () :
 public defn dip-pull (pins:Tuple<JITXObject>, power-pin:JITXObject, gnd-pin:JITXObject) :
   inside pcb-module :
     val n = length(pins)
-    public inst dip : ocdb/cts/219/component(n)
+    public inst dip : ocdb/components/cts/219/component(n)
     require sws:SPST[n] from dip
     for i in 0 to n do :
       net (pins[i], sws[i].p)
@@ -877,7 +877,7 @@ public defn add-rgb-indicator (brightness:Double, proc:JITXObject, vin:JITXObjec
       defn calc-r (l:JITXObject, brightness:Double, vio:Double):
         val i = PWL(property(l.mcd-current))[brightness]
         closest-std-val((vio - property(l.forward-voltage)) / i, 5.0)
-      public inst led : ocdb/foshan-optoelectronics/FM-B2020RGBA-HG/component ; TODO: make generic
+      public inst led : ocdb/components/foshan-optoelectronics/FM-B2020RGBA-HG/component ; TODO: make generic
       
       res-strap(control-pins[0].timer, led.l.r, calc-r(led.l.r, brightness, vio))
       res-strap(control-pins[1].timer, led.l.g, calc-r(led.l.g, brightness, vio))

@@ -1,5 +1,5 @@
 #use-added-syntax(jitx)
-defpackage ocdb/micro-controllers :
+defpackage ocdb/utils/micro-controllers :
   import core
   import collections
   import json
@@ -7,15 +7,15 @@ defpackage ocdb/micro-controllers :
   import jitx
   import jitx/commands
   import jitx/errors
-  import ocdb/land-patterns
-  import ocdb/design-vars
-  import ocdb/property-structs
-  import ocdb/box-symbol
-  import ocdb/db-parts
+  import ocdb/utils/landpatterns
+  import ocdb/utils/design-vars
+  import ocdb/utils/property-structs
+  import ocdb/utils/box-symbol
+  import ocdb/utils/db-parts
 
-  import ocdb/stm
-  import ocdb/stm-to-jitx
-  import ocdb/st-microelectronics/landpatterns
+  import ocdb/utils/stm
+  import ocdb/utils/stm-to-jitx
+  import ocdb/components/st-microelectronics/landpatterns
 
 
 ;============================================================
@@ -43,9 +43,9 @@ defpackage ocdb/designs/mcu :
   import jitx
   import jitx/commands
 
-  import ocdb/defaults
-  import ocdb/micro-controllers
-  import ocdb/generic-components
+  import ocdb/utils/defaults
+  import ocdb/utils/micro-controllers
+  import ocdb/utils/generic-components
 
 println("Available mcu cores: %_" % [look-up-micro-controllers("core")])
 
@@ -63,7 +63,7 @@ view-schematic()
 based on the ARM Cortex-M3. It needs to be run with arguments `\[`cap-bypass-package => 4.7e-6\]` for our micro-controller
 API to generate a module with the required configuration.
 
-See [ocdb/stm-to-jitx](#ocdbstm-to-jitx) for documentation of the micro-controller generator.
+See [ocdb/utils/stm-to-jitx](#ocdbstm-to-jitx) for documentation of the micro-controller generator.
 <>
 
 public defn micro-controller (params:Tuple<KeyValue>) -> (Tuple<KeyValue<Symbol,?>> -> Instantiable) :
@@ -103,7 +103,7 @@ be given in argument to restrict further criteria on the considered micro-contro
 Example:
 ```stanza
 $ jitx repl
-stanza> import ocdb/micro-controllers
+stanza> import ocdb/utils/micro-controllers
 stanza> println("Available mcu cores: %_" % [look-up-micro-controllers("core")])
 Available mcu cores: ["ARM Cortex-M0+" "ARM Cortex-M3" "ARM Cortex-M4" "ARM Cortex-M7"]
 stanza> println $ look-up-micro-controllers("io")
@@ -139,7 +139,7 @@ Check the [properties reference](../utilities/properties.md) for a description o
 Here are available attribute values with [default design requirements](#microcontroller-accessors) as of 10/14/2021. They can be queried anytime with:
 ```stanza
 $ jitx repl
-stanza> import ocdb/micro-controllers
+stanza> import ocdb/utils/micro-controllers
 stanza> for attribute in ["manufacturer", "mpn", "trust", "dimensions", "mounting", "rated-temperature", "core", "core-architecture", "data-width", "flash", "frequency", "io", "line", "mfg-package", "ram", "eeprom", "series", "supply-voltage", "rated-esd"] do :
       >   println("| %_ | %@ |" % [attribute, look-up-micro-controllers(attribute)])
 ```
@@ -167,7 +167,7 @@ stanza> for attribute in ["manufacturer", "mpn", "trust", "dimensions", "mountin
 | rated-esd | 2000.0 |
 <>
 
-public pcb-struct ocdb/micro-controllers/MicroController <: Component :
+public pcb-struct ocdb/utils/micro-controllers/MicroController <: Component :
   ; Generic properties
   manufacturer: String
   mpn: String
@@ -253,14 +253,14 @@ public defn MicroController (properties:Tuple<KeyValue>) -> MicroController
 Fixed Requirements :
 * category: "microcontroller"
 
-Default design Requirements (set by global variables defined in `ocdb/design-vars`) :
+Default design Requirements (set by global variables defined in `ocdb/utils/design-vars`) :
 *  _sort: \["area"]\
 * max-rated-temperature.min: 0.0
 * min-rated-temperature.max: 25.0
 * _stock: 100
 * _sellers: \["Digi-Key" "Mouser" "Newark" "Allied Electronics & Automation" "Avnet" "Future Electronics" "Arrow Electronics"\]
 
-Those design requirements can be changed, either by changing `ocdb/design-vars` or by importing `ocdb/design-vars` and
+Those design requirements can be changed, either by changing `ocdb/utils/design-vars` or by importing `ocdb/utils/design-vars` and
 setting new values for the global variables:
 * _sort: set by `OPTIMIZE-FOR`.
 * max-rated-temperature.min / min-rated-temperature.max : set by `OPERATING-TEMPERATURE`.
@@ -291,7 +291,7 @@ Arguments:
 Example: Find the best micro-controllers for our design requirements (optimizes by area by default)
 ```stanza
 $ jitx repl
-stanza> import ocdb/micro-controllers
+stanza> import ocdb/utils/micro-controllers
 stanza> val mcu = MicroController([])
 stanza> println $ mcu
 MicroController(
@@ -347,7 +347,7 @@ Example:
 ```stanza
 $ jitx repl
 stanza> import jitx/commands
-stanza> import ocdb/db-parts
+stanza> import ocdb/utils/db-parts
 stanza> import json
 stanza> val jobject = dbquery-first(["category" => "microcontroller" "flash" => 32.0e3, "_stock" => 1, "_sellers" => ["Mouser"]]) as JObject
 stanza> val mcu = MicroController(jobject)
@@ -452,7 +452,7 @@ Example :
 #use-added-syntax(jitx)
 defpackage ocdb/designs/mcu :
   import core
-  import ocdb/micro-controllers
+  import ocdb/utils/micro-controllers
 
 pcb-module my-design:
   inst mcu : micro-controller(["core" => "ARM Cortex-M3"])([`cap-bypass-package => 4.7e-6])
@@ -462,7 +462,7 @@ is equivalent to
 #use-added-syntax(jitx)
 defpackage ocdb/designs/mcu :
   import core
-  import ocdb/micro-controllers
+  import ocdb/utils/micro-controllers
 
 val mcu = MicroController(["core" => "ARM Cortex-M3"])
 val module-generator = mcu-module $ to-jitx(mcu)
@@ -499,7 +499,7 @@ Available user settings are:
 | Option | Values | Default |
 |:-----|:-----|:-----|
 | \`debug-interface | `Bundle` | `swd()` (pins: swdio, swdclk) |
-| \`debug-connector | `Instantiable` | `ocdb/tag-connect/TC2050-IDC-NL/module` (pins: p\[1 through 10\]) |
+| \`debug-connector | `Instantiable` | `ocdb/components/tag-connect/TC2050-IDC-NL/module` (pins: p\[1 through 10\]) |
 
 * Configuring the micro-controller clock
 
@@ -545,8 +545,8 @@ Example:
 ```stanza
 #use-added-syntax(jitx)
 defpackage my-design :
-  import ocdb/db-parts
-  import ocdb/micro-controllers
+  import ocdb/utils/db-parts
+  import ocdb/utils/micro-controllers
 
 val micro-controller = MicroController(["max-io" => 40])
 

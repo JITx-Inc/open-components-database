@@ -1,0 +1,50 @@
+#use-added-syntax(jitx, tests)
+defpackage ocdb/tests/bundle-connects : 
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/connects
+  import ocdb/utils/bundles
+
+  import ocdb/utils/defaults
+  import ocdb/utils/design-vars
+  import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/property-structs
+  import ocdb/utils/checks
+  import ocdb/utils/micro-controllers
+    
+deftest(odcb, bundle-connects) connect-spi-01 :
+  pcb-module accel:  
+    ; connect mcu spi with cip and copi to accelerometer spi using SDI and SDO
+    inst accel : ocdb/components/st-microelectronics/LIS3DH/module
+    inst mcu : ocdb/components/st-microelectronics/STM32F105VBH6/module([])
+    require spi1:spi-controller() from mcu.mcu
+    connect-spi(mcu.mcu, spi1, [accel.spi])
+
+    require spi2:spi-controller() from mcu.mcu
+    inst spi-other-mcu : ocdb/components/st-microelectronics/STM32F105VBH6/module([])
+    require spi-from-other:spi-controller() from spi-other-mcu.mcu
+    inst adc : ocdb/components/analog-devices/AD7124-8BBCPZ/module[4]
+
+    ; connet main mcu to other mcu with spi-controller and other peripheral spi
+    connect-spi(mcu.mcu, spi2, [spi-from-other adc[0].spi adc[1].spi adc[2].spi adc[3].spi])
+    ; check spi cipo sdo, copi sdi, sck, and gpio for cs
+    ; spi 1 checks
+    #EXPECT(connected?([accel.spi.sdi spi1.copi]))
+    #EXPECT(connected?([accel.spi.sdo spi1.cipo]))
+    #EXPECT(connected?([accel.spi.sck spi1.sck]))
+    #EXPECT(connected?([accel.spi.cs spi1.cs]))
+
+    ; spi 2 checks    
+    #EXPECT(connected?([spi2.copi spi-from-other.copi adc[0].spi.sdi adc[1].spi.sdi  adc[2].spi.sdi  adc[3].spi.sdi]))
+    #EXPECT(connected?([spi2.cipo spi-from-other.cipo adc[0].spi.sdo adc[1].spi.sdo  adc[2].spi.sdo  adc[3].spi.sdo]))
+    #EXPECT(connected?([spi2.sck spi-from-other.sck adc[0].spi.sck adc[1].spi.sck  adc[2].spi.sck  adc[3].spi.sck]))
+    #EXPECT(connected?([spi2.cs spi-from-other.cs]))
+    #EXPECT(not connected?([spi2.cs adc[0].spi.cs adc[1].spi.cs adc[2].spi.cs  adc[3].spi.cs])) 
+    ; [TODO] replace above with function that checks if each net in the Tuple is not connected to each other net in the Tuple
+
+    ; #EXPECT(connected?([accel.spi.sdo spi1.copi])) ; this should fail
+  make-default-board(accel, 4, RoundedRectangle(50.0, 50.0, 0.25))
+;   print-def(accel)

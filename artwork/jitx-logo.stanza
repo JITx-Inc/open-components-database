@@ -1,0 +1,188 @@
+; Symbols: small, large
+; Options to pass: (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
+;                   Layer                  Show Symbol or box on schematic,   Courtyard
+; How to use:
+; size small, Top copper, box on schematic, no courtyard
+  ; inst logo1 : ocdb/artwork/jitx-logo/small(LayerIndex(0),false,false)
+; size small, Top copper, symbol on schematic, courtyard on Top
+  ; inst logo2 : ocdb/artwork/jitx-logo/small(LayerIndex(0),true)
+; size small, Top soldermask layer, symbol on schematic, courtyard on Top
+  ; inst logo3 : ocdb/artwork/jitx-logo/small(SolderMask(Top),true, Top)
+; size large, Top silkscreen layer, symbol on schematic, top courtyard
+  ; inst logo4 : ocdb/artwork/jitx-logo/large()
+; use place function to control position, orientation, and top/bottom layer
+; place(<name>) at loc(0.0, 0.0, 0.0) on Bottom
+#use-added-syntax(jitx)
+defpackage ocdb/artwork/jitx-logo :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/generic-components
+  import ocdb/utils/symbols
+  import jitx/geometry/algorithms/detect-boundary
+  import jitx/geometry/shapes/arc-utils
+
+pcb-symbol JITX-symbol (show-symbol:True|False) :
+  if show-symbol :
+    layer("foreground") = jitx-logo-scale(0.025)
+  else :
+    layer("foreground") = Rectangle(5.08, 5.08, loc(0.0, 0.0))
+  layer("foreground") = Text(">VALUE", 0.762, SW, loc(-2.54, 2.84))
+  layer("foreground") = Text(">REF", 0.762, SW, loc(-2.54, 3.902))
+
+  ; ===========================================================================
+  ; ===================== Scale ===============================================
+  ; ===========================================================================
+; Defaults
+public defn logo (height:Double) :
+  logo(Silkscreen("artwork", Top),true, Top, height)
+public defn logo () :
+  logo(Silkscreen("artwork", Top),true, Top, 0.05)
+public defn logo (layer:LayerSpecifier|LayerIndex, height) :
+  logo(layer,true, Top, height)
+public defn logo (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, height) :
+  logo(layer,show-symbol, Top, height)
+
+public pcb-component logo (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False, height:Double) : ; height in mm
+  name = "JITX"
+  description = "JITX Logo"
+  manufacturer = "non-BOM"
+  mpn = "non-BOM"
+  assign-landpattern(jitx-sm-lp(layer, side, height))
+  val sym = JITX-symbol(show-symbol)
+  symbol = sym()
+  reference-prefix = "JITX"
+
+pcb-landpattern jitx-sm-lp (lyr:LayerSpecifier|LayerIndex, side:Side|False, height:Double) :
+  val scaling-factor =  height / 273.374
+  if side is Side :
+    layer(Courtyard(side as Side)) = Rectangle(scaling-factor * 434.331, scaling-factor * 273.374, loc(scaling-factor * 263.647, scaling-factor * 174.533))
+  match(lyr) :
+    (lyr:LayerSpecifier) : layer(lyr) = jitx-logo-scale(scaling-factor) 
+    (lyr:LayerIndex) : copper(lyr) = jitx-logo-scale(scaling-factor)
+
+  ; ===========================================================================
+  ; ===================== Small ===============================================
+  ; ===========================================================================
+; Defaults
+public defn small () :
+  small(Silkscreen("artwork", Top),true, Top)
+public defn small (layer:LayerSpecifier|LayerIndex) :
+  small(layer,true, Top)
+public defn small (layer:LayerSpecifier|LayerIndex,show-symbol:True|False) :
+  small(layer,show-symbol, Top)
+
+public pcb-component small (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
+  name = "JITX"
+  description = "JITX Logo"
+  manufacturer = "non-BOM"
+  mpn = "non-BOM"
+  assign-landpattern(jitx-sm-lp(layer, side))
+  val sym = JITX-symbol(show-symbol)
+  symbol = sym()
+  reference-prefix = "JITX"
+
+pcb-landpattern jitx-sm-lp (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
+  if side is Side :
+    layer(Courtyard(side as Side)) = Rectangle(0.025 * 434.331, 0.025 * 273.374, loc(0.025 * 263.647, 0.025 * 174.533))
+  match(lyr) :
+    (lyr:LayerSpecifier) : layer(lyr) = jitx-logo-scale(0.025) ; shift new logo by 263.648mm x 174.533mm
+    (lyr:LayerIndex) : copper(lyr) = jitx-logo-scale(0.025)
+
+  ; ===========================================================================
+  ; ===================== Large ===============================================
+  ; ===========================================================================
+; Defaults
+public defn large () :
+  large(Silkscreen("artwork", Top),true, Top)
+public defn large (layer:LayerSpecifier|LayerIndex) :
+  large(layer,true, Top)
+public defn large (layer:LayerSpecifier|LayerIndex,show-symbol:True|False) :
+  large(layer,show-symbol, Top)
+
+public pcb-component large (layer:LayerSpecifier|LayerIndex,show-symbol:True|False, side:Side|False) :
+  name = "JITX"
+  description = "JITX Logo"
+  manufacturer = "non-BOM"
+  mpn = "non-BOM"
+  assign-landpattern(jitx-large(layer, side))
+  val sym = JITX-symbol(show-symbol)
+  symbol = sym()
+  reference-prefix = "JITX"
+
+pcb-landpattern jitx-large (lyr:LayerSpecifier|LayerIndex, side:Side|False) :
+  if side is Side :
+    layer(Courtyard(side as Side)) = Rectangle(0.1 * 434.331, 0.1 * 273.374, loc(0.1 * 263.647, 0.1 * 174.533))
+  match(lyr) :
+    (lyr:LayerSpecifier) : layer(lyr) = jitx-logo-scale(0.1)
+    (lyr:LayerIndex) : copper(lyr) = jitx-logo-scale(0.1)
+
+; ========================  Artwork ========================
+defn jitx-logo-scale (scale:Double) :
+  Union([get-shape-from-contour([ ; lower x other color
+    Line(0.254, [Point(scale * 352.25071, scale * 166.56614), Point(scale * 385.77918, scale * 212.30018)]) ; point
+    Line(0.254, [Point(scale * 385.77918, scale * 212.30018), Point(scale * 425.72271, scale * 109.47624)]) ; point
+    Line(0.254, [Point(scale * 425.72271, scale * 109.47624), Point(scale * 376.16831, scale * 109.46994)])
+    Line(0.254, [Point(scale * 376.16831, scale * 109.46994), Point(scale * 352.25071, scale * 166.56614)])
+    ])
+    get-shape-from-contour([ ; upper x other color
+      Line(0.254, [Point(scale * 385.77918, scale * 212.30018), Point(scale * 448.17761, scale * 296.47284)]) ; point
+      Polyline(0.254, [Arc(Point(scale * 480.32967, scale * 268.80635), Point(scale * 480.81341, scale * 311.22044), (89.34 - 139.288)) ]); new arc
+      Line(0.254, [ Point(scale * 480.81341, scale * 311.22044), Point(scale * 430.08697, scale * 311.1661)])
+      Polyline(0.254, [Arc(scale * 427.43546, scale * 269.54979, scale * 41.70069, 86.354432664842, 47.8643206763705)])
+      Line(0.254, [Point(scale * 368.54126, scale * 256.67461), Point(scale * 398.35341, scale * 299.43594)])
+      Line(0.254, [Point(scale * 368.54126, scale * 256.67461), Point(scale * 385.77918, scale * 212.30018)]) ; point
+    ])
+    get-shape-from-contour([ ; t
+      Line(0.254, [Point(scale * 192.21811, scale * 109.47134), Point(scale * 220.88521, scale * 109.47204)])
+      Line(0.254, [Point(scale * 220.88521, scale * 109.47204), Point(scale * 243.89771, scale * 240.25584)])
+      Line(0.254, [Point(scale * 243.89771, scale * 240.25584), Point(scale * 281.90071, scale * 240.31184)])
+      Line(0.254, [Point(scale * 281.90071, scale * 240.31184), Point(scale * 287.04781, scale * 269.85464)])
+      Line(0.254, [Point(scale * 287.04781, scale * 269.85464), Point(scale * 249.13091, scale * 269.87074)]) ; reverse?
+      Line(0.254, [Point(scale * 249.13091, scale * 269.87074), Point(scale * 254.13451, scale * 298.55814)])
+      Line(0.254, [Point(scale * 254.13451, scale * 298.55814), Point(scale * 225.48071, scale * 298.55604)])
+      Line(0.254, [Point(scale * 225.48071, scale * 298.55604), Point(scale * 192.21811, scale * 109.47134)])
+    ])
+    get-shape-from-contour([ ; i dot
+      Polyline(0.254, [Arc(scale * 192.79512, scale * 280.0784, scale * 18.48297, 90.045434172056, 66.0875592258654)]) ; 1
+      Polyline(0.254, [Arc(scale * 187.62571, scale * 281.66284, scale * 13.13026, 153.32723335444, 90.0000049753901)]) ; 2
+      Polyline(0.254, [Arc(scale * 187.00212, scale * 285.99534, scale * 16.90794, 251.837227244361, 80.7081864800818)]) ; 3
+      Polyline(0.254, [Arc(scale * 191.6858, scale * 286.02582, scale * 12.95168, 322.826473363368, 90.0)]) ; 4
+      Polyline(0.254, [Arc(scale * 191.49081, scale * 283.31024, scale * 15.30556, 58.3960486943029, 26.7704478088988)]) ; 5
+    ])
+    get-shape-from-contour([ ; j
+      Line(0.254, [Point(scale * 129.99511, scale * 106.11806), Point(scale * 155.77751, scale * 252.92654)])
+      Line(0.254, [Point(scale * 155.77751, scale * 252.92654), Point(scale * 127.07961, scale * 252.92794)])
+      Line(0.254, [Point(scale * 127.07961, scale * 252.92794), Point(scale * 100.88372, scale * 104.07677)])
+      Polyline(0.254, [Arc(Point(scale * 50.63525, scale * 118.77768), Point(scale * 51.23486, scale * 66.42632), 1.0 *  (270.656 - 343.692)) ]); new arc
+      Line(0.254, [Point(scale * 51.23486, scale * 66.42632), Point(scale * 46.48195, scale * 37.846)])
+      Polyline(0.254, [Arc(scale * 39.72792, scale * 131.34997, scale * 93.74758, 274.131472313522, 70.1282911141564)])
+    ])
+    get-shape-from-contour([ ; i body
+      Line(0.254, [Point(scale * 161.37197, scale * 109.53154), Point(scale * 186.14702, scale * 109.58264)]) ; 1
+      Polyline(0.254, [Arc(Point(scale * 187.78956, scale * 120.45189), Point(scale * 176.92031, scale * 122.09443), 171.407 - 261.407)]) ; 8
+      Line(0.254, [Point(scale * 176.92031, scale * 122.09443), Point(scale * 197.30991, scale * 239.93381)]) ; 7
+      Polyline(0.254, [Arc(scale * 185.69481, scale * 241.28834,scale *  11.69381, 353.348467089116, 90.0)]) ; 6
+      Line(0.254, [Point(scale * 187.04931, scale * 252.90344), Point(scale * 161.24171,scale *  252.88594)]) ; 5
+      Polyline(0.254, [Arc(Point(scale * 159.87001,scale *  241.55414), Point(scale * 171.19061, scale * 240.21184), -1.0 * (360.0 - 353.238 + 82.238))]) ; 4
+      Line(0.254, [Point(scale * 171.19061, scale * 240.21184), Point(scale * 150.64721,scale *  120.99825)]) ; 3
+      Polyline(0.254, [Arc(scale * 161.74291, scale * 120.62724, scale * 11.1019, 178.084937086803, 90.0000126632972)]) ; 2      
+    ])
+    get-shape-from-contour([ ; x other
+      Line(0.254, [Point(320.43221, 124.54584), Point(352.25071, 166.56614)])
+      Line(0.254, [Point(scale * 352.25071, scale * 166.56614), Point(scale * 385.77918, scale * 212.30018)]) ; point ; from blue x
+      Line(0.254, [Point(scale * 385.77918, scale * 212.30018), Point(scale * 368.54126, scale * 256.67461)]) ; point ; from blue x
+      Line(0.254, [Point(scale * 368.54126, scale * 256.67461), Point(scale * 347.41301, scale * 311.06364)])
+      Line(0.254, [Point(scale * 347.41301, scale * 311.06364), Point(scale * 294.69251, scale * 311.11124)])
+      Line(0.254, [Point(scale * 294.69251, scale * 311.11124), Point(scale * 332.55271, scale * 210.13204)])
+      Line(0.254, [Point(scale * 332.55271, scale * 210.13204), Point(scale * 267.96461, scale * 124.89584)])
+      Polyline(0.254, [Arc(Point(scale * 231.32182, scale * 159.73793), Point(scale *236.85711, scale * 109.47834), -1.0 * (316.443 - 276.285))]) 
+      Line(0.254, [Point(scale * 236.85711, scale * 109.47834), Point(scale * 288.27911, scale * 109.48569)])
+      Polyline(0.254, [Arc(scale * 288.35845, scale * 151.16948, scale * 41.68387, 269.890956168332, 50.4138162580514)])
+
+    ])
+  ])
