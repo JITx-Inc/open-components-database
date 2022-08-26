@@ -8,13 +8,11 @@ defpackage ocdb/designs/ble-mote :
 
   import ocdb/utils/bundles
   import ocdb/utils/connects
-  import ocdb/utils/defaults
   import ocdb/utils/design-vars
   import ocdb/utils/generator-utils
   import ocdb/utils/generic-components
   import ocdb/utils/property-structs
   import ocdb/utils/checks
-  import ocdb/manufacturers/rules
   import ocdb/utils/tolerance
 
 
@@ -58,7 +56,7 @@ pcb-module sensors :
   port humidity-i2c : i2c
 
   ; Add USB connector
-  public inst usb : usb2-on-a-usb-c-connector(ocdb/korean-hroparts-elec/TYPE-C-31-M-12/module(SinkDefault))
+  public inst usb : usb2-on-a-usb-c-connector(ocdb/components/korean-hroparts-elec/TYPE-C-31-M-12/module(SinkDefault))
 
   ; Define ground net and assign symbol
   public net gnd (usb.usb-2.vbus.gnd)
@@ -74,8 +72,8 @@ pcb-module sensors :
   net P3V3 (ldo.vout.vdd)
 
   net VBUS (usb.usb-2.vbus.vdd)
-  symbol(P5V0) = ocdb/symbols/supply-sym
-  symbol(P3V3) = ocdb/symbols/supply-sym
+  symbol(P5V0) = ocdb/utils/symbols/supply-sym
+  symbol(P3V3) = ocdb/utils/symbols/supply-sym
 
   property(VBUS.net-voltage) = min-max(4.8, 5.2)
   property(P5V0.net-voltage) = min-max(4.7, 5.1)
@@ -104,18 +102,18 @@ pcb-module sensors :
   val debug-tps = add-testpoint([ debug.tx
                                   debug.rx
                                   debug.dtr
-                                  debug.rts], ocdb/keystone/5017/component)
+                                  debug.rts], ocdb/components/keystone/5017/component)
 
   val power-tps = add-testpoint([ P5V0
                                   P3V3
-                                  gnd ], ocdb/keystone/5017/component)
+                                  gnd ], ocdb/components/keystone/5017/component)
 
   val hum-tps = add-testpoint([   hum.i2c.sda
-                                  hum.i2c.scl], ocdb/keystone/5017/component)
+                                  hum.i2c.scl], ocdb/components/keystone/5017/component)
 
   val pms-tps = add-testpoint([   particle-counter-interface.uart.tx
                                   particle-counter-interface.uart.tx
-                                  gnd ], ocdb/keystone/5017/component)
+                                  gnd ], ocdb/components/keystone/5017/component)
 
   schematic-group([usb, ldo, cp2105, power-tps containing-instance(protected-usb) as JITXObject]) = power
   schematic-group([hum hum-tps]) = humidity-sensor
@@ -150,7 +148,7 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
   net gnd (proc.gnd)
 
   ; Add an antenna for the PICO-D4
-  if processor == ocdb/espressif/ESP32-PICO-D4/module :
+  if processor == ocdb/components/espressif/ESP32-PICO-D4/module :
     inst ant : inverted-f-antenna
     net (proc.ant, ant.rf-in)
     net (gnd ant.gnd)
@@ -175,7 +173,7 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
     copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = board-outline
     copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = board-outline
 
-  inst logo : ocdb/jitx-logo/small(Silkscreen("artwork", Top),true)
+  inst logo : ocdb/artwork/jitx-logo/small(Silkscreen("artwork", Top),true)
   place(logo) at loc(x + 1.0, 0.0 - y, 0.0) on Bottom
 
   check-design(self)
@@ -185,14 +183,14 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
 ; ==========================================
 defn run-design (run-checks?:True|False) :
   val outline = Rectangle(45.0, 30.0)
-  val circuit = sensor-system(ocdb/espressif/esp32-wroom-32/module(ocdb/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), outline)
+  val circuit = sensor-system(ocdb/components/espressif/esp32-wroom-32/module(ocdb/components/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), outline)
   set-design-directory("ble-mote")
-  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, outline))
-  set-rules(ocdb/rules/jlcpcb-rules)
+  set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-jlc2313, outline))
+  set-rules(ocdb/manufacturers/rules/jlcpcb-rules)
 
   var main-module = circuit
   if run-checks? :
-    main-module = ocdb/generator-utils/run-final-passes(circuit) ; Analyze design with a pass
+    main-module = ocdb/utils/generator-utils/run-final-passes(circuit) ; Analyze design with a pass
   
   set-main-module(main-module) ; Treat the provided module as a design, and compile it.
   
@@ -221,8 +219,8 @@ defn export-design (module:Instantiable, shape:Rectangle, directory:String) :
   set-export-backend(`altium)
 
   set-design-directory(directory)
-  set-board(ocdb/defaults/default-board(ocdb/stackups/jlcpcb-jlc2313, shape))
-  set-rules(ocdb/rules/jlcpcb-rules)
+  set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-jlc2313, shape))
+  set-rules(ocdb/manufacturers/rules/jlcpcb-rules)
   set-main-module(module)
   export-bill-of-materials()
   set-config-sets([`groups])
@@ -232,8 +230,8 @@ defn export-design (module:Instantiable, shape:Rectangle, directory:String) :
 ; Export BOM to tsv
 ; =================
 defn export-bill-of-materials () :
-  set-bom-vendors(ocdb/design-vars/APPROVED-DISTRIBUTOR-LIST)
-  set-bom-design-quantity(ocdb/design-vars/DESIGN-QUANTITY)
+  set-bom-vendors(ocdb/utils/design-vars/APPROVED-DISTRIBUTOR-LIST)
+  set-bom-design-quantity(ocdb/utils/design-vars/DESIGN-QUANTITY)
   export-bom()
 
 ; ============
@@ -242,11 +240,11 @@ defn export-bill-of-materials () :
 ; compile-design()
 
 val pico-shape = Rectangle(35.0, 20.0)
-export-design(sensor-system(ocdb/espressif/ESP32-PICO-D4/module, pico-shape)
+export-design(sensor-system(ocdb/components/espressif/ESP32-PICO-D4/module, pico-shape)
               pico-shape, 
               "air-quality-sensor-pico")
 
 val wroom-shape = Rectangle(45.0, 30.0)
-export-design(sensor-system(ocdb/espressif/esp32-wroom-32/module(ocdb/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), wroom-shape)
+export-design(sensor-system(ocdb/components/espressif/esp32-wroom-32/module(ocdb/components/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), wroom-shape)
               wroom-shape, 
               "air-quality-sensor-wroom")
