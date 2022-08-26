@@ -11,29 +11,29 @@ defpackage ocdb/designs/power-monitor :
   import collections
   import jitx
   import jitx/commands
-  import ocdb/defaults
-  import ocdb/generic-components
-  import ocdb/bundles
-  import ocdb/design-vars
-  import ocdb/micro-controllers
-  import ocdb/generator-utils
-  import ocdb/property-structs
-  import ocdb/checks
-  import ocdb/tolerance
+  import ocdb/utils/defaults
+  import ocdb/utils/generic-components
+  import ocdb/utils/bundles
+  import ocdb/utils/design-vars
+  import ocdb/utils/micro-controllers
+  import ocdb/utils/generator-utils
+  import ocdb/utils/property-structs
+  import ocdb/utils/checks
+  import ocdb/utils/tolerance
 
 val board-shape = RoundedRectangle(3.55 * 25.4, 3.775 * 25.4, 1.0)
 
 OPERATING-TEMPERATURE = [-40.0, 90.0]
 
 pcb-module power-monitor :
-  inst fmc :ocdb/samtec/ASP-134488-01/component
+  inst fmc :ocdb/components/samtec/ASP-134488-01/component
   place(fmc) at loc(0.0, -35.0) on Top
   set-power-source(fmc.v12p0 ,fmc.gnd, 12.0)
 
   net GND (fmc.gnd)
-  symbol(GND) = ocdb/symbols/ground-sym
+  symbol(GND) = ocdb/utils/symbols/ground-sym
 
-  inst fpga : ocdb/microsemi/A2F200M3F-FGG256I/module
+  inst fpga : ocdb/components/microsemi/A2F200M3F-FGG256I/module
 
 ; Rails to monitor
   val power-rails = [ PowerRail(fmc.v12p0,         tol%(12.0, 2.0))
@@ -41,7 +41,7 @@ pcb-module power-monitor :
                       PowerRail(fpga.src-3V3.vdd,  tol%(3.30, 2.0))
                       PowerRail(fpga.src-io.vdd,   tol%(1.80, 2.0))]
 
-  inst mon : ocdb/maxim/MAX1606x/module(power-rails)
+  inst mon : ocdb/components/maxim/MAX1606x/module(power-rails)
   net gnd (mon.power.gnd GND)
   net vdd (mon.power.vdd fmc.v3p3)
 
@@ -52,7 +52,7 @@ pcb-module power-monitor :
   require comm-bus:lvds[16] from fpga
   require comm-bus-ext:lvds[16] from fmc
   for i in 0 to 16 do :
-    net (ocdb/terminations/terminate-lvds(comm-bus[i], gnd, vdd, ocdb/terminations/LVDSTerminationACSimple), comm-bus-ext[i])
+    net (ocdb/modules/terminations/terminate-lvds(comm-bus[i], gnd, vdd, ocdb/modules/terminations/LVDSTerminationACSimple), comm-bus-ext[i])
 
   ; Mechanicals
   add-mounting-holes(board-shape, "M2", [2 3])

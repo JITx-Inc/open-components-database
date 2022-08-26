@@ -1,0 +1,164 @@
+#use-added-syntax(jitx, tests)
+defpackage ocdb/tests/stm32-mcu-props :
+
+  import core
+  import collections
+  import math
+
+  import utils/time
+
+  import jitx
+  import jitx/commands
+
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/symbol-utils
+  import ocdb/utils/generic-components
+
+  import ocdb/utils/bundles
+  import ocdb/utils/box-symbol
+  import ocdb/utils/property-structs
+  import ocdb/utils/generator-utils
+  import ocdb/utils/checks
+  import ocdb/utils/tolerance
+  import ocdb/utils/micro-controllers
+  import ocdb/utils/design-vars
+
+  import ocdb/utils/db-parts 
+  import ocdb/components/st-microelectronics/generate-ioc
+
+public pcb-module test-stm32-mcu-props :
+  port supply : power
+
+  public net vdd (supply.vdd)
+  val num-vdd-pins = 12
+  val num-vss-pins = 9
+  public net gnd (supply.gnd)
+  net vssa (gnd)
+
+  inst mcu : ocdb/components/st-microelectronics/STM32F407ZET6/component
+  
+  inst cd100n0 : ceramic-cap(["capacitance" => 100.0e-9 "case" => "0603"])[12]
+  inst cd4u7 : ceramic-cap(["capacitance" => 4.7e-6 "case" => "0603"])
+  
+  inst fb : chip-resistor(["resistance" => 10.0, "case" => "0805"])
+  inst xtal : ocdb/components/citizen/CMJ206T32768DZBT/component
+  inst debug-conn : ocdb/components/tag-connect/TC2030-IDC/component
+
+
+  require debug-power : power from debug-conn
+  require debug : swd() from debug-conn
+  require conn-reset : reset from debug-conn
+
+  require lf-osc : low-freq-oscillator from mcu
+  require mcu-uart : uart() from mcu
+  require mcu-debug : swd() from mcu
+
+  ; how to count the number of VDD pins in instance mcu? punt for now
+  ; 
+  for i in 0 to num-vdd-pins do :
+    net (vdd mcu.VDD[i])
+  net (vdd mcu.PDR_ON) ; use on-board POR/PDR
+  net (gnd xtal.gnd)
+  net (supply.vdd debug-power.vdd)
+
+  for i in 0 to num-vss-pins do :
+    net (gnd mcu.VSS[i])
+  
+  public net vcap-1 (mcu.VCAP[1])
+  public net vcap-2 (mcu.VCAP[2])
+  
+  bypass-cap-strap(mcu.VCAP[1], gnd, 2.2e-6)
+  bypass-cap-strap(mcu.VCAP[2], gnd, 2.2e-6)
+  
+  res-strap(mcu.BOOT[0], gnd, 1.0e3)
+  
+  public net vdda (mcu.VDDA mcu.VREF+)
+    
+  bypass-cap-strap(mcu.VDDA, gnd, 1.0e-6)
+  bypass-cap-strap(mcu.VDDA, gnd, 100.0e-9)
+  bypass-cap-strap(mcu.VREF+, gnd, 1.0e-6)
+  bypass-cap-strap(mcu.VREF+, gnd, 100.0e-9)
+  
+  net (vdd fb.p[1])
+  net (vdda fb.p[2])
+  
+  for i in 0 to num-vdd-pins do :
+    net (cd100n0[i].p[1] vdd)
+    net (cd100n0[i].p[2] gnd)
+    
+  net (cd4u7.p[1] vdd)
+  net (cd4u7.p[2] gnd)
+    
+  net (vssa mcu.VSSA)
+  
+  val lf-cb = add-xtal-caps(xtal, gnd, 0.5e-12)
+  
+  net (lf-osc.in xtal.p[1])
+  net (lf-osc.out xtal.p[2])
+
+  net (debug mcu-debug)
+
+  net (mcu-debug.swdio mcu-debug.swdclk)
+
+  net dummy ()
+
+  require mcu-gpio-o:gpio[16] from mcu
+  for i in 0 to 16 do :
+    net (mcu-gpio-o[i].gpio dummy)
+    property(mcu-gpio-o[i].gpio.stm32-gpio-iomode) = STMGPIOOutput
+    property(mcu-gpio-o[i].gpio.stm32-gpio-label) = append("OutPut", to-string(i))
+    property(mcu-gpio-o[i].gpio.stm32-gpio-speed) = STMGPIOSpeedMedium
+
+  require mcu-gpio-i:gpio[16] from mcu
+  for i in 0 to 16 do :
+    net (mcu-gpio-i[i].gpio dummy)
+    property(mcu-gpio-i[i].gpio.stm32-gpio-iomode) = STMGPIOInput
+    property(mcu-gpio-i[i].gpio.stm32-gpio-label) = append("InPut", to-string(i))
+
+  require mcu-gpio-eo:gpio[4] from mcu
+  for i in 0 to 4 do :
+    net (mcu-gpio-eo[i].gpio dummy)
+    property(mcu-gpio-eo[i].gpio.stm32-gpio-iomode) = STMGPIOEventOut
+    property(mcu-gpio-eo[i].gpio.stm32-gpio-label) = append("EventOut", to-string(i))
+
+  require mcu-gpio-a:gpio[16] from mcu
+  for i in 0 to 16 do :
+    net (mcu-gpio-a[i].gpio dummy)
+    property(mcu-gpio-a[i].gpio.stm32-gpio-iomode) = STMGPIOAnalog
+    property(mcu-gpio-a[i].gpio.stm32-gpio-label) = append("Analog", to-string(i))
+
+  require mcu-gpio-ex:gpio[4] from mcu
+  for i in 0 to 4 do :
+    net (mcu-gpio-ex[i].gpio dummy)
+    property(mcu-gpio-ex[i].gpio.stm32-gpio-iomode) = STMGPIOExtI
+    property(mcu-gpio-ex[i].gpio.stm32-gpio-label) = append("ExtI", to-string(i))
+
+  require mcu-gpio-speed:gpio[16] from mcu
+  for i in 0 to 16 do :
+    net (mcu-gpio-speed[i].gpio dummy)
+    property(mcu-gpio-speed[i].gpio.stm32-gpio-iomode) = STMGPIOOutput
+    property(mcu-gpio-speed[i].gpio.stm32-gpio-speed) = STMGPIOSpeedVeryHigh
+    property(mcu-gpio-speed[i].gpio.stm32-gpio-label) = append("GPIOSpeedVeryHigh", to-string(i))
+
+  property(mcu-uart.rx.stm32-uxart-mode) = STMUSARTAsynchronous
+  property(mcu-uart.tx.stm32-uxart-mode) = STMUSARTAsynchronous
+
+  ; schematic-group(self) = control
+  ; layout-group(self) = control
+
+deftest(ocdb, stm32-mcu-props, design) test-muc-props-in-design :
+  println $ get-time-string("%H:%M:%S")
+  val final-design = run-final-passes(test-stm32-mcu-props)
+  set-design-directory("test-stm32-mcu-props")
+  set-main-module(final-design)
+  val assigned-pins = assign-pins()
+  val interim = transform-module(generate-ioc-file, assigned-pins)
+
+  set-board(default-board(4, Rectangle(50.0,50.0)))
+  set-config-sets([`groups])
+  run-checks("test-stm32-mcu-props.txt")
+  set-paper(ANSI-E)
+
+  println $ get-time-string("%H:%M:%S")

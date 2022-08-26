@@ -1,0 +1,34 @@
+#use-added-syntax(jitx, tests)
+defpackage ocdb/tests/pin-properties-index-field :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/box-symbol
+  import ocdb/utils/tolerance
+  import ocdb/utils/landpatterns
+
+deftest(ocdb, pin-properties-index-field) test-pin-properties-index-field :
+  set-default-rules(ocdb/utils/defaults/default-rules)
+
+  pcb-landpattern SO4N :
+    make-n-pin-soic-landpattern(4, 1.27, 
+                                tol(6.0, 0.2), tol(3.9, 0.1), 
+                                tol(4.9, 0.1), min-typ-max(0.4, 1.04, 1.27), 
+                                min-typ-max(0.28, 0.38, 0.48), 
+                                false)
+  
+  pcb-component mycomponent :
+    pin-properties :
+      [pin:Ref | pads:Int ...]
+      [a.x     | 1           ]
+      [a.y     | 2           ]
+      [b.y     | 3           ]
+      [b.x     | 4           ]
+    make-box-symbol()
+    assign-landpattern(SO4N)
+    
+  #EXPECT(property(mycomponent.a.x.pin-properties-row-index) == 0)
+  #EXPECT(property(mycomponent.a.y.pin-properties-row-index) == 1)
+  #EXPECT(property(mycomponent.b.y.pin-properties-row-index) == 2)
+  #EXPECT(property(mycomponent.b.x.pin-properties-row-index) == 3)

@@ -1,0 +1,2514 @@
+#use-added-syntax(jitx)
+defpackage ocdb/utils/landpatterns :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/fonts
+  import jitx/commands with:
+    prefix(pad) => def-
+  import ocdb/utils/design-vars
+  import ocdb/utils/land-protrusions
+  import ocdb/utils/tolerance
+
+;==============================================================================
+;============================== Helpers =======================================
+;==============================================================================
+; ====== Argument constraint Helpers ===========================================
+; Ensure that a value is even and positive.
+defn ensure-even-positive! (value: Int, name: String):
+  if value < 2 or value % 2 == 1:
+    fatal("%_ only supports a positive even number of pins." % [name])
+
+defn ensure-divisible! (value:Int, divisor:Int, name: String):
+  if divisor < 2:
+    fatal("%_ must be > 2" % [value])
+  if (value < divisor) or (value % 2 != 0):
+    fatal("%_ must be positive and divisible by %_." % [value])
+
+; ====== Silk screen helpers ===================================================
+; Create a reference label at (0, 0)
+; ====== Reference Label Helpers ===============================================
+; Creates a reference label from pose and anchor
+public defn ref-label (pose:Pose, anchor:Anchor):
+  inside pcb-landpattern:
+    val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
+    layer(Silkscreen("values", Top)) = Text(">REF", min-silkscreen-text-height, anchor, pose)
+
+; Creates a reference label at a fixed pose
+public defn ref-label (pose:Pose):
+  ref-label(pose, C)
+
+; DEPRECATED: prefer ref-label(loc(x, y))
+; Creates a reference label at an x,y position and anchor
+public defn ref-label (x:Double, y:Double, anchor:Anchor):
+  ref-label(loc(x, y), anchor)
+
+; DEPRECATED: prefer ref-label(loc(x, y))
+; Creates a reference label at an x,y position with default anchor
+public defn ref-label (x:Double, y:Double) :
+  ref-label(x,y,C)
+
+; Create a default reference label
+public defn ref-label () :
+  ref-label(loc(0.0, 0.0))
+
+; Helper function to convert an anchor into a point.
+defn normalize-to-point (anchor:Anchor) -> Point:
+  val [v, h] = components(anchor)
+  val dx = match(h):
+    (hr:W) :  1.0
+    (hr:C) :  0.0
+    (hr:E) : -1.0
+  val dy = match(v) :
+    (vt:S) : 1.0
+    (vt:C) : 0.0
+    (vt:N) : 1.0
+  Point(dx, dy)
+
+; TODO move to internals
+defn times (p:Point, d:Dims) -> Point:
+  Point(x(p) * x(d), y(p) * y(d))
+
+; Helper function to convert an x/y width to length and width (by convention: longer side 
+; is on x axis and shorter side is on y)
+defn normalize-rotation (width:Double, height:Double) -> [Double, Double, Double]:
+  val rot = 90.0 when height > width else 0.0
+  [max(width, height), min(width, height), rot]
+
+; Normalize the position of a shape given an anchor and rotation.
+defn normalize-loc (s:Shape, anchor:Anchor, rot:Double):
+  val pose = Pose((0.5 * normalize-to-point(anchor)) * dims(s), rot, false)
+  pose * s 
+
+; Create a rectangle with normalized rotation and position.
+defn rectangle (anchor:Anchor, width:Double, height:Double):
+  val [length, width_, rot] = normalize-rotation(width, height)
+  normalize-loc(Rectangle(width, height), anchor,rot)
+
+; Create a capsule with normalized rotation and position.
+defn capsule (anchor:Anchor, width:Double, height:Double):
+  val [length, width_, rot] = normalize-rotation(width, height)
+  normalize-loc(Capsule(length, width_), anchor, rot)
+
+; Create a rounded rectangle with normalized rotation and position.
+defn round-rect (anchor:Anchor, width:Double, height:Double, r:Double):
+  val [length, width_, rot] = normalize-rotation(width, height)
+  normalize-loc(RoundedRectangle(length, width_ r), anchor, rot)
+  
+; Create a chamfered rectangle with normalized rotation and position.
+defn chamfered (anchor:Anchor, width:Double, height:Double, r:Double):
+  val [length, width_, rot] = normalize-rotation(width, height)
+  normalize-loc(ChamferedRectangle(length, width_, r), anchor, rot)
+
+;==============================================================================
+;=========================== Geometric Helpers ================================
+;==============================================================================
+defn shift-locs (x:Double, y:Double, s:Seqable<Pose>):
+  seq({loc(x, y) * _}, s)
+
+defn max-distance (p1:Point, p2:Point) -> Point:
+  defn radius (p:Point):
+    sqrt(x(p) * x(p) + y(p) * y(p))
+  if radius(p1) > radius(p2):
+    p1
+  else:
+    p2
+
+; ====== Land pattern utilities ===============================================
+; Create a rectangle out of lines
+public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double, line-w:Double) :
+  val w2 = w * 0.5
+  val h2 = h * 0.5
+  Line(line-w, [
+    Point(xc - w2, yc - h2)
+    Point(xc + w2, yc - h2)
+    Point(xc + w2, yc + h2)
+    Point(xc - w2, yc + h2)
+    Point(xc - w2, yc - h2)])
+
+; Create a rectangle with width, height, center x/y and default line width
+public defn LineRectangle (w:Double, h:Double, xc:Double, yc:Double) :
+  LineRectangle(w, h, xc, yc, clearance(current-rules(), MinSilkscreenWidth))
+
+; Create a rectangle with width and height and default x/y position
+public defn LineRectangle (w:Double, h:Double) :
+  LineRectangle(w, h, 0.0, 0.0)
+
+; Create a rectangle from dims structure
+public defn LineRectangle (d:Dims): 
+  LineRectangle(x(d), y(d))
+
+; Create a rectangle around another shape
+public defn outline-bounding-box (s:Shape):
+  LineRectangle(dims(s))
+
+; Create a "+" symbol with a fixed length at a center point
+public defn PlusSymbol (center:Point, l:Double) -> Shape:
+  val min-width = clearance(current-rules(), MinSilkscreenWidth)
+  loc(x(center), y(center)) * 
+    Union([Line(min-width, [Point(-0.5 * l, 0.0), Point(0.5 * l, 0.0)])
+           Line(min-width, [Point(0.0, -0.5 * l), Point(0.0, 0.5 * l)])])
+
+; Create a 1mm x 1mm plus symbol at Point(x, y)
+public defn PlusSymbol (x:Double, y:Double) -> Shape:
+  PlusSymbol(Point(x, y), 1.0)
+
+;==============================================================================
+;================================= Pads =======================================
+;==============================================================================
+; Apply a shape to the soldermask layer of a pcb-pad. 
+public defn apply-soldermask (mask-shape:Shape):
+  inside pcb-pad:
+    layer(SolderMask(Top)) = mask-shape
+    if pad-type(self) == TH:
+      layer(SolderMask(Bottom)) = mask-shape
+
+; Create the soldermask layers based on the pad shape, using a fixed factor.
+; when expand? is true the soldermask shape is computed with expand(), else it is
+; computed with offset()
+public defn apply-soldermask (amount:Double):
+  val mask-shape = 
+    match(pad-shape(self)):
+      (s:Rectangle|Circle|RoundedRectangle|Capsule|DShape|ChamferedRectangle):
+        expand(s, amount)
+      (s:Shape):
+        ; FIXME: for other shapes we need an implementation of offset
+        s
+
+  inside pcb-landpattern:
+    apply-soldermask(mask-shape)
+
+; Apply a default soldermask layer to a pcb-pad, using the solder-mask-registration
+; design rule and offset() method.
+public defn apply-soldermask ():
+  apply-soldermask(clearance(current-rules(), SolderMaskRegistration))
+
+; A "solder mask defined pad" is one where the soldermask opening is smaller than 
+; the pad shape. This method takes a pad as an argument and converts it into a 
+; soldermask-defined version based on its soldermask layer, if it exists, or the
+; pad shape if it does not.
+public defn soldermask-defined (p:Pad):
+  ; extract the pad data before conversion
+  val mask?   = find({specifier(_) is SolderMask}, layers(p))  
+  ; special case: the mask is smaller than the shape already
+  if (mask? is-not False) and 
+     (min-width([pad-shape(p)]) > min-width([shape $ (mask? as LayerShape)])) :
+    p
+  else :
+    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
+    pcb-pad SMD-p:
+      name  = to-string("%_, SMD" % [name(p)])
+      type  = pad-type(p)
+      shape = offset(pad-shape(p), solder-mask-registration)
+      apply-soldermask(pad-shape(p))
+      for layer_ in filter({specifier(_) is-not SolderMask}, layers(p)) do:
+        layer(specifier(layer_)) = shape(layer_)
+    SMD-p
+
+; Convert a landpattern to solder mask defined. Geoms will be ignored. 
+public defn soldermask-defined (lp:LandPattern):
+  pcb-landpattern SMD-l:
+    name = to-string("%_, soldermask defined" % [name(lp)])
+    for pad_ in pads(lp) do:
+      pad (ref(pad_)): soldermask-defined(def-pad(pad_)) at pose(pad_)
+    for layer_ in layers(lp) do:
+      layer(specifier(layer_)) = shape(layer_)
+
+  SMD-l
+
+public pcb-pad smd-pad (copper-layer:Shape,solder-mask-layer:Shape|False,paste-layer:Shape):
+  name  = "SMD Pad"
+  type  = SMD
+  shape = copper-layer
+  layer(Paste(Top)) = paste-layer
+  match(solder-mask-layer):
+    (mask:False) : 
+      apply-soldermask()
+    (mask:Shape) :
+      layer(SolderMask(Top)) = mask
+
+public defn smd-pad (s:Shape):
+  smd-pad(s, false, s)
+
+; Create an rectangular SMD pad 
+public defn smd-pad (anchor:Anchor, width:Double, height:Double):
+  smd-pad(Rectangle(anchor, width, height))
+
+; Create a rectangular SMD pad 
+public defn smd-pad (d:Dims):
+  smd-pad(Rectangle(d))
+
+; Create an SMD pad with a given width and height
+public defn smd-pad (width:Double, height:Double) :
+  smd-pad(C, width, height)
+
+; Create a BGA pad, with circular SMD
+public defn bga-pad (diameter:Double) :
+  smd-pad(Circle(diameter * 0.5))
+
+; Create a soldermask-defined BGA pad
+public pcb-pad soldermask-defined-bga-pad (
+  soldermask-opening-diameter:Double ; the diameter of the soldermask opening
+  overlap:Double                     ; the amount the soldermask overlaps the pad beneath
+):
+  val mask-shape = Circle(soldermask-opening-diameter * 0.5)
+  name  = "SMD BGA Pad"
+  shape = offset(mask-shape, -1. * overlap) as Circle
+  type = SMD
+  layer(SolderMask(Top)) = mask-shape
+  layer(Paste(Top)) = mask-shape
+
+; Create an arbitrary testpoint pad
+public pcb-pad testpoint-pad (testpoint-shape:Shape):
+  name = "Test Point Pad"
+  shape = testpoint-shape
+  type = SMD
+  apply-soldermask()
+  
+; Create a circular test point pad
+public defn testpoint-pad (diameter:Double) :
+  testpoint-pad(Circle(0.5 * diameter))
+
+public pcb-pad pth-pad (pad-shape:Shape, solder-mask-layer:Shape|False, paste-layer:Shape|False, hole-shape:Shape):
+  name = "PTH Pad"
+  shape = pad-shape
+  type = TH
+  if paste-layer is Shape: ; Enables paste-in-pad
+    layer(Paste(Top)) = paste-layer as Shape
+  match(solder-mask-layer):
+    (mask:False) : 
+      apply-soldermask()
+    (mask:Shape) :
+      layer(SolderMask(Top)) = mask
+      layer(SolderMask(Bottom)) = mask
+  layer(Cutout()) = hole-shape
+
+public defn pth-pad (pad-shape:Shape, hole-shape:Shape):
+  pth-pad(pad-shape, false, false, hole-shape)
+
+public defn pth-pad (drill-r:Double, pad-r:Double):
+  pth-pad(Circle(pad-r), Circle(drill-r))
+
+; Create a through hole circular pad
+public defn pth-pad (anchor:Anchor, drill-radius:Double, pad-radius:Double) :
+  pth-pad(Circle(anchor, pad-radius),  Circle(anchor, drill-radius))
+
+; Create a through hole circular pad with drill radius and anchor
+public defn pth-pad (anchor:Anchor, drill-radius:Double) :
+  val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
+  pth-pad(anchor, drill-radius, drill-radius + solder-mask-registration)
+
+public defn pth-pad (drill-radius:Double):
+  pth-pad(C, drill-radius)
+
+; Create an ovalcut pad, the shape is a Circle with a Capsule shaped hole.
+public defn pth-ovalcut-pad (anchor:Anchor, drill-size:Dims, pad-radius:Double, mask-radius:Double):
+  pth-pad(Circle(anchor, pad-radius), capsule(anchor, x(drill-size), y(drill-size)))
+  
+; Create an ocvalcut pad, the shape is a Circle with a Capsule shaped hole.
+public defn pth-ovalcut-pad (anchor:Anchor, drill-width:Double, drill-height:Double, pad-radius:Double, mask-radius:Double) :
+  pth-ovalcut-pad(anchor, Dims(drill-width, drill-height), pad-radius, mask-radius)
+
+; Create an ovalcut pad with a given drill width, drill height, and mask radius.
+public defn pth-ovalcut-pad (drill-w:Double, drill-h:Double, mask-r:Double) :
+  pth-ovalcut-pad(C, drill-w, drill-h, mask-r, mask-r)
+
+; Create a capsule shaped SMD pad with an anchor
+public defn oval-smd-pad (anchor:Anchor, width:Double, height:Double) :
+  smd-pad(capsule(anchor, width, height))  
+
+; Create a capsule shaped SMD pad
+public defn oval-smd-pad (w:Double, h:Double) :
+  oval-smd-pad(C, w, h)
+
+; Create a capsule shaped TH pad with anchor
+public defn oval-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
+  val shape = capsule(anchor, pad-w, pad-h)
+  val hole  = capsule(anchor, drill-w, drill-h)
+  pth-pad(shape, hole)
+
+; Create a capsule shaped TH pad with a circular hole
+public defn oval-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
+  oval-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h)
+
+; Create a capsule shaped pth pad
+public defn oval-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
+  oval-pth-pad(C, drill-w, drill-h, pad-w, pad-h)
+
+; Create a rectangle pth pad with anchor, width, height, pad width, and pad height
+public defn rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double):
+  val shape = rectangle(anchor, pad-w, pad-h)
+  val hole  = capsule(anchor, drill-w, drill-h)
+  pth-pad(shape, hole)
+
+; Create a rectangle pth pad with drill 
+public defn rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
+  rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h)
+
+public defn rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
+  rect-pth-pad(C, drill-w, drill-h, pad-w, pad-h)
+
+public defn round-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  val shape = round-rect(anchor, pad-w, pad-h, pad-r)
+  val hole  = capsule(anchor, drill-w, drill-h)
+  pth-pad(shape, hole)
+
+public defn round-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  round-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r)
+
+public defn round-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
+  smd-pad(round-rect(anchor, w, h, r))
+
+public defn round-rect-smd-pad (w:Double, h:Double, r:Double) :
+  round-rect-smd-pad(C, w, h, r)
+
+public defn chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  val shape = chamfered(anchor, pad-w, pad-h, pad-r)
+  val hole  = capsule(anchor, drill-w, drill-h)
+  pth-pad(shape, hole)
+
+public defn chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  chamfered-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r)
+
+public defn chamfered-rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+  chamfered-rect-pth-pad(C, drill-w, drill-h, pad-w, pad-h, pad-r)
+
+public defn chamfered-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
+  smd-pad(chamfered(anchor, w, h, r))
+
+public defn chamfered-rect-smd-pad (w:Double, h:Double, r:Double):
+  chamfered-rect-smd-pad(C, w, h, r)
+
+public defn dshape-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) : 
+  val shape = DShape(anchor, pad-w, pad-h, pad-r)
+  val hole  = capsule(anchor drill-w, drill-h)
+  pth-pad(shape, hole)
+
+public defn dshape-pth-pad (drill-w:Double, drill-h:Double, w:Double, h:Double, r:Double) : 
+  dshape-pth-pad(C, drill-w, drill-h, w, h, r)
+
+public defn dshape-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
+  smd-pad(DShape(anchor, w, h, r))
+
+public defn dshape-smd-pad (w:Double, h:Double, r:Double) : 
+  dshape-smd-pad(C, w, h, r)
+
+public defn general-round-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Tuple<Double>) :
+  val shape = GeneralRoundedRectangle(anchor, pad-w, pad-h, pad-r)
+  val hole  = capsule(anchor, drill-w, drill-h)
+  pth-pad(shape, hole)
+ 
+public defn general-round-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Tuple<Double>) :
+  general-round-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r)
+
+public defn general-round-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Tuple<Double>) :
+  smd-pad(GeneralRoundedRectangle(anchor, w, h, r))
+
+public defn general-round-rect-smd-pad (w:Double, h:Double, r:Tuple<Double>) :
+  general-round-rect-smd-pad(C, w, h, r)
+
+public defn general-round-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double, cm:CornerModifier) :
+  val shape = GeneralRoundedRectangle(anchor, pad-w, pad-h, pad-r, cm)
+  val hole  = capsule(anchor, drill-w, drill-h)
+  pth-pad(shape, hole)
+
+public defn general-round-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double, cm:CornerModifier) :
+  general-round-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r, cm)
+
+public defn general-round-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double, cm:CornerModifier) :
+  smd-pad(GeneralRoundedRectangle(anchor, w, h, r, cm))
+
+public defn general-round-rect-smd-pad (w:Double, h:Double, r:Double, cm:CornerModifier) :
+  general-round-rect-smd-pad(C, w, h, r, cm)
+
+public defn general-chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Tuple<Double>) :
+  val shape = GeneralChamferedRectangle(anchor, pad-w, pad-h, pad-r)
+  val hole  = capsule(anchor, drill-w, drill-h)
+  pth-pad(shape, hole)
+
+public defn general-chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Tuple<Double>) :
+  general-chamfered-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r)
+
+public defn general-chamfered-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Tuple<Double>) :
+  smd-pad(GeneralChamferedRectangle(anchor, w, h, r))
+
+public defn general-chamfered-rect-smd-pad (w:Double, h:Double, r:Tuple<Double>) :
+  general-chamfered-rect-smd-pad(C, w, h, r)
+
+public defn general-chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double, cm:CornerModifier) :
+  val shape = GeneralChamferedRectangle(anchor, pad-w, pad-h, pad-r, cm)
+  val hole  = capsule(anchor, drill-w, drill-h)
+  pth-pad(shape, hole)
+
+public defn general-chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double, cm:CornerModifier) :
+  general-chamfered-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r, cm)
+
+public defn general-chamfered-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double, cm:CornerModifier) :
+  smd-pad(GeneralChamferedRectangle(anchor, w, h, r, cm))
+
+public defn general-chamfered-rect-smd-pad (w:Double, h:Double, r:Double, cm:CornerModifier) :
+  general-chamfered-rect-smd-pad(C, w, h, r, cm)
+
+;==============================================================================
+;========================= Land Patterns ======================================
+;==============================================================================
+; Create a non-plated hole of arbitrary shape for hole and mask
+public pcb-landpattern non-plated-hole-landpattern (hole:Shape, mask:Shape):
+  layer(Cutout())           = hole
+  layer(SolderMask(Top))    = mask
+  layer(SolderMask(Bottom)) = mask
+  val d = dims(hole)
+  layer(Courtyard(Top))    = Rectangle(x(d), y(d))
+  layer(Courtyard(Bottom)) = Rectangle(x(d), y(d))
+
+; Create a non-plated hole landpattern with a hole shape
+public defn non-plated-hole-landpattern (hole:Shape):
+  val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
+  non-plated-hole-landpattern(hole, offset(hole,  solder-mask-registration))
+
+; Create a circular non-plated hole landpattern with given drill radius and mask radius
+public defn non-plated-hole-landpattern (drill-r:Double, mask-r:Double) :
+  non-plated-hole-landpattern(Circle(drill-r), Circle(mask-r))
+
+; Create a non-plated hole landpattern with a given drill radius.
+public defn non-plated-hole-landpattern (drill-r:Double) :
+  non-plated-hole-landpattern(drill-r, drill-r)
+
+;==============================================================================
+;========================== Land Pattern Generators ===========================
+;==============================================================================
+
+;==============================================================================
+;========================== Pose Arrangement Helpers ==========================
+;==============================================================================
+; PinPadMapping is a not-yet-placed pad, with assigned name, pad, and pose
+public pcb-struct ocdb/utils/landpatterns/PinPadMapping:
+  pad-name:  Ref,  ; the name of the pad
+  pad-shape: JITXDef, ; the corresponding pcb-pad
+  pose:      Pose,    ; the pose of the pad
+
+; A generic landpattern created from a sequence of PinPadMappings
+public defn make-generic-landpattern (pads:Seqable<PinPadMapping>):
+  inside pcb-landpattern:
+    for p in pads do:
+      pad (pad-name(p)): (pad-shape(p) as Pad) at pose(p)
+
+; Create a generic landpattern with a uniform pad
+public defn make-generic-landpattern (pad-names:Seqable<Ref>,
+                                      poses:Seqable<Pose>,
+                                      pad-shape:JITXDef):
+  val pads = 
+    for (pn in pad-names, pp in poses) seq:
+      PinPadMapping(pn, pad-shape, pp) 
+  make-generic-landpattern(to-tuple(pads))
+
+; Naming for a 2-column arrangment of pins 
+public defn soic-naming-convention (row:Int, column:Int, num-pins:Int) -> Ref:
+  if (column < 0) or (column > 1): 
+    fatal("soic naming convention supports a maximum of 2 columns")
+  switch(column):
+    0: IndexRef(Ref("p"), row + 1)
+    1: IndexRef(Ref("p"), num-pins - row)
+  
+; Create a two-column landpattern
+public defn make-two-column-landpattern (count: Int,    ; number of pads in the column
+                                         pitch: Double, ; pitch of the column
+                                         naming-convention: (Int, Int) -> Ref, ; naming convention
+                                         pad-convention: (Int, Int) -> JITXDef,
+                                         spacing:Double) :
+  val locs = grid-locs(count, 2, spacing, pitch)
+  val rcs  = 
+    for row in 0 to count seq-cat:
+      for col in 0 to 2 seq:
+        [row, col]
+
+  val mapping = to-tuple $ 
+    for (pose in locs, rc in rcs) seq:
+      val [row, col] = rc
+      PinPadMapping(naming-convention(row, col), pad-convention(row, col), pose)
+
+  make-generic-landpattern(mapping)
+
+public defn make-grid-landpattern (num-rows:Int,
+                                   num-cols:Int,
+                                   row-pitch:Double,
+                                   col-pitch:Double,
+                                   naming-convention: (Int, Int) -> Ref,
+                                   pad-convention: (Int, Int) -> JITXDef):
+  make-grid-landpattern(num-rows, num-cols, row-pitch, col-pitch, naming-convention, pad-convention, fn (r, c): true)
+
+; Create a grid landpattern
+public defn make-grid-landpattern (num-rows:Int,
+                                   num-cols:Int,
+                                   row-pitch:Double,
+                                   col-pitch:Double,
+                                   naming-convention: (Int, Int) -> Ref,
+                                   pad-convention: (Int, Int) -> JITXDef,
+                                   ignore?: (Int, Int) -> True|False):
+  val rcs = 
+    for r in 0 to num-rows seq-cat:
+      for c in 0 to num-cols seq:
+        [r, c]
+  val mapping = to-tuple $ 
+    for (coord in rcs, pose in grid-locs(num-rows, num-cols, row-pitch, col-pitch)) seq?:
+      val [c, r] = coord
+      if not ignore?(r, c):
+        One(PinPadMapping(naming-convention(r, c), pad-convention(r, c), pose))
+      else:
+        None()
+  make-generic-landpattern(mapping)
+
+; 2D array of pins
+public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double, pad-ref, offset-x:Double, offset-y:Double) :
+  defn normalize (i:Int):
+    0.5 * to-double(i - 1)
+  
+  inside pcb-landpattern:
+    val n-col  = to-int(ceil(to-double(n-pin) / to-double(n-row)))
+    val origin = loc(offset-x, offset-y) * loc(
+      (normalize(2 - n-row) * pin-pitch), ; x
+      (normalize(n-col) * pin-pitch)  ; y
+    )
+
+    for i in 0 to n-col do :
+      for j in 0 to n-row do :
+        val idx = n-row * i + j + 1
+        val x = to-double(j) * row-pitch
+        val y = -1.0 * to-double(i) * pin-pitch
+        pad p[idx] : pad-ref at origin * loc(x, y)
+    
+public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double, pad-ref:JITXDef) :
+  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch, pad-ref, 0.0, 0.0)
+
+public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
+  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch, pth-pad(0.5), 0.0, 0.0)
+
+public defn make-pin-grid (n-pin:Int) :
+  make-pin-grid(n-pin, 1, 2.54, 2.54, pth-pad(0.5), 0.0, 0.0)
+
+;==================================================================================
+; Create a testpad
+public pcb-landpattern testpad (d:Double) :
+  pad tp : testpoint-pad(d) at loc(0.0,0.0)
+
+; ====== Package Family Generators ================================================
+; TODO: Unify These.
+val PKG-RECTANGLE = ["009005", "0301m", "01005", "0402m", "0201", "0603m", "0202", "0606m", "0204", "0510m","Wide 0402", "0306",
+           "0816m","Wide 0603", "0402", "1005m", "0505", "1414m", "0508", "1220m","Wide 0805", "0603", "1608m", "0612",
+           "1632m","Wide 1206", "0805", "2012m", "1111", "2828m", "1206", "3216m", "1210", "3225m", "1218", "3246m",
+           "Wide 1812", "1225", "3263m","Wide 2512", "1530", "3876m","Wide 3015", "1808", "4520m", "1812", "4532m", "1825",
+           "4564m", "1835", "4589","Wide 3518", "5020m", "2010", "5025m", "2043", "Wide 4320", "2220", "5750m", "2225",
+           "5763m", "2312", "6032m", "2512", "6331m", "2725", "7142m", "2728", "7142m", "Wide 2827", "2816", "2817", 
+           "7142m", "2953", "Wide 5929", "3920", "1052m"]
+
+public defn check-valid-rectangle-pkg-list (pkg: String) -> True|False :
+  contains?(PKG-RECTANGLE, pkg)
+
+public pcb-landpattern dummy-landpattern (n:Int, courtyard:[Double,Double]):
+  val r = (max(courtyard[0], courtyard[1]) - 0.2) / 2.0
+  for i in 0 to n do :
+    var theta = (2.0 * PI / to-double(n)) * to-double(i) + PI
+    pad p[i + 1] : bga-pad(0.05) at loc(r * cos(theta), r * sin(theta))
+
+  layer(Courtyard(Top)) = Rectangle(courtyard[0], courtyard[1])
+  layer(Silkscreen("f-silk", Top)) = LineRectangle(courtyard[0], courtyard[1])
+  ref-label()
+
+; from IPC-SM-782 spec
+; Z - width between outer pad edges
+; G - width between inner pad edges
+; X - pad height
+; w, h - width and height of courtyard in mm
+public defn make-two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double, courtyard?:True|False, polarized?:True|False) :
+  inside pcb-landpattern :
+    val Y = (Z - G) / 2.0 ; width of pad
+    val C2 = (G + Y) / 2.0 ; distance between pad center and package centerline
+    if polarized? :
+      pad c : smd-pad(Y,X) at loc((- C2), 0.0)
+      pad a : smd-pad(Y,X) at loc(C2, 0.0)
+      val he = h / 2.0 + 0.25
+      val we = w / 2.0 + 0.3
+      layer(Silkscreen("pol", Top)) = Line(0.12, [Point(w / 2.0, (- he)) Point((- we), (- he))])
+      layer(Silkscreen("pol", Top)) = Line(0.12, [Point((- we), he) Point(w / 2.0, he) ])
+      layer(Silkscreen("pol", Top)) = Line(0.30, [Point((- we), (- he)) Point((- we), he)])
+    else:
+      pad p[1] : smd-pad(Y,X) at loc((- C2), 0.0)
+      pad p[2] : smd-pad(Y,X) at loc(C2, 0.0)
+    if courtyard? : 
+      layer(Courtyard(Top)) = Rectangle(w, h)
+
+public defn make-two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
+  make-two-pin-landpattern(Z,G,X,w,h,true,false)
+
+public pcb-landpattern two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
+  make-two-pin-landpattern(Z,G,X,w,h,true,false)
+
+public pcb-landpattern two-pin-polarized-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
+  make-two-pin-landpattern(Z,G,X,w,h,true,true)
+
+public defn make-ipc-two-pin-landpattern (part-name:String,
+                                          height:Toleranced,
+                                          courtyard?:True|False,
+                                          density:DensityLevel,
+                                          polarized?:True|False):
+  inside pcb-landpattern :
+    val                 [length,                        width,                         lead-length,                   lead-width] = switch contains?{_, part-name} : 
+      ;imperial, metric
+      ["009005", "0301m"] : [tol(0.3,0.01),              tol(0.15,0.01),                 tol(0.11,0.01),                tol(0.15,0.01)]
+      ["01005", "0402m"] : [tol(0.4,0.02),               tol(0.2,0.02),                  tol(0.1,0.03),                 tol(0.2,0.02)]
+      ["0201", "0603m"] : [min-typ-max(0.57, 0.60, 0.63), min-typ-max(0.27, 0.30, 0.33), min-typ-max(0.10, 0.15, 0.20), min-typ-max(0.27, 0.30, 0.33)]
+      ["0202", "0606m"] : [min-typ-max(0.57, 0.60, 0.63), min-typ-max(0.57, 0.60, 0.63), min-typ-max(0.10, 0.15, 0.20), min-typ-max(0.57, 0.60, 0.63)]
+      ["0204", "0510m","Wide 0402"] : [min-typ-max(0.40, 0.50, 0.60), min-typ-max(0.90, 1.00, 1.10), min-typ-max(0.10, 0.25, 0.40), min-typ-max(0.90, 1.00, 1.10)]
+      ["0306", "0816m","Wide 0603"] : [min-typ-max(0.65, 0.80, 0.95), min-typ-max(1.45, 1.60, 1.75), min-typ-max(0.20, 0.35, 0.50), min-typ-max(1.45, 1.60, 1.75)]
+      ["0402", "1005m"] : [min-typ-max(0.90, 1.00, 1.10), min-typ-max(0.40, 0.50, 0.60), min-typ-max(0.10, 0.25, 0.40), min-typ-max(0.40, 0.50, 0.60)]
+      ["0505", "1414m"] : [min-typ-max(1.02, 1.40, 1.78), min-typ-max(1.02, 1.40, 1.78), min-typ-max(0.05, 0.10, 0.20), min-typ-max(1.02, 1.40, 1.78)]
+      ["0508", "1220m","Wide 0805"] : [min-typ-max(1.02, 1.27, 1.52), min-typ-max(1.75, 2.00, 2.25), min-typ-max(0.10, 0.13, 0.16), min-typ-max(1.75, 2.00, 2.25)]
+      ["0603", "1608m"] : [min-typ-max(1.45, 1.60, 1.75), min-typ-max(0.65, 0.80, 0.95), min-typ-max(0.20, 0.35, 0.50), min-typ-max(0.65, 0.80, 0.95)]
+      ["0612", "1632m","Wide 1206"] : [min-typ-max(1.40, 1.60, 1.80), min-typ-max(3.00, 3.20, 3.40), min-typ-max(0.10, 0.13, 0.16), min-typ-max(3.00, 3.20, 3.40)]
+      ["0805", "2012m"] : [min-typ-max(1.80, 2.00, 2.20), min-typ-max(1.10, 1.20, 1.30), min-typ-max(0.20, 0.50, 0.80), min-typ-max(1.10, 1.20, 1.30)]
+      ["1111", "2828m"] : [tol(2.79, 0.38),                tol(2.79, 0.38),               tol(0.38,0.25),               tol(2.79, 0.38)]
+      ["1206", "3216m"] : [min-typ-max(3.00, 3.20, 3.40), min-typ-max(1.40, 1.60, 1.80), min-typ-max(0.25, 0.50, 0.75), min-typ-max(1.40, 1.60, 1.80)]
+      ["1210", "3225m"] : [min-typ-max(3.00, 3.20, 3.40), min-typ-max(2.30, 2.50, 2.70), min-typ-max(0.25, 0.50, 0.75), min-typ-max(2.30, 2.50, 2.70)]
+      ["1218", "3246m","Wide 1812"] : [min-typ-max(3.0, 3.2, 3.3), tol(4.6,0.15),                tol(0.45,0.2),                 tol(4.6,0.15)]
+      ["1225", "3263m","Wide 2512"] : [tol(3.2,0.2),      tol(6.3,0.2),                  tol(0.8,0.2),                 tol(6.3,0.2)]
+      ["1530", "3876m","Wide 3015"] : [tol(3.8,0.2),      tol(7.6,0.2),                  min-typ-max(0.6, 0.60, 1.35), tol(7.6,0.2)]
+      ["1808", "4520m"] : [tol(4.5,0.4),                  tol(2.0,0.2),                  tol(0.25,0.5),                 tol(2.0,0.2)]
+      ["1812", "4532m"] : [min-typ-max(4.20, 4.50, 4.80), min-typ-max(2.90, 3.20, 3.50), min-typ-max(0.25, 0.60, 0.95), min-typ-max(2.90, 3.20, 3.50)]
+      ["1825", "4564m"] : [min-typ-max(4.20, 4.50, 4.80), min-typ-max(6.00, 6.40, 6.80), min-typ-max(0.25, 0.60, 0.95), min-typ-max(6.00, 6.40, 6.80)]
+      ["1835", "4589","Wide 3518"] : [tol(4.5,0.2),       tol(8.9,0.2),                  min-typ-max(0.7, 0.70, 1.6),   tol(8.9,0.2)]
+      [        "5020m"] : [tol(5.0,0.2),                  tol(2.0,0.2),                  min-typ-max(0.3, 0.50, 1.5),   tol(2.0,0.2)]
+      ["2010", "5025m"] : [tol(5.08,0.254),               tol(2.54,0.254),               min-typ-max(0.254, 0.508, 1.72), tol(2.54,0.254)]
+      ["2043",        "Wide 4320"] : [tol(5.0,0.2),       tol(11.0,0.2),                 min-typ-max(0.8, 0.80, 1.6),   tol(11.0,0.2)]
+      ["2220", "5750m"] : [tol(5.7,0.2),                  tol(5.0,0.2),                  tol(0.25,0.5),                 tol(5.0,0.2)]
+      ["2225", "5763m"] : [tol(5.7,0.2),                  tol(6.35,0.22),                tol(0.25,0.5),                 tol(6.35,0.25)]
+      ["2312", "6032m"] : [tol(6.0,0.25),                 tol(3.2,0.25),                 tol(1.3,0.3),                  tol(3.2,0.25)]
+      ["2512", "6331m"] : [tol(6.35,0.25),                tol(3.18,0.25),                tol(2.0,0.5),                  tol(3.18,0.25)]
+      ["2725", "7142m"] : [tol(6.81,0.25),                tol(6.45,0.25),                tol(2.0,0.5),                  tol(6.45,0.25)]
+      ["2728", "7142m", "Wide 2827"] : [tol(6.71,0.25),   tol(7.19,0.25),                tol(1.5,0.5),                  tol(7.19,0.25)]
+      ["2816", "2817", "7142m"] : [tol(7.1,0.3),          tol(4.2,0.3),                  tol(2.0,0.5),                  tol(4.2,0.3)]
+      ["2953",        "Wide 5929"] : [tol(7.5,0.2),       tol(15.0,0.2),                 tol(1.10,0.1),                 tol(15.0,0.2)]
+      ["3920", "1052m"] : [tol(10.0,0.3),                 tol(5.2,0.3),                  min-typ-max(1.1,2.0,2.5),      tol(5.2,0.3)]
+      else : 
+        fatal("No default land-pattern dimensions in make-ipc-two-pin-landpattern for package code %_ " % [part-name])
+    make-two-pin-chip-landpattern(length, width, height, lead-length, lead-width, density, polarized?)
+    external-names = ([part-name])
+
+public defn make-ipc-two-pin-landpattern (part-name:String) :
+  make-ipc-two-pin-landpattern(part-name, true, DENSITY-LEVEL, false)
+
+public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False) :
+  make-ipc-two-pin-landpattern(part-name, courtyard?, DENSITY-LEVEL, polarized?)
+
+public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, density:DensityLevel, polarized?:True|False):
+  make-ipc-two-pin-landpattern(part-name, tol(0.4,0.01), courtyard?, density, polarized?)
+
+;<test>
+part-name: "01005" "0402" "0603" "0508" "0805"
+<test>
+public pcb-landpattern ipc-two-pin-landpattern (part-name:String) :
+  make-ipc-two-pin-landpattern(part-name, true, false)
+
+public pcb-landpattern ipc-two-pin-landpattern (part-name:String, pol?:True|False) :
+  make-ipc-two-pin-landpattern(part-name, true, pol?)
+
+public pcb-landpattern ipc-two-pin-landpattern (part-name:String, density:DensityLevel, pol?:True|False) :
+  make-ipc-two-pin-landpattern(part-name, tol(0.4,0.01), true, density, pol?)
+
+public pcb-landpattern ipc-two-pin-landpattern (part-name:String, height:Double) :
+  make-ipc-two-pin-landpattern(part-name, tol(height,0.1), true, DENSITY-LEVEL, false)
+
+public pcb-landpattern ipc-two-pin-landpattern (part-name:String, height:Double, pol?:True|False) :
+  make-ipc-two-pin-landpattern(part-name, tol(height,0.1), true, DENSITY-LEVEL, pol?)
+
+public pcb-landpattern ipc-two-pin-landpattern (part-name:String, height:Toleranced) :
+  make-ipc-two-pin-landpattern(part-name, height, true, DENSITY-LEVEL, false)
+
+public pcb-landpattern ipc-two-pin-landpattern (part-name:String, height:Toleranced, pol?:True|False) :
+  make-ipc-two-pin-landpattern(part-name, height, true, DENSITY-LEVEL, pol?)
+
+public pcb-landpattern ipc-two-pin-landpattern (part-name:String, height:Toleranced, density:DensityLevel, pol?:True|False) :
+  make-ipc-two-pin-landpattern(part-name, height, true, density, pol?)
+
+;<test>
+part-name: "1210"
+<test>
+public pcb-landpattern ipc-two-pin-pol-landpattern (part-name:String) :
+  make-ipc-two-pin-landpattern(part-name, true, true)
+
+public pcb-landpattern ipc-two-pin-pol-landpattern (part-name:String, density:DensityLevel) :
+  make-ipc-two-pin-landpattern(part-name, true, density, true)
+
+public defn make-soic127p-landpattern (n:Int, lead-span:Double) :
+  ensure-even-positive!(n, "make-soic127p-landpattern")
+
+  inside pcb-landpattern :  
+
+    val pin-pitch = 1.27
+
+    val x0 = (- ((lead-span / 2.0) - 0.5))
+    val y0 = (to-double((n / 2) - 1) * pin-pitch) / 2.0
+    val l0 = loc(x0, y0, -90.0)
+    val l1 = loc((- x0), (- y0), 90.0)
+    
+    val pin-row = to-list(row-locs(W, n / 2, pin-pitch))
+
+    for (i in 0 to (n / 2), l in pin-row) do :
+      pad p[i + 1] : smd-pad(0.6, 1.5) at l0 * l
+    
+    for (i in (n / 2) to n, l in pin-row) do :
+      pad p[i + 1] : smd-pad(0.6, 1.5) at l1 * l
+    
+    val pkg-height = to-double((n / 2) - 1) * pin-pitch + 1.1
+    val c-w = lead-span + 1.5
+    val c-h = pkg-height
+    
+    layer(Courtyard(Top)) = Rectangle(c-w, c-h)
+
+    ; layer(Silkscreen("f-silk", Top)) = LineRectangle(c-w, c-h)
+    layer(Silkscreen("pol", Top)) = Circle(x0 - 2.0, y0, 0.2)
+    ref-label()
+
+public defn make-soic127p-landpattern (n:Int) :
+  make-soic127p-landpattern(n, 6.0)
+
+;<test>
+n: even positive
+<test>
+public pcb-landpattern soic127p-landpattern (n:Int) :
+  make-soic127p-landpattern(n, 6.0)
+
+public pcb-landpattern soic127p-landpattern (n:Int, hs:[Double, Double]) :
+  make-soic127p-landpattern(n, 6.0)
+  pad p[n + 1] : smd-pad(hs[0], hs[1]) at loc(0.0, 0.0)
+
+; See SOP_JEDEC_MO-153F.pdf for reference
+public defn make-sop65-landpattern (n:Int, lead-span:Double) :
+  ensure-even-positive!(n, "make-sop65-landpattern")
+
+  inside pcb-landpattern :
+
+    val pin-pitch = 0.65
+
+    val x0 = (- ((lead-span / 2.0) - 0.5))
+    val y0 = (to-double((n / 2) - 1) * pin-pitch) / 2.0
+    val l0 = loc(x0, y0, -90.0)
+    val l1 = loc((- x0), (- y0), 90.0)
+    
+    val pin-row = to-list(row-locs(W, n / 2, pin-pitch))
+
+    for (i in 1 through (n / 2), l in pin-row) do :
+      pad p[i] : smd-pad(0.39, 1.4) at l0 * l
+    
+    for (i in (n / 2 + 1) through n, l in pin-row) do :
+      pad p[i] : smd-pad(0.39, 1.4) at l1 * l
+    
+    val pkg-height = to-double((n / 2) - 1) * pin-pitch + 0.4
+    
+    val c-w = lead-span + 0.45
+    val c-h = pkg-height
+    layer(Courtyard(Top)) = Rectangle(c-w, c-h)
+
+    name = to-string("SOP65 with %_ pins." % [n])
+    layer(Silkscreen("pol", Top)) = Circle(x0 - 1.0, y0, 0.2)
+    ref-label()
+
+public pcb-landpattern sop65-landpattern (n:Int, lead-span:Double) :
+  make-sop65-landpattern(n, lead-span)
+
+;<test>
+n: even positive
+<test>
+public pcb-landpattern sop65-landpattern (n:Int) :
+  make-sop65-landpattern(n, 6.4)
+
+public defn make-qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double, corner-pads:[Pad,Pad]|False) :
+  inside pcb-landpattern :
+    var n = -1
+    if n-pins % 4 == 0 :
+      n = n-pins / 4
+    else :
+      fatal("make-qfn-landpattern is only for symmetric 4-sided qfns.")
+
+    val x0 = (- (lead-span / 2.0 + 0.3))
+    val y0 = (to-double(n - 1) * pin-pitch) / 2.0
+    val l0 = loc(x0, y0, -90.0)
+    val row-pos = to-list(row-locs(W, n, pin-pitch))
+
+    val pin-pad = smd-pad(S, pad-width, pad-length + 0.3)
+
+    defn place-pads (pose:Pose, i:Int, ub:Int, lb:Int) :
+      match(corner-pads:[Pad,Pad]):
+        if i == lb:
+          pad p[i + 1] : corner-pads[0] at pose
+        else if i == ub:
+          pad p[i + 1] : corner-pads[1] at pose
+        else:
+          pad p[i + 1] : pin-pad at pose
+      else:
+        pad p[i + 1] : pin-pad at pose
+
+    for (i in 0 to n, l in row-pos) do :
+      place-pads(loc(x0, y0, -90.0) * l, i, 0, n - 1)
+    for (i in n to (n * 2), l in row-pos) do :
+      place-pads(loc((- y0), x0, 0.0) * l, i, n, n * 2 - 1)
+    for (i in (n * 2) to (n * 3), l in row-pos) do :
+      place-pads(loc((- x0), (- y0), 90.0) * l, i, n * 2, n * 3 - 1)
+    for (i in (n * 3) to (n * 4), l in row-pos) do :
+      place-pads(loc((y0), (- x0), 180.0) * l, i, n * 3, n * 4 - 1)
+
+    layer(Courtyard(Top)) = Rectangle(lead-span, lead-span)
+    layer(Silkscreen("pol",Top)) = Circle((lead-span / -2.0) - 1.0, y0, 0.2)
+    ref-label()
+
+public pcb-landpattern qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
+  make-qfn-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length, false)
+
+public pcb-landpattern qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double, corner-pads:[Pad,Pad]|False) :
+  make-qfn-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length, corner-pads)
+
+public pcb-landpattern qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double, hs:[Double,Double]) :
+  make-qfn-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length, false)
+  pad p[n-pins + 1] : smd-pad(hs[0],hs[1]) at loc(0.0, 0.0)  
+
+public defn make-qfp-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
+  inside pcb-landpattern :
+    var n = -1
+    
+    if n-pins % 4 == 0 :
+      n = n-pins / 4
+    else :
+      fatal("make-qfp-package is only for symmetric 4-sided qfps.")
+    
+    val pin-pad = smd-pad(S, pad-width, (pad-length + 0.3))
+    
+    val x0 = (- ((lead-span / 2.0) + 0.3))
+    val y0 = (to-double(n - 1) * pin-pitch) / 2.0
+    val l0 = loc(x0, y0, -90.0)
+    val row-pos = to-list(row-locs(W, n, pin-pitch))
+
+    for (i in 0 to n, l in row-pos) do :
+      pad p[i + 1] : pin-pad at loc(x0, y0, -90.0) * l
+
+    for (i in n to (n * 2), l in row-pos) do :
+      pad p[i + 1] : pin-pad at loc((- y0), x0, 0.0) * l
+
+    for (i in (n * 2) to (n * 3), l in row-pos) do :
+      pad p[i + 1] : pin-pad at loc((- x0), (- y0), 90.0) * l
+
+    for (i in (n * 3) to (n * 4), l in row-pos) do :
+      pad p[i + 1] : pin-pad at loc((y0), (- x0), 180.0) * l
+
+    
+    layer(Courtyard(Top)) = Rectangle(lead-span, lead-span)
+    layer(Silkscreen("pol",Top)) = Circle((lead-span / -2.0) - 1.0, y0, 0.2)
+
+public pcb-landpattern qfp-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int, pad-width:Double, pad-length:Double) :
+  make-qfp-landpattern(pin-pitch, lead-span, n-pins, pad-width, pad-length)
+
+public defn make-dfn-landpattern (
+  n-pad:Int
+  pad-pitch:Double
+  pad-dims:[Double,Double]
+  pad-x0:Double
+  body-dims:[Double,Double]
+) :
+  val [pad-w, pad-h] = pad-dims
+  val [body-w, body-h] = body-dims
+
+  inside pcb-landpattern :
+    val pin-pad = smd-pad(pad-w, pad-h)
+
+    val n-side = n-pad / 2
+    val pad-y0 = to-double(n-side - 1) * pad-pitch / 2.0
+    val l0 = loc(pad-x0, pad-y0, -90.0)
+    val ln2 = loc((- pad-x0), (- pad-y0), 90.0)
+    val pin-row = to-list(row-locs(W, n-side, pad-pitch))
+
+    for (i in 0 to n-side, l in pin-row) do :
+      pad p[i + 1] : pin-pad at l0 * l
+
+    for (i in n-side to n-pad, l in pin-row) do :
+      pad p[i + 1] : pin-pad at ln2 * l
+
+    val pad-x0-abs = abs(pad-x0)
+    val pad-x0-dir = pad-x0 / pad-x0-abs
+    val pol-x = pad-x0-dir * (pad-x0-abs + (pad-h / 2.0) + 0.5)
+
+    val courtyard-w = max(body-w, 2.0 * pad-x0-abs + pad-h)
+    val courtyard-h = max(body-h, 2.0 * abs(pad-y0) + pad-w)
+
+    layer(Courtyard(Top)) = Rectangle(courtyard-w, courtyard-h)
+    layer(Silkscreen("f-silk",Top)) = LineRectangle(body-w, body-h)
+    layer(Silkscreen("pol",Top)) = Circle(pol-x, pad-y0, 0.254)
+    ref-label()
+
+public pcb-landpattern dfn-landpattern ( n-pad:Int, pad-pitch:Double, pad-dims:[Double,Double], pad-x0:Double, body-dims:[Double,Double]) :
+  make-dfn-landpattern(n-pad,pad-pitch,pad-dims,pad-x0,body-dims)
+
+public pcb-landpattern dfn-landpattern ( n-pad:Int, pad-pitch:Double, pad-dims:[Double,Double], pad-x0:Double, body-dims:[Double,Double], hs:[Double,Double]) :
+  make-dfn-landpattern(n-pad,pad-pitch,pad-dims,pad-x0,body-dims)
+  pad p[n-pad + 1] : smd-pad(hs[0],hs[1]) at loc(0.0, 0.0)  
+
+public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>|False) :
+  inside pcb-landpattern :
+    val pin-pad = bga-pad(pad-diam)
+    val pad-names = BGAPadNames(n-pads[0], n-pads[1], false)
+    defn make-pad (r:Int, c:Int) :
+      val x = ((to-double(n-pads[0]) - 1.0) / -2.0 + to-double(c)) * pitch
+      val y = ((to-double(n-pads[1]) - 1.0) / 2.0 - to-double(r)) * pitch
+      val name = pad-names[r, c]
+
+      match(omit-pads:Tuple<Ref>):
+        if not contains?(omit-pads, name) :
+          pad (name) : pin-pad at loc(x,y)
+      else :
+          pad (name) : pin-pad at loc(x,y)
+
+    for c in 0 to n-pads[0] do :
+      for r in 0 to n-pads[1] do :
+        make-pad(r,c)
+
+    layer(Courtyard(Top)) = Rectangle(courtyard[0], courtyard[1])
+    ; layer(Silkscreen("f-silk", Top)) = LineRectangle(courtyard[0], courtyard[1])
+    layer(Silkscreen("pol", Top)) = Circle(-0.3 - courtyard[0] / 2.0, courtyard[1] / 2.0, 0.127)
+    ref-label()
+
+public pcb-landpattern bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double], omit-pads:Tuple<Ref>|False) :
+  make-bga-pkg(pitch, pad-diam, n-pads, courtyard, omit-pads)
+
+public pcb-landpattern bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], courtyard:[Double Double]) :
+  make-bga-pkg(pitch, pad-diam, n-pads, courtyard, false)
+
+; Generic package instantiations
+; Passives
+
+public pcb-landpattern INDC1005X55 :
+  make-ipc-two-pin-landpattern("0402")
+  ref-label()
+
+public pcb-landpattern CAPT1005X55 :
+  make-ipc-two-pin-landpattern("0402")
+  layer(Silkscreen("pol", Top)) = PlusSymbol(-1.7, 0.0)
+  ref-label()
+
+public pcb-landpattern CAPT1608X80 :
+  make-ipc-two-pin-landpattern("0603")
+  layer(Silkscreen("pol", Top)) = PlusSymbol(-2.2, 0.0)
+  ref-label()
+
+public pcb-landpattern CAPT2012X125 :
+  make-ipc-two-pin-landpattern("0805")
+  layer(Silkscreen("pol", Top)) = PlusSymbol(-2.4, 0.0)
+  ref-label()
+
+public pcb-landpattern CAPT3216X160 :
+  make-ipc-two-pin-landpattern("1206")
+  layer(Silkscreen("pol", Top)) = PlusSymbol(-3.0, 0.0)
+  ref-label()
+
+public pcb-landpattern FUSC7330X390 :
+  name = "FUSC7330X390"
+  make-two-pin-landpattern(7.26, 2.48, 3.0, 7.5, 3.0)
+
+public pcb-landpattern DIOM-4539X220 :
+  name = "DIOM-4539X220"
+  make-two-pin-landpattern(5.58, 2.15, 2.18, 5.5, 4.0)
+  layer(Silkscreen("pol",Top)) = Line(0.25, [Point(3.0, -1.0), Point(3.0, 1.0)])
+
+public pcb-landpattern d-sod-123 :
+  pad c : smd-pad(0.9, 1.2) at loc(-1.65, 0.0)
+  pad a : smd-pad(0.9, 1.2) at loc(1.65, 0.0)
+  layer(Courtyard(Top)) = Rectangle(4.5, 2.0)
+  layer(Silkscreen("pol", Top)) = Line(0.12, [Point(1.65, -1.0) Point(-2.4, -1.0)])
+  layer(Silkscreen("pol", Top)) = Line(0.12, [Point(-2.4, 1.0) Point(1.65, 1.0) ])
+  layer(Silkscreen("pol", Top)) = Line(0.30, [Point(-2.4, -1.0) Point(-2.4, 1.0)])
+  ref-label()
+
+; QFNs
+
+public pcb-landpattern QFN50P715X715X80-48 :
+  name = "QFN50P715X715X80-48"
+  make-qfn-landpattern(0.5, 7.15, 48, 0.3, 0.5, false)
+  pad p[49] : smd-pad(5.1,5.1) at loc(0.0, 0.0)
+
+public pcb-landpattern QFN50P400X400X85-24 :
+  name = "QFN50P400X400X85-24"
+  make-qfn-landpattern(0.5, 4.0, 24, 0.25, 0.4, false)
+  pad p[25] : smd-pad(2.5,2.5) at loc(0.0, 0.0)  
+
+public pcb-landpattern SOT95P280X100-3N :
+  
+  val x0 = -0.95
+  val y0 = -1.0
+  pad p[1] : smd-pad(0.6, 0.7) at loc(x0,y0)
+  pad p[2] : smd-pad(0.6, 0.7) at loc((- x0), y0)
+  pad p[3] : smd-pad(0.6, 0.7) at loc(0.0, (- y0))
+
+  layer(Courtyard(Top)) = Rectangle(3.3, 2.8)
+  layer(Silkscreen("pol", Top)) = Circle(x0, y0 - 1.0, 0.2)
+  ref-label()
+
+public pcb-landpattern SC-70-3 :
+  
+  val x0 = -1.85 / 2.0
+  val y0 = -1.3 / 2.0
+  pad p[1] : smd-pad(0.6, 0.7) at loc(x0,y0)
+  pad p[2] : smd-pad(0.6, 0.7) at loc((- x0), y0)
+  pad p[3] : smd-pad(0.6, 0.7) at loc(0.0, (- y0))
+
+  layer(Courtyard(Top)) = Rectangle(2.65, 2.35)
+  ref-label()
+
+
+public defn make-sot23-3 () : 
+  make-dual-row-smd-landpattern(2,   1,  
+                             1.9, 0.0, ; e1, n/a 
+                             min-typ-max(2.1, 2.37, 2.634), ; E
+                             tol(1.3, 0.1)                 ; E1
+                             min-typ-max(2.8, 2.9, 3.04),  ; D
+                             tol(0.4, 0.1)  ; b
+                             tol(0.5, 0.1)  ; L
+                             false)
+
+public pcb-landpattern SOT23-3 : 
+  make-sot23-3()
+
+public pcb-landpattern TO-236 : 
+  make-sot23-3()
+
+public defn SOT23 () :
+  SOT23-3
+
+public pcb-landpattern SOT95P280X145-5N :
+  val x0 = -0.95
+  val y0 = 2.7 / -2.0
+  pad p[1] : smd-pad(0.6, 1.05) at loc(x0,y0)
+  pad p[2] : smd-pad(0.6, 1.05) at loc(0.0, y0)
+  pad p[3] : smd-pad(0.6, 1.05) at loc((- x0), y0)
+  pad p[4] : smd-pad(0.6, 1.05) at loc((- x0), (- y0))
+  pad p[5] : smd-pad(0.6, 1.05) at loc(x0, (- y0))
+
+  layer(Courtyard(Top)) = Rectangle(2.7, 3.95)  
+  layer(Silkscreen("pol", Top)) = Circle(x0, y0 - 1.0, 0.2)
+  
+  ref-label()
+
+public pcb-landpattern SOT95P280X145-6N :
+  val x0 = -0.95
+  val y0 = 2.7 / -2.0
+  pad p[1] : smd-pad(0.6, 1.05) at loc(x0,y0)
+  pad p[2] : smd-pad(0.6, 1.05) at loc(0.0, y0)
+  pad p[3] : smd-pad(0.6, 1.05) at loc((- x0), y0)
+  pad p[4] : smd-pad(0.6, 1.05) at loc((- x0), (- y0))
+  pad p[5] : smd-pad(0.6, 1.05) at loc(0.0, (- y0))
+  pad p[6] : smd-pad(0.6, 1.05) at loc(x0, (- y0))
+
+  layer(Silkscreen("pol", Top)) = Circle(x0, y0 - 1.0, 0.2)
+  layer(Courtyard(Top)) = Rectangle(2.7, 3.95)  
+  
+  ref-label()
+
+
+public pcb-landpattern pin-header-pkg (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
+  make-pin-grid(n-pin, n-row, pin-pitch, row-pitch)
+
+  val n-col = to-int(ceil(to-double(n-pin) / to-double(n-row)))
+
+  val c-w = to-double(n-row) * row-pitch
+  val c-h = to-double(n-col) * pin-pitch
+
+  layer(Courtyard(Top)) = Rectangle(c-w, c-h)
+  layer(Courtyard(Bottom)) = Rectangle(c-w, c-h)
+  layer(Silkscreen("f-silk", Top)) = LineRectangle(c-w, c-h)
+  
+  ref-label()
+
+public pcb-landpattern smd-testpoint-pkg (d:Double) :
+  pad p : testpoint-pad(d) at loc(0.0, 0.0)
+  layer(Courtyard(Top)) = Circle(d / 2.0)
+  layer(Silkscreen("f-silk", Top)) = Circle(d / 2.0)
+  ref-label()
+
+; Helper struct to contain the results of the IPC formula in section 3 of 
+; 7351-B
+public defstruct IpcResults:
+  Zmax:Double,
+  Gmin:Double,
+  Xmin:Double,
+
+defmethod print (o:OutputStream, i:IpcResults):
+  print(o, "IpcResults(Zmax:%_, Gmin:%_, Xmin:%_" % [Zmax(i), Gmin(i), Xmin(i)])
+
+; Helper to compute the pad size from the formula results
+public defn pad-size (i:IpcResults) -> Dims:
+  Dims(0.5 * (Zmax(i) - Gmin(i)), Xmin(i))
+
+; Helper function to apply a thermal pad shape, if it is provided. Assumes that the
+; land pattern is centered at (0.0, 0.0).
+defn make-thermal-pad (shape?:False|Shape, num-pins:Int):
+  if num-pins < 0:
+    fatal("make-thermal-pad(...) failed: num-pins must positive. Called with %_" % [num-pins])
+  match(shape?:Shape):
+    val thermal-dims = dims(shape?)
+    inside pcb-landpattern:
+      pad p[num-pins + 1]: smd-pad(shape?) at loc(0.0, 0.0)
+
+; the IPC formula
+public defn ipc-formula (L:Toleranced, ; the distance from edge-of-lead to edge-of-lead on the exterior of the land pattern
+                  T:Toleranced, ; the nominal size of the leads, in the same dimension as L
+                  W:Toleranced, ; the nominal size of the leads, in the dimension orthogonal to L
+                  fillets:LeadFillets): ; looked up using lead-fillets(lead-type, density-level)
+  ; compute root-mean-squared of a sequence of numbers
+  val [Jt, Jh, Js, _] = to-tuple(fillets)
+  val Lmax = max-value(L)
+  val Lmin = min-value(L)
+  val Wmin = min-value(W)
+  val Tmin = min-value(T)
+  val Smax = Lmax - 2.0 * Tmin
+  val C_L  = tolerance-range(L)
+  val C_W  = tolerance-range(W)
+  val C_T  = tolerance-range(T)
+  val C_S  = sqrt(C_L * C_L + C_T * C_T)
+  val Zmax = Lmin + 2.0 * Jt + C_L ; the distance from edge of land to edge of land on the exterior of the land pattern
+  val Gmin = Smax - 2.0 * Jh - C_S ; the distance from edge of land to edge of land on the interior of the land pattern
+  val Xmin = Wmin + 2.0 * Js + C_W ; the size of the land in the dimension orthogonal to Z and G.
+  IpcResults(Zmax, Gmin, Xmin)
+
+; helper struct to contain information about how we plan 
+; to layout the pads on a single side of a quad land pattern
+public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on the west face
+                                   num-pins-south: Int, ; the number of pins on the south face
+                                   num-pins-east: Int,  ; the number of pins on the east face
+                                   num-pins-north: Int, ; the number of pins on the north face
+                                   pitch-west:Double,   ; the pithc on the west face
+                                   pitch-south:Double,  ; the pitch on the south face
+                                   pitch-east:Double,   ; the pitch on the east face
+                                   pitch-north:Double,  ; the pitch on the north face
+                                   lead-span-x: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the x direction
+                                   lead-span-y: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the y direction
+                                   package-length: Toleranced,  ; the size of the package in the x direction
+                                   package-width: Toleranced,  ; the size of hte package in the y direction
+                                   terminal-length: Toleranced, ; the dimension of the leads in the x direction on the east/west faces
+                                   terminal-width: Toleranced,  ; the dimension of the leads in the y direction on the east/west faces
+                                   lead-type:  LandProtrusionType, ; the type of the leads
+                                   density-level: DensityLevel,     ; the density level of the design
+                                   exposed-metal-heat-feature?: Shape|False):     ; an optional thermal pad
+  val lead-fillets = lead-fillets(lead-type, density-level)  
+  inside pcb-landpattern: 
+    ;----------------------------------------------------------
+    ; compute dimensions
+    val ipc-ns = ipc-formula(lead-span-x, terminal-length, terminal-width, lead-fillets)
+    val ipc-ew = ipc-formula(lead-span-y, terminal-length, terminal-width, lead-fillets)
+    val pad-sz-ns = transpose(pad-size(ipc-ns))
+    val pad-sz-ew = pad-size(ipc-ew)
+
+    ;----------------------------------------------------------
+    ; compute pad locations 
+    val x-shift = 0.5 * (Zmax(ipc-ew) - x(pad-sz-ew))
+    val y-shift = 0.5 * (Zmax(ipc-ns) - y(pad-sz-ns))
+
+    val pad-1-loc = to-tuple(grid-locs(num-pins-east, 2, 2.0 * x-shift, pitch-east))[0]
+    var pin-count = 0 ; accumulator, holds the number of pins we have laid out
+
+    defn layout-pads (dir:Dir, num-pins:Int, pitch:Double):
+      val locs = switch(dir):
+        Up: 
+          shift-locs{0.0, y-shift, _ } $
+          reverse(to-list(row-locs(num-pins, pitch)))
+        Down: 
+          shift-locs{0.0, (- y-shift), _ } $
+          row-locs(num-pins, pitch)
+        Left:  
+          shift-locs{(- x-shift), 0.0, _ } $
+          col-locs(num-pins, pitch)
+        Right: 
+          shift-locs{x-shift, 0.0, _ } $
+          reverse(to-list(col-locs(num-pins, pitch)))
+      
+      val pad-dims = 
+        if contains?([Left, Right], dir): pad-sz-ew
+        else: pad-sz-ns        
+      val idx = pin-count to (pin-count + num-pins)
+      for (i in idx, loc in locs) do:
+        pad p[i + 1]: smd-pad(pad-dims) at loc
+      pin-count = pin-count + num-pins
+
+    layout-pads(Left, num-pins-east,  pitch-east)
+    layout-pads(Down, num-pins-south, pitch-south)
+    layout-pads(Right,num-pins-west,  pitch-west)
+    layout-pads(Up,   num-pins-north, pitch-north)
+    
+    ;----------------------------------------------------------
+    ; Compute the courtyard
+    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
+    val part-sz = Dims(max-value(package-length), max-value(package-width))
+    val lp-sz   = enlarge(Dims(Zmax(ipc-ew), Zmax(ipc-ns)), 2.0 * solder-mask-registration)
+    val cy-sz   = enlarge(max(part-sz, lp-sz), courtyard-excess(lead-fillets))
+    layer(Courtyard(Top)) = Rectangle(cy-sz)
+  
+    ;----------------------------------------------------------
+    ; Place the polarity marker
+    val silk-solder-mask-clearance = clearance(current-rules(), MinSilkSolderMaskSpace)
+    val line-width  = clearance(current-rules(), MinSilkscreenWidth)
+    val line-length = 3.0 * line-width - line-width
+    val dist  = solder-mask-registration + silk-solder-mask-clearance + line-width * 0.5 + 0.01
+    
+    val pad-loc = center(pad-1-loc)
+    val p1 = Point(
+      x(pad-loc) - 0.5 * x(pad-sz-ew),
+      y(pad-loc) + 0.5 * y(pad-sz-ew) + dist
+    )
+    val p2 = Point(
+      -0.5 * x(part-sz) - line-width * 0.5,
+       0.5 * y(part-sz) - line-width * 0.5,
+    )
+    val pol = max-distance(p1, p2)
+    layer(Silkscreen("pol", Top)) = Line(line-width, [
+      pol, pol + Point(line-length, 0.0)
+    ])
+
+    ;----------------------------------------------------------
+    ; Place the reference label
+    val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
+    val text-y = 0.5 * (y(cy-sz) + min-silkscreen-text-height)
+    ref-label(0.0, text-y)
+
+    make-thermal-pad(exposed-metal-heat-feature?, 
+                     num-pins-west + num-pins-south + num-pins-east + num-pins-north)
+  
+public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on the west face
+                                   num-pins-south: Int, ; the number of pins on the south face
+                                   num-pins-east: Int,  ; the number of pins on the east face
+                                   num-pins-north: Int, ; the number of pins on the north face
+                                   pitch-west:Double,   ; the pithc on the west face
+                                   pitch-south:Double,  ; the pitch on the south face
+                                   pitch-east:Double,   ; the pitch on the east face
+                                   pitch-north:Double,  ; the pitch on the north face
+                                   component-length: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the x direction
+                                   component-width: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the y direction
+                                   package-length: Toleranced,  ; the size of the package in the x direction
+                                   package-width: Toleranced,  ; the size of hte package in the y direction
+                                   terminal-length: Toleranced, ; the dimension of the leads in the x direction on the east/west faces
+                                   terminal-width: Toleranced, ; the dimension of the leads in the y direction on the east/west faces
+                                   lead-type:  LandProtrusionType, ; the type of the leads
+                                   density-level: DensityLevel   ; the density level of the design
+):
+  make-quad-landpattern(num-pins-west, num-pins-south, num-pins-east, num-pins-north,
+                        pitch-west,    pitch-south,    pitch-east,    pitch-north,
+                        component-length, component-width, 
+                        package-length, package-width,
+                        terminal-length, terminal-width,
+                        lead-type, density-level,
+                        false)
+
+; create a quad landpattern with default density level and no thermal pad
+public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on the west face
+                                   num-pins-south: Int, ; the number of pins on the south face
+                                   num-pins-east: Int,  ; the number of pins on the east face
+                                   num-pins-north: Int, ; the number of pins on the north face
+                                   pitch-west:Double,   ; the pithc on the west face
+                                   pitch-south:Double,  ; the pitch on the south face
+                                   pitch-east:Double,   ; the pitch on the east face
+                                   pitch-north:Double,  ; the pitch on the north face
+                                   component-length: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the x direction
+                                   component-width: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the y direction
+                                   package-length: Toleranced,  ; the size of the package in the x direction
+                                   package-width: Toleranced,  ; the size of hte package in the y direction
+                                   terminal-length: Toleranced, ; the dimension of the leads in the x direction on the east/west faces
+                                   terminal-width: Toleranced, ; the dimension of the leads in the y direction on the east/west faces
+                                   lead-type:  LandProtrusionType, ; the type of the leads
+):
+  make-quad-landpattern(num-pins-west, num-pins-south, num-pins-east, num-pins-north,
+                        pitch-west,    pitch-south,    pitch-east,    pitch-north,
+                        component-length, component-width, 
+                        package-length, package-width,
+                        terminal-length, terminal-width,
+                        lead-type, DENSITY-LEVEL,
+                        false)
+
+; Create a quad landpattern with optional thermal pad and default density level
+public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on the west face
+                                   num-pins-south: Int, ; the number of pins on the south face
+                                   num-pins-east: Int,  ; the number of pins on the east face
+                                   num-pins-north: Int, ; the number of pins on the north face
+                                   pitch-west:Double,   ; the pithc on the west face
+                                   pitch-south:Double,  ; the pitch on the south face
+                                   pitch-east:Double,   ; the pitch on the east face
+                                   pitch-north:Double,  ; the pitch on the north face
+                                   component-length: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the x direction
+                                   component-width: Toleranced, ; the distance from pad-edge to pad-edge on the exterior of the part in the y direction
+                                   package-length: Toleranced,  ; the size of the package in the x direction
+                                   package-width: Toleranced,  ; the size of hte package in the y direction
+                                   terminal-length: Toleranced, ; the dimension of the leads in the x direction on the east/west faces
+                                   terminal-width: Toleranced, ; the dimension of the leads in the y direction on the east/west faces
+                                   lead-type:  LandProtrusionType, ; the type of the leads
+                                   exposed-metal-heat-feature?: Shape|False, ; the thermal pad
+):
+  make-quad-landpattern(num-pins-west, num-pins-south, num-pins-east, num-pins-north,
+                        pitch-west,    pitch-south,    pitch-east,    pitch-north,
+                        component-length, component-width, 
+                        package-length, package-width,
+                        terminal-length, terminal-width,
+                        lead-type, DENSITY-LEVEL,
+                        exposed-metal-heat-feature?)
+
+; Create a quad landpattern with optional thermal pad
+public defn make-quad-landpattern (num-pins:Int, 
+                                   pitch:Double, 
+                                   lead-span:Toleranced, 
+                                   package-size:Toleranced, 
+                                   terminal-length:Toleranced, 
+                                   terminal-width:Toleranced, 
+                                   lead-type:LandProtrusionType
+                                   exposed-metal-heat-feature?:Shape|False):
+  ensure-divisible!(num-pins, 4, "make-quad-landpattern(num-pins, ...)")
+  make-quad-landpattern(num-pins / 4, num-pins / 4, num-pins / 4, num-pins / 4, 
+                        pitch, pitch, pitch, pitch, 
+                        lead-span, lead-span, 
+                        package-size, package-size, 
+                        terminal-length, terminal-width, lead-type, 
+                        DENSITY-LEVEL, exposed-metal-heat-feature?)
+  
+; Create a default quad landpattern with no thermal pad
+public defn make-quad-landpattern (num-pins:Int, 
+                                   pitch:Double, 
+                                   lead-span:Toleranced, 
+                                   package-size:Toleranced, 
+                                   terminal-length:Toleranced, 
+                                   terminal-width:Toleranced, 
+                                   lead-type:LandProtrusionType):
+  make-quad-landpattern(num-pins,
+                        pitch,
+                        lead-span,
+                        package-size,
+                        terminal-length,
+                        terminal-width,
+                        lead-type
+                        false)
+
+; Create a qfn landpattern with optional thermal pad
+public defn make-qfn-landpattern (num-pins:Int, 
+                                  pitch:Double, 
+                                  package-size:Toleranced, 
+                                  terminal-length:Toleranced, 
+                                  terminal-width:Toleranced,
+                                  exposed-metal-heat-feature?:Shape|False):
+  make-quad-landpattern(num-pins,
+                        pitch,
+                        package-size,
+                        package-size, 
+                        terminal-length, terminal-width, 
+                        QuadFlatNoLeads, 
+                        exposed-metal-heat-feature?)
+
+; Create a qfn landpattern with no thermal pad
+public defn make-qfn-landpattern (num-pins:Int, 
+                                  pitch:Double, 
+                                  package-size:Toleranced, 
+                                  terminal-length:Toleranced, 
+                                  terminal-width:Toleranced):
+  make-qfn-landpattern(num-pins, pitch, package-size, terminal-length, terminal-width, false)
+
+; Create a qfn landpattern with optional thermal pad and differing number of pins per side
+public defn make-qfn-landpattern (num-pins:[Int, Int, Int, Int], 
+                                  pitch:Double, 
+                                  package-size:Toleranced, 
+                                  terminal-length:Toleranced, 
+                                  terminal-width:Toleranced,
+                                  exposed-metal-heat-feature?:Shape|False):
+  make-quad-landpattern(num-pins[0], num-pins[1], num-pins[2], num-pins[3], 
+                        pitch, pitch, pitch, pitch,
+                        package-size, package-size,
+                        package-size, package-size,
+                        terminal-length, terminal-width, 
+                        QuadFlatNoLeads, DENSITY-LEVEL, 
+                        exposed-metal-heat-feature?)
+
+; Create a QFN landpattern with no thermal pad and different number of pins per side
+public defn make-qfn-landpattern (num-pins:[Int, Int, Int, Int], 
+                                  pitch:Double, 
+                                  package-size:Toleranced, 
+                                  terminal-length:Toleranced, 
+                                  terminal-width:Toleranced):
+  make-qfn-landpattern(num-pins, pitch, package-size, terminal-length, terminal-width, false)
+
+; Create a QFP land pattern with optional thermal pad
+public defn make-qfp-landpattern (num-pins:Int, 
+                                  pitch:Double, 
+                                  lead-span:Toleranced, 
+                                  package-length:Toleranced, 
+                                  lead-length:Toleranced, 
+                                  lead-width:Toleranced
+                                  exposed-metal-heat-feature?:Shape|False):
+  val lead-type = BigGullWingLeads when pitch >= 0.0625 else SmallGullWingLeads
+  make-quad-landpattern(num-pins, 
+                        pitch,
+                        lead-span, 
+                        package-length, 
+                        lead-length, lead-width,
+                        lead-type, 
+                        exposed-metal-heat-feature?)
+
+; Create a QFP landpattern with no thermal pad
+public defn make-qfp-landpattern (num-pins:Int, 
+                                  pitch:Double, 
+                                  component-size:Toleranced, 
+                                  package-size:Toleranced, 
+                                  lead-length:Toleranced, 
+                                  lead-width:Toleranced):
+  make-qfp-landpattern(num-pins, pitch, component-size, package-size, lead-length, lead-width, false)
+
+; Create an `n` pin SOIC land pattern. 
+;
+; Restrictions:
+; - n must be even
+; - the leads are oriented on the left and right sides of the land pattern
+; - p[1] is the top left pin
+;
+public pcb-enum ocdb/utils/landpatterns/PinNumbering : 
+  SoicNumbering
+  RowMajorNumbering
+public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number of pins of the component
+                                         pitch:Double,                 ; pitch of the pins of the component
+                                         lead-span:Toleranced,  ; the overall length of the component, from terminal-edge to terminal-edge
+                                         package-length:Toleranced,    ; the length of the package 
+                                         package-width:Toleranced,     ; the width of the package
+                                         lead-type:LandProtrusionType, ; the lead/land protrusion type of the part
+                                         terminal-length:Toleranced,   ; the length of the terminals
+                                         terminal-width:Toleranced,    ; the width of the terminals
+                                         density-level:DensityLevel,   ; the density level of the design
+                                         exposed-metal-heat-feature?:False|Shape,    ; an optional shape of a thermal pad
+                                         pin-numbering:PinNumbering):
+  fatal("n must be even") when (num-pins % 2) != 0
+  val lead-fillets = lead-fillets(lead-type, density-level)
+
+  inside pcb-landpattern:
+    ;----------------------------------------------------
+    ; Compute adjustments to dimensions using IPC formula
+    val ipc = ipc-formula(
+      lead-span, terminal-length, terminal-width, 
+      lead-fillets
+    )
+
+    ;----------------------------------------------------
+    ; compute our pad sizes
+    val pad-sz  = pad-size(ipc)
+
+    ;----------------------------------------------------
+    ; place the pads
+    val grid-sz = Dims(Gmin(ipc) + x(pad-sz), pitch)
+    var pin-position:True|False = (pin-numbering is RowMajorNumbering)
+    val locs    = to-tuple(grid-locs(num-pins / 2, 2, x(grid-sz), y(grid-sz), pin-position))
+    for (i in 0 to false, l in locs) do:
+      val r = i % (num-pins / 2)
+      val c = i / (num-pins / 2)
+      val idx = 
+        if pin-position or c == 0 : (i + 1)
+        else : num-pins - r
+      pad p[idx] : smd-pad(Rectangle(pad-sz)) at l
+
+    ;----------------------------------------------------
+    ; compute the courtyard
+    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
+    val [max-y, min-y] = fork-on-seq(seq(y{center(_)}, locs), maximum, minimum)
+    val lp-y-dim = y(pad-sz) + max-y - min-y
+    val lp-sz   = enlarge(Dims(Zmax(ipc), y(pad-sz) + max-y - min-y), 2.0 * solder-mask-registration)
+    val part-sz = Dims(max-value(package-length), max-value(package-width))
+    val cy-sz   = enlarge(max(lp-sz, part-sz), 2.0 * courtyard-excess(lead-fillets))
+    layer(Courtyard(Top)) = Rectangle(cy-sz)
+        
+    ;----------------------------------------------------
+    ; draw the orientation marker
+    val silk-solder-mask-clearance = clearance(current-rules(), MinSilkSolderMaskSpace)
+    val pad-loc = center(locs[0])
+    val pol-x = min(-0.5 * x(part-sz), x(pad-loc) - 0.5 * x(pad-sz))
+    val pol-y = max( 0.5 * y(part-sz), y(pad-loc) + 0.5 * y(pad-sz))
+    val line-width  = clearance(current-rules(), MinSilkscreenWidth)
+    val line-length = 3.0 * line-width - line-width
+    val dist  = solder-mask-registration + silk-solder-mask-clearance + line-width * 0.5 + 0.01
+    layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * Line(line-width, [Point(0.0, 0.0), Point(line-length, 0.0)])
+    
+    ;----------------------------------------------------
+    ; place the reference label    
+    val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
+    val text-y = 0.5 * (y(cy-sz) + min-silkscreen-text-height)
+    ref-label(0.0, text-y)
+
+    ;----------------------------------------------------
+    ; place the thermal pad
+    make-thermal-pad(exposed-metal-heat-feature?, num-pins)
+
+; Create an SOIC landpattern default pin numbering - SOIC
+public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number of pins of the component
+                                         pitch:Double,                 ; pitch of the pins of the component
+                                         lead-span:Toleranced,  ; the overall length of the component, from terminal-edge to terminal-edge
+                                         package-length:Toleranced,    ; the length of the package 
+                                         package-width:Toleranced,     ; the width of the package
+                                         lead-type:LandProtrusionType, ; the lead/land protrusion type of the part
+                                         terminal-length:Toleranced,   ; the length of the terminals
+                                         terminal-width:Toleranced,    ; the width of the terminals
+                                         density-level:DensityLevel,   ; the density level of the design
+                                         exposed-metal-heat-feature?:False|Shape):    ; an optional shape of a thermal pad
+  make-n-pin-soic-landpattern(num-pins,
+                              pitch
+                              lead-span,
+                              package-length,
+                              package-width,
+                              lead-type,
+                              terminal-length,
+                              terminal-width,
+                              density-level, 
+                              exposed-metal-heat-feature?,
+                              SoicNumbering)
+; Create an SOIC landpattern with default density level and optional pin numbering
+public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number of pins of the component
+                                         pitch:Double,                 ; pitch of the pins of the component
+                                         lead-span:Toleranced,  ; the overall length of the component, from terminal-edge to terminal-edge
+                                         package-length:Toleranced,    ; the length of the package 
+                                         package-width:Toleranced,     ; the width of the package
+                                        ;  lead-type:LandProtrusionType, ; the lead/land protrusion type of the part
+                                         terminal-length:Toleranced,   ; the length of the terminals
+                                         terminal-width:Toleranced,    ; the width of the terminals
+                                        ;  density-level:DensityLevel,   ; the density level of the design
+                                        ;  exposed-metal-heat-feature?:False|Shape,    ; an optional shape of a thermal pad
+                                         pin-numbering:PinNumbering):
+  val lead-type = BigGullWingLeads when pitch > 0.0625 else SmallGullWingLeads
+  make-n-pin-soic-landpattern(num-pins,
+                              pitch
+                              lead-span,
+                              package-length,
+                              package-width,
+                              lead-type,
+                              terminal-length,
+                              terminal-width,
+                              DENSITY-LEVEL, 
+                              false,
+                              pin-numbering)
+; Create an SOIC landpattern with default density level and optional thermal pad
+public defn make-n-pin-soic-landpattern (num-pins:Int, ; the number of pins of the component
+                                         pitch:Double, ; the pitch of the pins
+                                         lead-span:Toleranced, ; the overall length of the component, from lead to lead
+                                         package-length:Toleranced,   ; the length of the package
+                                         package-width:Toleranced,    ; the width of the package
+                                         terminal-length:Toleranced,  ; the length of terminals or leads of the package
+                                         terminal-width:Toleranced,   ; the width of the terminals or leads of the package
+                                         exposed-metal-heat-feature?:False|Shape) :  ; an optional thermal pad shape
+  val lead-type = BigGullWingLeads when pitch > 0.0625 else SmallGullWingLeads
+  make-n-pin-soic-landpattern(num-pins,
+                              pitch
+                              lead-span,
+                              package-length,
+                              package-width,
+                              lead-type,
+                              terminal-length,
+                              terminal-width,
+                              DENSITY-LEVEL, 
+                              exposed-metal-heat-feature?)
+
+; Create an SOIC landpattern with default denity level and no thermal pad
+public defn make-n-pin-soic-landpattern (num-pins:Int, ; the number of pins of the component
+                                         pitch:Double, ; the pitch of the pins
+                                         component-length:Toleranced, ; the overall length of the component, from lead to lead
+                                         package-length:Toleranced,   ; the length of the package
+                                         package-width:Toleranced,    ; the width of the package
+                                         terminal-length:Toleranced,  ; the length of the terminals
+                                         terminal-width:Toleranced) : ; the width of the terminals
+  make-n-pin-soic-landpattern(num-pins,
+                              pitch
+                              component-length,
+                              package-length,
+                              package-width,
+                              terminal-length,
+                              terminal-width,
+                              false)
+
+public defn make-dfn-land-pattern (num-pins:Int,                 ; number of pins of the component
+                                  pitch:Double,                 ; pitch of the pins of the component
+                                  package-length:Toleranced,    ; the length of the package 
+                                  package-width:Toleranced,     ; the width of the package
+                                  terminal-length:Toleranced,   ; the length of the terminals
+                                  terminal-width:Toleranced,    ; the width of the terminals
+                                  exposed-metal-heat-feature?:False|Shape):    ; an optional shape of a thermal pad
+  make-n-pin-soic-landpattern(num-pins, 
+                              pitch,
+                              package-length, 
+                              package-length, package-width,
+                              SmallOutlineNoLeads,
+                              terminal-length, terminal-width,
+                              DENSITY-LEVEL,
+                              exposed-metal-heat-feature?)
+
+
+public defn draw-pol-marker (locs:Tuple<Pose>, 
+                             part-sz:Dims,
+                             pad-sz:Dims,
+                             ) : 
+  inside pcb-landpattern : 
+    val mask-reg        = clearance(SolderMaskRegistration)
+    val silk-mask-space = clearance(MinSilkSolderMaskSpace)
+    val min-silk        = clearance(MinSilkscreenWidth)
+
+    val pad-loc = center(locs[0])
+    val pol-x = min(-0.5 * x(part-sz), x(pad-loc) - 0.5 * x(pad-sz))
+    val pol-y = max( 0.5 * y(part-sz), y(pad-loc) + 0.5 * y(pad-sz))
+    val line-length = 2.0 * min-silk
+
+    val dist = mask-reg + silk-mask-space + min-silk * 0.5 + 0.01
+    val line = Line(min-silk, [Point(-0.5 * line-length, 0.0), Point(0.5 * line-length, 0.0)])
+    layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * line
+    
+
+public defstruct LandPatternSide : 
+  side:Dir,
+  num-pins:Int, 
+
+public defn make-dual-row-smd-landpattern (primary-num-pins:    Int,    ; the number of pins on the primary side of the land pattern
+                                        secondary-num-pins:  Int,    ; the number of pins on the other side of the land pattern
+                                        primary-pin-pitch:   Double, ; the pitch of the pins on the primary side of the land pattern
+                                        secondary-pin-pitch: Double, ; the pitch of pins on the other side of the land pattern
+                                        lead-span:       Toleranced, ; the lead span across the package
+                                        package-length:  Toleranced, ; the length of the package
+                                        package-width:   Toleranced, ; the width of the package
+                                        lead-type:       LandProtrusionType   ; optional lead/land protrusion type
+                                        terminal-length: Toleranced,          ; the length of the terminals of the land pattern
+                                        terminal-width:  Toleranced,          ; the width of the terminals of the land pattern
+                                        with-pol-marker?: True|False,         ; optional polarity marker 
+                                        density-level:   DensityLevel,        ; optional density level
+                                        exposed-metal-heat-feature?:False|Shape) : ; optional thermal pad shape 
+  inside pcb-landpattern : 
+    val fillets = lead-fillets(lead-type, density-level)
+    val ipc = ipc-formula(lead-span, terminal-length, 
+                          terminal-width, fillets)
+    val pad-sz = pad-size(ipc)
+
+    defn make-grid (n:Int, p:Double) : 
+      val sz = Dims(Gmin(ipc) + x(pad-sz), p)
+      to-tuple $ grid-locs(n / 2, 2, x(sz), y(sz), false)
+
+    val primary-locs   = make-grid(2 * primary-num-pins, primary-pin-pitch)[0 to primary-num-pins]
+    val secondary-locs = make-grid(2 * secondary-num-pins, secondary-pin-pitch)[secondary-num-pins to false]
+    val locs = to-tuple(cat-all([primary-locs, in-reverse(secondary-locs)]))
+
+    for (i in 1 to false, l in locs) do : 
+      pad p[i] : smd-pad(Rectangle(pad-sz)) at l
+    
+    val [max-y, min-y] = fork-on-seq(seq(y{center(_)}, locs), maximum, minimum)
+    val lp-sz = enlarge(Dims(Zmax(ipc), y(pad-sz) + max-y - min-y), 2.0 * clearance(SolderMaskRegistration))
+    val part-sz = Dims(max-value(package-length), max-value(package-width))
+    val cy-sz = enlarge(max(lp-sz, part-sz), 2.0 * courtyard-excess(fillets))
+    layer(Courtyard(Top)) = Rectangle(cy-sz)
+    if with-pol-marker? : 
+      draw-pol-marker(locs, part-sz, pad-sz)
+    
+    make-thermal-pad(exposed-metal-heat-feature?, length(locs))
+    
+    val text-y = 0.5 * (y(cy-sz) + clearance(MinSilkscreenTextHeight))
+    ref-label(0.0, text-y)
+
+public defn make-dual-row-smd-landpattern (primary-num-pins:    Int,     ; number of pins on one side of the land pattern
+                                        secondary-num-pins:  Int,     ; number of pins on the other side of the land pattern
+                                        primary-pin-pitch:   Double,  ; the pitch of pins on the primary side of the land pattern
+                                        secondary-pin-pitch: Double,  ; the pitch of the pins on the other side of the land pattern
+                                        lead-span:       Toleranced,  ; the lead span across the land pattern
+                                        package-length:  Toleranced,  ; the length of the package
+                                        package-width:   Toleranced,  ; the width of the package
+                                        terminal-length: Toleranced,  ; the length of the terminals
+                                        terminal-width:  Toleranced) : ; the width of the terminals 
+  make-dual-row-smd-landpattern(primary-num-pins, secondary-num-pins, 
+                             primary-pin-pitch, secondary-pin-pitch, 
+                             lead-span, package-length, package-width, 
+                             BigGullWingLeads, terminal-length, terminal-width,
+                             true,
+                             DENSITY-LEVEL, false)
+
+public defn make-dual-row-smd-landpattern (
+  primary-num-pins:    Int,    ; the number of pins along one side of the land pattern
+  secondary-num-pins:  Int,    ; the number of pins along the other side of the land pattern
+  primary-pin-pitch:   Double, ; the pitch of pins on the primary side of the land pattern
+  secondary-pin-pitch: Double, ; the pitch of pins on the secondary side of the land pattern
+  lead-span:       Toleranced, ; the overal lead span, across both sides of the land pattern
+  package-length:  Toleranced, ; the length of the package
+  package-width:   Toleranced, ; the width of the package
+  terminal-length: Toleranced, ; the length of the terminals of the package
+  terminal-width:  Toleranced, ; the width of the terminals of the package 
+  with-pol-marker?: True|False ; optional parameter to include or remove the polarity marker
+): 
+  make-dual-row-smd-landpattern(primary-num-pins, secondary-num-pins, 
+                             primary-pin-pitch, secondary-pin-pitch, 
+                             lead-span, package-length, package-width, 
+                             BigGullWingLeads, 
+                             terminal-length, terminal-width,
+                             with-pol-marker?,
+                             DENSITY-LEVEL, false)
+
+public defn make-dfn-landpattern (num-pins:    Int
+                                  pitch:   Double, ; the pitch of the pins on the primary side of the land pattern
+                                  package-length:  Toleranced, ; the length of the package
+                                  package-width:   Toleranced, ; the width of the package
+                                  terminal-length: Toleranced,          ; the length of the terminals of the land pattern
+                                  terminal-width:  Toleranced,          ; the width of the terminals of the land pattern
+                                  exposed-metal-heat-feature?:False|Shape) : ; optional thermal pad shape
+
+  make-dual-row-smd-landpattern(num-pins  ; the number of pins on the primary side of the land pattern
+                                num-pins   ; the number of pins on the other side of the land pattern
+                                pitch ; the pitch of the pins on the primary side of the land pattern
+                                pitch ; the pitch of pins on the other side of the land pattern
+                                package-length ; the lead span across the package
+                                package-length ; the length of the package
+                                package-width ; the width of the package
+                                QuadFlatNoLeads   ; optional lead/land protrusion type
+                                terminal-length   ; the length of the terminals of the land pattern
+                                terminal-width         ; the width of the terminals of the land pattern
+                                true         ; optional polarity marker 
+                                DENSITY-LEVEL        ; optional density level
+                                exposed-metal-heat-feature?) ; optional thermal pad shape
+
+public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vertical) dimension of the package
+                                           width:Toleranced,  ; the width (horizontal) dimension of the package
+                                           lead-length:Toleranced, ; the length (vertical) dimension of the conductors/leads of the package
+                                           lead-width?:False|Toleranced, ; the width (horizontal) dimension of the conductors/leads of the package, if different from `length`
+                                           density-level:DensityLevel,   ; the density level of the design (DensityLevelA|DensityLevelB|DensityLevelC)
+                                           anode-and-cathode?:True|False,; whether the pads should be named `a` and `c` (if false, p[1] and p[2])
+                                           polarized?:True|False         ; whether a polarity marker is required or not
+                                           ):
+  make-two-pin-chip-landpattern(
+    length, width, tol(0.4,0.01), lead-length, lead-width?, 
+    density-level, anode-and-cathode?, polarized?
+  )
+; assume a height
+
+public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vertical) dimension of the package
+                                           width:Toleranced,  ; the width (horizontal) dimension of the package
+                                           height:Toleranced,  ; the height (horizontal) dimension of the package
+                                           lead-length:Toleranced, ; the length (vertical) dimension of the conductors/leads of the package
+                                           lead-width?:False|Toleranced, ; the width (horizontal) dimension of the conductors/leads of the package, if different from `length`
+                                           density-level:DensityLevel,   ; the density level of the design (DensityLevelA|DensityLevelB|DensityLevelC)
+                                           polarized?:True|False         ; whether a polarity marker is required or not
+                                           ):
+  make-two-pin-chip-landpattern(
+    length, width, height, lead-length, lead-width?, 
+    density-level, polarized?, polarized?
+  )
+
+public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vertical) dimension of the package
+                                           width:Toleranced,  ; the width (horizontal) dimension of the package
+                                           height:Toleranced,  ; the height (horizontal) dimension of the package
+                                           lead-length:Toleranced, ; the length (vertical) dimension of the conductors/leads of the package
+                                           lead-width?:False|Toleranced, ; the width (horizontal) dimension of the conductors/leads of the package, if different from `length`
+                                           density-level:DensityLevel,   ; the density level of the design (DensityLevelA|DensityLevelB|DensityLevelC)
+                                           anode-and-cathode?:True|False,; whether the pads should be named `a` and `c` (if false, p[1] and p[2])
+                                           polarized?:True|False         ; whether a polarity marker is required or not
+                                           ):
+  inside pcb-landpattern:
+    ; compute the solder fillets based on the protrusion type
+    ; if > 16xx (1.6mm), use big rectangular leads
+    val land-protrusion-type = BigRectangularLeads when typ-value(width) > 0.8 else SmallRectangularLeads
+    val lead-fillets = lead-fillets(land-protrusion-type, density-level)
+
+    ; compute the base dimensions of the lands
+    ; val ipc = ipc-formula(
+    ;   length, lead-length, width when lead-width? is False else lead-width? as Toleranced,
+    ;   lead-fillets
+    ; )
+    val W = width when lead-width? is False else lead-width? as Toleranced
+    val [Jt-table, Jh, Js, _] = to-tuple(lead-fillets)
+    var Jt = Jt-table
+    if land-protrusion-type == BigRectangularLeads :
+      if density-level == DensityLevelB :
+        Jt = min(0.5,(0.25 * typ-value(height)) )
+    else :
+      if density-level == DensityLevelA :
+        Jt = typ-value(height)
+      if density-level == DensityLevelB :
+        Jt = 0.5 * typ-value(height)
+      if density-level == DensityLevelC :
+        Jt = 0.25 * typ-value(height)
+    val Lmax = max-value(length)
+    val Lmin = min-value(length)
+    val Wmin = min-value(W)
+    val Tmin = min-value(lead-length)
+    val Smax = Lmax - 2.0 * Tmin
+    val C_L  = tolerance-range(length)
+    val C_W  = tolerance-range(W)
+    val C_T  = tolerance-range(lead-length)
+    val C_S  = sqrt(C_L * C_L + C_T * C_T)
+    val Zmax = Lmin + 2.0 * Jt + C_L ; the distance from edge of land to edge of land on the exterior of the land pattern
+    val Gmin = Smax - 2.0 * Jh - C_S ; the distance from edge of land to edge of land on the interior of the land pattern
+    val Xmin = Wmin + 2.0 * Js + C_W ; the size of the land in the dimension orthogonal to Z and G.
+    val ipc = IpcResults(Zmax, Gmin, Xmin)
+
+    ; ----------------------------------------------------
+    ; place the pads
+    val pad-sz = transpose(pad-size(ipc))
+    val y-max = 0.5 * Gmin + 0.5 * y(pad-sz)
+    val y-min = (- y-max)
+
+    val pad-def = smd-pad(Rectangle(pad-sz)) ; pass in solder-mask-defined? 
+    if anode-and-cathode?:
+      pad a: pad-def at loc(0.0, y-max)
+      pad c: pad-def at loc(0.0, y-min)
+    else:
+      pad p[1]: pad-def at loc(0.0, y-max)
+      pad p[2]: pad-def at loc(0.0, y-min)
+    
+    ; ----------------------------------------------------
+    ; compute the courtyard
+    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
+    val lp-sz   = enlarge(Dims(x(pad-sz), Zmax), 2.0 * solder-mask-registration)
+    val part-sz = Dims(max-value(width), max-value(length))
+    val cy-sz   = enlarge(max(lp-sz, part-sz), 2.0 * courtyard-excess(lead-fillets))
+    layer(Courtyard(Top)) = Rectangle(cy-sz)
+    
+    ; ----------------------------------------------------
+    ; draw the polarity marker
+    if polarized?:
+      val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
+      ; the formula for placing the polarity marker is:
+      ;   for marker line M:
+      ;   
+      ;   M is placed a distance M_dist away from the land pattern 
+      ;   in the top-level corner, which is the corner of the land pattern 
+      ;   closest to p[1]/a. 
+      ; 
+      ;   - M_length = 3.0 * min-silk-width
+      ;   - M_width  = min-silk-width
+      ; 
+      ;   M_dist = solder-mask-registration + silk-solder-mask-clearance + min-silk-width * 0.5 + 0.01
+      ; 
+      ; assumptions:
+      ;   - the pad dimensions are outside the bounds of the part. This is guaranteed by the computation above.
+      ;   - the land pattern is centered about the origin
+      ;   - the pad corresponding to p[1] or a is centered about its origin.
+      ; 
+      val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
+      val silk-solder-mask-clearance = clearance(current-rules(), MinSilkSolderMaskSpace)
+      val line = Line(min-silk-width, [Point(min-silk-width * 0.5, 0.0),
+                                       Point(3.5 * min-silk-width, 0.0)])
+      val dist = solder-mask-registration + silk-solder-mask-clearance + min-silk-width * 0.5 + 0.01
+      val pol-x = -0.5 * max(x(lp-sz), x(part-sz))
+      val pol-y =  0.5 * max(y(lp-sz), y(part-sz)) + dist
+      layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y) * line
+      
+    val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
+    val text-x = 0.5 * (x(cy-sz) + min-silkscreen-text-height)
+    ref-label(loc(text-x, 0.0, -90.0), C)
+
+public defn make-two-pin-chip-landpattern (length:Toleranced,
+                                           width:Toleranced,
+                                           lead-length:Toleranced,
+                                           lead-width?:False|Toleranced,
+                                           density-level:DensityLevel,
+                                           polarized?:True|False):
+  make-two-pin-chip-landpattern(
+    length, width, lead-length, lead-width?, 
+    density-level, polarized?, polarized?
+  )
+
+public defn make-two-pin-chip-landpattern (length:Toleranced,
+                                           width:Toleranced,
+                                           lead-length:Toleranced,
+                                           density-level:DensityLevel,
+                                           polarized?:True|False):
+  make-two-pin-chip-landpattern(
+    length, width, lead-length, false, 
+    density-level, polarized?
+  )
+
+; Create a two pin chip land pattern with default density level and optional polarity
+public defn make-two-pin-chip-landpattern (length:Toleranced,
+                                           width:Toleranced,
+                                           lead-length:Toleranced,
+                                           polarized?:True|False):
+  make-two-pin-chip-landpattern(
+    length, width, lead-length, false, 
+    DENSITY-LEVEL, polarized?
+  )
+
+; Create a two pin chip land pattern with default density level and default polarity
+public defn make-two-pin-chip-landpattern (length:Toleranced,
+                                           width:Toleranced,
+                                           lead-length:Toleranced):
+  make-two-pin-chip-landpattern(length, width, lead-length, false)
+
+; Create a two pin chip land pattern with default density level, optional polarity and custom 
+; lead dimensions
+public defn make-two-pin-chip-landpattern (length:Toleranced,
+                                           width:Toleranced,
+                                           lead-length:Toleranced,
+                                           lead-width:Toleranced
+                                           polarized?:True|False):
+  make-two-pin-chip-landpattern(
+    length, width, lead-length, lead-width, 
+    DENSITY-LEVEL, polarized?
+  )
+
+; Create a two pin chip land pattern with default density level, default polarity and custom 
+; lead dimensions
+public defn make-two-pin-chip-landpattern (length:Toleranced,
+                                           width:Toleranced,
+                                           lead-length:Toleranced
+                                           lead-width:Toleranced):
+  make-two-pin-chip-landpattern(length, width, lead-length, lead-width, false)
+
+; Create a two pin chip landpattern factoring in factory tolerances and controlling 
+; whether the pads should be considered "solder mask defined" 
+public pcb-landpattern two-pin-chip-landpattern (length:Toleranced,
+                                                 width:Toleranced,
+                                                 lead-length:Toleranced,
+                                                 lead-width?:False|Toleranced,
+                                                 density-level:DensityLevel,
+                                                 polarized?:True|False):
+  make-two-pin-chip-landpattern(
+    length, width, lead-length, lead-width?,
+    density-level, polarized?, polarized?
+  )
+
+
+; Create a two-pin chip landpattern with a custom density level
+public defn two-pin-chip-landpattern (length:Toleranced,
+                                      width:Toleranced,
+                                      lead-length:Toleranced,
+                                      density-level:DensityLevel,
+                                      polarized?:True|False):
+  two-pin-chip-landpattern(
+    length, width, lead-length, false, 
+    density-level, polarized?
+  )
+
+; Create a two-pin chip landpattern given legnth, width, and lead-lengths
+public defn two-pin-chip-landpattern (length:Toleranced,
+                                      width:Toleranced,
+                                      lead-length:Toleranced,
+                                      polarized?:True|False):
+  two-pin-chip-landpattern(
+    length, width, lead-length, false, 
+    DENSITY-LEVEL, polarized?
+  )
+
+; Helper function to lookup the hole-to-lead diameter based on the density level of the design.
+defn hole-to-lead-diameter (d:DensityLevel) -> [Double, Double]:
+  switch(d):
+    DensityLevelA: [0.70, 0.25],
+    DensityLevelB: [0.70, 0.20],
+    DensityLevelC: [0.60, 0.15],
+
+; Helper function to compute the pad and hole size of through hoel components
+defn pth-pad-sizes (lead-diameter:Toleranced, density-level:DensityLevel):
+  val min-outer-layer-pad-size = MIN-OUTER-LAYER-PAD-SIZE
+  val max-hole-size-tolerance  = MAX-HOLE-SIZE-TOLERANCE
+  val min-hole-size-tolerance  = MIN-HOLE-SIZE-TOLERANCE
+  val hole-position-tolerance  = HOLE-POSITION-TOLERANCE
+
+  ; Lookup the max/min hole to lead diameter
+  val [max-h2l, min-h2l] = hole-to-lead-diameter(density-level)
+
+  ; Compute the hole size. This will be the average of the maximum
+  ; and minimum possible hole sizes given the design rules.
+  val max-hole-diam = min-value(lead-diameter) - max-hole-size-tolerance + max-h2l
+  val min-hole-diam = max-value(lead-diameter) + min-hole-size-tolerance + min-h2l
+  val hole-diameter = 0.5 * (max-hole-diam + min-hole-diam) 
+
+  ; Compute the pad diameter
+  val pad-diameter = hole-diameter + maximum([
+      max-hole-size-tolerance + 0.5,
+      max-hole-size-tolerance + hole-position-tolerance + 50.0e-6
+      min-outer-layer-pad-size,
+  ])
+  [pad-diameter, hole-diameter]
+
+; Helper function for two-pin through-hole components, to place the polarity marker
+defn two-pin-th-polarity-marker (cmp-sz:Dims, pad-diameter:Double, lead-spacing:Double):
+  inside pcb-landpattern:
+    val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
+    val min-silk-solder-mask-space = clearance(current-rules(), MinSilkSolderMaskSpace)
+    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
+
+    val line-length = 3.0 * min-silk-width
+    val line = Line(min-silk-width, [Point(0.0, 0.0),
+                                     Point(line-length, 0.0)])
+    val dist = solder-mask-registration + min-silk-solder-mask-space + min-silk-width * 0.5 + 0.01
+    val pad-x = -0.5 * pad-diameter
+    val pad-y =  0.5 * pad-diameter + 0.5 * lead-spacing
+    val cmp-x = -0.5 * x(cmp-sz)
+    val cmp-y =  0.5 * y(cmp-sz)
+    
+    val pol-x = min(pad-x, cmp-x)
+    val pol-y = max(pad-y, cmp-y) + dist
+    layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y) * line
+    val pol-x-2 = pol-x - line-length * 0.5 + 1.5 * min-silk-width
+    layer(Silkscreen("pol", Top)) = loc(pol-x-2, pol-y, -90.0) * line
+
+; Helper function for two-pin through hole components, controlling where they get placed
+defn place-pth-pads (polarized?:True|False, lead-spacing:Double, pad-def:Pad):
+  inside pcb-landpattern:
+    val y1 = 0.5 * lead-spacing
+    val y2 = (- y1)
+    if polarized?:
+      pad a: pad-def at loc(0.0, y1)
+      pad c: pad-def at loc(0.0, y2)
+    else:
+      pad p[1]: pad-def at loc(0.0, y1)
+      pad p[2]: pad-def at loc(0.0, y2)
+  
+; Generate a land pattern for a two-pin radial through hole component
+public defn make-two-pin-radial-landpattern (component-length:Toleranced, ; the length of the component (x direction)
+                                            component-width:Toleranced,  ; the width of the component (y direction)
+                                            lead-spacing:Double,     ; the distance between the two leads
+                                            lead-diameter:Toleranced,    ; the diameter of the leads
+                                            polarized?:True|False,       ; whether the component is polarized or not
+                                            density-level:DensityLevel) : ; the density level of the design
+  inside pcb-landpattern:
+    ;------------------------------------------------------------
+    ; Compute the pad definition
+    val [pad-diameter, hole-diameter] = pth-pad-sizes(lead-diameter, density-level)
+    val pad-def = pth-pad(hole-diameter * 0.5, pad-diameter * 0.5)
+
+    ;------------------------------------------------------------
+    ; Place the pads
+    place-pth-pads(polarized?, lead-spacing, pad-def)
+    
+    ;------------------------------------------------------------
+    ; Compute the courtyard
+    val courtyard-excess = 0.75
+    val cy-sz = enlarge{_, courtyard-excess} $
+      Dims(max-value(component-length), max-value(component-width))
+
+    layer(Courtyard(Top))    = Rectangle(cy-sz)
+    layer(Courtyard(Bottom)) = Rectangle(cy-sz)
+    val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
+    ref-label(loc(0.5 * x(cy-sz) + min-silkscreen-text-height, 0.0, 270.0))
+
+    ; place the polarity marker, if necessary
+    if polarized?:
+      two-pin-th-polarity-marker(Dims(max-value(component-length), max-value(component-width)), 
+                                 pad-diameter, lead-spacing)
+
+; Generate a land pattern for a two-pin axial through hole component
+public defn make-two-pin-axial-landpattern (component-length:Toleranced,   ; The length of the component
+                                            component-diameter:Toleranced, ; The diameter of the component 
+                                            weld:Double,     ; the distance away from the body the leads are bent
+                                            lead-diameter:Toleranced, ; the diameter of the leads of the component
+                                            bend-length:Double, ; the length of the bend in the leads
+                                            bend-radius:Double, ; the radius of the bend in the leads (mm, not %)
+                                            polarized?:True|False, ; whether the component is polarized or not
+                                            density-level:DensityLevel) : ; the density level of the design
+  inside pcb-landpattern:  
+    ;------------------------------------------------------------
+    ; Compute the pad definition
+    val [pad-diameter, hole-diameter] = pth-pad-sizes(lead-diameter, density-level)
+    val pad-def = pth-pad(Circle(0.5 * pad-diameter), Circle(0.5 * hole-diameter))
+    val lead-spacing = typ-value(component-length) + 2.0 * (weld + bend-length + bend-radius)
+
+    ;------------------------------------------------------------
+    ; Place the pads
+    place-pth-pads(polarized?, lead-spacing, pad-def)
+
+    ;------------------------------------------------------------
+    ; Compute the courtyard
+    val courtyard-excess = 0.75
+    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
+    val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
+
+    val max-x-dim = max(
+      max-value(component-diameter),
+      pad-diameter + 2.0 * solder-mask-registration
+    )
+    val max-y-dim = max(
+      max-value(component-length)
+      pad-diameter + 2.0 * solder-mask-registration + lead-spacing
+    )
+    val max-dims = Dims(max-x-dim, max-y-dim)
+    val cy-sz = enlarge(max-dims, courtyard-excess)
+    layer(Courtyard(Top))    = Rectangle(cy-sz)
+    layer(Courtyard(Bottom)) = Rectangle(cy-sz)
+    ref-label(loc(0.5 * x(cy-sz) + min-silkscreen-text-height, 0.0, 270.0))
+
+    ; place the polarity label, if necessary
+    if polarized?:
+      two-pin-th-polarity-marker(Dims(max-value(component-diameter), max-value(component-length)), 
+                                 pad-diameter, lead-spacing)
+
+; Create a two-pin radial through hole component with default density level
+public defn make-two-pin-radial-landpattern (component-length:Toleranced,
+                                             component-width:Toleranced, 
+                                             lead-spacing:Double,
+                                             lead-diameter:Toleranced,
+                                             polarized?:True|False):
+  make-two-pin-radial-landpattern(component-length, component-width,
+                                  lead-spacing, lead-diameter,
+                                  polarized?,
+                                  DENSITY-LEVEL)
+
+; Create a two-pin radial through hole component with default density level and polarization (false)
+public defn make-two-pin-radial-landpattern (component-length:Toleranced,
+                                             component-width:Toleranced, 
+                                             lead-spacing:Double,
+                                             lead-diameter:Toleranced) :
+  make-two-pin-radial-landpattern(component-length, component-width,
+                                  lead-spacing, lead-diameter,
+                                  false,
+                                  DENSITY-LEVEL)
+
+public defn make-two-pin-radial-landpattern (component-diameter:Toleranced,
+                                             lead-spacing:Double,
+                                             lead-diameter:Toleranced
+                                             polarized?:True|False) :
+  make-two-pin-radial-landpattern(component-diameter, component-diameter,
+                                  lead-spacing, lead-diameter,
+                                  polarized?,
+                                  DENSITY-LEVEL)
+
+; Create a two-pin radial through hole component with default density level for a circular component
+public defn make-two-pin-radial-landpattern (component-diameter:Toleranced,
+                                             lead-spacing:Double,
+                                             lead-diameter:Toleranced) :
+  make-two-pin-radial-landpattern(component-diameter, component-diameter,
+                                  lead-spacing, lead-diameter,
+                                  false)
+
+
+
+; Create a two-pin axial through hole component with default density level, bend-length, bend-radius, and weld
+public defn make-two-pin-axial-landpattern (length:Toleranced,
+                                            diameter:Toleranced,
+                                            weld:Double,
+                                            lead-diameter:Toleranced, 
+                                            polarized?:True|False) :
+  val bend-length = 1.0
+  val bend-radius = 
+    if typ-value(lead-diameter) < 0.8: typ-value(lead-diameter)
+    else if typ-value(lead-diameter) < 1.2: 1.5 * typ-value(lead-diameter)
+    else: 2.0 * typ-value(lead-diameter)
+  make-two-pin-axial-landpattern(length,
+                                 diameter,
+                                 weld,
+                                 lead-diameter,
+                                 bend-length,
+                                 bend-radius
+                                 polarized?,
+                                 DENSITY-LEVEL)
+
+public defn make-two-pin-axial-landpattern (length:Toleranced,
+                                            diameter:Toleranced,
+                                            lead-diameter:Toleranced, 
+                                            polarized?:True|False) :
+  make-two-pin-axial-landpattern(length, diameter, 1.0, lead-diameter, polarized?)
+
+; Create a two-pin axial through hole component with default density level, bend-length, and bend-radius, and polarization
+public defn make-two-pin-axial-landpattern (length:Toleranced,
+                                            diameter:Toleranced,
+                                            lead-diameter:Toleranced) :
+  make-two-pin-axial-landpattern(length,
+                                 diameter,
+                                 lead-diameter,
+                                 false)
+
+
+;==================================================================================================
+;====================================== BGA Land Patterns =========================================
+;==================================================================================================
+public pcb-enum ocdb/utils/landpatterns/BGAPadType:
+  SolderMaskDefined,
+  NonSolderMaskDefined,
+  Collapsible,
+  
+pcb-pad bga-pad (typical-ball-diameter:Double,      ; the typical/nominal size of the bga balls
+                 pad-type:BGAPadType,               ; the bga pad type, (collapsible, solder mask defined, or non-soldermask defined)
+                 solder-mask-registration:Double,   ; the solder-mask registration of the design
+                 density-level:DensityLevel,        ; the density level of the design
+                 ):
+  name = "BGA Pad"
+  type = SMD
+  val solder-mask-defined? = pad-type is SolderMaskDefined
+  val collapsible? = pad-type is Collapsible
+
+  val adjustment = switch(density-level):
+    DensityLevelA: 0.75 when collapsible? else 1.15
+    DensityLevelB: 0.80 when collapsible? else 1.10
+    DensityLevelC: 0.85 when collapsible? else 1.05
+
+  val definition-diameter = typical-ball-diameter * adjustment
+  val referenced-diameter = definition-diameter + solder-mask-registration * 2.0
+
+  if not solder-mask-defined?:
+    shape = Circle(0.5 * definition-diameter)
+    layer(SolderMask(Top)) = Circle(0.5 * referenced-diameter)
+  else:
+    shape = Circle(0.5 * referenced-diameter)
+    layer(SolderMask(Top)) = Circle(0.5 * definition-diameter)
+
+defn bga-pad (typical-ball-diameter:Double, ; the typical/nominal size of the bga balls
+              pad-type:BGAPadType):
+  bga-pad(typical-ball-diameter, 
+          pad-type,
+          clearance(current-rules(), SolderMaskRegistration),
+          DENSITY-LEVEL)
+
+; A BGAModifier is an abstract type representing a class of BGA Components. It is used to 
+; control the way pads are depopulated and spaced on the land pattern. You can declare
+; a custom BGA modifier using the new type syntax:
+; 
+; defn MyBgaModifier ():
+;   new BGAModifier:
+;     defmethod locs (this, num-rows:Int, num-cols:Int) -> Seqable<Pose>:
+;       ...
+;     defmethod depopulated? (this, row-index:Int, column-index:Int) -> True|False:
+;       ...
+;
+public deftype BGAModifier
+public defmulti depopulated? (m:BGAModifier, r:Int, c:Int) -> True|False
+public defmulti locs (m:BGAModifier, nr:Int, nc:Int, pitch:Double) -> Seqable<Pose>
+defmethod depopulated? (m:BGAModifier, r:Int, c:Int) -> True|False:
+  false
+defmethod locs (m:BGAModifier, nr:Int, nc:Int, pitch:Double):
+  grid-locs(nr, nc, pitch, pitch)
+
+; A "FullMatrix" BGA is one where no pads are depopulated and the pad
+; columns and rows are all equidistant.
+public defstruct FullMatrix <: BGAModifier
+
+; A "StageredMatrix" BGA is one where every other pad is depopulated,
+; alternating across rows. The distance between adjacent pads on subsequent
+; rows will be pitch / sqrt(2).
+public defstruct StaggeredMatrix <: BGAModifier
+
+; An "EquilaterTriangleMatrix" is like a staggered matrix, but where the 
+; pads are all equistance from eachother. This means for any three adjacent pads
+; with two in the same row or column, the centers of the pads form an equilateral 
+; triangle.
+public defstruct EquilateralTriangleMatrix <: BGAModifier
+
+; A "PerimeterMatrix" is like a full matrix, but with a region of pads in the
+; center depopulated.
+public defstruct PerimeterMatrix <: BGAModifier:
+  rows:Range, ; the range of rows to depopulate
+  cols:Range, ; the range of columns to depopulate
+
+; A "ThermallyEnhancedMatrix" is like a PerimeterMatrix, except with some
+; region in the center remaining populated.
+public defstruct ThermallyEnhancedMatrix <: BGAModifier:
+  perimeter-rows:Range, ; the range of rows to depopulate
+  perimeter-cols:Range, ; the range of columns to depopulate
+  interior-rows:Range, ; the range of rows in the center to remain populated
+  interior-cols:Range, ; the range of columns in the center to remain populated
+
+public defn CustomDepop (f:(Int, Int) -> True|False): 
+  new BGAModifier:
+    defmethod depopulated? (this, r:Int, c:Int):
+      f(r, c)
+
+defmethod depopulated? (m:StaggeredMatrix, r:Int, c:Int): 
+  ((r + 1) % 2) == (c % 2)
+
+defmethod depopulated? (m:EquilateralTriangleMatrix, r:Int, c:Int): 
+  ((r + 1) % 2) == (c % 2)
+
+defmethod depopulated? (m:PerimeterMatrix, r:Int, c:Int):
+  contains?(rows(m), r) and contains?(cols(m), c)
+
+defmethod depopulated? (m:ThermallyEnhancedMatrix, r:Int, c:Int):
+  (contains?(perimeter-rows(m), r) and contains?(perimeter-cols(m), c)) and not
+  (contains?(interior-rows(m), r) and contains?(interior-cols(m), c))
+
+defmethod locs (m:EquilateralTriangleMatrix, nr:Int, nc:Int, pitch:Double):
+  val vertical   = sqrt(3.0) * 0.5 * pitch
+  val horizontal = pitch * 0.5
+  grid-locs(nr, nc, horizontal, vertical)
+
+public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
+                                  num-cols:Int, ; the number of columns of the package
+                                  pitch:Double, ; the pitch of the solder bumps
+                                  ball-diameter:Double, ; the nominal/typical diameter of the solder balls
+                                  pad-type:BGAPadType,  ; whether the pads will be "solder mask defined" or not
+                                  package-length:Toleranced, ; the length of the package
+                                  package-width:Toleranced,  ; the width of the package
+                                  modifier:BGAModifier,      ; the modifier that controls which pads are depopulated
+                                  row-characters-omitted?:String|False, ; which characters are omitted from the row names
+                                  mirrored?:True|False, ; controls whether the pads are mirrored or not
+                                  density-level:DensityLevel): ; the density level of the design
+  fatal("make-bga-landpattern-failed(...), num-rows must be positive. Called with: %_." % [num-rows]) when num-rows <= 0
+  fatal("make-bga-landpattern-failed(...), num-cols must be positive. Called with: %_." % [num-cols]) when num-cols <= 0
+  fatal("make-bga-landpattern-failed(...), pitch must be positive. Called with: %_." % [pitch]) when pitch <= 0.0
+  fatal("make-bga-landpattern-failed(...), ball-diameter be positive. Called with: %_." % [ball-diameter]) when ball-diameter <= 0.0
+  inside pcb-landpattern:
+    ;-------------------------------------------------------------
+    ; Compute the pad definition
+    val pad-def = bga-pad(ball-diameter, pad-type)
+    
+    ;-------------------------------------------------------------
+    ; Layout the pads
+    ; Calculate pad indices
+    val pin-indices = to-tuple $
+      for r in 0 to num-rows seq-cat:
+        for c in 0 to num-cols seq:
+          val c* = c when not mirrored? else (num-cols - c - 1)
+          [r, c]
+    
+    ; Calculate pad locations
+    val pad-locs = to-tuple(locs(modifier, num-rows, num-cols, pitch))
+
+    ; Calculate pad names
+    val pad-names = BGAPadNames(num-rows, num-cols, row-characters-omitted?)
+    
+    ; Layout the pad given indices and locations
+    for ([row, col] in pin-indices, loc in pad-locs) do:
+      if not depopulated?(modifier, row, col):
+        pad (pad-names[row, col]): pad-def at loc
+
+    ;-------------------------------------------------------------
+    ; Compute the courtyard
+    val courtyard-excess = bga-courtyard-excess(density-level)
+    val pkg-sz = Dims(max-value(package-length), max-value(package-width))
+    val cy-sz = enlarge(pkg-sz, 2.0 * courtyard-excess)
+    layer(Courtyard(Top)) = Rectangle(cy-sz)
+
+    ;-------------------------------------------------------------
+    ; Compute the orientation marker
+    val silk-solder-mask-clearance = clearance(current-rules(), MinSilkSolderMaskSpace)
+    val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
+    val line-width = clearance(current-rules(), MinSilkscreenWidth)
+    val pad-loc = center(pad-locs[0])
+    val pol-x = x(pad-loc) - ball-diameter * 0.5 - solder-mask-registration
+    val pol-y = y(pad-loc) + ball-diameter * 0.5 + solder-mask-registration
+    val line-length = 3.0 * line-width
+    val dist  = solder-mask-registration + silk-solder-mask-clearance + line-width * 0.5 + 0.01
+    layer(Silkscreen("pol", Top)) = loc(pol-x, pol-y + dist) * Line(line-width, [Point(0.0, 0.0), Point(line-length, 0.0)])
+    
+    ;-------------------------------------------------------------
+    ; Add the reference label 
+    ref-label(0.0, 0.5 * (y(cy-sz) - clearance(current-rules(), MinSilkscreenTextHeight)))
+    
+public defn make-bga-landpattern (num-rows:Int,
+                                  num-cols:Int,
+                                  pitch:Double,
+                                  ball-diameter:Double,
+                                  package-length:Toleranced,
+                                  package-width:Toleranced,
+                                  modifier:BGAModifier,
+                                  row-characters-omitted?:False|String,
+                                  mirrored?:True|False,):
+  make-bga-landpattern(num-rows, num-cols,
+                       pitch, ball-diameter, Collapsible,
+                       package-length, package-width,
+                       modifier, 
+                       row-characters-omitted?, 
+                       mirrored?,
+                       DENSITY-LEVEL)
+
+; Create a BGA land pattern default mirroring (false), default row naming (omitting the characters "IOQSXZ"), 
+; default pad type (Collapsible) and default density level. A depopulation modifier may be supplied to control
+; which pads are depopulated.
+public defn make-bga-landpattern (num-rows:Int,
+                                  num-cols:Int,
+                                  pitch:Double,
+                                  ball-diameter:Double,
+                                  package-length:Toleranced,
+                                  package-width:Toleranced,
+                                  modifier:BGAModifier):
+  make-bga-landpattern(num-rows, num-cols,
+                       pitch, ball-diameter, Collapsible,
+                       package-length, package-width,
+                       modifier, 
+                       false, ; row-characters-omitted >
+                       false, ; mirrored?
+                       DENSITY-LEVEL)
+
+; Create a BGA land pattern with default modifier (no pads depopulated), default mirroring (false), 
+; default row naming (omitting the characters "IOQSXZ"), and density level pulled from the design variables.
+; The pad type may be supplied (SolderMaskDefined, NonSolderMaskDefined, and Collapsible)
+public defn make-bga-landpattern (num-rows:Int,
+                                  num-cols:Int,
+                                  pitch:Double,
+                                  ball-diameter:Double,
+                                  pad-type:BGAPadType,
+                                  package-length:Toleranced,
+                                  package-width:Toleranced,
+                                  modifier:BGAModifier):
+  make-bga-landpattern(num-rows, num-cols,
+                       pitch, ball-diameter, pad-type,
+                       package-length, package-width,
+                       modifier, 
+                       false, ; row-characters-omitted
+                       false, ; mirrored?
+                       DENSITY-LEVEL)
+
+; Create a BGA land pattern with default modifier (no pads depopulated), default mirroring (false), 
+; default row naming (omitting the characters "IOQSXZ"), default pad type (Collapsible), and 
+; density level pulled from the design variables.
+public defn make-bga-landpattern (num-rows:Int,
+                                  num-cols:Int,
+                                  pitch:Double,
+                                  ball-diameter:Double,
+                                  package-length:Toleranced,
+                                  package-width:Toleranced):
+  make-bga-landpattern(num-rows, num-cols,
+                       pitch, ball-diameter, Collapsible,
+                       package-length, package-width,
+                       FullMatrix()) ; modifier
+
+;============================================================
+;================== Pad Name Algorithm ======================
+;============================================================
+
+; BGAPadNames is a helper type to create a lookup table of precomputed
+; pad names given BGA parameters
+public deftype BGAPadNames
+
+; Lookup the pad name given row and column indices
+public defmulti get (b:BGAPadNames, r:Int, c:Int) -> Ref
+
+; Precompute all of the pad names in a grid
+public defn BGAPadNames (num-rows:Int, num-cols:Int, row-chars-omitted?:False|String):
+  ; pick the omitted characters if not supplied fallback to a default
+  val row-chars-omitted = match(row-chars-omitted?):
+    (s:String): s
+    (_:False): "IOQSXZ"
+
+  ; Character table
+  val table = to-tuple $
+    for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" filter:
+      not contains?(upper-case(row-chars-omitted), ch)
+
+  ; Construct a lookup table of pad names
+  val pad-names = to-tuple $ 
+    for row in 0 to num-rows seq-cat:
+      val row-name = Ref(lookup-bga-row-name(row, table))
+      for col in 0 to num-cols seq:
+        row-name[col + 1]
+
+  ; finally wrap the table in a helper to perform the lookup.
+  new BGAPadNames:
+    defmethod get (this, r:Int, c:Int):
+      pad-names[r * num-cols + c]
+
+; Returns the name of a row given its index and a list of omitted
+; characters.
+; 
+; The algorithm is a realization of this description from JEDEC JC-11:
+;
+; > When a package is viewed ... with the A1 corner in the upper left position, 
+; > terminal rows are lettered from top to bottom starting with A and 
+; > terminal columns are numbered from left to right starting with 1. 
+; > ... For packages with greater than 20 rows (i.e.,  following rows W and Y),  
+; > the 21st row is designated AA and subsequent rows are designated AB, AC, etc.
+;
+; The modification is we abstract over the omitted characters to support non-
+; standard naming conventions. 
+;
+defn lookup-bga-row-name (idx:Int, table:Tuple<Char>):
+  val buffer = StringBuffer()
+  let loop (i:Int = idx) :
+    val rem = i / length(table)
+    val char-index = i % length(table)
+    loop(rem - 1) when rem > 0
+    print(buffer, table[char-index])
+  to-string(buffer)
+
+; for backwards compatibility.
+; [TODO] Remove this. 
+public defn red-alph-letter (r:Int) -> String:
+  val table = to-tuple $
+    for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" filter:
+      not contains?(upper-case("IOQSXZ"), ch)
+  lookup-bga-row-name(r, table)

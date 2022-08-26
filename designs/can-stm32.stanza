@@ -4,15 +4,15 @@ defpackage ocdb/designs/tutorial :
   import collections
   import jitx
   import jitx/commands
-  import ocdb/defaults
-  import ocdb/generic-components
-  import ocdb/bundles
-  import ocdb/design-vars
-  import ocdb/micro-controllers
-  import ocdb/generator-utils
-  import ocdb/checks
-  import ocdb/terminations
-  import ocdb/tolerance
+  import ocdb/utils/defaults
+  import ocdb/utils/generic-components
+  import ocdb/utils/bundles
+  import ocdb/utils/design-vars
+  import ocdb/utils/micro-controllers
+  import ocdb/utils/generator-utils
+  import ocdb/utils/checks
+  import ocdb/modules/terminations
+  import ocdb/utils/tolerance
 
 val board-shape = RoundedRectangle(30.0, 25.0, 3.0)
 
@@ -22,13 +22,13 @@ DESIGN-QUANTITY = 0
 pcb-module can-connector :
   port power:power
   port can:can
-  public inst connector : ocdb/phoenix/combicon-mc/component(4)
+  public inst connector : ocdb/components/phoenix/combicon-mc/component(4)
   net (connector.p[1], power.gnd)
   net VIN (connector.p[2], power.vdd)
   net (connector.p[3], can.canh)
   net (connector.p[4], can.canl)
 
-  ocdb/terminations/terminate-can(can, power.gnd, CANTerminationParallel)
+  ocdb/modules/terminations/terminate-can(can, power.gnd, CANTerminationParallel)
   set-power-source(connector.p[2], connector.p[1], 5.0)
 
 pcb-module first-design :
@@ -38,13 +38,13 @@ pcb-module first-design :
   inst stm : micro-controller(["mpn" => "STM32F103RBH6"])([`HSE-ppm => 30.0e-6 `boot-from => "flash"])
 
   ; Add a CAN transceiver
-  inst xr : ocdb/texas-instruments/TCAN1051/module
+  inst xr : ocdb/components/texas-instruments/TCAN1051/module
   require can-out:can-interface from stm.mcu
   net (can-out, xr.can-interface)
   net CAN (xr.can, connector.can)
 
   ; Add an accelerometer
-  inst xl : ocdb/st-microelectronics/LIS3DH/module
+  inst xl : ocdb/components/st-microelectronics/LIS3DH/module
   require acc-i2c:i2c from stm.mcu
   net (acc-i2c, xl.i2c)
   add-open-drain-pullups(acc-i2c, stm.power.vdd)
@@ -56,8 +56,8 @@ pcb-module first-design :
   net (xl.power, stm.power)
   net P3V3 (xl.vio, xr.vio, stm.power.vdd)
   net GND (stm.power.gnd)
-  symbol(P3V3) = ocdb/symbols/supply-sym
-  symbol(GND) = ocdb/symbols/ground-sym
+  symbol(P3V3) = ocdb/utils/symbols/supply-sym
+  symbol(GND) = ocdb/utils/symbols/ground-sym
 
   property(GND.net-voltage) = typ(0.0)
 
