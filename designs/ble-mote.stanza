@@ -31,15 +31,11 @@ pcb-bundle pms7003-interface :
   pin reset
   pin set
   port uart : uart()
-<<<<<<< HEAD
 
 pcb-module pms7003 :
   port interface : pms7003-interface
   
-  inst header : ocdb/amphenol/minitek127/component(10)
-=======
   inst header : ocdb/components/amphenol/minitek127/component(10)
->>>>>>> d9a380a1eb04c393bcf9c83b2490e42e79785cff
   place(header) at loc(0.0,0.0) on Top
   net (interface.vin.gnd interface.vin-mcu.gnd header.p[3] header.p[4])
   net (interface.vin.vdd header.p[1] header.p[2])
@@ -69,18 +65,14 @@ pcb-module sensors :
   symbol(gnd) = ocdb/utils/symbols/ground-sym
 
   ; Create a protected power and data interface for USB-2
-<<<<<<< HEAD
-  val protected-usb = ocdb/protection/esd-clamp(usb.usb-2, gnd)
-=======
-  val protected-usb = ocdb/modules/protection/esd-clamp(usb.usb-2, gnd) as JITXObject
->>>>>>> d9a380a1eb04c393bcf9c83b2490e42e79785cff
+  val protected-usb = ocdb/modules/protection/esd-clamp(usb.usb-2, gnd)
 
   ; Specify a power regulator and name power nets
   public inst ldo : ocdb/components/diodes-incorporated/AP2112/module
   net (ldo.vin protected-usb.vbus)
   net P5V0 (ldo.vin.vdd ldo.en)
   net P3V3 (ldo.vout.vdd)
-<<<<<<< HEAD
+
   net VBUS (usb.usb-2.vbus.vdd)
   symbol(P5V0) = ocdb/symbols/supply-sym
   symbol(P3V3) = ocdb/symbols/supply-sym
@@ -89,33 +81,15 @@ pcb-module sensors :
   property(P5V0.net-voltage) = min-max(4.7, 5.1)
   property(P3V3.net-voltage) = tol%(3.3, 1.5)
   property(gnd.net-voltage) = typ(0.0)
-=======
-  symbol(P5V0) = ocdb/utils/symbols/supply-sym
-  symbol(P3V3) = ocdb/utils/symbols/supply-sym
-
-  ; Add a Bluetooth SoC
-  public inst proc : ocdb/components/espressif/ESP32-PICO-D4/module
-  public inst ant : inverted-f-antenna
-  net (proc.ant, ant.rf-in)
-  net (ant.gnd gnd)
-  place(ant) at loc(9.0, 5.0, -90.0) on Top
->>>>>>> d9a380a1eb04c393bcf9c83b2490e42e79785cff
 
   ; Use a connect statement to interface USB-2 to UART with bus-powered xcvr
   val cp2105 = connect-cp2105(protected-usb, debug)
   net (P3V3 cp2105.vio)
 
   ; Add a humidty sensor, connect over i2c, add pullups.
-<<<<<<< HEAD
-  public inst hum : ocdb/texas-instruments/HDC1080/module
+  public inst hum : ocdb/components/texas-instruments/HDC1080/module
   net H-I2C (humidity-i2c, hum.i2c)
   val i2c-pullups = add-open-drain-pullups(humidity-i2c, ldo.vout.vdd)
-=======
-  public inst hum : ocdb/components/texas-instruments/HDC1080/module
-  require i2c:i2c from proc
-  net H-I2C (i2c, hum.i2c)
-  val i2c-pullups = add-open-drain-pullups(i2c, ldo.vout.vdd)
->>>>>>> d9a380a1eb04c393bcf9c83b2490e42e79785cff
 
   ; Add the particle counter interface and place on bottom, and connect
   public inst particle-counter : pms7003
@@ -143,21 +117,6 @@ pcb-module sensors :
                                   particle-counter-interface.uart.tx
                                   gnd ], ocdb/keystone/5017/component)
 
-<<<<<<< HEAD
-=======
-; Add artwork
-  inst pcb-name: ocdb/artwork/board-text/text("PCB, BLE MOTE", 1.5, clearance(current-rules(), MinSilkscreenWidth) )
-  inst ver-rev : ocdb/artwork/board-text/text("v0 rev0", 1.0, 0.0)
-  inst logo : ocdb/artwork/jitx-logo/small(Silkscreen("artwork", Top),true)
-  inst assy-label : ocdb/utils/mechanical/gen-label()
-  place(pcb-name) at loc(0.0,-0.5) on Bottom
-  place(ver-rev) at loc(10.0,3.0) on Bottom
-  place(logo) at loc(6.0,0.0, 0.0) on Bottom
-  place(assy-label) at loc(5.0,-5.25, 0.0) on Bottom
-
-  ; Apply groups to sub-circuits for schematic and layout
-  schematic-group([proc, ant, debug-tps rgb, i2c-pullups]) = esp32
->>>>>>> d9a380a1eb04c393bcf9c83b2490e42e79785cff
   schematic-group([usb, ldo, cp2105, power-tps containing-instance(protected-usb) as JITXObject]) = power
   schematic-group([hum hum-tps]) = humidity-sensor
   schematic-group([particle-counter pms-tps]) = particle-counter
@@ -255,10 +214,9 @@ defn compile-design () :
 defn check-design () :
   run-design(true)
 
-
-; ===============================================
-; Export two versions of the sensor-system to CAD
-; ===============================================
+; ======================
+; Export a design to CAD
+; ======================
 defn export-design (module:Instantiable, shape:Rectangle, directory:String) :
   set-export-backend(`altium)
 
