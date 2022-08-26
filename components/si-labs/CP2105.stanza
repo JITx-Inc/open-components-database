@@ -20,43 +20,17 @@ public pcb-component component :
   description  = "IC SGL USB-DL UART BRIDGE 24QFN"
   mpn          = "CP2105-F01-GM"
 
-  pin REGIN
-  pin VDD
-  pin RI_SCI
-  pin GND
-  pin VBUS
-  pin D+
-  pin D-
-  pin VIO
-  pin nRST
-  pin CTS_ECI
-  pin RTS_ECI
-  pin RXD_ECI
-  pin TXD_ECI
-  pin DSR_ECI
-  pin DTR_ECI
-  pin DCD_ECI
-  pin RI_ECI 
-  pin CTS_SCI
-  pin RTS_SCI
-  pin RXD_SCI
-  pin TXD_SCI
-  pin DSR_SCI
-  pin DTR_SCI
-  pin DCD_SCI
-  pin EPAD
-
   pin-properties :
     [pin:Ref | pads:Int ... | side:Dir]
-    [REGIN   | 7  | Up]
-    [VDD     | 6  | Up]
-    [RI_SCI  | 1  | Right]
+    [nRST    | 9  | Left]
+    [VIO     | 5  | Left]
+    [VDD     | 6  | Left]
+    [REGIN   | 7  | Left]
     [GND     | 2  | Down]
     [VBUS    | 8  | Left]
     [D+      | 3  | Left]
     [D-      | 4  | Left]
-    [VIO     | 5  | Left]
-    [nRST    | 9  | Left]
+    [RI_SCI  | 1  | Right]
     [CTS_ECI | 10 | Right]
     [RTS_ECI | 11 | Right]
     [RXD_ECI | 12 | Right]
@@ -82,16 +56,18 @@ public pcb-component component :
   ;  2) self-powered with REGIN connected to VDD, VBUS independent
 
   ; assume that REGIN has some power input in either mode
-  property(REGIN.power-pin) = PowerPin(min-max(3.0, 5.25))
+  property(self.REGIN.power-pin) = PowerPin(min-max(3.0, 5.25))
+  property(self.rated-temperature) = RatedTemperature(ocdb/utils/tolerance/min-max(-40.0, 85.0))
+
 
   ; VIO can be independent of VDD/REGIN/VBUS
-  eval-when has-property?(VIO.net-voltage) :
-    val vdd  = max-value(property(VIO.net-voltage))
-    val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.4), min-max(vdd - 0.2, vdd)), false, VIO, GND)
-    val input-props = DigitalInput(0.6, 0.7 * vdd, VIO, GND, 50.0e-6)
-    for o in [TXD_ECI DTR_ECI RTS_ECI TXD_SCI DTR_SCI RTS_SCI] do :
+  eval-when has-property?(self.VIO.net-voltage) :
+    val vdd  = max-value(property(self.VIO.net-voltage))
+    val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.4), min-max(vdd - 0.2, vdd)), false, self.VIO, self.GND)
+    val input-props = DigitalInput(0.6, 0.7 * vdd, self.VIO, self.GND, 50.0e-6)
+    for o in [self.TXD_ECI self.DTR_ECI self.RTS_ECI self.TXD_SCI self.DTR_SCI self.RTS_SCI] do :
       property(o.digital-output) = drive-props
-    for i in [RXD_ECI RXD_SCI] do :
+    for i in [self.RXD_ECI self.RXD_SCI] do :
       property(i.digital-input) = input-props
 
 public pcb-module module (bus-powered?:True|False):

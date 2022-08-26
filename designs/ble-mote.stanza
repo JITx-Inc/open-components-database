@@ -8,187 +8,243 @@ defpackage ocdb/designs/ble-mote :
 
   import ocdb/utils/bundles
   import ocdb/utils/connects
-  import ocdb/utils/defaults
   import ocdb/utils/design-vars
   import ocdb/utils/generator-utils
   import ocdb/utils/generic-components
   import ocdb/utils/property-structs
   import ocdb/utils/checks
-  import ocdb/manufacturers/rules
   import ocdb/utils/tolerance
 
 
-OPERATING-TEMPERATURE = [-20.0 70.0]
+OPERATING-TEMPERATURE = [-20.0 50.0]
 OPTIMIZE-FOR = ["cost"]
 MIN-PKG = "0402"
+MIN-CAP-VOLTAGE = 12.0
 
-val board-shape = Rectangle(30.0, 18.0)
 
 ; PMS7003 particle counter interface via header pins
-pcb-module pms7003 :
+pcb-bundle pms7003-interface :
   port vin : power
   port vin-mcu : power
   pin reset
   pin set
   port uart : uart()
+
+pcb-module pms7003 :
+  port interface : pms7003-interface
+  
   inst header : ocdb/components/amphenol/minitek127/component(10)
   place(header) at loc(0.0,0.0) on Top
-  net (vin.gnd vin-mcu.gnd header.p[3] header.p[4])
-  net (vin.vdd header.p[1] header.p[2])
-  net (uart.tx, header.p[10])
-  net (uart.rx, header.p[8])
-  net (reset, header.p[6])
-  net (set, header.p[9])
-  res-strap(vin-mcu.vdd, set, 10.0e3)
-  res-strap(vin-mcu.vdd, reset, 10.0e3)
+  net (interface.vin.gnd interface.vin-mcu.gnd header.p[3] header.p[4])
+  net (interface.vin.vdd header.p[1] header.p[2])
+  net (interface.uart.tx, header.p[10])
+  net (interface.uart.rx, header.p[8])
+  net (interface.reset, header.p[6])
+  net (interface.set, header.p[9])
+  res-strap(interface.vin-mcu.vdd, interface.set, 10.0e3)
+  res-strap(interface.vin-mcu.vdd, interface.reset, 10.0e3)
   property(header.p[1].power-pin) = PowerPin(min-typ-max(4.5, 5.0, 5.5))
   property(header.p[10].digital-output) = DigitalOutput(CMOSOutput(min-max(0.3, 0.5), min-max(2.6, 3.3)), false, header.p[1], header.p[3])
   property(header.p[8].digital-input) = DigitalInput(0.8, 2.6, header.p[1], header.p[3], 1.0e-6)
   property(header.p[6].digital-input) = DigitalInput(0.8, 2.6, header.p[1], header.p[3], 1.0e-6)
   property(header.p[9].digital-input) = DigitalInput(0.8, 2.6, header.p[1], header.p[3], 1.0e-6)
 
-pcb-module sensor-mote :
+pcb-module sensors :
+  port power-3v3 : power
+  port debug : uart([UART-DTR UART-RTS UART-RX UART-TX])
+  port particle-counter-interface : pms7003-interface
+  port humidity-i2c : i2c
+
   ; Add USB connector
-  public inst usb : micro-usb-connector
-  place(usb.con) at loc(-10.0, -7.3) on Top
+  public inst usb : usb2-on-a-usb-c-connector(ocdb/components/korean-hroparts-elec/TYPE-C-31-M-12/module(SinkDefault))
 
   ; Define ground net and assign symbol
   public net gnd (usb.usb-2.vbus.gnd)
   symbol(gnd) = ocdb/utils/symbols/ground-sym
 
   ; Create a protected power and data interface for USB-2
-  val protected-usb = ocdb/modules/protection/esd-clamp(usb.usb-2, gnd) as JITXObject
+  val protected-usb = ocdb/modules/protection/esd-clamp(usb.usb-2, gnd)
 
   ; Specify a power regulator and name power nets
   public inst ldo : ocdb/components/diodes-incorporated/AP2112/module
   net (ldo.vin protected-usb.vbus)
   net P5V0 (ldo.vin.vdd ldo.en)
   net P3V3 (ldo.vout.vdd)
+
+  net VBUS (usb.usb-2.vbus.vdd)
   symbol(P5V0) = ocdb/utils/symbols/supply-sym
   symbol(P3V3) = ocdb/utils/symbols/supply-sym
 
-  ; Add a Bluetooth SoC
-  public inst proc : ocdb/components/espressif/ESP32-PICO-D4/module
-  public inst ant : inverted-f-antenna
-  net (proc.ant, ant.rf-in)
-  net (ant.gnd gnd)
-  place(ant) at loc(9.0, 5.0, -90.0) on Top
+  property(VBUS.net-voltage) = min-max(4.8, 5.2)
+  property(P5V0.net-voltage) = min-max(4.7, 5.1)
+  property(P3V3.net-voltage) = tol%(3.3, 1.5)
+  property(gnd.net-voltage) = typ(0.0)
 
-  ; Use a connect statement to interface USB-2 to UART as bus-powered
-  val cp2105 = connect-cp2105(true, protected-usb, proc.uart) as JITXObject
+  ; Use a connect statement to interface USB-2 to UART with bus-powered xcvr
+  val cp2105 = connect-cp2105(protected-usb, debug)
+  net (P3V3 cp2105.vio)
 
   ; Add a humidty sensor, connect over i2c, add pullups.
   public inst hum : ocdb/components/texas-instruments/HDC1080/module
-  require i2c:i2c from proc
-  net H-I2C (i2c, hum.i2c)
-  val i2c-pullups = add-open-drain-pullups(i2c, ldo.vout.vdd)
+  net H-I2C (humidity-i2c, hum.i2c)
+  val i2c-pullups = add-open-drain-pullups(humidity-i2c, ldo.vout.vdd)
 
   ; Add the particle counter interface and place on bottom, and connect
   public inst particle-counter : pms7003
-  place(particle-counter) at loc(-10.0,5.0, 180.0) on Bottom
 
-  require pc-ctrl:gpio[2] from proc
-  net PC-RESET (pc-ctrl[0].gpio, particle-counter.reset)
-  net PC-SET (pc-ctrl[1].gpio, particle-counter.set)
+  net (particle-counter.interface particle-counter-interface) 
+  net (protected-usb.vbus particle-counter.interface.vin)
 
-  require pc-uart:uart() from proc
-  net PC-TX (pc-uart.rx particle-counter.uart.tx)
-  net PC-RX (pc-uart.tx particle-counter.uart.rx)
-
-  ; Connect power to proc and sensors
-  net (hum.power, particle-counter.vin-mcu, proc.power, ldo.vout)
-  net (proc.power.vdd, cp2105.vio)
-
-  net (protected-usb.vbus particle-counter.vin)
-
-  ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
-  val rgb = add-rgb-indicator(60.0, proc, P3V3)
+  ; Connect power to sensors
+  net (ldo.vout, hum.power, particle-counter-interface.vin-mcu, power-3v3)
 
   ; Add probe loops
-  val debug-tps = add-testpoint([ proc.uart.tx
-                                  proc.uart.rx
-                                  proc.en
-                                  gnd
-                                  proc.boot], Testpoint-SMDLoop)
+  val debug-tps = add-testpoint([ debug.tx
+                                  debug.rx
+                                  debug.dtr
+                                  debug.rts], ocdb/components/keystone/5017/component)
 
   val power-tps = add-testpoint([ P5V0
                                   P3V3
-                                  gnd ], Testpoint-SMDLoop)
+                                  gnd ], ocdb/components/keystone/5017/component)
 
   val hum-tps = add-testpoint([   hum.i2c.sda
-                                  hum.i2c.scl], Testpoint-SMDLoop)
+                                  hum.i2c.scl], ocdb/components/keystone/5017/component)
 
-  val pms-tps = add-testpoint([   PC-TX
-                                  PC-RX
-                                  gnd ], Testpoint-SMDLoop)
- 
+  val pms-tps = add-testpoint([   particle-counter-interface.uart.tx
+                                  particle-counter-interface.uart.tx
+                                  gnd ], ocdb/components/keystone/5017/component)
 
-  ; Add a ground plane
-  geom(gnd):
-    copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = board-shape
-    copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = board-shape
-
-; Add artwork
-  inst pcb-name: ocdb/artwork/board-text/text("PCB, BLE MOTE", 1.5, clearance(current-rules(), MinSilkscreenWidth) )
-  inst ver-rev : ocdb/artwork/board-text/text("v0 rev0", 1.0, 0.0)
-  inst logo : ocdb/artwork/jitx-logo/small(Silkscreen("artwork", Top),true)
-  inst assy-label : ocdb/utils/mechanical/gen-label()
-  place(pcb-name) at loc(0.0,-0.5) on Bottom
-  place(ver-rev) at loc(10.0,3.0) on Bottom
-  place(logo) at loc(6.0,0.0, 0.0) on Bottom
-  place(assy-label) at loc(5.0,-5.25, 0.0) on Bottom
-
-  ; Apply groups to sub-circuits for schematic and layout
-  schematic-group([proc, ant, debug-tps rgb, i2c-pullups]) = esp32
   schematic-group([usb, ldo, cp2105, power-tps containing-instance(protected-usb) as JITXObject]) = power
   schematic-group([hum hum-tps]) = humidity-sensor
   schematic-group([particle-counter pms-tps]) = particle-counter
 
-  layout-group([proc, ant]) = proc
   layout-group([usb, ldo, cp2105 containing-instance(protected-usb) as JITXObject]) = power
   layout-group([hum hum-tps]) = hum
   layout-group(particle-counter) = particle-counter
-
-  net VBUS (usb.usb-2.vbus.vdd)
-  net D- (usb.usb-2.data.N)
-  net D+ (usb.usb-2.data.P)
-
-  property(VBUS.net-voltage) = min-max(4.8, 5.2)
-  property(P5V0.net-voltage) = min-max(4.9, 5.1)
-  property(P3V3.net-voltage) = typ(3.3)
-  property(gnd.net-voltage) = typ(0.0)
 
   ; Set up netclasses
   val power-net-class = NetClass(`Power, [`min-trace => 0.50])
   for n in [P5V0 P3V3 VBUS] do :
     property(n.net-class) = power-net-class
+
   ; Rules for JLC2313 Stackup, 45-Ohm characteristic impedance
+  net D- (usb.usb-2.data.N)
+  net D+ (usb.usb-2.data.P)
   val usb-net-class = NetClass(`USB, [`min-trace => 0.224 `min-space => 0.3])
   for n in [D- D+] do :
     property(n.net-class) = usb-net-class
 
+
+pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
+  inst sensors : sensors
+  
+  val x = width(board-outline) / 2.0
+  val y = height(board-outline) / 2.0
+  place(sensors.usb) at loc(4.0 - x, 7.0 - y) on Top
+  place(sensors.particle-counter) at loc(5.0 - x, y - 5.0, 180.0) on Bottom
+
+  inst proc : processor
+  net gnd (proc.gnd)
+
+  ; Add an antenna for the PICO-D4
+  if processor == ocdb/components/espressif/ESP32-PICO-D4/module :
+    inst ant : inverted-f-antenna
+    net (proc.ant, ant.rf-in)
+    net (gnd ant.gnd)
+    place(ant) at loc(x - 6.0, 14.0 - y, -90.0) on Top
+  else :
+    place(proc) at loc(x - 6.0, y - 12.0, -90.0) on Top
+
+  require i2c:i2c from proc
+  require pc-uart:uart() from proc
+  require pc-ctrl:gpio[2] from proc
+  net (sensors.debug, proc.uart)
+  net (sensors.power-3v3, proc.power)
+  net (sensors.humidity-i2c i2c)
+  net (sensors.particle-counter-interface.uart  pc-uart)
+  net (sensors.particle-counter-interface.set   pc-ctrl[0].gpio)
+  net (sensors.particle-counter-interface.reset pc-ctrl[1].gpio)
+
+  ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
+  val rgb = add-rgb-indicator(60.0, proc, sensors.power-3v3.vdd)
+  ; Add a ground plane
+  geom(gnd):
+    copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = board-outline
+    copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = board-outline
+
+  inst logo : ocdb/artwork/jitx-logo/small(Silkscreen("artwork", Top),true)
+  place(logo) at loc(x + 1.0, 0.0 - y, 0.0) on Bottom
+
   check-design(self)
 
-val final-design = run-final-passes(sensor-mote)
+; ==========================================
+; Configure the design, then run or check it
+; ==========================================
+defn run-design (run-checks?:True|False) :
+  val outline = Rectangle(45.0, 30.0)
+  val circuit = sensor-system(ocdb/components/espressif/esp32-wroom-32/module(ocdb/components/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), outline)
+  set-design-directory("ble-mote")
+  set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-jlc2313, outline))
+  set-rules(ocdb/manufacturers/rules/jlcpcb-rules)
 
-; === Setup visualizations and exports ===
-; Set the active design directory for CAD
-set-design-directory("hardware/ble-mote")
-; Configure design to have a default 4-layer stackup and design rules.
-set-main-module(final-design)
-set-board(default-board(4, board-shape))
-set-rules(jlcpcb-rules)
-run-checks("checks.txt")
+  var main-module = circuit
+  if run-checks? :
+    main-module = ocdb/utils/generator-utils/run-final-passes(circuit) ; Analyze design with a pass
+  
+  set-main-module(main-module) ; Treat the provided module as a design, and compile it.
+  
+  if run-checks? :
+    run-checks("checks.txt")
+  else:  
+    view-board()
+    view-schematic()
 
-set-paper(ANSI-A4)
+; ====================================
+; Compile the design, view the results
+; ====================================
+defn compile-design () :
+  run-design(false)
 
-; Show the Schematic and PCB for the design
-view-board()
-view-schematic()
+; =====================
+; Run the design checks
+; =====================
+defn check-design () :
+  run-design(true)
 
-; Export CAD
-; set-export-board?(false)
-; export-cad()
+; ======================
+; Export a design to CAD
+; ======================
+defn export-design (module:Instantiable, shape:Rectangle, directory:String) :
+  set-export-backend(`altium)
 
-; Solve and export Bill of Materials
-; export-bom()
+  set-design-directory(directory)
+  set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-jlc2313, shape))
+  set-rules(ocdb/manufacturers/rules/jlcpcb-rules)
+  set-main-module(module)
+  export-bill-of-materials()
+  set-config-sets([`groups])
+  export-cad()
+
+; =================
+; Export BOM to tsv
+; =================
+defn export-bill-of-materials () :
+  set-bom-vendors(ocdb/utils/design-vars/APPROVED-DISTRIBUTOR-LIST)
+  set-bom-design-quantity(ocdb/utils/design-vars/DESIGN-QUANTITY)
+  export-bom()
+
+; ============
+; Run the code
+; ============
+; compile-design()
+
+val pico-shape = Rectangle(35.0, 20.0)
+export-design(sensor-system(ocdb/components/espressif/ESP32-PICO-D4/module, pico-shape)
+              pico-shape, 
+              "air-quality-sensor-pico")
+
+val wroom-shape = Rectangle(45.0, 30.0)
+export-design(sensor-system(ocdb/components/espressif/esp32-wroom-32/module(ocdb/components/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), wroom-shape)
+              wroom-shape, 
+              "air-quality-sensor-wroom")

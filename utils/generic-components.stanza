@@ -656,7 +656,8 @@ public defn  usb2-on-a-usb-c-connector ():
 public pcb-module usb2-on-a-usb-c-connector (conref:Instantiable):
   port usb-2 : usb-2
   port usb-c : usb-c
-  public inst con : conref
+  inst con : conref
+  place(con) at loc(0.0, 0.0) on Top
   net (usb-c con.usb-c)
   net (usb-2.data.N con.usb-c.data[1].N con.usb-c.data[2].N)
   net (usb-2.data.P con.usb-c.data[1].P con.usb-c.data[2].P)
@@ -686,7 +687,7 @@ public pcb-enum ocdb/utils/generic-components/Testpoint :
   Testpoint-SMDPad
   Testpoint-PTHLoop
 
-pcb-module test-points (count:Int, method:ocdb/utils/generic-components/Testpoint) :
+pcb-module test-points (count:Int, method:ocdb/utils/generic-components/Testpoint|Instantiable) :
   port tp : pin[count]
   val points = match(method) :
     (method:Testpoint-PTHLoop) :
@@ -701,10 +702,13 @@ pcb-module test-points (count:Int, method:ocdb/utils/generic-components/Testpoin
     (method:Testpoint-SMDPad) :
       inst point : gen-testpad(2.0)[count]
       point
+    (method:Instantiable) :
+      inst point : method[count]
+      point
   for i in 0 to count do :
     net (tp[i] points[i].p)
 
-public defn add-testpoint (rs:Tuple<JITXObject>, method:ocdb/utils/generic-components/Testpoint) :
+public defn add-testpoint (rs:Tuple<JITXObject>, method:ocdb/utils/generic-components/Testpoint|Instantiable) :
   inside pcb-module :
     inst test-points:test-points(length(rs), method)
     for (r in rs, i in 0 to false) do :
@@ -719,6 +723,8 @@ public pcb-component gen-testpad (d:Double) :
   symbol = test-point-sym(p => test-point-sym.p)
   val pkg = testpad(d)
   landpattern = pkg(p => pkg.tp)
+  property(self.rated-temperature) = false
+
 
 public defn add-testpad (rs:Tuple<JITXObject>, d:Double) :
   inside pcb-module :
@@ -826,9 +832,9 @@ pcb-landpattern ant-2GHz4-inverted-f-geom :
   via(LayerIndex(0), LayerIndex(0, Bottom), 
     radius = 0.3, hole-radius = 0.125) 
     at Point(-2.1, 0.0)
-  layer(ForbidCopper(LayerIndex(0), LayerIndex(0, Bottom))) = Rectangle(18.0, 5.5, loc(5.0, 3.25))
-  layer(Courtyard(Top)) = Rectangle(18.0, 5.5, loc(5.0, 3.25))
-  layer(Courtyard(Bottom)) = Rectangle(18.0, 5.5, loc(5.0, 3.25))
+  layer(ForbidCopper(LayerIndex(0), LayerIndex(0, Bottom))) = Rectangle(25.0, 5.5, loc(5.0, 3.25))
+  layer(Courtyard(Top)) = Rectangle(25.0, 5.5, loc(5.0, 3.25))
+  layer(Courtyard(Bottom)) = Rectangle(25.0, 5.5, loc(5.0, 3.25))
   layer(BoardEdge()) = Line(0.0, [Point(17.0, 6.0), Point(-7.0, 6.0)])
   ref-label()
 
@@ -841,6 +847,7 @@ public pcb-component inverted-f-antenna-cmp :
   landpattern = pkg(launch => pkg.launch, gnd => pkg.gnd)
   symbol = sym(launch => sym.p[1], gnd => sym.p[2])
   reference-prefix = "ANT"
+  property(self.rated-temperature) = false
 
 public pcb-module inverted-f-antenna :
   pin rf-in

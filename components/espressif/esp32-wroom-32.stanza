@@ -91,9 +91,15 @@ public pcb-component component (pn:esp32-wroom-32mpn) :
     [IO[33] |      9       |  Right ]
     [IO[34] |      6       |  Right ]
     [IO[35] |      7       |  Right ]
-    [RXD0 |      34      |  Left ]
-    [TXD0 |      35      |  Left ]
-    [NC | 17, 18, 19, 20, 21, 22, 32 |  Left ]
+    [SD[2]  |      17      |  Right ]
+    [SD[3]  |      18      |  Right ]
+    [CMD    |      19      |  Right ]
+    [CLK    |      20      |  Right ]
+    [SD[0]  |      21      |  Right ]
+    [SD[1]  |      22      |  Right ]
+    [RXD0   |      34      |  Left ]
+    [TXD0   |      35      |  Left ]
+    [NC | 32 |  Left ]
 
   make-box-symbol()
   assign-landpattern(esp32-wroom(antenna-type))
@@ -124,11 +130,13 @@ public pcb-module module (pn:esp32-wroom-32mpn, add-serial-programming-circuit?:
   port power : power
   pin boot
   pin en
-  val serial-programming? = false
+  pin gnd
+  place(esp32) at loc(0.0, 0.0) on Top
+  cap-strap(esp32.P3V3 esp32.GND, 10.0e-6)
 ; RC enable delay
   inst en-r: chip-resistor(10.0e3)
   inst en-c: ceramic-cap(1.0e-6)
-  net (power.gnd esp32.GND en-c.p[1])
+  net (power.gnd gnd esp32.GND en-c.p[1])
   net (power.vdd esp32.P3V3 en-r.p[1])
   net (esp32.EN en-c.p[2] en-r.p[2])
 
@@ -151,9 +159,9 @@ public pcb-module module (pn:esp32-wroom-32mpn, add-serial-programming-circuit?:
     res-strap(uart.dtr, q[0].b, 10.0e3)
     res-strap(uart.rts, q[1].b, 10.0e3)
     net ( q[1].c boot)
-    net ( q[0].c en)
     net (uart.rts, q[0].e)
     net (uart.dtr, q[1].e)
+    net ( q[0].c en)
 
   for i in 0 to 22 do:
     supports gpio:
