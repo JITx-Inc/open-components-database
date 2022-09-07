@@ -1,0 +1,47 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/murata/NCP03WF104F05RL :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/utils/defaults
+
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/box-symbol
+  import ocdb/utils/bundles
+  import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/tolerance
+  import ocdb/utils/property-structs
+
+public pcb-component component : 
+  manufacturer = "Murata"
+  description = "THERM NTC 100KOHM 4250K 0201"
+  mpn = "NCP03WF104F05RL"
+
+  port p : pin[[1 2]]
+
+  val sym = resistor-sym(ResistorTherm)
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+  val pkg = ipc-two-pin-landpattern("0201")
+  landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+
+  val generic-props = GenericPin(min-max(0.0, 5.0), 2000.0)
+
+  property(p[1].generic-pin) = generic-props
+  property(p[2].generic-pin) = generic-props
+
+  property(self.nominal-resistance) = 100.0e3 ; ohms @ nominal-temperature
+  property(self.nominal-temperature) = 25 ; in C degrees
+
+  property(self.rtemp-curve) = [[3000000.0 -40.0] [350000.0 0.0] [100000.0 25.0] [33000.0 50.0] [5500.0 100.0] [2600.0 125.0]] ; PWL resistance/temperature pairs
+  property(self.temp-error) = [[min-max(-0.6, 0.6) -40.0] [min-max(-0.2, 0.2) 25.0] [min-max(-1.6, 1.6) 125.0]] ; PWL temperature error in degrees C versus temperature
+
+  property(self.rated-temperature) = RatedTemperature(min-max(-40.0, 125.0))
+
+public pcb-module module :
+  public inst i : component
+
+ 
