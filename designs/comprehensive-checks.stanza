@@ -1,0 +1,193 @@
+#use-added-syntax(jitx)
+defpackage ocdb/designs/comprehensive-checks :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/checks
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/tolerance
+  import ocdb/utils/symbols
+  import ocdb/utils/property-structs
+  import ocdb/utils/box-symbol
+
+;==============================================================================
+;=========================== Resistor Properties ==============================
+;==============================================================================
+pcb-component resistor :
+  reference-prefix = "R"
+
+  pin-properties :
+    [ pin : Ref | pads : Int ... ]
+    [ p[1]      | 1              ]
+    [ p[2]      | 2              ]
+  
+  assign-landpattern(ipc-two-pin-landpattern("0603"))
+  val sym = resistor-sym()
+  symbol =
+    sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
+
+  property(self.resistor)    = true
+  property(self.resistance)  = 1.0e3
+  property(self.rated-power) = 5.0
+  
+
+;==============================================================================
+;============================ Inductor Properties =============================
+;==============================================================================
+pcb-component inductor :
+  reference-prefix = "L"
+
+  pin-properties :
+    [ pin : Ref | pads : Int ... ]
+    [ p[1]      | 1              ]
+    [ p[2]      | 2              ]
+  
+  assign-landpattern(ipc-two-pin-landpattern("0603"))
+  val sym = resistor-sym()
+  symbol =
+    sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
+
+  property(self.inductor)       = true
+  property(self.dc-resistance)  = 16.0
+  property(self.rated-power)    = 5.0
+  property(self.inductance)     = 1.0e-6
+
+;==============================================================================
+;============================ Capacitor Properties =============================
+;==============================================================================
+pcb-component ceramic-cap :
+  reference-prefix = "C"
+
+  pin-properties :
+    [ pin : Ref | pads : Int ... ]
+    [ p[1]      | 1              ]
+    [ p[2]      | 2              ]
+  
+  assign-landpattern(ipc-two-pin-landpattern("0603"))
+  val sym = resistor-sym()
+  symbol =
+    sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
+
+  property(self.capacitor)         = true
+  property(self.type)              = "ceramic"
+  property(self.rated-temperature) = min-max(-100.0, 100.0)
+  property(self.capacitance)       = 1.0e-6
+  property(self.rated-voltage)     = min-max(-1.0, 24.0)
+
+pcb-component electrolytic-cap :
+  reference-prefix = "C"
+
+  pin-properties :
+    [ pin : Ref | pads : Int ... ]
+    [ p[1]      | 1              ]
+    [ p[2]      | 2              ]
+  
+  assign-landpattern(ipc-two-pin-landpattern("0603"))
+  val sym = resistor-sym()
+  symbol =
+    sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
+
+  property(self.capacitor)         = true
+  property(self.type)              = "electrolytic"
+  property(self.rated-temperature) = min-max(-100.0, 100.0)
+  property(self.capacitance)       = 1.0e-6
+  property(self.rated-voltage)     = min-max(-1.0, 24.0)
+  property(self.anode)             = "tantalum"
+  property(self.electrolyte)       = "manganese-dioxide"
+  property(self.rated-current-pk)  = 1.0e-6
+
+pcb-component mica-cap :
+  reference-prefix = "C"
+
+  pin-properties :
+    [ pin : Ref | pads : Int ... ]
+    [ p[1]      | 1              ]
+    [ p[2]      | 2              ]
+  
+  assign-landpattern(ipc-two-pin-landpattern("0603"))
+  val sym = resistor-sym()
+  symbol =
+    sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
+
+  property(self.capacitor)         = true
+  property(self.type)              = "mica"
+  property(self.rated-temperature) = min-max(-100.0, 100.0)
+  property(self.capacitance)       = 1.0e-6
+  property(self.rated-voltage)     = min-max(-1.0, 24.0)
+
+pcb-component mylar-cap :
+  reference-prefix = "C"
+
+  pin-properties :
+    [ pin : Ref | pads : Int ... ]
+    [ p[1]      | 1              ]
+    [ p[2]      | 2              ]
+  
+  assign-landpattern(ipc-two-pin-landpattern("0603"))
+  val sym = resistor-sym()
+  symbol =
+    sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
+
+  property(self.capacitor)         = true
+  property(self.type)              = "mylar"
+  property(self.rated-temperature) = min-max(-100.0, 100.0)
+  property(self.capacitance)       = 1.0e-6
+  property(self.rated-voltage)     = min-max(-1.0, 24.0)
+
+;==============================================================================
+;============================= Generic Properties =============================
+;==============================================================================
+pcb-component component :
+  pin-properties :
+    [ pin : Ref | pads : Int ... | side:Dir ]
+    [ p[1]      | 1              | Left  ]
+    [ p[2]      | 2              | Left  ]
+    [ p[3]      | 3              | Left  ]
+    [ p[4]      | 4              | Left  ]
+    [ p[5]      | 5              | Right ]
+    [ p[6]      | 6              | Right ]
+    [ p[7]      | 7              | Right ]
+    [ p[8]      | 8              | Right ]
+    
+  assign-landpattern(ocdb/components/st-microelectronics/landpatterns/LQFP32)
+  make-box-symbol()
+
+;==============================================================================
+;==============================================================================
+;==============================================================================
+
+pcb-module submodule :
+  ; ICs
+  inst U1 : component
+
+  ; Capacitors
+  public inst C1 : ceramic-cap
+  public inst C2 : electrolytic-cap
+  public inst C3 : mica-cap
+  public inst C4 : mylar-cap
+
+  ; Resistors
+  inst R1 : resistor
+
+  ; Inductors
+  inst L1 : inductor
+
+  ; Set the operating points...
+  property(C1.operating-point) = OperatingPoint(typ(20.0), typ(1.0e-3))
+  property(C2.operating-point) = OperatingPoint(typ(20.0), typ(1.0e-3))
+  property(C3.operating-point) = OperatingPoint(typ(20.0), typ(1.0e-3))
+  property(R1.operating-point) = OperatingPoint(typ(20.0), typ(1.0e-3))
+  property(L1.operating-point) = OperatingPoint(typ(20.0), typ(1.0e-3))
+  
+pcb-module main-module : 
+  inst submodule : submodule
+  check-design(self)
+
+defn main () :
+  set-design-directory("comprehensive-checks") 
+  set-main-module(main-module)
+  run-checks("checks.txt")
+
+main()
