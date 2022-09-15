@@ -1,0 +1,28 @@
+defpackage ocdb/utils/passive-checks/utils :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+
+doc:"Helper to create a context string for an object being checked."
+public defn context (c:JITXObject) :
+  "%~ (%_)" % [reference-designator(c), ref(c)]
+
+doc:"Category used by passive component checks."
+public val CATEGORY = "Component Checks"
+
+doc:"Helper to check if a component has a property."
+public defn has-prop-msg (condition: () -> Maybe<True|False>, 
+                 instance: JITXObject,
+                 prop: Symbol) :
+  val context = "%~ (%_)" % [reference-designator(instance), ref(instance)]
+  val [pass?, info-msg] = 
+    match(condition()) :
+      (one:One<True|False>) :
+        if value(one) :
+          [true, "%_ is has property `%_`" % [context, prop]]
+        else :
+          [false, "%_ is missing property `%_`" % [context, prop]]
+      (n:None) :
+        [true, "%_ does not require property `%_`" % [context, prop]]
+  [pass?, "Component has property `%_`" % [prop] info-msg]
