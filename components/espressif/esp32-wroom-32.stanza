@@ -103,6 +103,8 @@ public pcb-component component (pn:esp32-wroom-32mpn) :
 
   make-box-symbol()
   assign-landpattern(esp32-wroom(antenna-type))
+  property(self.P3V3.power-pin) = PowerPin(min-max(1.8, 3.6))
+
 
   ; ESP supports crossbarred IO, so use generic supports
   val reserved-io = [IO[0] IO[16] IO[17] IO[32] IO[33] IO[34] IO[35]]
@@ -162,6 +164,10 @@ public pcb-module module (pn:esp32-wroom-32mpn, add-serial-programming-circuit?:
     net (uart.rts, q[0].e)
     net (uart.dtr, q[1].e)
     net ( q[0].c en)
+
+  for a in [34 35 32 33 25 26 27 14 12 13 15 2 4] do :
+    supports adc :
+      adc.adc => esp32.IO[a]
 
   for i in 0 to 22 do:
     supports gpio:
@@ -272,3 +278,8 @@ pcb-landpattern esp32-wroom (antenna-type:Antenna) :
     val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
     val text-y = 0.5 * courtyard-y + min-silkscreen-text-height
     ref-label(0.0, text-y)
+
+    model3d = Model3D("WIFI-SMD_ESP32-WROOM-32E.wrl",
+                      Vec3D(0.0, 0.0, 0.0)
+                      Vec3D(1.0, 1.0, 1.0)
+                      Vec3D(0.0, 0.0, 270.0))
