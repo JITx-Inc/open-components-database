@@ -11,7 +11,6 @@ defpackage ocdb/utils/checks :
   import ocdb/utils/generator-utils
   import ocdb/utils/property-structs
   import ocdb/utils/design-vars
-  import ocdb/utils/tolerance
   import ocdb/utils/passive-checks/capacitor-checks
   import ocdb/utils/passive-checks/resistor-checks
   import ocdb/utils/passive-checks/inductor-checks
@@ -181,7 +180,7 @@ public pcb-check within? (t:Toleranced, value:Toleranced) :
     category =             "Value checks"
     subcheck-description = "Check that a value is within a given range"
     pass-message =         "Range %_ is correctly within %_" % [value t]
-    fail-message =         "Value %_ to %_ is not within the range of %_ to %_" % [min-value(value) max-value(value) min-value(t) max-value(t)]
+    fail-message =         "Value %_ to %_ is not within the range of %_ to %_" % [min(value) max(value) min(t) max(t)]
     locators =             []
     )
 
@@ -481,7 +480,7 @@ defn check-sink-current-meets-collector-ratings (net-voltage: Toleranced, pull-u
   ; Next, compute the sink current (V / R) and check if it is in spec for each driver.
   for open-collector in open-collectors do :
     val driver = driver $ prop(open-collector)
-    val sink-current = (max-value(net-voltage) - min-value(vol(driver))) / equivalent-resistance
+    val sink-current = (max(net-voltage) - min(vol(driver))) / equivalent-resistance
     #CHECK(condition =            sink-current < iol(driver),
            name =                 "IO pin checks"
            description =          "Check io pin properties"
@@ -500,7 +499,7 @@ defn check-input-and-generic-pin-max-voltage-rating (net-voltage: Toleranced, pi
     ; Check that the min net voltage is above the rating of the input pin
     match(input-prop: DigitalInput|DigitalIO) :
       val vih-v = vih(input-prop)
-      #CHECK(condition =            min-value(net-voltage) > vih-v,
+      #CHECK(condition =            min(net-voltage) > vih-v,
              name =                 "IO pin checks"
              description =          "Check io pin properties"
              category =             "Pin Checks"
@@ -553,23 +552,23 @@ public defn check-single-push-pull-levels-with-inputs (out-p:DigitalPin, in-p:Di
     locators =             [out-pin, in-pin]
   )
   #CHECK(
-    condition =            min-value(driver-voh) >= vih,
+    condition =            min(driver-voh) >= vih,
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
     subcheck-description = "Verify min voh of output driver is greater than the vih of the input pin",
-    pass-message =         "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-pin), min-value(driver-voh), ref(in-pin), vih],
-    fail-message =         "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-pin), min-value(driver-voh), ref(in-pin), vih],
+    pass-message =         "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-pin), min(driver-voh), ref(in-pin), vih],
+    fail-message =         "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-pin), min(driver-voh), ref(in-pin), vih],
     locators =             [out-pin, in-pin]
   )
   #CHECK(
-    condition =            max-value(driver-vol) <= vil,
+    condition =            max(driver-vol) <= vil,
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
     subcheck-description = "Verify max vol of output driver is lower than the vil of the input pin",
-    pass-message =         "Output pin %_ max vol %_ is compatible with the input pin %_ vil %_" % [ref(out-pin), max-value(driver-vol), ref(in-pin), vil],
-    fail-message =         "Output pin %_ max vol %_ is not compatible with the input pin %_ vil %_" % [ref(out-pin), max-value(driver-vol), ref(in-pin), vil],
+    pass-message =         "Output pin %_ max vol %_ is compatible with the input pin %_ vil %_" % [ref(out-pin), max(driver-vol), ref(in-pin), vil],
+    fail-message =         "Output pin %_ max vol %_ is not compatible with the input pin %_ vil %_" % [ref(out-pin), max(driver-vol), ref(in-pin), vil],
     locators =             [out-pin, in-pin]
   )
 
@@ -620,44 +619,44 @@ public defn check-single-push-pull-levels-with-ios (out-p:DigitalPin, io-p:Digit
   )
   val [vih-v vil-v] = [vih(io-prop) vil(io-prop)]
   #CHECK(
-    condition =            min-value(driver-voh) >= vih-v,
+    condition =            min(driver-voh) >= vih-v,
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
     subcheck-description = "Verify min voh of output driver is greater than the vih of the input pin",
-    pass-message =         "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-pin), min-value(driver-voh), ref(io-pin), vih-v],
-    fail-message =         "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-pin), min-value(driver-voh), ref(io-pin), vih-v],
+    pass-message =         "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-pin), min(driver-voh), ref(io-pin), vih-v],
+    fail-message =         "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-pin), min(driver-voh), ref(io-pin), vih-v],
     locators =             [out-pin, io-pin]
   )
   #CHECK(
-    condition =            max-value(driver-vol) <= vil-v,
+    condition =            max(driver-vol) <= vil-v,
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
     subcheck-description = "Verify max vol of output driver is lower than the vil of the input pin",
-    pass-message =         "Output pin %_ max vol %_ is compatible with the input pin %_ vil %_" % [ref(out-pin), max-value(driver-vol), ref(io-pin), vil-v],
-    fail-message =         "Output pin %_ max vol %_ is not compatible with the input pin %_ vil %_" % [ref(out-pin), max-value(driver-vol), ref(io-pin), vil-v],
+    pass-message =         "Output pin %_ max vol %_ is compatible with the input pin %_ vil %_" % [ref(out-pin), max(driver-vol), ref(io-pin), vil-v],
+    fail-message =         "Output pin %_ max vol %_ is not compatible with the input pin %_ vil %_" % [ref(out-pin), max(driver-vol), ref(io-pin), vil-v],
     locators =             [out-pin, io-pin]
   )
   if has-property?(out-pin.digital-io):
     #CHECK(
-      condition =            min-value(voh(io-driver)) >= vih(out-prop),
+      condition =            min(voh(io-driver)) >= vih(out-prop),
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "Pin Checks"
       subcheck-description = "Verify min voh of io driver is greater than the vih of the io pin",
-      pass-message =         "IO pin %_ min voh %_ is compatible with the io pin %_ vih %_" % [ref(io-pin), min-value(voh(io-driver)), ref(out-pin), vih(out-prop)],
-      fail-message =         "IO pin %_ min voh %_ is not compatible with the io pin %_ vih %_" % [ref(io-pin), min-value(voh(io-driver)), ref(out-pin), vih(out-prop)],
+      pass-message =         "IO pin %_ min voh %_ is compatible with the io pin %_ vih %_" % [ref(io-pin), min(voh(io-driver)), ref(out-pin), vih(out-prop)],
+      fail-message =         "IO pin %_ min voh %_ is not compatible with the io pin %_ vih %_" % [ref(io-pin), min(voh(io-driver)), ref(out-pin), vih(out-prop)],
       locators =             [io-pin]
     )
     #CHECK(
-      condition =            max-value(vol(io-driver)) <= vil(out-prop),
+      condition =            max(vol(io-driver)) <= vil(out-prop),
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "Pin Checks"
       subcheck-description = "Verify max vol of io driver is lower than the vil of the io pin",
-      pass-message =         "IO pin %_ max vol %_ is compatible with the io pin %_ vil %_" % [ref(io-pin), max-value(vol(io-driver)), ref(out-pin), vil(out-prop)],
-      fail-message =         "IO pin %_ max vol %_ is not compatible with the io pin %_ vil %_" % [ref(io-pin), max-value(vol(io-driver)), ref(out-pin), vil(out-prop)],
+      pass-message =         "IO pin %_ max vol %_ is compatible with the io pin %_ vil %_" % [ref(io-pin), max(vol(io-driver)), ref(out-pin), vil(out-prop)],
+      fail-message =         "IO pin %_ max vol %_ is not compatible with the io pin %_ vil %_" % [ref(io-pin), max(vol(io-driver)), ref(out-pin), vil(out-prop)],
       locators =             [out-pin, io-pin]
     )
 

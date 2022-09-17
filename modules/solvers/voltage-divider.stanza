@@ -12,7 +12,6 @@ defpackage ocdb/modules/solvers/voltage-divider :
   import ocdb/utils/checks
   import ocdb/utils/design-vars
   import ocdb/utils/db-parts
-  import ocdb/utils/tolerance
 
 
 defstruct Ratio :
@@ -72,7 +71,7 @@ public defn voltage-divider-solver (v-in: Toleranced,
 
         if in-range?(v-out, vo) :
           println("      Solved: mpn1=%_, mpn2=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A"
-                  % [mpn(r-hi-cmp), mpn(r-lo-cmp), min-value(v-out), typ-value(v-out), max-value(v-out), typ-value(v-out) / low(ratio)])
+                  % [mpn(r-hi-cmp), mpn(r-lo-cmp), min(v-out), typ-value(v-out), max(v-out), typ-value(v-out) / low(ratio)])
           return(VoltageDividerSolution(r-hi-cmp, r-lo-cmp, vo))
         else :
           println("      Ignoring: not a solution when taking into account TCRs.")
@@ -113,10 +112,10 @@ public defn compute-output-voltage-range (v-in: Toleranced,
                                           r-lo-val, r-hi-val,
                                           min-lo-tol, max-lo-tol, min-hi-tol, max-hi-tol,
                                           min-lo-dr, max-lo-dr, min-hi-dr, max-hi-dr) -> Toleranced :
-  val vo-min = min-value(v-in) * (r-lo-val * (1.0 + min-lo-dr)) * (1.0 + min-lo-tol)
+  val vo-min = min(v-in) * (r-lo-val * (1.0 + min-lo-dr)) * (1.0 + min-lo-tol)
                      / ( (r-lo-val * (1.0 + min-lo-dr)) * (1.0 + min-lo-tol)
                       + (r-hi-val  * (1.0 + max-hi-dr)) * (1.0 + max-hi-tol))
-  val vo-max = max-value(v-in) * (r-lo-val * (1.0 + max-lo-dr)) * (1.0 + max-lo-tol)
+  val vo-max = max(v-in) * (r-lo-val * (1.0 + max-lo-dr)) * (1.0 + max-lo-tol)
                      / ( (r-lo-val * (1.0 + max-lo-dr)) * (1.0 + max-lo-tol)
                      + (r-hi-val  * (1.0 + min-hi-dr)) * (1.0 + min-hi-tol))
   val vo-nom = typ-value(v-in) * (r-lo-val) / ( (r-lo-val) + (r-hi-val) )

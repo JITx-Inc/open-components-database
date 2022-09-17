@@ -10,7 +10,6 @@ defpackage ocdb/utils/checks :
   import ocdb/utils/generator-utils
   import ocdb/utils/property-structs
   import ocdb/utils/design-vars
-  import ocdb/utils/tolerance
   import lang-utils
 
 
@@ -177,7 +176,7 @@ public pcb-check within? (t:Toleranced, value:Toleranced) :
     category =             "Value checks"
     subcheck-description = "Check that a value is within a given range"
     pass-message =         "Range %_ is correctly within %_" % [value t]
-    fail-message =         "Value %_ to %_ is not within the range of %_ to %_" % [min-value(value) max-value(value) min-value(t) max-value(t)]
+    fail-message =         "Value %_ to %_ is not within the range of %_ to %_" % [min(value) max(value) min(t) max(t)]
     locators =             []
     )
 
@@ -476,7 +475,7 @@ defn check-sink-current-meets-collector-ratings (net-voltage: Toleranced, pull-u
   ; Next, compute the sink current (V / R) and check if it is in spec for each driver.
   for open-collector in open-collectors do :
     val driver = driver $ prop(open-collector)
-    val sink-current = (max-value(net-voltage) - min-value(vol(driver))) / equivalent-resistance
+    val sink-current = (max(net-voltage) - min(vol(driver))) / equivalent-resistance
     #CHECK(condition =            sink-current < iol(driver),
            name =                 "IO pin checks"
            description =          "Check io pin properties"
@@ -495,7 +494,7 @@ defn check-input-and-generic-pin-max-voltage-rating (net-voltage: Toleranced, pi
     ; Check that the min net voltage is above the rating of the input pin
     match(input-prop: DigitalInput|DigitalIO) :
       val vih-v = vih(input-prop)
-      #CHECK(condition =            min-value(net-voltage) > vih-v,
+      #CHECK(condition =            min(net-voltage) > vih-v,
              name =                 "IO pin checks"
              description =          "Check io pin properties"
              category =             "Pin Checks"
@@ -548,23 +547,23 @@ public defn check-single-push-pull-levels-with-inputs (out-p:DigitalPin, in-p:Di
     locators =             [out-pin, in-pin]
   )
   #CHECK(
-    condition =            min-value(driver-voh) >= vih,
+    condition =            min(driver-voh) >= vih,
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
     subcheck-description = "Verify min voh of output driver is greater than the vih of the input pin",
-    pass-message =         "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-pin), min-value(driver-voh), ref(in-pin), vih],
-    fail-message =         "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-pin), min-value(driver-voh), ref(in-pin), vih],
+    pass-message =         "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-pin), min(driver-voh), ref(in-pin), vih],
+    fail-message =         "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-pin), min(driver-voh), ref(in-pin), vih],
     locators =             [out-pin, in-pin]
   )
   #CHECK(
-    condition =            max-value(driver-vol) <= vil,
+    condition =            max(driver-vol) <= vil,
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
     subcheck-description = "Verify max vol of output driver is lower than the vil of the input pin",
-    pass-message =         "Output pin %_ max vol %_ is compatible with the input pin %_ vil %_" % [ref(out-pin), max-value(driver-vol), ref(in-pin), vil],
-    fail-message =         "Output pin %_ max vol %_ is not compatible with the input pin %_ vil %_" % [ref(out-pin), max-value(driver-vol), ref(in-pin), vil],
+    pass-message =         "Output pin %_ max vol %_ is compatible with the input pin %_ vil %_" % [ref(out-pin), max(driver-vol), ref(in-pin), vil],
+    fail-message =         "Output pin %_ max vol %_ is not compatible with the input pin %_ vil %_" % [ref(out-pin), max(driver-vol), ref(in-pin), vil],
     locators =             [out-pin, in-pin]
   )
 
@@ -615,44 +614,44 @@ public defn check-single-push-pull-levels-with-ios (out-p:DigitalPin, io-p:Digit
   )
   val [vih-v vil-v] = [vih(io-prop) vil(io-prop)]
   #CHECK(
-    condition =            min-value(driver-voh) >= vih-v,
+    condition =            min(driver-voh) >= vih-v,
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
     subcheck-description = "Verify min voh of output driver is greater than the vih of the input pin",
-    pass-message =         "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-pin), min-value(driver-voh), ref(io-pin), vih-v],
-    fail-message =         "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-pin), min-value(driver-voh), ref(io-pin), vih-v],
+    pass-message =         "Output pin %_ min voh %_ is compatible with the input pin %_ vih %_" % [ref(out-pin), min(driver-voh), ref(io-pin), vih-v],
+    fail-message =         "Output pin %_ min voh %_ is not compatible with the input pin %_ vih %_" % [ref(out-pin), min(driver-voh), ref(io-pin), vih-v],
     locators =             [out-pin, io-pin]
   )
   #CHECK(
-    condition =            max-value(driver-vol) <= vil-v,
+    condition =            max(driver-vol) <= vil-v,
     name =                 "IO pin checks"
     description =          "Check io pin properties"
     category =             "Pin Checks"
     subcheck-description = "Verify max vol of output driver is lower than the vil of the input pin",
-    pass-message =         "Output pin %_ max vol %_ is compatible with the input pin %_ vil %_" % [ref(out-pin), max-value(driver-vol), ref(io-pin), vil-v],
-    fail-message =         "Output pin %_ max vol %_ is not compatible with the input pin %_ vil %_" % [ref(out-pin), max-value(driver-vol), ref(io-pin), vil-v],
+    pass-message =         "Output pin %_ max vol %_ is compatible with the input pin %_ vil %_" % [ref(out-pin), max(driver-vol), ref(io-pin), vil-v],
+    fail-message =         "Output pin %_ max vol %_ is not compatible with the input pin %_ vil %_" % [ref(out-pin), max(driver-vol), ref(io-pin), vil-v],
     locators =             [out-pin, io-pin]
   )
   if has-property?(out-pin.digital-io):
     #CHECK(
-      condition =            min-value(voh(io-driver)) >= vih(out-prop),
+      condition =            min(voh(io-driver)) >= vih(out-prop),
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "Pin Checks"
       subcheck-description = "Verify min voh of io driver is greater than the vih of the io pin",
-      pass-message =         "IO pin %_ min voh %_ is compatible with the io pin %_ vih %_" % [ref(io-pin), min-value(voh(io-driver)), ref(out-pin), vih(out-prop)],
-      fail-message =         "IO pin %_ min voh %_ is not compatible with the io pin %_ vih %_" % [ref(io-pin), min-value(voh(io-driver)), ref(out-pin), vih(out-prop)],
+      pass-message =         "IO pin %_ min voh %_ is compatible with the io pin %_ vih %_" % [ref(io-pin), min(voh(io-driver)), ref(out-pin), vih(out-prop)],
+      fail-message =         "IO pin %_ min voh %_ is not compatible with the io pin %_ vih %_" % [ref(io-pin), min(voh(io-driver)), ref(out-pin), vih(out-prop)],
       locators =             [io-pin]
     )
     #CHECK(
-      condition =            max-value(vol(io-driver)) <= vil(out-prop),
+      condition =            max(vol(io-driver)) <= vil(out-prop),
       name =                 "IO pin checks"
       description =          "Check io pin properties"
       category =             "Pin Checks"
       subcheck-description = "Verify max vol of io driver is lower than the vil of the io pin",
-      pass-message =         "IO pin %_ max vol %_ is compatible with the io pin %_ vil %_" % [ref(io-pin), max-value(vol(io-driver)), ref(out-pin), vil(out-prop)],
-      fail-message =         "IO pin %_ max vol %_ is not compatible with the io pin %_ vil %_" % [ref(io-pin), max-value(vol(io-driver)), ref(out-pin), vil(out-prop)],
+      pass-message =         "IO pin %_ max vol %_ is compatible with the io pin %_ vil %_" % [ref(io-pin), max(vol(io-driver)), ref(out-pin), vil(out-prop)],
+      fail-message =         "IO pin %_ max vol %_ is not compatible with the io pin %_ vil %_" % [ref(io-pin), max(vol(io-driver)), ref(out-pin), vil(out-prop)],
       locators =             [out-pin, io-pin]
     )
 
@@ -1011,9 +1010,9 @@ public pcb-check inductor-component (l:JITXObject) :
     locators =             [l]
   )
 
-  val [vpk, i, temp] = [[min-value(peak-voltage(property(l.operating-point)))
-                        max-value(peak-voltage(property(l.operating-point)))],
-                        max-value(peak-current(property(l.operating-point))),
+  val [vpk, i, temp] = [[min(peak-voltage(property(l.operating-point)))
+                        max(peak-voltage(property(l.operating-point)))],
+                        max(peak-current(property(l.operating-point))),
                         OPERATING-TEMPERATURE[1]]
 
   val power = property(l.dc-resistance) * pow(i, 2.0) ; just using the DC formula
@@ -1098,9 +1097,9 @@ public pcb-check resistor-component (r:JITXObject) :
     locators =             [r]
   )
 
-  val [vpk, i, temp] = [[min-value(peak-voltage(property(r.operating-point)))
-                        max-value(peak-voltage(property(r.operating-point)))],
-                        max-value(peak-current(property(r.operating-point))),
+  val [vpk, i, temp] = [[min(peak-voltage(property(r.operating-point)))
+                        max(peak-voltage(property(r.operating-point)))],
+                        max(peak-current(property(r.operating-point))),
                         OPERATING-TEMPERATURE[1]]
 
   val power = property(r.resistance) * pow(i, 2.0)
@@ -1196,8 +1195,8 @@ public pcb-check capacitor-component (c:JITXObject) :
     locators =             [c]
   )
 
-  val [vpk temp] = [[min-value(peak-voltage(property(c.operating-point))) max-value(peak-voltage(property(c.operating-point)))] OPERATING-TEMPERATURE[1]]
-  val max-temp = max-value(operating-temperature(property(c.rated-temperature)))
+  val [vpk temp] = [[min(peak-voltage(property(c.operating-point))) max(peak-voltage(property(c.operating-point)))] OPERATING-TEMPERATURE[1]]
+  val max-temp = max(operating-temperature(property(c.rated-temperature)))
   switch(property(c.type)) :
     "ceramic" :
       val vpk-derate-wc = PWL(DERATE-CAPACITOR-MLCC-VPK-WC)[temp]
@@ -1247,13 +1246,13 @@ public pcb-check capacitor-component (c:JITXObject) :
       )
 
       #CHECK(
-        condition =            temp <= min-value(DERATE-CAPACITOR-MLCC-TEMP, max-temp),
+        condition =            temp <= min(DERATE-CAPACITOR-MLCC-TEMP, max-temp),
         name =                 "Capacitor checks"
         description =          "Check capacitor component properties"
         category =             "Component Checks"
         subcheck-description = "Check the ceramic capacitor de-rated temperature operating point meets the design constraints",
-        pass-message =         "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MLCC-TEMP, max-temp)],
-        fail-message =         "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MLCC-TEMP, max-temp)],
+        pass-message =         "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-MLCC-TEMP, max-temp)],
+        fail-message =         "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-MLCC-TEMP, max-temp)],
         locators =             [c]
       )
 
@@ -1296,13 +1295,13 @@ public pcb-check capacitor-component (c:JITXObject) :
         )
 
         #CHECK(
-          condition =            temp  <= min-value(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp),
+          condition =            temp  <= min(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp),
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
           subcheck-description = "Check the capacitor de-rated temperature operating point versus design constraints",
-          pass-message =         "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp)],
-          fail-message =         "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp)],
+          pass-message =         "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp)],
+          fail-message =         "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-ETANTPOLY-TEMP, max-temp)],
           locators =             [c]
         )
 
@@ -1399,24 +1398,24 @@ public pcb-check capacitor-component (c:JITXObject) :
           )
 
           #CHECK(
-            condition =            temp <= min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp),
+            condition =            temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp),
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
             subcheck-description = "Check the capacitor de-rated nominal temperature operating point meets the design constraints",
-            pass-message =         "Capacitor %_ operating temp %_C satisfies the nominal temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
-            fail-message =         "Capacitor %_ operating temp %_C does not satisfy the nominal temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
+            pass-message =         "Capacitor %_ operating temp %_C satisfies the nominal temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
+            fail-message =         "Capacitor %_ operating temp %_C does not satisfy the nominal temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp)],
             locators =             [c]
           )
 
           #CHECK(
-            condition =            temp <= min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp),
+            condition =            temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp),
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
             subcheck-description = "Check the capacitor de-rated wc temperature operating point meets the design constraints",
-            pass-message =         "Capacitor %_ operating temp %_C satisfies the wc temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp)],
-            fail-message =         "Capacitor %_ operating temp %_C does not satisfy the wc temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp)],
+            pass-message =         "Capacitor %_ operating temp %_C satisfies the wc temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp)],
+            fail-message =         "Capacitor %_ operating temp %_C does not satisfy the wc temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-ETANTMNO2-TEMP-WC, max-temp)],
             locators =             [c]
           )
 
@@ -1433,7 +1432,7 @@ public pcb-check capacitor-component (c:JITXObject) :
           )
 
           #CHECK(
-            condition =            temp <= min-value(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp),
+            condition =            temp <= min(DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM, max-temp),
             name =                 "Capacitor checks"
             description =          "Check capacitor component properties"
             category =             "Component Checks"
@@ -1470,13 +1469,13 @@ public pcb-check capacitor-component (c:JITXObject) :
       )
 
       #CHECK(
-          condition =            temp <= min-value(DERATE-CAPACITOR-MICA-TEMP, max-temp),
+          condition =            temp <= min(DERATE-CAPACITOR-MICA-TEMP, max-temp),
           name =                 "Capacitor checks"
           description =          "Check capacitor component properties"
           category =             "Component Checks"
           subcheck-description = "Check the capacitor de-rated temperature operating point meets the design constraints",
-          pass-message =         "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MICA-TEMP, max-temp)],
-          fail-message =         "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min-value(DERATE-CAPACITOR-MICA-TEMP, max-temp)],
+          pass-message =         "Capacitor %_ operating temp %_C satisfies the temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-MICA-TEMP, max-temp)],
+          fail-message =         "Capacitor %_ operating temp %_C does not satisfy the temperature derating spec of %_C" % [ref(c),temp,min(DERATE-CAPACITOR-MICA-TEMP, max-temp)],
           locators =             [c]
         )
 

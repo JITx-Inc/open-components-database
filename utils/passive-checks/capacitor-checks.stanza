@@ -8,7 +8,6 @@ defpackage ocdb/utils/passive-checks/capacitor-checks :
   import ocdb/space-derating
   import ocdb/utils/generator-utils
   import ocdb/utils/property-structs
-  import ocdb/utils/tolerance
   import ocdb/utils/passive-checks/utils
 
 ;==============================================================================
@@ -93,7 +92,7 @@ pcb-check capacitor-temp (c:JITXObject, case?:False|String, derating:False|Doubl
   
   val rated-temp* = 
     match(derating:Double) :
-      min-max(min-value(rated-temp), min(derating, max-value(rated-temp)))
+      min-max(min(rated-temp), min(derating, max(rated-temp)))
     else :
       rated-temp
   val case-str = 
@@ -124,7 +123,7 @@ pcb-check capacitor-temp (c:JITXObject, case?:False|String, derating:False|Doubl
 pcb-check capacitor-voltage (c:JITXObject, case?:False|String, derating:False|Double|Tuple<[Double, Double]>) :
   val peak-voltage = property(c.operating-point)
     $> peak-voltage
-    $> max{ abs(min-value(_0)), abs(max-value(_0)) }
+    $> max{ abs(min(_0)), abs(max(_0)) }
   
   val rated-voltage = property(c.rated-voltage)
   val temp    = OPERATING-TEMPERATURE[1]
@@ -138,7 +137,7 @@ pcb-check capacitor-voltage (c:JITXObject, case?:False|String, derating:False|Do
     match(case?:String) : " %_ " % [case?]
     else : " "
   
-  val voltage = derating* * max-value(rated-voltage)
+  val voltage = derating* * max(rated-voltage)
   #CHECK(
       condition = peak-voltage < voltage
       name = NAME
@@ -290,7 +289,7 @@ pcb-check electrolytic-cap-current (c:JITXObject) :
   val rated-current-pk = property(c.rated-current-pk)
   val peak-current     = property(c.operating-point)
     $> peak-current
-  val ipk = max(abs(max-value(peak-current)), abs(min-value(peak-current)))
+  val ipk = max(abs(max(peak-current)), abs(min(peak-current)))
 
   ; todo: rms current
   #CHECK(
