@@ -1,0 +1,54 @@
+#use-added-syntax(jitx)
+defpackage ocdb/utils/pin-checks/all :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/pin-checks/utils
+  import ocdb/utils/pin-checks/generic-pin-checks
+  import ocdb/utils/pin-checks/power-pin-checks
+  import ocdb/utils/pin-checks/reset-pin-checks
+
+doc: "Check the pins of an instance."
+public defn check-pins (instance:JITXObject) :
+  for pin in pins(instance) do :
+    check-connectivity(pin)
+    check-generic-pin(pin)      when has-property?(pin.generic-pin)
+    check-power-pin(pin)        when has-property?(pin.power-pin)
+    ; check-power-supply-pin(pin) when has-property?(pin.power-supply-pin)
+    check-reset-pin(pin)        when has-property?(pin.reset-pin)
+
+defn check-connectivity (p:JITXObject) :
+  inside pcb-module :
+    check connectivity(p)
+
+; Checks that a pin is connected (or not). 
+; if no connect, fail if connected. If not no connect, fail if unconnected.
+pcb-check connectivity (p:JITXObject) :
+  val connected-pins = connected-pins(p)
+  if no-connect?(p) :
+    #CHECK(
+      condition = empty?(connected-pins)
+      name = "Pin Connectivity"
+      category = CATEGORY
+      description = "Check that a no-connect pin is not connected"
+      subcheck-description = "Check that no-connect pins are not connected"
+      pass-message = "%_ is marked no-connect and not connected"
+        % [context(p)]
+      fail-message = "%_ is marked no-connected, but is connected to other pins: %,"
+        % [context(p), seq(context, connected-pins)] 
+      locators = [p]
+    )
+  else :
+    #CHECK(
+      condition = connected?(p)
+      name = "Pin Connectivity"
+      category = CATEGORY
+      description = "Check that a pin is connected"
+      subcheck-description = "Check that pins are connected"
+      pass-message = "%_ is connected to %,"
+        % [context(p), seq(context, connected-pins)]
+      fail-message = "%_ is not unconnected but not marked no-connect" 
+        % [context(p)]
+      locators = [p]
+    )
