@@ -92,7 +92,7 @@ pcb-check capacitor-temp (c:JITXObject, case?:False|String, derating:False|Doubl
   
   val rated-temp* = 
     match(derating:Double) :
-      min-max(min(rated-temp), min(derating, max(rated-temp)))
+      min-max(min-value(rated-temp), min(derating, max-value(rated-temp)))
     else :
       rated-temp
   val case-str = 
@@ -123,7 +123,7 @@ pcb-check capacitor-temp (c:JITXObject, case?:False|String, derating:False|Doubl
 pcb-check capacitor-voltage (c:JITXObject, case?:False|String, derating:False|Double|Tuple<[Double, Double]>) :
   val peak-voltage = property(c.operating-point)
     $> peak-voltage
-    $> max{ abs(min(_0)), abs(max(_0)) }
+    $> max{ abs(min-value(_0)), abs(max-value(_0)) }
   
   val rated-voltage = property(c.rated-voltage)
   val temp    = OPERATING-TEMPERATURE[1]
@@ -137,7 +137,7 @@ pcb-check capacitor-voltage (c:JITXObject, case?:False|String, derating:False|Do
     match(case?:String) : " %_ " % [case?]
     else : " "
   
-  val voltage = derating* * max(rated-voltage)
+  val voltage = derating* * max-value(rated-voltage)
   #CHECK(
       condition = peak-voltage < voltage
       name = NAME
@@ -289,7 +289,7 @@ pcb-check electrolytic-cap-current (c:JITXObject) :
   val rated-current-pk = property(c.rated-current-pk)
   val peak-current     = property(c.operating-point)
     $> peak-current
-  val ipk = max(abs(max(peak-current)), abs(min(peak-current)))
+  val ipk = max(abs(max-value(peak-current)), abs(min-value(peak-current)))
 
   ; todo: rms current
   #CHECK(

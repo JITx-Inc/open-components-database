@@ -1160,10 +1160,10 @@ public defn ipc-formula (L:Toleranced, ; the distance from edge-of-lead to edge-
                   fillets:LeadFillets): ; looked up using lead-fillets(lead-type, density-level)
   ; compute root-mean-squared of a sequence of numbers
   val [Jt, Jh, Js, _] = to-tuple(fillets)
-  val Lmax = max(L)
-  val Lmin = min(L)
-  val Wmin = min(W)
-  val Tmin = min(T)
+  val Lmax = max-value(L)
+  val Lmin = min-value(L)
+  val Wmin = min-value(W)
+  val Tmin = min-value(T)
   val Smax = Lmax - 2.0 * Tmin
   val C_L  = tolerance-range(L)
   val C_W  = tolerance-range(W)
@@ -1241,7 +1241,7 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
     ;----------------------------------------------------------
     ; Compute the courtyard
     val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
-    val part-sz = Dims(max(package-length), max(package-width))
+    val part-sz = Dims(max-value(package-length), max-value(package-width))
     val lp-sz   = enlarge(Dims(Zmax(ipc-ew), Zmax(ipc-ns)), 2.0 * solder-mask-registration)
     val cy-sz   = enlarge(max(part-sz, lp-sz), courtyard-excess(lead-fillets))
     layer(Courtyard(Top)) = Rectangle(cy-sz)
@@ -1513,7 +1513,7 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number 
     val [max-y, min-y] = fork-on-seq(seq(y{center(_)}, locs), maximum, minimum)
     val lp-y-dim = y(pad-sz) + max-y - min-y
     val lp-sz   = enlarge(Dims(Zmax(ipc), y(pad-sz) + max-y - min-y), 2.0 * solder-mask-registration)
-    val part-sz = Dims(max(package-length), max(package-width))
+    val part-sz = Dims(max-value(package-length), max-value(package-width))
     val cy-sz   = enlarge(max(lp-sz, part-sz), 2.0 * courtyard-excess(lead-fillets))
     layer(Courtyard(Top)) = Rectangle(cy-sz)
         
@@ -1694,7 +1694,7 @@ public defn make-dual-row-smd-landpattern (primary-num-pins:    Int,    ; the nu
     
     val [max-y, min-y] = fork-on-seq(seq(y{center(_)}, locs), maximum, minimum)
     val lp-sz = enlarge(Dims(Zmax(ipc), y(pad-sz) + max-y - min-y), 2.0 * clearance(SolderMaskRegistration))
-    val part-sz = Dims(max(package-length), max(package-width))
+    val part-sz = Dims(max-value(package-length), max-value(package-width))
     val cy-sz = enlarge(max(lp-sz, part-sz), 2.0 * courtyard-excess(fillets))
     layer(Courtyard(Top)) = Rectangle(cy-sz)
     if with-pol-marker? : 
@@ -1823,10 +1823,10 @@ public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vert
         Jt = 0.5 * typ-value(height)
       if density-level == DensityLevelC :
         Jt = 0.25 * typ-value(height)
-    val Lmax = max(length)
-    val Lmin = min(length)
-    val Wmin = min(W)
-    val Tmin = min(lead-length)
+    val Lmax = max-value(length)
+    val Lmin = min-value(length)
+    val Wmin = min-value(W)
+    val Tmin = min-value(lead-length)
     val Smax = Lmax - 2.0 * Tmin
     val C_L  = tolerance-range(length)
     val C_W  = tolerance-range(W)
@@ -1855,7 +1855,7 @@ public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vert
     ; compute the courtyard
     val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
     val lp-sz   = enlarge(Dims(x(pad-sz), Zmax), 2.0 * solder-mask-registration)
-    val part-sz = Dims(max(width), max(length))
+    val part-sz = Dims(max-value(width), max-value(length))
     val cy-sz   = enlarge(max(lp-sz, part-sz), 2.0 * courtyard-excess(lead-fillets))
     layer(Courtyard(Top)) = Rectangle(cy-sz)
     
@@ -2071,7 +2071,7 @@ public defn make-two-pin-radial-landpattern (component-length:Toleranced, ; the 
     ; Compute the courtyard
     val courtyard-excess = 0.75
     val cy-sz = enlarge{_, courtyard-excess} $
-      Dims(max(component-length), max(component-width))
+      Dims(max-value(component-length), max-value(component-width))
 
     layer(Courtyard(Top))    = Rectangle(cy-sz)
     layer(Courtyard(Bottom)) = Rectangle(cy-sz)
@@ -2080,7 +2080,7 @@ public defn make-two-pin-radial-landpattern (component-length:Toleranced, ; the 
 
     ; place the polarity marker, if necessary
     if polarized?:
-      two-pin-th-polarity-marker(Dims(max(component-length), max(component-width)), 
+      two-pin-th-polarity-marker(Dims(max-value(component-length), max-value(component-width)), 
                                  pad-diameter, lead-spacing)
 
 ; Generate a land pattern for a two-pin axial through hole component
@@ -2110,11 +2110,11 @@ public defn make-two-pin-axial-landpattern (component-length:Toleranced,   ; The
     val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
 
     val max-x-dim = max(
-      max(component-diameter),
+      max-value(component-diameter),
       pad-diameter + 2.0 * solder-mask-registration
     )
     val max-y-dim = max(
-      max(component-length)
+      max-value(component-length)
       pad-diameter + 2.0 * solder-mask-registration + lead-spacing
     )
     val max-dims = Dims(max-x-dim, max-y-dim)
@@ -2125,7 +2125,7 @@ public defn make-two-pin-axial-landpattern (component-length:Toleranced,   ; The
 
     ; place the polarity label, if necessary
     if polarized?:
-      two-pin-th-polarity-marker(Dims(max(component-diameter), max(component-length)), 
+      two-pin-th-polarity-marker(Dims(max-value(component-diameter), max-value(component-length)), 
                                  pad-diameter, lead-spacing)
 
 ; Create a two-pin radial through hole component with default density level
@@ -2358,7 +2358,7 @@ public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
     ;-------------------------------------------------------------
     ; Compute the courtyard
     val courtyard-excess = bga-courtyard-excess(density-level)
-    val pkg-sz = Dims(max(package-length), max(package-width))
+    val pkg-sz = Dims(max-value(package-length), max-value(package-width))
     val cy-sz = enlarge(pkg-sz, 2.0 * courtyard-excess)
     layer(Courtyard(Top)) = Rectangle(cy-sz)
 
