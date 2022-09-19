@@ -139,6 +139,45 @@ defn is-digital-pin? (p:JITXObject) -> True|False :
   has-property?(p.digital-input) or
   has-property?(p.digital-output)
 
+public pcb-check connected (p:JITXObject|Tuple<JITXObject>) :
+  val name = "connected net checks"
+  val description = "Check that the object(s) are connected"
+  val category = "Net Checks"
+
+  ;Helper function used by object-connected-message and objects-connected-message
+  defn connected-str (connected?:True|False) -> String :
+    "connected" when connected? else "not connected"
+
+  ;Prepare the appropriate message for checking if a single object is connected to the design.
+  defn object-connected-message (obj:JITXObject, connected?:True|False) -> Printable :
+    "Object %_ is %_" % [ref(obj), connected-str(connected?)]
+  
+  ;Prepare the appropriate message for checking if a Tuple of objects are connected to each other.
+  defn objects-connected-message (objs:Tuple<JITXObject>, connected?:True|False) -> Printable :
+    "Objects %, are %_" % [map(ref, objs), connected-str(connected?)]
+
+  val [pass-message, fail-message, locators] =
+    match(p) :
+      (p:JITXObject) :
+        [object-connected-message(p, true),
+         object-connected-message(p, false),
+         [p]]
+      (p:Tuple<JITXObject>) :
+        [objects-connected-message(p, true),
+         objects-connected-message(p, false),
+         p]
+
+  #CHECK(
+    condition =            connected?(p),
+    name =                 "connected net checks"
+    description =          "Check that the object(s) are connected"
+    category =             "Net Checks"
+    subcheck-description = "Verify the design object is connected",
+    pass-message =         pass-message,
+    fail-message =         fail-message,
+    locators =             locators
+  )
+
 ; ====== Component-level checks ======
 ; ====================================
 ; public pcb-check pull-up-check (p:JITXObject) :
