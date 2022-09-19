@@ -1,0 +1,508 @@
+#use-added-syntax(jitx)
+defpackage ocdb/utils/netlist-checks/io-checks :
+  import core
+  import collections
+  import math
+  import lang-utils
+  import jitx
+  import jitx/commands
+  import ocdb/utils/property-structs
+  import ocdb/utils/netlist-checks/utils
+  import ocdb/utils/tolerance
+
+;==============================================================================
+;============================ Driver ==========================================
+;==============================================================================
+val NAME = "IO Checks"
+val DESCRIPTION = "Check Digital I/O Properties"
+
+doc: "Check the i/o pin nets."
+public defn check-io (module:JITXObject, connections:Connections) :
+  ; A "connected group" is an electrical net, defined by
+  ; all the pins of every component connected to each other.
+  val connected-groups = connected-groups(connections)
+    $> filter{{not empty?(_)}, _}
+
+  for group in connected-groups do :
+    ; Categorize pins and extract i/o classes we care about
+    val pin-categories   = categorize-digital-pins(group)
+    val output-pins      = outputs(pin-categories)
+    val open-collectors  = open-collectors(pin-categories)
+    val cmos-ttl-outputs = cmos-ttl-outputs(pin-categories)
+
+    ; Perform checks on each pin in the net
+    check-open-collectors(open-collectors, pin-categories) when not empty?(open-collectors)
+    check-cmos-and-ttl(cmos-ttl-outputs, pin-categories)   when not empty?(cmos-ttl-outputs)
+
+    ; Check the digital outputs
+    inside pcb-module :
+      check digital-output(output-pins) when not empty?(output-pins)
+
+;==============================================================================
+;============================== Helpers =======================================
+;==============================================================================
+; Return the open collector pins
+defn open-collectors (pin-categories:DigitalPinCategories) :
+  to-tuple $
+    for resolved-pin in cat(ios(pin-categories), outputs(pin-categories)) filter :
+      driver(prop(resolved-pin)) is OpenCollector
+
+; Return the CMOS TTL pins
+defn cmos-ttl-outputs (pin-categories:DigitalPinCategories) :
+  to-tuple $
+    for resolved-pin in cat(ios(pin-categories), outputs(pin-categories)) filter :
+      driver(prop(resolved-pin)) is CMOSOutput|TTLOutput
+
+
+;==============================================================================
+;=================================== Checks ===================================
+;==============================================================================
+pcb-check digital-output (output-pins: Tuple<DigitalPin>) :
+  val non-tristateable-output-pins = to-tuple $ filter({not tristateable(prop(_))}, output-pins)
+  #CHECK(condition = length(non-tristateable-output-pins) >= 1
+          name = NAME
+          description = DESCRIPTION
+          category = CATEGORY
+          subcheck-description = "Check there is at least one non-tristateable output pin",
+          pass-message = "Output pins %, are connected together and at most 1 of them is non-tristateable" 
+            % [seq(ref{pin(_)}, output-pins)],
+          fail-message = "The following non-tristateable output pins are connected together: %," 
+            % [seq(ref{pin(_)}, non-tristateable-output-pins)],
+          locators = map(pin, output-pins)
+          )
+
+;==============================================================================
+;=============================== Open Collector ===============================
+;==============================================================================
+; Helpers
+defn open-collector-pass-message (open-collectors:Tuple<DigitalPin>, action:?) :
+  if length(open-collectors) == 1 :
+    "Pin %_ is marked OpenCollector and has %_" 
+      % [ref $ pin(open-collectors[0]), action]
+  else :
+    "Pins %, are marked OpenCollector on the same net and have %_" 
+      % [seq(ref{pin(_)}, open-collectors), action]
+
+defn open-collector-fail-message (open-collectors:Tuple<DigitalPin>, action:?) :
+  if length(open-collectors) == 1 :
+    "Pin %_ is marked OpenCollector but does not have %_" 
+      % [ref $ pin(open-collectors[0]), action]
+  else :
+    "Pins %, are marked OpenCollector on the same net but do not have %_" 
+      % [seq(ref{pin(_)}, open-collectors), action]
+
+; Main check driver. Given list of open collectors and 
+; table of categorized pins on the net :
+; - all the pins have a net voltage
+; - find the pullup resistors
+; - find the net voltage
+; - check there is a net voltage
+; - check that at least one pullup resistor exists
+; - compute parallel pullup resistance
+; - check that the sink current is not too high
+; - check that generic pin/io-pin ratings agree
+defn check-open-collectors (open-collectors:Tuple<DigitalPin>,
+                            pin-categories:DigitalPinCategories) :
+  inside pcb-module :
+    val [pullup-resistors, net-voltages] = 
+      pullup-resistors(open-collectors, pin-categories)
+    
+    for p in open-collectors do :
+      check no-net-voltage(pin(p))
+    
+    check net-voltages-equal(open-collectors, net-voltages, pullup-resistors)
+    check pullup-resistor-exists(open-collectors, pullup-resistors)
+
+    val resistance?  = parallel-resistance(pullup-resistors) when not empty?(pullup-resistors)
+    val net-voltage? = net-voltages[0] when not empty?(net-voltages)
+
+    match(resistance?:Double, net-voltage?:Toleranced) :
+      for p in open-collectors do :
+        check sink-current(p, net-voltage?, resistance?)
+        check input-and-generic-pin-max-voltage-rating(net-voltage?, pin-categories)
+
+pcb-check net-voltages-equal (ps:Tuple<DigitalPin>, nvs:Tuple<Toleranced>, rs:Tuple<JITXObject>) :
+  #CHECK(
+    condition = all-equal?(nvs),
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    subcheck-description = 
+      "Check that io pins have pullup resistors connected to the same net voltage",
+    pass-message = 
+      open-collector-pass-message(ps, "all pull-up resistors with the same net voltage"),
+    fail-message = 
+      open-collector-fail-message(ps, 
+        "all pull-up resistors %, with the same net voltage" 
+          % [seq(ref, rs)]),
+    locators = to-tuple(cat(seq(pin, ps), rs))
+  )
+
+; Check that a pin does not have a net voltage
+pcb-check no-net-voltage (p:Pin) :
+  #CHECK(
+    condition = not has-property?(p.net-voltage),
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    subcheck-description = 
+      "Check that open-collector i/o pins are not connected to a net with a `net-voltage` property.",
+    pass-message =
+      "%_ is not connected to a net with a net-voltage property." 
+        % [context(p)],
+    fail-message = 
+      "%_ is connected to a net with a net-voltage property." 
+        % [context(p)],
+    locators = [p])
+
+; Check that a pullup resistor exists for a pin
+pcb-check pullup-resistor-exists (open-collectors:Tuple<DigitalPin>, resistors:Tuple<Instance>) :
+  #CHECK(
+    condition = not empty?(resistors),
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    subcheck-description = "Check that open collector pins have at least one pullup resistor",
+    pass-message = open-collector-pass-message(open-collectors, "at least one pullup resistor"),
+    fail-message = open-collector-fail-message(open-collectors, "any pullup resistor attached"),
+    locators = map(pin, open-collectors))
+
+pcb-check sink-current (open-collector:DigitalPin, net-voltage:Toleranced, resistance?:False|Double) :
+  #CHECK(condition = resistance? is Double,
+         name = NAME,
+         description = DESCRIPTION,
+         category = CATEGORY, 
+         subcheck-description  = "Check that open collector pins have a finite pullup resistance.",
+         fail-message = "%_ has an infinite pullup resistance" %
+          [context(pin(open-collector))]
+         pass-message = "%_ has a finite pullup resistance" % 
+          [context(pin(open-collector))]
+         locators = [pin(open-collector)])
+
+  val resistance = resistance? as Double
+  val driver = driver(prop(open-collector))
+  val vpk    = max-value(net-voltage) - min-value(vol(driver))
+  val ipk    = vpk / resistance
+  #CHECK(condition =           ipk < iol(driver),
+        name =                 NAME
+        description =          CATEGORY
+        category =             DESCRIPTION
+        subcheck-description = "Check an open collector pin's peak sink current is in spec",
+        pass-message = "%_ current sink specification %_A satisfies the design requirement %_A" 
+          % [ref $ pin(open-collector), iol(driver), ipk],
+        fail-message = "%_ current specification %_A does not satisfy the design requirement %_A" 
+          % [ref $ pin(open-collector), iol(driver), ipk],
+        locators =             [pin(open-collector)])
+  
+
+pcb-check input-and-generic-pin-max-voltage-rating (net-voltage:Toleranced, pin-categories:DigitalPinCategories) :
+  ; Now we need to check on any io-pins connected to this output pin
+  val input-pins = cat(ios(pin-categories), inputs(pin-categories))
+  for p in input-pins do :
+    val pin = pin(p)
+    val input-prop = prop(p)
+    ; Check that the min net voltage is above the rating of the input pin
+    match(input-prop:DigitalInput|DigitalIO) :
+      val vih-v = vih(input-prop)
+      #CHECK(condition = min-value(net-voltage) > vih-v,
+             name = NAME
+             description = DESCRIPTION
+             category = CATEGORY
+             subcheck-description = "Check the net with a net-voltage property is higher than the vih pin specification",
+             pass-message = "%_'s vih specification (%_V) is lower than the net voltage (%_V)"    
+              % [context(pin), vih-v, net-voltage],
+             fail-message =  "%_'s vih specification (%_V) is greater than the net voltage (%_V)" 
+              % [context(pin), vih-v, net-voltage],
+             locators = [pin])
+
+
+; Returns a list of pullup resistors and their opposing net voltages
+defn pullup-resistors (open-collectors:Tuple<DigitalPin>,
+                       pin-categories:DigitalPinCategories) :
+  val collected-net-voltages = Vector<Toleranced>()
+
+  defn is-resistor? (r) :
+    has-property?(r.resistor) and
+    has-property?(r.resistance)
+
+  defn collect-net-voltages-and-returns-if-any? (instance:Instance) -> True|False :
+    val voltages = 
+      for p in pins(instance) seq? :
+        property?(p.net-voltage)
+    val result = not empty?(voltages)
+    add-all(collected-net-voltages, voltages as Seq<Toleranced>)
+    result
+
+  ; lazy 'and', connected-to-net? can be heavy
+  defn pull-up? (instance) :
+    is-resistor?(instance) and
+    collect-net-voltages-and-returns-if-any?(instance)
+
+  ; First, we search for the pull-up-resistors that might be connected to this pin
+  val pull-up-resistors = all(pin-categories) $> map{containing-instance!, _}
+                                              $> unique
+                                              $> filter{pull-up?, _}
+                                              $> to-tuple
+  
+  [pull-up-resistors, to-tuple(collected-net-voltages)]
+
+; Compute the parallel resistance of a tuple of resistors. 
+; Note on numerical stability : 
+; 
+; In the empty array case, we return false (instead of +INFINITY). 
+; Negative resistances are forbidden and will cause a fatal error.
+; 
+; Zero-ohm resistors in parallel will result in 0 total resistance.
+;
+defn parallel-resistance (resistors:Tuple<Instance>) -> Double :
+  val resistances = map({property(_.resistance) as Double}, resistors)
+  
+  fatal("Resistance must be positive") when any?({_ > 0.0}, resistances)
+
+  val num = product(resistances)
+  val den = sum(resistances)
+
+  0.0 when (num == 0.0) else (num / den)
+
+;==============================================================================
+;================================ CMOS/TTL ====================================
+;==============================================================================
+defn check-cmos-and-ttl (cmos-ttl-outputs:Tuple<DigitalPin>,
+                         pin-categories:DigitalPinCategories) :
+  val inputs  = inputs(pin-categories)
+  val ios     = ios(pin-categories)
+
+  inside pcb-module :
+    for output in cmos-ttl-outputs do :
+      for io in ios do :
+        if io != output :
+          check io-push-pull-levels(io, output)
+      
+      for input in inputs do :
+        if input != output :
+          check input-push-pull-levels(input, output)
+
+; Helper: checks if high/low voltages for two pins are compatible.
+defn vhi-vlo (i:Pin, o:Pin, vih:Double, voh:Toleranced, vil:Double, vol:Toleranced) :
+  val locators = [i, o]
+
+  #CHECK(condition = min-value(voh) >= vih
+         name = NAME
+         category = CATEGORY
+         description = DESCRIPTION
+         locators = locators
+         pass-message = "%_'s voh (%_) is greater than %_'s vih (%_)" % [
+            context(o), voh
+            context(i), vih
+         ]
+         fail-message = "%_'s voh (%_) is less than %_'s vih (%_)" % [
+            context(o), voh
+            context(i), vih
+         ])
+  
+  #CHECK(condition = max-value(vol) <= vil
+         name = NAME
+         category = CATEGORY
+         description = DESCRIPTION
+         locators = locators
+         pass-message = "%_'s vol (%_) is less than %_'s vil (%_)" % [
+            context(o), voh
+            context(i), vih
+         ]
+         fail-message = "%_'s vol (%_) is greater than %_'s vil (%_)" % [
+            context(o), vol
+            context(i), vil
+         ])
+
+defn gnd-pins (i:Pin, o:Pin, ip:DigitalInput|DigitalIO, op:DigitalOutput|DigitalIO) :
+  val locators = [i, o]
+  #CHECK(condition = connected?([gnd-pin(ip), gnd-pin(op)])
+         name = NAME
+         category = CATEGORY
+         description = DESCRIPTION
+         locators = locators
+         subcheck-description = "Check that digital i/o pins share a ground net"
+         pass-message = "%_ and %_ grounds are connected together"
+          % [ context(i), context(o) ]
+         fail-message = "%_ and %_  grounds are not connected"
+          % [ context(i), context(o) ])
+
+pcb-check input-push-pull-levels (input:DigitalPin, output:DigitalPin) :
+  val [outp-pin, outp-prop] = [pin(output), prop(output)]
+  val [inpt-pin, inpt-prop] = [pin(input), prop(input)]
+  val driver = driver(outp-prop)
+
+  val [vih, vil] = [vih(inpt-prop), vil(inpt-prop)]
+  val [voh, vol] = [voh(driver),    vil(driver)   ]
+
+  val locators = [inpt-pin, outp-pin]
+
+  gnd-pins(inpt-pin, outp-pin, inpt-prop, outp-prop)
+  vhi-vlo(inpt-pin, outp-pin, vih, voh, vil, vol)
+
+  val generic-in-prop? = property?(inpt-pin.generic-pin)
+  match(generic-in-prop?:One<GenericPin>) :
+    val vin-max = max-voltage(value(generic-in-prop?))
+    #CHECK(condition = in-range?(vin-max, voh)
+           name = NAME
+           category = CATEGORY
+           description = DESCRIPTION
+           locators = [inpt-pin, outp-pin]
+           pass-message = "%_'s voh (%_) is in range of %_'s max input voltage (%_)" % [
+             context(outp-pin), voh
+             context(outp-pin), vih
+           ]
+           fail-message = "%_'s voh (%_) is not in range of %_'s vih (%_)" % [
+             context(inpt-pin), voh
+             context(outp-pin), vih
+           ])
+
+pcb-check io-push-pull-levels (io:DigitalPin, output:DigitalPin) :
+  val [outp-pin, outp-prop] = [pin(output), prop(output) as DigitalOutput|DigitalIO]
+  val [io-pin,   io-prop]  =  [pin(io), prop(io) as DigitalIO]
+  val io-driver? = driver(io-prop)
+  val driver?    = driver(outp-prop)
+  val locators = [io-pin, outp-pin]
+
+  #CHECK(
+    condition = driver? is CMOSOutput|TTLOutput
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    locators = locators    
+    subcheck-description = "Check digital output's driver pin is CMOSOutput|TTLOutput"
+    pass-message = "Output driver pin is supported LogicFamily"
+    fail-message = "Output drive pin is %~" % [driver?]
+  )
+  #CHECK(
+    condition = driver? is CMOSOutput|TTLOutput
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    locators = [outp-pin]
+    subcheck-description = "Check digital output's driver pin is CMOSOutput|TTLOutput"
+    pass-message = "Output driver pin is supported LogicFamily"
+    fail-message = "Output drive pin is %~" % [driver?]
+  )
+  #CHECK(
+    condition = io-driver? is CMOSOutput|TTLOutput
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    locators = [io-pin]
+    subcheck-description = "Check digital i/o's driver pin is CMOSOutput|TTLOutput"
+    pass-message = "i/o driver pin is supported LogicFamily"
+    fail-message = "i/o drive pin is %~" % [driver?]
+  )
+  
+  val driver    = driver? as CMOSOutput|TTLOutput
+  val io-driver = io-driver? as CMOSOutput|TTLOutput
+
+  gnd-pins(io-pin, outp-pin, io-prop, outp-prop)
+  vhi-vlo(io-pin, outp-pin, vih(io-prop), voh(driver), vil(io-prop), vol(driver))
+  
+  match(outp-prop:DigitalIO) :
+    #CHECK(
+      condition = min-value(voh(io-driver)) >= vih(outp-prop),
+      name = NAME
+      description = DESCRIPTION
+      category = CATEGORY
+      locators = locators
+      subcheck-description = "Check min voh of io driver is greater than the vih of the io pin",
+      pass-message = "%_'s min voh (%_V) is greater than %_'s vih (%_V)" % [
+        context(io-pin),   min-value(voh(io-driver)),
+        context(outp-pin), vih(outp-prop) 
+      ]
+      fail-message = "%_'s min voh (%_V) is less than %_ls vih (%_V)" % [
+        context(io-pin), min-value(voh(io-driver)),
+        context(outp-pin), vih(outp-prop)
+      ])
+    
+    #CHECK(
+      condition = max-value(vol(io-driver)) <= vil(outp-prop),
+      name = NAME
+      description = DESCRIPTION
+      category = CATEGORY
+      locators = locators
+      subcheck-description = "Check max vol of io driver is lower than the vil of the io pin",
+      pass-message = "%_'s max vol (%_V) less than %_'s vil (%_V)" % [
+        context(io-pin), max-value(vol(io-driver)), 
+        context(outp-pin), vil(outp-prop)
+      ],
+      fail-message = "%_'s max vol (%_V) greater than %_'s vil (%_V)" % [
+        context(io-pin), max-value(vol(io-driver)), 
+        context(outp-pin), vil(outp-prop) 
+      ])
+
+  val generic-io-prop? = property?(io-pin.generic-pin)
+  match(generic-io-prop?:One) :
+    val max-input-voltage = max-voltage $ value(generic-io-prop?)
+    #CHECK(
+      condition = in-range?(max-input-voltage, voh(driver)),
+      name = NAME
+      description = DESCRIPTION
+      category = CATEGORY
+      locators = locators
+      subcheck-description = "Check voh of output driver is within its voltage range",
+      pass-message = "%_'s max voh (%_V) is in the voltage range of %_  (%_)" % [
+        context(outp-pin), voh, 
+        context(io-pin), max-input-voltage
+      ],
+      fail-message = "%_'s max voh (%_V) is outside the voltage range of %_ (%_)" % [
+        context(outp-pin), voh(driver),
+        context(io-pin), max-input-voltage
+      ])
+
+  val generic-out-prop? = property?(outp-pin.generic-pin)
+  match(generic-out-prop?: One) :
+    val max-input-voltage = max-voltage $ value(generic-out-prop?)
+    #CHECK(
+      condition = in-range?(max-input-voltage, voh(io-driver)),
+      name = NAME
+      description = DESCRIPTION
+      category = CATEGORY
+      locators = locators
+      subcheck-description = "Check voh of output driver is within its voltage range",
+      pass-message = "%_'s max voh (%_V) is in the range of the of %_ (%_)" %  [
+        context(io-pin),  voh(io-driver), 
+        context(outp-pin), max-input-voltage
+      ]
+      fail-message = "%_'s max voh (%_V) is outside the voltage range of %_ (%_)" % [
+        ref(io-pin),  voh(io-driver),
+        ref(outp-pin), max-input-voltage
+      ],
+    )
+
+; TODO: unused
+; defn check-input-and-generic-pin-max-voltage-rating (net-voltage: Toleranced, pin-categories: DigitalPinCategories) :
+;   ; Now we need to check on any io-pins connected to this output pin
+;   val input-pins = cat(ios(pin-categories), inputs(pin-categories))
+;   for p in input-pins do :
+;     val pin = pin(p)
+;     val input-prop = prop(p)
+;     ; Check that the min net voltage is above the rating of the input pin
+;     match(input-prop: DigitalInput|DigitalIO) :
+;       val vih-v = vih(input-prop)
+;       #CHECK(condition =            min-value(net-voltage) > vih-v,
+;              name =                 "IO pin checks"
+;              description =          "Check io pin properties"
+;              category =             "Pin Checks"
+;              subcheck-description = "Check the net with a net-voltage property is higher than the vih pin specification",
+;              pass-message =         "Input pin %_ vih specification %_V is correctly lower than the voltage-set net %_V"    % [ref $ pin, vih-v, net-voltage],
+;              fail-message =         "Input pin %_ vih specification %_V is incorrectly higher than the voltage-set net %_V" % [ref $ pin, vih-v, net-voltage],
+;              locators =             [pin])
+
+;     ; If the pin has generic pin props, check that net voltage is in range.
+;     val generic-pin = property?(pin.generic-pin)
+;     match(generic-pin:One<GenericPin>) :
+;       val max-voltage = max-voltage(value(generic-pin))
+;       #CHECK(
+;         condition =            in-range?(max-voltage, net-voltage),
+;         name =                 "IO pin checks"
+;         description =          "Check io pin properties"
+;         category =             "Pin Checks"
+;         subcheck-description = "Check the pin's maximum voltage is within the design specification",
+;         pass-message =         "Generic pin %_ maximum voltage %_V is correctly within the power supply specification %_V"    % [ref $ pin, max-voltage, net-voltage],
+;         fail-message =         "Generic pin %_ maximum voltage %_V is incorrectly outside the power supply specification %_V" % [ref $ pin, max-voltage, net-voltage],
+;         locators =             [pin]
+;       )
