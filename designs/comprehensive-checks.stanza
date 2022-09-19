@@ -19,6 +19,7 @@ defpackage ocdb/designs/comprehensive-checks :
   import ocdb/utils/symbols
   import ocdb/utils/property-structs
   import ocdb/utils/box-symbol
+  import ocdb/utils/passive-checks/resonator-checks
 
 ;==============================================================================
 ;=========================== Resistor Properties ==============================
@@ -53,7 +54,7 @@ pcb-component inductor :
     [ p[2]      | 2              ]
   
   assign-landpattern(ipc-two-pin-landpattern("0603"))
-  val sym = resistor-sym()
+  val sym = inductor-sym()
   symbol =
     sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
 
@@ -93,7 +94,7 @@ pcb-component electrolytic-cap :
     [ p[2]      | 2              ]
   
   assign-landpattern(ipc-two-pin-landpattern("0603"))
-  val sym = resistor-sym()
+  val sym = capacitor-sym()
   symbol =
     sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
 
@@ -115,7 +116,7 @@ pcb-component mica-cap :
     [ p[2]      | 2              ]
   
   assign-landpattern(ipc-two-pin-landpattern("0603"))
-  val sym = resistor-sym()
+  val sym = capacitor-sym()
   symbol =
     sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
 
@@ -134,7 +135,7 @@ pcb-component mylar-cap :
     [ p[2]      | 2              ]
   
   assign-landpattern(ipc-two-pin-landpattern("0603"))
-  val sym = resistor-sym()
+  val sym = capacitor-sym()
   symbol =
     sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
 
@@ -143,6 +144,53 @@ pcb-component mylar-cap :
   property(self.rated-temperature) = min-max(-100.0, 100.0)
   property(self.capacitance)       = 1.0e-6
   property(self.rated-voltage)     = min-max(-1.0, 24.0)
+
+
+;==============================================================================
+;=========================== Resonator Properties =============================
+;==============================================================================
+pcb-component crystal-resonator :
+  reference-prefix = "X"
+
+  pin-properties :
+    [ pin : Ref | pads : Int ... ]
+    [ p[1]      | 1              ]
+    [ p[2]      | 2              ]
+  
+  assign-landpattern(ipc-two-pin-landpattern("0603"))
+  val sym = crystal-sym()
+  symbol =
+    sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
+  
+  ; Set the crystal resonator properties
+  property(self.crystal-resonator) = 
+    CrystalResonator(
+      load-capacitance, shunt-capacitance, motional-capacitance, 
+      ESR, frequency, frequency-tolerance, max-drive-level
+    ) where :
+      val load-capacitance = 9.0e-12
+      val shunt-capacitance = 1.31e-12
+      val motional-capacitance = 4.41e-15
+      val ESR = 60.0
+      val frequency = 16.0e6
+      val frequency-tolerance = 10.0e-6
+      val max-drive-level = 100.0e-6
+
+pcb-module resonator-module :
+  inst X1 : crystal-resonator
+  inst C1 : ceramic-cap
+
+  val intf = CrystalOscillator(
+    max-critical-gain, drive-level, 
+    c-pin, frequency-tolerance, frequency
+  ) where :
+    val max-critical-gain = 2.0e-3
+    val drive-level = 100.0e-6
+    val c-pin = 3.0e-12
+    val frequency-tolerance = 20.0e-6
+    val frequency = 16.0e6
+
+  check-resonator(X1, intf, C1)
 
 ;==============================================================================
 ;============================= Generic Properties =============================
@@ -165,16 +213,15 @@ pcb-component component :
 ;==============================================================================
 ;==============================================================================
 ;==============================================================================
-
 pcb-module submodule :
   ; ICs
   inst U1 : component
 
   ; Capacitors
-  public inst C1 : ceramic-cap
-  public inst C2 : electrolytic-cap
-  public inst C3 : mica-cap
-  public inst C4 : mylar-cap
+  inst C1 : ceramic-cap
+  inst C2 : electrolytic-cap
+  inst C3 : mica-cap
+  inst C4 : mylar-cap
 
   ; Resistors
   inst R1 : resistor
@@ -188,6 +235,9 @@ pcb-module submodule :
   property(C3.operating-point) = OperatingPoint(typ(20.0), typ(1.0e-3))
   property(R1.operating-point) = OperatingPoint(typ(20.0), typ(1.0e-3))
   property(L1.operating-point) = OperatingPoint(typ(20.0), typ(1.0e-3))
+  
+  ; Resonators
+  inst res : resonator-module
   
 pcb-module main-module : 
   inst submodule : submodule

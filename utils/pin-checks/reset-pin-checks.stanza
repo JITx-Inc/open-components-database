@@ -1,0 +1,39 @@
+#use-added-syntax(jitx)
+defpackage ocdb/utils/pin-checks/reset-pin-checks :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/property-structs
+  import ocdb/utils/pin-checks/utils
+
+val NAME = "Reset Pin Checks"
+val DESCRIPTION = "Check reset pin properties"
+
+public defn check-reset-pin (p:JITXObject) :
+  inside pcb-module :
+    check reset-pin(p)
+
+pcb-check reset-pin (p:JITXObject) :
+  val p-props = property(p.reset-pin)
+  #CHECK(
+    condition = p-props is ResetPin
+    name = NAME
+    category = CATEGORY
+    description = DESCRIPTION
+    subcheck-description = "Verify the reset pin has the ResetPin property attached",
+    pass-message =         "Reset pin %_ has the correct reset-pin type property attached" % [ref(p)],
+    fail-message =         "Reset pin %_ does not have the correct reset-pin type property attached" % [ref(p)],
+    locators =             [p]
+  )
+  ; Improve this to check togglability
+  #CHECK(
+    condition =            connected?(p),
+    name = NAME
+    category = CATEGORY
+    description = DESCRIPTION
+    subcheck-description = "Verify the reset pin is connected",
+    pass-message = "Reset pin %_ is connected" % [ref(p)],
+    fail-message = "Reset pin %_ is not connected" % [ref(p)],
+    locators = [p]
+  )
