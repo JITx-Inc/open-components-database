@@ -88,8 +88,11 @@ pcb-check resistor-power (r:JITXObject) :
 ; Return the derating of a resistor, or a default.
 defn derating (r:JITXObject) :
   match(property?(r.derating)) :
-    (pwl:One<PWL>) : 
-      value(pwl)
+    (pwl:One<?>) : 
+      match(value(pwl)) :
+        (t:Tuple<[Double, Double]>) : PWL(t)
+        (p:PWL) : p
+        (_:?) : fatal(".derating property must be a tuple or PWL")
     (_:None) :
       PWL([
         [0.0,   1.0] 

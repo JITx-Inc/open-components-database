@@ -77,18 +77,18 @@ pcb-check digital-output (output-pins: Tuple<DigitalPin>) :
 ; Helpers
 defn open-collector-pass-message (open-collectors:Tuple<DigitalPin>, action:?) :
   if length(open-collectors) == 1 :
-    "Pin %_ is marked OpenCollector and has %_" 
+    "open-collector pin %_has %_" 
       % [ref $ pin(open-collectors[0]), action]
   else :
-    "Pins %, are marked OpenCollector on the same net and have %_" 
+    "open-collector pins %, are on the same net and have %_" 
       % [seq(ref{pin(_)}, open-collectors), action]
 
 defn open-collector-fail-message (open-collectors:Tuple<DigitalPin>, action:?) :
   if length(open-collectors) == 1 :
-    "Pin %_ is marked OpenCollector but does not have %_" 
+    "open-collector pin %_ is missing %_" 
       % [ref $ pin(open-collectors[0]), action]
   else :
-    "Pins %, are marked OpenCollector on the same net but do not have %_" 
+    "open-collector pins %, are on the same net but do not have %_" 
       % [seq(ref{pin(_)}, open-collectors), action]
 
 ; Main check driver. Given list of open collectors and 
@@ -107,6 +107,8 @@ defn check-open-collectors (open-collectors:Tuple<DigitalPin>,
     val [pullup-resistors, net-voltages] = 
       pullup-resistors(open-collectors, pin-categories)
     
+    println("Pullups: %_" % [pullup-resistors])
+
     for p in open-collectors do :
       check no-net-voltage(pin(p))
     
@@ -164,7 +166,7 @@ pcb-check pullup-resistor-exists (open-collectors:Tuple<DigitalPin>, resistors:T
     category = CATEGORY
     subcheck-description = "Check that open collector pins have at least one pullup resistor",
     pass-message = open-collector-pass-message(open-collectors, "at least one pullup resistor"),
-    fail-message = open-collector-fail-message(open-collectors, "any pullup resistor attached"),
+    fail-message = open-collector-fail-message(open-collectors, "a pullup resistor attached"),
     locators = map(pin, open-collectors))
 
 pcb-check sink-current (open-collector:DigitalPin, net-voltage:Toleranced, resistance?:False|Double) :
@@ -189,9 +191,9 @@ pcb-check sink-current (open-collector:DigitalPin, net-voltage:Toleranced, resis
         category =             DESCRIPTION
         subcheck-description = "Check an open collector pin's peak sink current is in spec",
         pass-message = "%_ current sink specification %_A satisfies the design requirement %_A" 
-          % [ref $ pin(open-collector), iol(driver), ipk],
+          % [context(pin(open-collector)), iol(driver), ipk],
         fail-message = "%_ current specification %_A does not satisfy the design requirement %_A" 
-          % [ref $ pin(open-collector), iol(driver), ipk],
+          % [context(pin(open-collector)), iol(driver), ipk],
         locators =             [pin(open-collector)])
   
 
@@ -204,7 +206,7 @@ pcb-check input-and-generic-pin-max-voltage-rating (net-voltage:Toleranced, pin-
     ; Check that the min net voltage is above the rating of the input pin
     match(input-prop:DigitalInput|DigitalIO) :
       val vih-v = vih(input-prop)
-      #CHECK(condition = min-value(net-voltage) > vih-v,
+      #CHECK(condition = min-value(net-voltage) > min-value(vih-v)
              name = NAME
              description = DESCRIPTION
              category = CATEGORY
@@ -222,6 +224,10 @@ defn pullup-resistors (open-collectors:Tuple<DigitalPin>,
   val collected-net-voltages = Vector<Toleranced>()
 
   defn is-resistor? (r) :
+    if index-of-chars(to-string(ref(r)), "pullup") is Int :
+      println("Checking if %_ is a resistor" % [ref(r)])
+      println("resistor:%_" % [property?(r.resistor)])
+      println("resistance:%_" % [property?(r.resistance)])
     has-property?(r.resistor) and
     has-property?(r.resistance)
 
@@ -257,7 +263,7 @@ defn pullup-resistors (open-collectors:Tuple<DigitalPin>,
 defn parallel-resistance (resistors:Tuple<Instance>) -> Double :
   val resistances = map({property(_.resistance) as Double}, resistors)
   
-  fatal("Resistance must be positive") when any?({_ > 0.0}, resistances)
+  fatal("Resistance must be positive") when any?({_ < 0.0}, resistances)
 
   val num = product(resistances)
   val den = sum(resistances)
@@ -282,37 +288,40 @@ defn check-cmos-and-ttl (cmos-ttl-outputs:Tuple<DigitalPin>,
         if input != output :
           check input-push-pull-levels(input, output)
 
+
 ; Helper: checks if high/low voltages for two pins are compatible.
-defn vhi-vlo (i:Pin, o:Pin, vih:Double, voh:Toleranced, vil:Double, vol:Toleranced) :
+defn vhi-vlo (i:Pin, o:Pin, vih:Toleranced, voh:Toleranced, vil:Toleranced, vol:Toleranced) :
   val locators = [i, o]
 
-  #CHECK(condition = min-value(voh) >= vih
+  #CHECK(condition = min-value(voh) >= max-value(vih)
          name = NAME
          category = CATEGORY
          description = DESCRIPTION
-         locators = locators
-         pass-message = "%_'s voh (%_) is greater than %_'s vih (%_)" % [
+         subcheck-description = "Check that the min voh is greater than max vih"
+         pass-message = "%_'s max voh (%_) greater than %_'s min vih (%_)" % [
+            context(i), vih
+            context(o), voh
+         ]
+         fail-message = "%_'s max voh (%_) is less than %_'s min vih (%_)" % [
             context(o), voh
             context(i), vih
          ]
-         fail-message = "%_'s voh (%_) is less than %_'s vih (%_)" % [
-            context(o), voh
-            context(i), vih
-         ])
+         locators = locators)
   
-  #CHECK(condition = max-value(vol) <= vil
+  #CHECK(condition = max-value(vol) <= min-value(vil)
          name = NAME
          category = CATEGORY
          description = DESCRIPTION
-         locators = locators
-         pass-message = "%_'s vol (%_) is less than %_'s vil (%_)" % [
+         subcheck-description = "Check that the max vol is less than min vil"
+         pass-message = "%_'s max vol (%_) is less than %_'s min vil (%_)" % [
             context(o), voh
             context(i), vih
          ]
-         fail-message = "%_'s vol (%_) is greater than %_'s vil (%_)" % [
+         fail-message = "%_'s max vol (%_) is greater than %_'s min vil (%_)" % [
             context(o), vol
             context(i), vil
-         ])
+         ]
+         locators = locators)
 
 defn gnd-pins (i:Pin, o:Pin, ip:DigitalInput|DigitalIO, op:DigitalOutput|DigitalIO) :
   val locators = [i, o]
@@ -332,8 +341,8 @@ pcb-check input-push-pull-levels (input:DigitalPin, output:DigitalPin) :
   val [inpt-pin, inpt-prop] = [pin(input), prop(input)]
   val driver = driver(outp-prop)
 
+  val [voh, vol] = [voh(driver),    vol(driver)   ]
   val [vih, vil] = [vih(inpt-prop), vil(inpt-prop)]
-  val [voh, vol] = [voh(driver),    vil(driver)   ]
 
   val locators = [inpt-pin, outp-pin]
 
@@ -403,7 +412,7 @@ pcb-check io-push-pull-levels (io:DigitalPin, output:DigitalPin) :
   
   match(outp-prop:DigitalIO) :
     #CHECK(
-      condition = min-value(voh(io-driver)) >= vih(outp-prop),
+      condition = min-value(voh(io-driver)) >= min-value(vih(outp-prop)),
       name = NAME
       description = DESCRIPTION
       category = CATEGORY
@@ -419,7 +428,7 @@ pcb-check io-push-pull-levels (io:DigitalPin, output:DigitalPin) :
       ])
     
     #CHECK(
-      condition = max-value(vol(io-driver)) <= vil(outp-prop),
+      condition = max-value(vol(io-driver)) <= min-value(vil(outp-prop)),
       name = NAME
       description = DESCRIPTION
       category = CATEGORY
