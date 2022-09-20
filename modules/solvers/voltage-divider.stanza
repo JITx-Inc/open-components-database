@@ -37,16 +37,14 @@ public defn voltage-divider-solver (v-in: Toleranced,
       val tolerance = std-tol / 100.
       val lo-tol = tol(0.0, tolerance)
       val hi-tol = tol(0.0, tolerance)
-      val lo-dr = tol(0.0)
-      val hi-dr = tol(0.0)
       if check-output-voltage-range(v-in,
                                     v-out,
                                     goal-r-lo,
                                     goal-r-hi,
                                     lo-tol,
                                     hi-tol,
-                                    lo-dr,
-                                    hi-dr) :
+                                    tol(0.0),
+                                    tol(0.0)) :
         println("-> Tolerance %_%%" % [std-tol])
         val solution = voltage-divider-solver(v-in, v-out, current, tolerance, current-tolerance)
         if solution is VoltageDividerSolution :
@@ -102,8 +100,6 @@ defn determine-and-sort-fitting-resistance-pairs (v-in: Toleranced,
                                                   lo-res: Tuple<Double>) :
   val lo-tol = tol(0.0, tolerance)
   val hi-tol = tol(0.0, tolerance)
-  val lo-dr = tol(0.0)
-  val hi-dr = tol(0.0)
   qsort{loss, _} $
     for rh in hi-res seq-cat :
       val rh-tol = tol(rh)
@@ -114,8 +110,8 @@ defn determine-and-sort-fitting-resistance-pairs (v-in: Toleranced,
                                               rh-tol,
                                               lo-tol,
                                               hi-tol,
-                                              lo-dr,
-                                              hi-dr)
+                                              tol(0.0),
+                                              tol(0.0))
         if in-range?(v-out, vo) :
           val loss = abs(typ-value(v-out) - typ-value(vo))
           One(Ratio(rh, rl, loss))
