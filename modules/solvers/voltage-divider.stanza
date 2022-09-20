@@ -25,23 +25,29 @@ public defstruct VoltageDividerSolution :
   vo: Toleranced
 
 public defn voltage-divider-solver (v-in: Toleranced,
-                             v-out: Toleranced,
-                             current: Double) -> VoltageDividerSolution|False:
+                                    v-out: Toleranced,
+                                    current: Double) -> VoltageDividerSolution|False:
   ; Look for highest acceptable tolerance in EIA standard values: [20% 10% 5% 2% 1% 0.5% 0.25% 0.1%]
   val current-tolerance = 0.1
-  val goal-r-hi = (typ-value(v-in) - typ-value(v-out)) / current
-  val goal-r-lo = typ-value(v-out) / current
+  val goal-r-hi = (v-in - v-out) / current
+  val goal-r-lo = v-out / current
   label<VoltageDividerSolution|False> return :
-    for tol in std-tols do :
+    for std-tol in std-tols do :
       ; std-tols are in % instead of being unitless
-      val tolerance = tol / 100.
+      val tolerance = std-tol / 100.
+      val lo-tol = tol(0.0, tolerance)
+      val hi-tol = tol(0.0, tolerance)
+      val lo-dr = tol(0.0)
+      val hi-dr = tol(0.0)
       if check-output-voltage-range(v-in,
                                     v-out,
                                     goal-r-lo,
                                     goal-r-hi,
-                                    (- tolerance), tolerance, (- tolerance), tolerance,
-                                    0., 0., 0., 0.) :
-        println("-> Tolerance %_%%" % [tol])
+                                    lo-tol,
+                                    hi-tol,
+                                    lo-dr,
+                                    hi-dr) :
+        println("-> Tolerance %_%%" % [std-tol])
         val solution = voltage-divider-solver(v-in, v-out, current, tolerance, current-tolerance)
         if solution is VoltageDividerSolution :
           return(solution)
@@ -91,46 +97,61 @@ defn get-resistance-values (goal-r: Double, r-tol: Double, current-tol: Double) 
 
 defn determine-and-sort-fitting-resistance-pairs (v-in: Toleranced,
                                                   v-out: Toleranced,
-                                                  tol: Double,
+                                                  tolerance: Double,
                                                   hi-res: Tuple<Double>,
                                                   lo-res: Tuple<Double>) :
+  val lo-tol = tol(0.0, tolerance)
+  val hi-tol = tol(0.0, tolerance)
+  val lo-dr = tol(0.0)
+  val hi-dr = tol(0.0)
   qsort{loss, _} $
     for rh in hi-res seq-cat :
+      val rh-tol = tol(rh)
       for rl in lo-res seq? :
+        val rl-tol = tol(rl)
         val vo = compute-output-voltage-range(v-in,
-                                              rl,
-                                              rh,
-                                              (- tol), tol, (- tol), tol,
-                                              0., 0., 0., 0.)
+                                              rl-tol,
+                                              rh-tol,
+                                              lo-tol,
+                                              hi-tol,
+                                              lo-dr,
+                                              hi-dr)
         if in-range?(v-out, vo) :
           val loss = abs(typ-value(v-out) - typ-value(vo))
           One(Ratio(rh, rl, loss))
         else :
           None()
 
-public defn compute-output-voltage-range (v-in: Toleranced,
-                                          r-lo-val, r-hi-val,
-                                          min-lo-tol, max-lo-tol, min-hi-tol, max-hi-tol,
-                                          min-lo-dr, max-lo-dr, min-hi-dr, max-hi-dr) -> Toleranced :
-  val vo-min = min-value(v-in) * (r-lo-val * (1.0 + min-lo-dr)) * (1.0 + min-lo-tol)
-                     / ( (r-lo-val * (1.0 + min-lo-dr)) * (1.0 + min-lo-tol)
-                      + (r-hi-val  * (1.0 + max-hi-dr)) * (1.0 + max-hi-tol))
-  val vo-max = max-value(v-in) * (r-lo-val * (1.0 + max-lo-dr)) * (1.0 + max-lo-tol)
-                     / ( (r-lo-val * (1.0 + max-lo-dr)) * (1.0 + max-lo-tol)
-                     + (r-hi-val  * (1.0 + min-hi-dr)) * (1.0 + min-hi-tol))
-  val vo-nom = typ-value(v-in) * (r-lo-val) / ( (r-lo-val) + (r-hi-val) )
+public defn compute-output-voltage-range (v-in:     Toleranced,
+                                          r-lo-val: Toleranced, r-hi-val: Toleranced,
+                                          lo-tol:   Toleranced, hi-tol:   Toleranced,
+                                          lo-dr:    Toleranced, hi-dr:    Toleranced) -> Toleranced :
+  val r-lo = r-lo-val * (1.0 + lo-dr) + (1.0 * lo-tol)
+  val r-hi = r-hi-val * (1.0 + hi-dr) + (1.0 * hi-tol)
 
+  val vo-min = (v-in-min * r-lo-min / (r-lo-min + r-hi-val-max)) where :
+    val v-in-min = min-value(v-in)
+    val r-lo-min = min-value(r-lo)
+    val r-hi-val-max = max-value(r-hi)
+  val vo-nom = (v-in-typ * r-lo-typ / (r-lo-typ + r-hi-val-typ)) where :
+    val v-in-typ = typ-value(v-in)
+    val r-lo-typ = typ-value(r-lo)
+    val r-hi-val-typ = typ-value(r-hi)
+  val vo-max = (v-in-max * r-lo-max / (r-lo-max + r-hi-val-min)) where :
+    val v-in-max = max-value(v-in)
+    val r-lo-max = max-value(r-lo)
+    val r-hi-val-min = min-value(r-hi)
+  
   min-typ-max(vo-min, vo-nom, vo-max)
 
-public defn check-output-voltage-range (v-in: Toleranced,
-                                        v-out: Toleranced,
-                                        r-lo-val, r-hi-val,
-                                        min-lo-tol, max-lo-tol, min-hi-tol, max-hi-tol,
-                                        min-lo-dr, max-lo-dr, min-hi-dr, max-hi-dr) -> True|False :
+public defn check-output-voltage-range (v-in:     Toleranced, v-out:    Toleranced,
+                                        r-lo-val: Toleranced, r-hi-val: Toleranced,
+                                        lo-tol:   Toleranced, hi-tol:   Toleranced,
+                                        lo-dr:    Toleranced, hi-dr:    Toleranced) -> True|False :
   val vo = compute-output-voltage-range(v-in,
                                         r-lo-val, r-hi-val,
-                                        min-lo-tol, max-lo-tol, min-hi-tol, max-hi-tol,
-                                        min-lo-dr, max-lo-dr, min-hi-dr, max-hi-dr)
+                                        lo-tol, hi-tol,
+                                        lo-dr, hi-dr)
   in-range?(v-out, vo)
 
 defn query-resistors (resistance: Double, tol: Double) -> Tuple<Resistor> :
@@ -154,13 +175,9 @@ defn study-solution (v-in: Toleranced, r-hi: Resistor, r-lo: Resistor) -> Tolera
   println("      Checking solution for existing components with: tol1=%_, tol2=%_" % [hi-tolerance, lo-tolerance])
 
   compute-output-voltage-range(v-in,
-                               resistance(r-lo),
-                               resistance(r-hi),
-                               min(lo-tolerance),
-                               max(lo-tolerance),
-                               min(hi-tolerance),
-                               max(hi-tolerance),
-                               minimum(lo-drs),
-                               maximum(lo-drs),
-                               minimum(hi-drs),
-                               maximum(hi-drs))
+                               tol(resistance(r-lo)),
+                               tol(resistance(r-hi)),
+                               min-max(min(lo-tolerance), max(lo-tolerance)),
+                               min-max(min(hi-tolerance), max(hi-tolerance)),
+                               min-max(minimum(lo-drs), maximum(lo-drs)),
+                               min-max(minimum(hi-drs), maximum(hi-drs)))
