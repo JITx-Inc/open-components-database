@@ -35,16 +35,16 @@ public defn voltage-divider-solver (v-in: Toleranced,
     for std-tol in std-tols do :
       ; std-tols are in % instead of being unitless
       val tolerance = std-tol / 100.
-      val lo-tol = tol(0.0, tolerance)
-      val hi-tol = tol(0.0, tolerance)
+      val lo-tol = tol(1.0, tolerance)
+      val hi-tol = tol(1.0, tolerance)
       if check-output-voltage-range(v-in,
                                     v-out,
                                     goal-r-lo,
                                     goal-r-hi,
                                     lo-tol,
                                     hi-tol,
-                                    tol(0.0),
-                                    tol(0.0)) :
+                                    tol(1.0),
+                                    tol(1.0)) :
         println("-> Tolerance %_%%" % [std-tol])
         val solution = voltage-divider-solver(v-in, v-out, current, tolerance, current-tolerance)
         if solution is VoltageDividerSolution :
@@ -98,8 +98,8 @@ defn determine-and-sort-fitting-resistance-pairs (v-in: Toleranced,
                                                   tolerance: Double,
                                                   hi-res: Tuple<Double>,
                                                   lo-res: Tuple<Double>) :
-  val lo-tol = tol(0.0, tolerance)
-  val hi-tol = tol(0.0, tolerance)
+  val lo-tol = tol(1.0, tolerance)
+  val hi-tol = tol(1.0, tolerance)
   qsort{loss, _} $
     for rh in hi-res seq-cat :
       val rh-tol = tol(rh)
@@ -110,33 +110,35 @@ defn determine-and-sort-fitting-resistance-pairs (v-in: Toleranced,
                                               rh-tol,
                                               lo-tol,
                                               hi-tol,
-                                              tol(0.0),
-                                              tol(0.0))
+                                              tol(1.0),
+                                              tol(1.0))
         if in-range?(v-out, vo) :
           val loss = abs(typ-value(v-out) - typ-value(vo))
           One(Ratio(rh, rl, loss))
         else :
           None()
 
+;lo-tol, hi-tol, lo-dr, are Tolerances of positive percentages.
+;A value of 1.0 is equivalent to 100%.
 public defn compute-output-voltage-range (v-in:     Toleranced,
                                           r-lo-val: Toleranced, r-hi-val: Toleranced,
                                           lo-tol:   Toleranced, hi-tol:   Toleranced,
                                           lo-dr:    Toleranced, hi-dr:    Toleranced) -> Toleranced :
-  val r-lo = r-lo-val * (1.0 + lo-dr) * (1.0 + lo-tol)
-  val r-hi = r-hi-val * (1.0 + hi-dr) * (1.0 + hi-tol)
+  val r-lo = r-lo-val * lo-dr * lo-tol
+  val r-hi = r-hi-val * hi-dr * hi-tol
 
-  val vo-min = (v-in-min * r-lo-min / (r-lo-min + r-hi-val-max)) where :
+  val vo-min = (v-in-min * r-lo-min / (r-lo-min + r-hi-max)) where :
     val v-in-min = min-value(v-in)
     val r-lo-min = min-value(r-lo)
-    val r-hi-val-max = max-value(r-hi)
-  val vo-nom = (v-in-typ * r-lo-typ / (r-lo-typ + r-hi-val-typ)) where :
+    val r-hi-max = max-value(r-hi)
+  val vo-nom = (v-in-typ * r-lo-typ / (r-lo-typ + r-hi-typ)) where :
     val v-in-typ = typ-value(v-in)
     val r-lo-typ = typ-value(r-lo)
-    val r-hi-val-typ = typ-value(r-hi)
-  val vo-max = (v-in-max * r-lo-max / (r-lo-max + r-hi-val-min)) where :
+    val r-hi-typ = typ-value(r-hi)
+  val vo-max = (v-in-max * r-lo-max / (r-lo-max + r-hi-min)) where :
     val v-in-max = max-value(v-in)
     val r-lo-max = max-value(r-lo)
-    val r-hi-val-min = min-value(r-hi)
+    val r-hi-min = min-value(r-hi)
   
   min-typ-max(vo-min, vo-nom, vo-max)
 
@@ -173,7 +175,7 @@ defn study-solution (v-in: Toleranced, r-hi: Resistor, r-lo: Resistor) -> Tolera
   compute-output-voltage-range(v-in,
                                tol(resistance(r-lo)),
                                tol(resistance(r-hi)),
-                               min-max(min(lo-tolerance), max(lo-tolerance)),
-                               min-max(min(hi-tolerance), max(hi-tolerance)),
-                               min-max(minimum(lo-drs), maximum(lo-drs)),
-                               min-max(minimum(hi-drs), maximum(hi-drs)))
+                               min-max(1.0 + min(lo-tolerance), 1.0 + max(lo-tolerance)),
+                               min-max(1.0 + min(hi-tolerance), 1.0 + max(hi-tolerance)),
+                               min-max(1.0 + minimum(lo-drs), 1.0 + maximum(lo-drs)),
+                               min-max(1.0 + minimum(hi-drs), 1.0 + maximum(hi-drs)))
