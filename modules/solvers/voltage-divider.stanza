@@ -29,8 +29,8 @@ public defn voltage-divider-solver (v-in: Toleranced,
                                     current: Double) -> VoltageDividerSolution|False:
   ; Look for highest acceptable tolerance in EIA standard values: [20% 10% 5% 2% 1% 0.5% 0.25% 0.1%]
   val current-tolerance = 0.1
-  val goal-r-hi = (v-in - v-out) / current
-  val goal-r-lo = v-out / current
+  val goal-r-hi = (typ-value(v-in) - typ-value(v-out)) / current
+  val goal-r-lo = typ-value(v-out) / current
   label<VoltageDividerSolution|False> return :
     for std-tol in std-tols do :
       ; std-tols are in % instead of being unitless
@@ -102,12 +102,10 @@ defn determine-and-sort-fitting-resistance-pairs (v-in: Toleranced,
   val hi-tol = tol(1.0, tolerance)
   qsort{loss, _} $
     for rh in hi-res seq-cat :
-      val rh-tol = tol(rh)
       for rl in lo-res seq? :
-        val rl-tol = tol(rl)
         val vo = compute-output-voltage-range(v-in,
-                                              rl-tol,
-                                              rh-tol,
+                                              rl,
+                                              rh,
                                               lo-tol,
                                               hi-tol,
                                               tol(1.0),
@@ -121,7 +119,7 @@ defn determine-and-sort-fitting-resistance-pairs (v-in: Toleranced,
 ;lo-tol, hi-tol, lo-dr, are Tolerances of positive percentages.
 ;A value of 1.0 is equivalent to 100%.
 public defn compute-output-voltage-range (v-in:     Toleranced,
-                                          r-lo-val: Toleranced, r-hi-val: Toleranced,
+                                          r-lo-val: Double,     r-hi-val: Double,
                                           lo-tol:   Toleranced, hi-tol:   Toleranced,
                                           lo-dr:    Toleranced, hi-dr:    Toleranced) -> Toleranced :
   val r-lo = r-lo-val * lo-dr * lo-tol
@@ -143,7 +141,7 @@ public defn compute-output-voltage-range (v-in:     Toleranced,
   min-typ-max(vo-min, vo-nom, vo-max)
 
 public defn check-output-voltage-range (v-in:     Toleranced, v-out:    Toleranced,
-                                        r-lo-val: Toleranced, r-hi-val: Toleranced,
+                                        r-lo-val: Double,     r-hi-val: Double,
                                         lo-tol:   Toleranced, hi-tol:   Toleranced,
                                         lo-dr:    Toleranced, hi-dr:    Toleranced) -> True|False :
   val vo = compute-output-voltage-range(v-in,
@@ -173,8 +171,8 @@ defn study-solution (v-in: Toleranced, r-hi: Resistor, r-lo: Resistor) -> Tolera
   println("      Checking solution for existing components with: tol1=%_, tol2=%_" % [hi-tolerance, lo-tolerance])
 
   compute-output-voltage-range(v-in,
-                               tol(resistance(r-lo)),
-                               tol(resistance(r-hi)),
+                               resistance(r-lo),
+                               resistance(r-hi),
                                min-max(1.0 + min(lo-tolerance), 1.0 + max(lo-tolerance)),
                                min-max(1.0 + min(hi-tolerance), 1.0 + max(hi-tolerance)),
                                min-max(1.0 + minimum(lo-drs), 1.0 + maximum(lo-drs)),
