@@ -20,6 +20,8 @@ defpackage ocdb/designs/comprehensive-checks :
   import ocdb/utils/property-structs
   import ocdb/utils/box-symbol
   import ocdb/utils/passive-checks/resonator-checks
+  import ocdb/utils/generator-utils
+
 
 ;==============================================================================
 ;=========================== Resistor Properties ==============================
@@ -40,7 +42,8 @@ pcb-component resistor :
   property(self.resistor)    = true
   property(self.resistance)  = 1.0e3
   property(self.rated-power) = 5.0
-  
+  property(self.rated-temperature) = min-max(-55.0, 100.0)
+
 
 ;==============================================================================
 ;============================ Inductor Properties =============================
@@ -62,6 +65,7 @@ pcb-component inductor :
   property(self.dc-resistance)  = 16.0
   property(self.rated-power)    = 5.0
   property(self.inductance)     = 1.0e-6
+  property(self.rated-temperature) = min-max(-55.0, 100.0)
 
 ;==============================================================================
 ;============================ Capacitor Properties =============================
@@ -82,7 +86,7 @@ pcb-component ceramic-cap :
   property(self.capacitor)         = true
   property(self.type)              = "ceramic"
   property(self.rated-temperature) = min-max(-100.0, 100.0)
-  property(self.capacitance)       = 1.0e-6
+  property(self.capacitance)       = 1.0e-9
   property(self.rated-voltage)     = min-max(-1.0, 24.0)
 
 pcb-component electrolytic-cap :
@@ -162,6 +166,8 @@ pcb-component crystal-resonator :
   symbol =
     sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
   
+  property(self.rated-temperature) = min-max(-55.0, 100.0)
+
   ; Set the crystal resonator properties
   property(self.crystal-resonator) = 
     CrystalResonator(
@@ -177,9 +183,9 @@ pcb-component crystal-resonator :
       val max-drive-level = 100.0e-6
 
 pcb-module resonator-module :
-  inst X1 : crystal-resonator
-  inst C1 : ceramic-cap
-
+  public inst X1 : crystal-resonator
+  public inst C1 : ceramic-cap
+  property(C1.tolerance) = [0.99, 1.01]
   val intf = CrystalOscillator(
     max-critical-gain, drive-level, 
     c-pin, frequency-tolerance, frequency
@@ -191,6 +197,8 @@ pcb-module resonator-module :
     val frequency = 16.0e6
 
   check-resonator(X1, intf, C1)
+  net (X1.p[1], C1.p[1])
+  net (X1.p[2], C1.p[2])
 
 ;==============================================================================
 ;============================= Generic Properties =============================
@@ -206,14 +214,11 @@ pcb-component component :
     [ p[6]      | 6              | Right ]
     [ p[7]      | 7              | Right ]
     [ p[8]      | 8              | Right ]
-    
+  
   assign-landpattern(ocdb/components/st-microelectronics/landpatterns/LQFP32)
   make-box-symbol()
 
-;==============================================================================
-;==============================================================================
-;==============================================================================
-pcb-module submodule :
+pcb-module passives :
   ; ICs
   inst U1 : component
 
@@ -230,22 +235,149 @@ pcb-module submodule :
   inst L1 : inductor
 
   ; Set the operating points...
-  property(C1.operating-point) = OperatingPoint(typ(20.0), typ(1.0e-3))
-  property(C2.operating-point) = OperatingPoint(typ(20.0), typ(1.0e-3))
-  property(C3.operating-point) = OperatingPoint(typ(20.0), typ(1.0e-3))
-  property(R1.operating-point) = OperatingPoint(typ(20.0), typ(1.0e-3))
-  property(L1.operating-point) = OperatingPoint(typ(20.0), typ(1.0e-3))
+  property(C1.operating-point) = OperatingPoint(typ(5.0), typ(0.5e-6))
+  property(C2.operating-point) = OperatingPoint(typ(5.0), typ(0.5e-6))
+  property(C3.operating-point) = OperatingPoint(typ(5.0), typ(0.5e-6))
+  property(C4.operating-point) = OperatingPoint(typ(5.0), typ(0.5e-6))
+  property(R1.operating-point) = OperatingPoint(typ(5.0), typ(0.5e-6))
+  property(L1.operating-point) = OperatingPoint(typ(5.0), typ(0.5e-6))
   
+  no-connect(C1.p[1])
+  no-connect(C1.p[2])
+
+  property(U1.DNP) = true
+  net (C2.p[1], C3.p[1], C4.p[1], R1.p[1], L1.p[1])
+  net (C2.p[2], C3.p[2], C4.p[2], R1.p[2], L1.p[2])
+
   ; Resonators
   inst res : resonator-module
+  property(res.C1.operating-point) = OperatingPoint(typ(5.0), typ(0.5e-6))
+ 
+;==============================================================================
+;============================= I/O Propertiese ================================
+;==============================================================================
+; For digital I/O the following properties must be set: 
+; 
+; - digital-output: DigitalOutput. The pin is a digital output (only) pin.
+; - digital-input: DigitalInput. The pin is a digital input (only) pin.
+; - digital-io: DigitalIO. The pin functions as either a digital input or
+;               digital output.
+;
+; digital-source: a component with power/ground and one digital output pin.
+; digital-sink: a component with power/ground and one digtal input pin.
+;
+pcb-component digital-source (io?:True|False,
+                              case:String,
+                              tristateable?:True|False):
+  pin-properties :
+    [ pin : Ref | pads : Int ... | side:Dir  ]
+    [ vdd  | 1 | Up    ]
+    [ out  | 2 | Right ]
+    [ gnd  | 3 | Down  ]
+  
+  make-box-symbol()
+  assign-landpattern(SOT23())
+  val vol = min-max(0.1, 0.5)
+  val voh = min-max(3.0, 3.3)
+
+  val driver = 
+    switch(case) :
+      "open-collector": 
+        OpenCollector(vol 6.0)
+      "cmos": 
+        CMOSOutput(vol, voh)
+      "ttl" : 
+        TTLOutput(vol, voh)
+  
+  if io? : 
+    property(self.out.digital-io) = 
+      DigitalIO(driver, typ(0.8), typ(2.0), 
+                self.vdd, self.gnd, 10.0e-6) 
+  else :
+    property(self.out.digital-output) = 
+      DigitalOutput(driver, tristateable?, self.vdd, self.gnd)
+
+  property(self.rated-temperature) = min-max(-55.0, 100.0)
+  
+pcb-component digital-sink (io?:True|False,
+                            case:String):
+  pin-properties :
+    [ pin : Ref | pads : Int ... | side:Dir  ]
+    [ vdd  | 1 | Up    ]
+    [ in   | 2 | Left  ]
+    [ gnd  | 3 | Down  ]
+
+  make-box-symbol()
+  assign-landpattern(SOT23())
+
+  val driver = 
+    switch(case) :
+      "open-collector": 
+        OpenCollector(min-max(3.3, 5.0), 6.0)
+      "cmos": 
+        CMOSOutput(min-max(0.1, 0.5), min-max(4.0, 5.0))
+      "ttl" : 
+        TTLOutput(min-max(0.1, 0.5), min-max(4.0, 5.0))
+  
+  if io? :
+    property(self.in.digital-io) = 
+      DigitalIO(driver, typ(0.8), typ(2.0), 
+                self.vdd, self.gnd, 10.0e-6) 
+  else :
+    property(self.in.digital-input) = 
+      DigitalInput(typ(0.8), typ(2.0), self.vdd, self.gnd, 10.0e-6)
+
+  property(self.rated-temperature) = min-max(-55.0, 100.0)
+
+pcb-module digital-io :
+  val cases = ["open-collector", "cmos", "ttl"]
+
+  val sink = to-tuple $  
+    for io? in [false, true] seq-cat :
+      for case in cases seq :
+        inst sink : digital-sink(io?, case)
+        sink
+
+  val source = to-tuple $ 
+    for io? in [false, true] seq-cat :
+      for case in cases seq :
+        val name = to-symbol $ string-join([`source, case, io?], "-")
+        make-inst(name, digital-source(io?, case, false), false)
+
+  net GND ()
+  net VDD ()
+
+  property(VDD.net-voltage) = min-max(4.5, 5.2)
+  for n in 0 to 2 * length(cases) do :
+    inst Rpullup : ocdb/utils/generic-components/gen-res-cmp(1.0e3)
+    net (source[n].gnd, sink[n].gnd, GND)
+    net (source[n].vdd, sink[n].vdd, VDD, Rpullup.p[1])
+    net dat (source[n].out, sink[n].in, Rpullup.p[2])
+    property(Rpullup.p[1].net-voltage) = property(VDD.net-voltage)
+    property(Rpullup.operating-point) = OperatingPoint(typ(5.2), typ(5.0e-3))  
+
+;==============================================================================
+;==============================================================================
+;==============================================================================
+
   
 pcb-module main-module : 
-  inst submodule : submodule
+  inst passives : passives
+  inst digital-io : digital-io
+
+  schematic-group(passives) = passives
+  schematic-group(digital-io) = digital-io
+
   check-design(self)
 
 defn main () :
   set-design-directory("comprehensive-checks") 
-  set-main-module(main-module)
+  main-module 
+    $> run-final-passes
+    $> set-main-module
+
+  view-schematic()
+  freeze-reference-designators()
   run-checks("checks.txt")
 
 main()
