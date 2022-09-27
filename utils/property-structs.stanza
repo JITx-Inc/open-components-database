@@ -1,5 +1,5 @@
 #use-added-syntax(jitx)
-defpackage ocdb/utils/property-structs:
+defpackage ocdb/utils/property-structs :
   import core
   import collections
   import math
@@ -7,6 +7,74 @@ defpackage ocdb/utils/property-structs:
   import jitx/commands
   import ocdb/utils/defaults
   import ocdb/utils/generator-utils
+  import ocdb/utils/connections
+  import lang-utils
+
+;==============================================================================
+;============================== Relative Voltages ================================================
+;==============================================================================
+
+public deftype RelativeVoltage <: Equalable&Hashable&jitx/client/JITXValue
+public defmulti resolve (rv:RelativeVoltage, v:Toleranced) -> Toleranced
+public defmulti relative (rv:RelativeVoltage) -> JITXObject
+
+public defn resolve (rv:RelativeVoltage) -> Toleranced :
+  val nv = property?(relative(rv).net-voltage)
+  match(nv:One<Toleranced>) :
+    resolve(rv, value(nv))
+  else :
+    fatal("%_ is missing a net-voltage property." % [ref(relative(rv))])
+
+public pcb-struct ocdb/utils/property-structs/FractionalVoltage <: RelativeVoltage :
+  factor:Double
+  pin:JITXObject
+
+public pcb-struct ocdb/utils/property-structs/OffsetVoltage <: RelativeVoltage :
+  factor:Double
+  pin:JITXObject
+
+public pcb-struct ocdb/utils/property-structs/DualOffsetVoltage <: RelativeVoltage :
+  factor-min:Double
+  factor-max:Double
+  pin:JITXObject
+
+public pcb-struct ocdb/utils/property-structs/PWLVoltage <: RelativeVoltage :
+  pwl-min:PWL
+  pwl-max:PWL
+  pin:JITXObject
+
+defmethod resolve (rv:FractionalVoltage, v:Toleranced) -> Toleranced :
+  min-typ-max(min, typ, max) where :
+    val conds = [ factor(rv) * min-value(v)
+                  factor(rv) * typ(v)
+                  factor(rv) * max-value(v) ]
+    val min = minimum(conds)
+    val typ = typ(v) * factor(rv)
+    val max = maximum(conds)
+
+defmethod resolve (rv:OffsetVoltage, v:Toleranced) -> Toleranced :
+  Toleranced(typ, tolp, toln) where :
+    val tolp = tol+(v)
+    val typ  = factor(rv) + typ(v)
+    val toln = tol-(v)
+
+defmethod resolve (rv:DualOffsetVoltage, v:Toleranced) -> Toleranced :
+  val min = min-value(v) + factor-min(rv)
+  val max = max-value(v) + factor-max(rv)
+  jitx/min-max(min, max)
+
+defmethod resolve (rv:PWLVoltage, v:Toleranced) -> Toleranced :
+  jitx/min-max(pwl-min(rv)[min-value(v)], 
+               pwl-max(rv)[min-value(v)] )
+
+defmethod relative (rv:FractionalVoltage) : pin(rv)
+defmethod relative (rv:OffsetVoltage) : pin(rv)
+defmethod relative (rv:DualOffsetVoltage) : pin(rv)
+defmethod relative (rv:PWLVoltage) : pin(rv)
+
+;==============================================================================
+;==============================================================================
+;==============================================================================
 
 public pcb-struct ocdb/utils/property-structs/OperatingPoint :
   peak-voltage:Toleranced
@@ -25,7 +93,7 @@ public pcb-struct ocdb/utils/property-structs/NetVoltage :
 
 ; Library property name: generic-pin
 public pcb-struct ocdb/utils/property-structs/GenericPin :
-  max-voltage:Toleranced
+  max-voltage:Toleranced|RelativeVoltage
   rated-esd:Double
 
 ; Library property name: power-supply-pin
@@ -35,12 +103,12 @@ public pcb-struct ocdb/utils/property-structs/PowerSupplyPin :
 
 ; Library property name: power-pin
 public pcb-struct ocdb/utils/property-structs/PowerPin :
-  recommended-voltage:Toleranced
+  recommended-voltage:Toleranced|RelativeVoltage
   
 ; Library property name: digital-input
 public pcb-struct ocdb/utils/property-structs/DigitalInput :
-  vil:Toleranced
-  vih:Toleranced
+  vil:Toleranced|RelativeVoltage
+  vih:Toleranced|RelativeVoltage
   vdd-pin:JITXObject
   gnd-pin:JITXObject
   leakage-current:Double
@@ -55,8 +123,8 @@ public pcb-struct ocdb/utils/property-structs/DigitalOutput :
 ; Library property name: digital-io
 public pcb-struct ocdb/utils/property-structs/DigitalIO :
   driver:LogicFamily
-  vil:Toleranced
-  vih:Toleranced
+  vil:Toleranced|RelativeVoltage
+  vih:Toleranced|RelativeVoltage
   vdd-pin:JITXObject
   gnd-pin:JITXObject
   leakage-current:Double
@@ -69,17 +137,17 @@ public pcb-struct ocdb/utils/property-structs/ResetPin :
 ; ==============================
 deftype LogicFamily <: jitx/value/JITXValue&Equalable&Hashable
 public pcb-struct ocdb/utils/property-structs/CMOSOutput <: LogicFamily :
-  vol:Toleranced
-  voh:Toleranced
+  vol:Toleranced|RelativeVoltage
+  voh:Toleranced|RelativeVoltage
 
 public pcb-struct ocdb/utils/property-structs/TTLOutput <: LogicFamily :
-  vol:Toleranced
-  voh:Toleranced
+  vol:Toleranced|RelativeVoltage
+  voh:Toleranced|RelativeVoltage
 
 ; vol: Voltage Output Low
 ; iol: Current Output Low
 public pcb-struct ocdb/utils/property-structs/OpenCollector <: LogicFamily :
-  vol:Toleranced
+  vol:Toleranced|RelativeVoltage
   iol:Double
 
 ; === Oscillator Property Structs ===
@@ -149,10 +217,3 @@ doc:"A helper function to setup the power states of a component or pin."
 public defn set-power-states (obj:JITXObject, states:Tuple<KeyValue<String, True|False>>) : 
   val states* = map(PowerState{key(_0), value(_0)}, states)
   set-property(obj, `power-states, states*)
-
-doc:"A RelativeVoltage struct is used to represent a voltage difference, \
-     relative to a known voltage, `voltage` on some reference net or \
-     pin."
-public defstruct RelativeVoltage :
-  reference:JITXObject
-  voltage:Double

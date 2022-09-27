@@ -6,6 +6,7 @@ defpackage ocdb/utils/netlist-checks/io-checks :
   import lang-utils
   import jitx
   import jitx/commands
+  import ocdb/utils/connections
   import ocdb/utils/property-structs
   import ocdb/utils/netlist-checks/utils
 
@@ -16,15 +17,15 @@ val NAME = "IO Checks"
 val DESCRIPTION = "Check Digital I/O Properties"
 
 doc: "Check the i/o pin nets."
-public defn check-io (module:JITXObject, connections:Connections) :
+public defn check-io (module:JITXObject, netlist:GlobalNetList) :
   ; A "connected group" is an electrical net, defined by
   ; all the pins of every component connected to each other.
-  val connected-groups = connected-groups(connections)
-    $> filter{{not empty?(_)}, _}
+  val nets = nets(netlist)
+    $> filter{{not empty?(pins(_))}, _}
 
-  for group in connected-groups do :
+  for net in nets do :
     ; Categorize pins and extract i/o classes we care about
-    val pin-categories   = categorize-digital-pins(group)
+    val pin-categories   = categorize-digital-pins(pins(net))
     val output-pins      = outputs(pin-categories)
     val open-collectors  = open-collectors(pin-categories)
     val cmos-ttl-outputs = cmos-ttl-outputs(pin-categories)
@@ -106,8 +107,6 @@ defn check-open-collectors (open-collectors:Tuple<DigitalPin>,
     val [pullup-resistors, net-voltages] = 
       pullup-resistors(open-collectors, pin-categories)
     
-    println("Pullups: %_" % [pullup-resistors])
-
     for p in open-collectors do :
       check no-net-voltage(pin(p))
     
@@ -204,7 +203,19 @@ pcb-check input-and-generic-pin-max-voltage-rating (net-voltage:Toleranced, pin-
     val input-prop = prop(p)
     ; Check that the min net voltage is above the rating of the input pin
     match(input-prop:DigitalInput|DigitalIO) :
-      val vih-v = vih(input-prop)
+      val vih-v? = vih(input-prop)
+      #CHECK(condition = vih-v? is Toleranced
+             name = NAME
+             description = DESCRIPTION
+             category = CATEGORY
+             subcheck-description = "Check vih-v is known",
+             pass-message = "%_'s vih is known" 
+              % [context(pin)],
+             fail-message = "%_'s vih is unknown, propagate-relative-voltages must be run" 
+              % [context(pin)]
+             locators = [pin])
+      
+      val vih-v = vih-v? as Toleranced
       #CHECK(condition = min-value(net-voltage) > min-value(vih-v)
              name = NAME
              description = DESCRIPTION
@@ -223,10 +234,6 @@ defn pullup-resistors (open-collectors:Tuple<DigitalPin>,
   val collected-net-voltages = Vector<Toleranced>()
 
   defn is-resistor? (r) :
-    if index-of-chars(to-string(ref(r)), "pullup") is Int :
-      println("Checking if %_ is a resistor" % [ref(r)])
-      println("resistor:%_" % [property?(r.resistor)])
-      println("resistance:%_" % [property?(r.resistance)])
     has-property?(r.resistor) and
     has-property?(r.resistance)
 
@@ -289,8 +296,31 @@ defn check-cmos-and-ttl (cmos-ttl-outputs:Tuple<DigitalPin>,
 
 
 ; Helper: checks if high/low voltages for two pins are compatible.
-defn vhi-vlo (i:Pin, o:Pin, vih:Toleranced, voh:Toleranced, vil:Toleranced, vol:Toleranced) :
+defn vhi-vlo (i:Pin, o:Pin, 
+              vih?:Toleranced|RelativeVoltage, 
+              voh?:Toleranced|RelativeVoltage, 
+              vil?:Toleranced|RelativeVoltage, 
+              vol?:Toleranced|RelativeVoltage) :
   val locators = [i, o]
+  for ( v in [vih?,   voh?,  vil?,  vol?],
+        n in ["vih", "voh", "vil", "vol"]  ) do :
+    #CHECK(
+      condition = v is Toleranced
+      name = NAME
+      category = CATEGORY
+      description = DESCRIPTION
+      subcheck-description = "Check that %_ is known" % [n]
+      pass-message = "%_ has a known value" % [n]
+      fail-message = "%_ is unknown, propagate-relative-voltages must be run" % [n]
+      locators = locators
+    )
+
+  val [vih, voh, vil, vol] = [
+    vih? as Toleranced, 
+    voh? as Toleranced, 
+    vil? as Toleranced, 
+    vol? as Toleranced
+  ]
 
   #CHECK(condition = min-value(voh) >= max-value(vih)
          name = NAME
@@ -350,7 +380,7 @@ pcb-check input-push-pull-levels (input:DigitalPin, output:DigitalPin) :
 
   val generic-in-prop? = property?(inpt-pin.generic-pin)
   match(generic-in-prop?:One<GenericPin>) :
-    val vin-max = max-voltage(value(generic-in-prop?))
+    val vin-max = max-voltage(value(generic-in-prop?) as GenericPin) as Toleranced
     #CHECK(condition = in-range?(vin-max, voh)
            name = NAME
            category = CATEGORY
@@ -411,42 +441,57 @@ pcb-check io-push-pull-levels (io:DigitalPin, output:DigitalPin) :
   
   match(outp-prop:DigitalIO) :
     #CHECK(
-      condition = min-value(voh(io-driver)) >= min-value(vih(outp-prop)),
+      condition = min-value(voh(io-driver) as Toleranced) >= min-value(vih(outp-prop) as Toleranced),
       name = NAME
       description = DESCRIPTION
       category = CATEGORY
       locators = locators
       subcheck-description = "Check min voh of io driver is greater than the vih of the io pin",
       pass-message = "%_'s min voh (%_V) is greater than %_'s vih (%_V)" % [
-        context(io-pin),   min-value(voh(io-driver)),
+        context(io-pin),   min-value(voh(io-driver) as Toleranced),
         context(outp-pin), vih(outp-prop) 
       ]
       fail-message = "%_'s min voh (%_V) is less than %_ls vih (%_V)" % [
-        context(io-pin), min-value(voh(io-driver)),
+        context(io-pin), min-value(voh(io-driver) as Toleranced),
         context(outp-pin), vih(outp-prop)
       ])
     
     #CHECK(
-      condition = max-value(vol(io-driver)) <= min-value(vil(outp-prop)),
+      condition = max-value(vol(io-driver) as Toleranced) <= min-value(vil(outp-prop) as Toleranced),
       name = NAME
       description = DESCRIPTION
       category = CATEGORY
       locators = locators
       subcheck-description = "Check max vol of io driver is lower than the vil of the io pin",
       pass-message = "%_'s max vol (%_V) less than %_'s vil (%_V)" % [
-        context(io-pin), max-value(vol(io-driver)), 
+        context(io-pin), max-value(vol(io-driver) as Toleranced), 
         context(outp-pin), vil(outp-prop)
       ],
       fail-message = "%_'s max vol (%_V) greater than %_'s vil (%_V)" % [
-        context(io-pin), max-value(vol(io-driver)), 
+        context(io-pin), max-value(vol(io-driver) as Toleranced), 
         context(outp-pin), vil(outp-prop) 
       ])
 
   val generic-io-prop? = property?(io-pin.generic-pin)
   match(generic-io-prop?:One) :
-    val max-input-voltage = max-voltage $ value(generic-io-prop?)
+    val max-input-voltage? = max-voltage $ value(generic-io-prop?)
     #CHECK(
-      condition = in-range?(max-input-voltage, voh(driver)),
+      condition = max-input-voltage? is Toleranced
+      name = NAME
+      description = DESCRIPTION
+      category = CATEGORY
+      locators = locators
+      subcheck-description = "Check the max input voltage is known",
+      pass-message = "%_'s max input voltage is known" % [
+        context(io-pin)
+      ],
+      fail-message = "%_'s max input voltage is unknown, propagate-relative-voltage must be run" % [
+        context(io-pin)
+      ])
+
+    val max-input-voltage = max-input-voltage? as Toleranced
+    #CHECK(
+      condition = in-range?(max-input-voltage, voh(driver) as Toleranced),
       name = NAME
       description = DESCRIPTION
       category = CATEGORY
@@ -463,9 +508,23 @@ pcb-check io-push-pull-levels (io:DigitalPin, output:DigitalPin) :
 
   val generic-out-prop? = property?(outp-pin.generic-pin)
   match(generic-out-prop?: One) :
-    val max-input-voltage = max-voltage $ value(generic-out-prop?)
+    val max-input-voltage? = max-voltage(value(generic-out-prop?))
     #CHECK(
-      condition = in-range?(max-input-voltage, voh(io-driver)),
+      condition = max-input-voltage? is Toleranced
+      name = NAME
+      description = DESCRIPTION
+      category = CATEGORY
+      locators = locators
+      subcheck-description = "Check that output pin has a known max input voltage"
+      pass-message = "%_ max input voltage is known" 
+        % [context(io-pin)]
+      fail-message = "%_ max input voltage is unknown, must run propagate-relative-voltages" 
+        % [context(io-pin)]
+    )
+
+    val max-input-voltage = max-input-voltage? as Toleranced
+    #CHECK(
+      condition = in-range?(max-input-voltage, voh(io-driver) as Toleranced),
       name = NAME
       description = DESCRIPTION
       category = CATEGORY

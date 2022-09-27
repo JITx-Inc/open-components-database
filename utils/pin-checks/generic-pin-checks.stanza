@@ -30,16 +30,28 @@ pcb-check generic-pin (p:JITXObject) :
       locators = [p]
     )
 
+    val max-voltage? = max-voltage(g-props)
     #CHECK(
-      condition = in-range?(max-voltage(g-props), property(p.net-voltage)),
+      condition = max-voltage? is Toleranced
+      name = NAME
+      category = CATEGORY
+      description = DESCRIPTION
+      subcheck-description = "Check that generic pin's max voltage is known"
+      pass-message = "Max voltage is known"
+      fail-message = "Max voltage is unknow, propagate-relative-voltages must be run"
+    )
+
+    val max-voltage = max-voltage? as Toleranced
+    #CHECK(
+      condition = in-range?(max-voltage, property(p.net-voltage)),
       name = NAME
       category = CATEGORY
       description = DESCRIPTION      
       subcheck-description = "Verify the max voltage of a generic pin is within the designs' supply voltage range",
       pass-message = "Generic pin %_ max-voltage %_ is compatible with the supply voltage range %_" 
-        % [context(p), max-voltage(g-props), property(p.net-voltage)],
+        % [context(p), max-voltage, property(p.net-voltage)],
       fail-message = "Generic pin %_ max-voltage %_ is not compatible with the supply voltage range %_" 
-        % [context(p), max-voltage(g-props), property(p.net-voltage)],
+        % [context(p), max-voltage, property(p.net-voltage)],
       locators = [p]
     )
   

@@ -15,6 +15,7 @@ defpackage ocdb/utils/generator-utils:
   import ocdb/utils/property-structs
   import ocdb/modules/power-regulators
   import ocdb/utils/bundles
+  import ocdb/utils/relative-voltages
 
 ; =======================================
 ; Ciruit convenience functions
@@ -79,30 +80,28 @@ public defn usb-c-configuration-channel (usb-c-bundle:JITXObject, method:USB-C-C
 ; Piecewise linear functions
 ; Example call : PWL([[x0 y0] [x1 y1] ... [xn yn])[x]. Returns interpolated value of y at x
 ; =======================================
-public deftype PWL
-public defmulti get (f:PWL, x:Double) -> Double
-public defn PWL (ps:Tuple<[Double,Double]>) -> PWL :
-  new PWL :
-    defmethod get (this, x:Double) :
-      val n = length(ps)
-      if x < ps[0][0] :
-        ; println("Warning: PWL is extrapolating with zero-order hold")
-        ps[0][1]
-      else if x >= ps[0][0] and x <= ps[n - 1][0] :
-        val i = for i in 0 to n find! :
-          ps[i][0] >= x
-        val j = for i in reverse(0 to n) find! :
-          ps[i][0] <= x
-        if i == j :
-          ps[i][1]
-        else :
-          val dydx = (ps[i][1] - ps[j][1]) / (ps[i][0] - ps[j][0])
-          dydx * (x - ps[j][0]) + ps[j][1]
-      else if x > ps[n - 1][0] :
-        ; println("Warning: PWL is extrapolating with zero-order hold")
-        ps[n - 1][1]
-      else  :
-        fatal("Something is wrong in PWL with x = %_" % [x])
+public pcb-struct ocdb/utils/generator-utils/PWL :
+  ps:Tuple<[Double, Double]>
+
+public defn get (f:PWL, x:Double) :
+  val ps = ps(f)
+  val n = length(ps)
+  if x < ps[0][0] :
+    ps[0][1]
+  else if x >= ps[0][0] and x <= ps[n - 1][0] :
+    val i = for i in 0 to n find! :
+      ps[i][0] >= x
+    val j = for i in reverse(0 to n) find! :
+      ps[i][0] <= x
+    if i == j :
+      ps[i][1]
+    else :
+      val dydx = (ps[i][1] - ps[j][1]) / (ps[i][0] - ps[j][0])
+      dydx * (x - ps[j][0]) + ps[j][1]
+  else if x > ps[n - 1][0] :
+    ps[n - 1][1]
+  else  :
+    fatal("Something is wrong in PWL with x = %_" % [x])
 
 ; =======================================
 ; Assign schematic and layout groups
@@ -281,6 +280,7 @@ public defn run-final-passes (module:Instantiable) -> Instantiable :
 
       ;TODO: Review the order and necessity of those algos
       design $> transform-module{propagate-net-voltages, _}
+             $> transform-module{propagate-relative-voltages, _}
              $> assign-pins
              $> run-eval-loop
 

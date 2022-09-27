@@ -1,0 +1,124 @@
+#use-added-syntax(jitx)
+defpackage ocdb/utils/relative-voltages :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/connections
+  import ocdb/utils/property-structs
+
+doc: "Propagate relative voltage properties throughout the netlist."
+public defn propagate-relative-voltages () :
+  ; println("propagating relative voltages for %_." % [ref(self)])
+  inside pcb-module :
+    propagate-relative-voltages(GlobalNetList(self))
+
+; TODO reuse netlist computation for other propagations and checks
+public defn propagate-relative-voltages (netlist:GlobalNetList) :
+  val sccs   = scc-relative-voltage(netlist)
+  val cycles = Vector<List>()
+  val nets   = Vector<GlobalNet>()
+  
+  for scc in sccs do :
+    match(scc) :
+      (n:GlobalNet) : 
+        add(nets, n)
+      (l:List) : 
+        add(cycles, l)
+  
+  if not empty?(cycles) :
+    fatal("Net list contains relative voltage cycles: %," % [cycles])
+  
+  do(resolve-relative-voltage, nets)
+
+
+;==============================================================================
+;============================ Implementation ==================================
+;==============================================================================
+
+; Compute the strongly connected components of a graph of global nets
+defn scc-relative-voltage (netlist:GlobalNetList) -> List<List<GlobalNet>|GlobalNet> :
+  val pin-table = to-hashtable<JITXObject, GlobalNet> $
+    for net in nets(netlist) seq-cat :
+      for pin in pins(net) seq :
+        pin => net
+  
+  defn dependencies (p:Pin) -> Seq<GlobalNet> :
+    seq(get{pin-table, relative(_)}, relative-voltages(p))
+
+  val dep-table = to-hashtable<GlobalNet, List<GlobalNet>> $ 
+    for net in nets(netlist) seq :
+      net => to-list $
+        for pin in pins(net) seq-cat :
+          dependencies(pin)
+
+  stz/algorithms/strong-components(dep-table)
+
+; Replace the generic-pin and net-voltage properties 
+; of a component once propagation completes
+defn sub-max-voltage (p:JITXObject, mv:Toleranced) :
+  val gp = get-property(p, `generic-pin) as GenericPin
+  set-property(p, `net-voltage, mv)
+  set-property(p, `generic-pin, GenericPin(mv, rated-esd(gp)))
+
+; If `p` is referenced from a relative voltage, return the 
+; reference voltage to it.
+defn ref-voltage? (p:JITXObject) -> False|Toleranced :
+  val np = get-property?(p, `net-voltage)
+  match(np:One<Toleranced>) : 
+    value(np)
+
+; Return the relative voltages on a pin, if they exists
+defn relative-voltages (p:JITXObject) -> Seqable<RelativeVoltage> :
+  defn flatten (x:?) -> Seqable<Toleranced|RelativeVoltage> :
+    println("Flattening: %_ (%_)" % [ref(p), x])
+    match(x) :
+      (p:PowerPin)      : [recommended-voltage(p)]
+      (p:DigitalInput)  : [vil(p), vih(p)]
+      (p:DigitalOutput) : flatten(driver(p))
+      (p:DigitalIO)     : cat-all([flatten(driver(p)), [vil(p), vih(p)]])
+      (p:ResetPin)      : flatten(input(p))
+      (p:CMOSOutput)    : [vol(p), voh(p)]
+      (p:TTLOutput)     : [vol(p), voh(p)]
+      (p:OpenCollector) : [vol(p)]
+      (x:?) : []
+      
+  val props = [
+    `digital-io
+    `digital-input
+    `digital-output
+    `generic-pin
+    `power-pin
+    `reset-pin
+  ]
+
+  val props*   = for prop in props seq? :
+    val v = get-property?(p, prop)
+    match(v:One) :
+      println("%_.%_: %_" % [ref(p), prop, value(v)])
+    v
+  val voltages = seq-cat(flatten, props*)      
+  filter-by<RelativeVoltage>(voltages)
+
+; Resolve relative voltages for the pins on a net.
+defn resolve-relative-voltage (net:GlobalNet) :
+  for pin in pins(net) do :
+    for rv in relative-voltages(pin) do :
+      println("Resolving relative voltage (%_) for pin %_" % [rv, ref(pin)])
+      val mv = ref-voltage?(relative(rv))
+      match(mv) :
+        (t:Toleranced) :
+          sub-max-voltage(pin, resolve(rv, t))
+        (f:False) :
+          fatal("%_ is missing a net-voltage property." 
+            % [ref(relative(rv))])
+
+defenum Case :
+  GenericPin-mv
+  PowerPin-rv
+  DigitalIO-vil
+  DigitalIO-vih
+  DigitalIO-CMOSOutput-vol
+  DigitalIO-CMOSInput-voh
+  DigitalIO-CMOS
+  

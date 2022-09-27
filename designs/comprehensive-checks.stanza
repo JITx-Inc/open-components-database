@@ -356,17 +356,54 @@ pcb-module digital-io :
     property(Rpullup.p[1].net-voltage) = property(VDD.net-voltage)
     property(Rpullup.operating-point) = OperatingPoint(typ(5.2), typ(5.0e-3))  
 
-;==============================================================================
-;==============================================================================
-;==============================================================================
+pcb-component relative-io :
+  property(self.rated-temperature) = min-max(-55.0, 100.0)
+  pin-properties :
+    [ pin : Ref | pads : Int ... | side:Dir ]
+    [ vdd       | 1              | Up       ]
+    [ gnd       | 2              | Down     ]
+    [ io        | 3              | Left     ]
 
+  make-box-symbol()
+  assign-landpattern(SOT23())
+
+  val gp = GenericPin(FractionalVoltage(0.75, self.vdd), 200.0)
+  val io = 
+    DigitalIO(driver, vil, vih, vdd-pin, gnd-pin, leakage-current)
+    where :
+      val driver = CMOSOutput(min-max(0.1, 0.5), OffsetVoltage(-0.3, self.vdd))
+      val vil = min-max(0.1, 0.5),
+      val vih = OffsetVoltage(-0.3, self.vdd)
+      val vdd-pin = self.vdd
+      val gnd-pin = self.gnd
+      val leakage-current = 1.0e-6
+
+  ; property(self.io.generic-pin) = gp
+  property(self.io.digital-io) = io
+
+; Relative Voltages
+pcb-module relative-io-module :
+  port power : ocdb/utils/bundles/power
+  inst U1 : relative-io
+  inst U2 : relative-io
+  net VDD (U1.vdd, U2.vdd, power.vdd)
+  net GND (U1.gnd, U2.gnd, power.gnd)
+  net (U1.io, U2.io)
+
+  property(VDD.net-voltage) = min-max(0.0, 5.0)
+  symbol(GND) = ground-sym
   
+;==============================================================================
+;==============================================================================
+;==============================================================================
 pcb-module main-module : 
-  inst passives : passives
-  inst digital-io : digital-io
+  ; inst passives    : passives
+  ; inst digital-io  : digital-io
+  inst relative-io : relative-io-module
 
-  schematic-group(passives) = passives
-  schematic-group(digital-io) = digital-io
+  ; schematic-group(passives) = passives
+  ; schematic-group(digital-io) = digital-io
+  schematic-group(relative-io) = relative-io
 
   check-design(self)
 
@@ -377,7 +414,6 @@ defn main () :
     $> set-main-module
 
   view-schematic()
-  freeze-reference-designators()
   run-checks("checks.txt")
 
 main()
