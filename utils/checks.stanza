@@ -48,6 +48,8 @@ Set of standard checks to run on a top-level-module.
  - Landpattern checks are run, see check-landpattern
  - Digital I/O pin checks are run, see check-io
 <S>
+public var check-flag : True|False
+check-flag = false
 
 public defn check-design (module:JITXObject):
   erc-check-design(module)
@@ -55,15 +57,16 @@ public defn check-design (module:JITXObject):
 
 public defn erc-check-design (module:JITXObject):
   inside pcb-module:
-    for i in populated-components(module) do :
-      check rated-temperature(i)
-      
-      check-capacitor(i) when has-property?(i.capacitor)
-      check-resistor(i)  when has-property?(i.resistor)
-      check-inductor(i)  when has-property?(i.inductor)    
-      check-pins(i)
+    eval-when check-flag == true:
+      for i in populated-components(module) do :
+        check rated-temperature(i)
+        
+        check-capacitor(i) when has-property?(i.capacitor)
+        check-resistor(i)  when has-property?(i.resistor)
+        check-inductor(i)  when has-property?(i.inductor)    
+        check-pins(i)
 
-    check-netlist(module)
+      check-netlist(module)
 
 public defn drc-check-design (module:JITXObject):
   inside pcb-module:
