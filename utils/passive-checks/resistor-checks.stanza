@@ -1,0 +1,105 @@
+#use-added-syntax(jitx)
+defpackage ocdb/utils/passive-checks/resistor-checks :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/checks
+  import ocdb/utils/design-vars
+  import ocdb/space-derating
+  import ocdb/utils/generator-utils
+  import ocdb/utils/property-structs
+  import ocdb/utils/passive-checks/utils
+
+;==============================================================================
+;=========================== Resistor Checks ==================================
+;==============================================================================
+; Some common values re-used in this package
+val NAME        = "Resistor Checks"
+val DESCRIPTION = "Check resistor component properties"
+
+
+doc: \<s> 
+  Assigns checks to a single resistor component.
+<s>
+public defn check-resistor (r:JITXObject) :
+  check-resistor-preconditions(r)
+  if can-run-resistor-checks?(r) :
+    inside pcb-module :
+      check resistor-power(r)
+
+; TODO: once inside pcb-check lands, reuse/chain logic
+defn can-run-resistor-checks? (r:JITXObject) -> True|False :
+  var acc : True|False = true
+  #for prop in [resistance, operating-point, rated-power] :
+    acc = acc and has-property?(r.prop)
+  acc
+
+; Checks a resistor component to see if it has the appropriate properties
+defn check-resistor-preconditions (r:JITXObject) :
+  #for prop in [resistance, operating-point, rated-power] :
+    pcb-check prop (r:JITXObject) :
+      val [pass?, sub-dsc, msg] = 
+        within has-prop-msg(r, `prop) :
+          One(has-property?(r.prop))
+      #CHECK(
+        condition = pass?
+        name = NAME
+        description = DESCRIPTION
+        category = CATEGORY
+        subcheck-description = sub-dsc
+        info-message = msg
+        pass-message = msg
+        locators = [r]
+      )
+    
+  inside pcb-module :
+    check resistance(r)
+    check operating-point(r)
+    check rated-power(r)
+
+; Check that the power consumed by a resistor is 
+; below the derated maximum power.
+pcb-check resistor-power (r:JITXObject) :
+  val op-point    = property(r.operating-point)
+  val resistance  = property(r.resistance)
+  val rated-power = property(r.rated-power)
+
+  val i = max-value(peak-current(op-point))
+  val temp = OPERATING-TEMPERATURE[1]
+
+  val power        = resistance * i * i
+  val derating     = derating(r)[temp]
+  val rated-power* = derating * rated-power * DERATE-RESISTOR-POWER
+
+  #CHECK(
+    condition = power < rated-power*
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    subcheck-description = "Check that resistor power derating meets the design requirements"
+    pass-message = "Derated power for %_  meets the design requirements: %_W < %_W"
+      % [ context(r), power, rated-power* ]
+    fail-message = "Derated power for %_  does not meet the design requirements: %_W < %_W" 
+      % [ context(r), power, rated-power* ]
+    locators = [r]
+  )
+
+; Return the derating of a resistor, or a default.
+defn derating (r:JITXObject) :
+  match(property?(r.derating)) :
+    (pwl:One<?>) : 
+      match(value(pwl)) :
+        (t:Tuple<[Double, Double]>) : PWL(t)
+        (p:PWL) : p
+        (_:?) : fatal(".derating property must be a tuple or PWL")
+    (_:None) :
+      PWL([
+        [0.0,   1.0] 
+        [70.0,  1.0] 
+        [110.0, 0.8] 
+        [150.0, 0.6] 
+        [190.0, 0.4] 
+        [240.0, 0.2] 
+        [260.0, 0.1]
+      ])

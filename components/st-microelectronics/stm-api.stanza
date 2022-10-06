@@ -1,22 +1,22 @@
 #use-added-syntax(jitx)
-defpackage ocdb/st-microelectronics/stm-api :
+defpackage ocdb/components/st-microelectronics/stm-api :
   import core
   import collections
   import math
   import jitx
   import jitx/commands
   
-  import ocdb/defaults
-  import ocdb/land-patterns
-  import ocdb/symbols
-  import ocdb/symbol-utils
-  import ocdb/generic-components
-  import ocdb/generator-utils
-  import ocdb/bundles
-  import ocdb/box-symbol
-  import ocdb/property-structs
-  import ocdb/checks
-  import ocdb/tolerance
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/symbol-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/generator-utils
+  import ocdb/utils/bundles
+  import ocdb/utils/box-symbol
+  import ocdb/utils/property-structs
+  import ocdb/utils/checks
+  import ocdb/utils/passive-checks/resonator-checks
 
 public deftype STMPinNames
 
@@ -106,7 +106,7 @@ public val DEFAULT-SETTINGS = [
     `boot-from => "flash"
     `boot-resistor => 10.0e3
     `debug-interface => swd()
-    `debug-connector => ocdb/tag-connect/TC2050-IDC/module
+    `debug-connector => ocdb/components/tag-connect/TC2050-IDC/module
     `HSE-freq => 16.0e6   `HSE-ppm => 30.0e-6 `HSE-source => "crystal"
     `LSE-freq => 32.768e3 `LSE-ppm => 0.05 `LSE-source => "crystal"]
 
@@ -309,7 +309,7 @@ public defn connect-por (stm:JITXObject, por-net:ResetPinNames, vdd-net:PwrPinNa
       if not empty?(power-pins) and not empty?(gnd-pins) :
         val v-range = recommended-voltage(property(power-pins[0].power-pin))
         if in-range?(v-range, 1.8) :
-          inst mon : ocdb/on-semiconductor/NCP30x/component(1.8)
+          inst mon : ocdb/components/on-semiconductor/NCP30x/component(1.8)
           bypass-cap-strap(por-pin[0], gnd-pins[0], 0.1e-6) ; hardcoded value for now (eek)
           net (mon.gnd, gnd-pins[0])
           net (mon.input, power-pins[0])
@@ -431,9 +431,9 @@ public defn setup-clocks (stm:JITXObject, HSE-freq:Double, HSE-ppm:Double, HSE-s
             ]
             inst hf-xtal :
               if contains?(HSE-FREQS, HSE-freq) : 
-                ocdb/epson/TSX-3225/component(HSE-freq)
+                ocdb/components/epson/TSX-3225/component(HSE-freq)
               else :
-                ocdb/abracon/AMB7/component(HSE-freq)
+                ocdb/components/abracon/AMB7/component(HSE-freq)
             if contains?(HSE-FREQS, HSE-freq) :
               net (hf-xtal.gnd, gnd-pin)
 
@@ -445,7 +445,7 @@ public defn setup-clocks (stm:JITXObject, HSE-freq:Double, HSE-ppm:Double, HSE-s
           "osc" :
             if HSE-ppm > 25.0e-6 :
               require hf-osc:high-freq-oscillator from stm
-              inst osc :  ocdb/abracon/AMPM/module(HSE-freq)
+              inst osc :  ocdb/components/abracon/AMPM/module(HSE-freq)
               net (hf-osc.in osc.out)
               net (osc.power.gnd, gnd-pin)
               net (osc.power.vdd, power-pin)
@@ -456,7 +456,7 @@ public defn setup-clocks (stm:JITXObject, HSE-freq:Double, HSE-ppm:Double, HSE-s
           "crystal" :
             if LSE-freq == 32.768e3 :
               require lf-osc:low-freq-oscillator from stm
-              inst losc : ocdb/epson/FC-135/component
+              inst losc : ocdb/components/epson/FC-135/component
               net (lf-osc.in losc.p[1])
               net (lf-osc.out losc.p[2])
               val lf-cb = add-xtal-caps(losc, gnd-pin)

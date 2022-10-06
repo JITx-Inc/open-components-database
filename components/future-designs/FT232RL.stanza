@@ -1,23 +1,22 @@
 #use-added-syntax(jitx)
-defpackage ocdb/future-designs/FT232RL :
+defpackage ocdb/components/future-designs/FT232RL :
   import core
   import collections
   import math
   import jitx
   import jitx/commands
 
-  import ocdb/defaults
-  import ocdb/land-patterns
-  import ocdb/symbols
-  import ocdb/symbol-utils
-  import ocdb/generic-components
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/symbol-utils
+  import ocdb/utils/generic-components
 
-  import ocdb/bundles
-  import ocdb/box-symbol
-  import ocdb/property-structs
-  import ocdb/generator-utils
-  import ocdb/checks
-  import ocdb/tolerance
+  import ocdb/utils/bundles
+  import ocdb/utils/box-symbol
+  import ocdb/utils/property-structs
+  import ocdb/utils/generator-utils
+  import ocdb/utils/checks
 
 public pcb-component component:
   pin VCC
@@ -70,17 +69,17 @@ public pcb-component component:
   assign-landpattern(sop65-landpattern(28, 7.8))
   property(VCC.power-pin) = PowerPin(min-max(4.0, 5.25))
   property(VCCIO.power-pin) = PowerPin(min-max(1.8, 5.25))
-  property(p3V3OUT.power-supply-pin) = PowerSupplyPin(3.3, 0.05)
+  property(p3V3OUT.power-supply-pin) = PowerSupplyPin(typ(3.3), 0.05)
 
-  eval-when has-property?(VCCIO.rail-voltage) :
-    val vdd  = property(VCCIO.rail-voltage)
+  eval-when has-property?(VCCIO.net-voltage) :
+    val vdd  = max-value(property(VCCIO.net-voltage))
     ; Datasheet gives data in tables, so use piecewise linear model to find value
     val voh-min = PWL([[1.8 1.32] [2.8 2.1] [3.3 2.2] [5.0 3.2]])[vdd]
     val voh-max = PWL([[1.8 1.8] [2.8 2.8] [3.3 3.2] [5.0 4.9]])[vdd]
     val vol-max = PWL([[1.8 0.18] [2.8 0.5] [3.3 0.5] [5.0 0.6]])[vdd]
     val vol-min = PWL([[1.8 0.06] [2.8 0.3] [3.3 0.3] [5.0 0.3]])[vdd]
-    val vih = 1.5
-    val vil = vdd * 0.3 ;guess
+    val vih = typ(1.5)
+    val vil = typ(vdd * 0.3) ;guess
     val drive-props = DigitalOutput(CMOSOutput(min-max(vol-min, vol-max), min-max(voh-min, voh-max)), false, VCCIO, GND)
     val input-props = DigitalInput(vil, vih, VCCIO, GND, 1.0e-6) ; TODO: Leakage current is a guess
     property(TXD.digital-output) = drive-props
@@ -110,7 +109,7 @@ public pcb-module module :
   pin vccio
   pin gnd
   
-  public inst xcvr : ocdb/future-designs/FT232RL/component
+  public inst xcvr : ocdb/components/future-designs/FT232RL/component
   net (usb-2.vbus.vdd xcvr.VCC)
   net (xcvr.VCCIO vccio)
   net (usb-2.vbus.gnd xcvr.GND xcvr.AGND gnd)

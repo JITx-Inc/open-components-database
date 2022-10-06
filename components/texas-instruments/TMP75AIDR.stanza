@@ -1,0 +1,87 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/texas-instruments/TMP75AIDR :
+
+  import core
+  import collections
+  import math
+
+  import jitx
+  import jitx/commands
+
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/symbol-utils
+  import ocdb/utils/generic-components
+
+  import ocdb/utils/bundles
+  import ocdb/utils/box-symbol
+  import ocdb/utils/property-structs
+  import ocdb/utils/generator-utils
+  import ocdb/utils/checks
+  import ocdb/utils/land-protrusions
+
+public pcb-landpattern TMP75AIDR-landpattern :
+  ; Create an SOIC landpattern with default density level and no thermal pad
+  make-n-pin-soic-landpattern(  8, ; the number of pins of the component
+                                1.270, ; the pitch of the pins
+                                tol(6.00, 0.020), ; the overall length of the component, from lead to lead
+                                tol(4.90, 0.100),   ; the length of the package
+                                tol(3.90, 0.100),    ; the width of the package
+                                tol(1.670 / 2.00, 0.870 / 2.00),  ; the length of the terminals
+                                tol(0.41, 0.100)) ; the width of the terminals
+
+
+public pcb-component component :
+  pin SDA   
+  pin SCL   
+  pin ALERT 
+  pin GND   
+  port A : pin[3]  
+  pin V+    
+  
+  name = "TMP75AIDR"
+  manufacturer = "Texas Instruments"
+  description = "-40°C ~ 125°C - Digital, Local 11 b I²C/SMBus SOIC-8_150mil Temperature Sensors ROHS"
+  reference-prefix = "U"
+  mpn = "TMP75AIDR"
+
+  val generic-props = GenericPin(min-max(-0.3, 3.6), 1500.0)
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir| generic-pin:GenericPin]
+    [SDA   | 1 | Left   | generic-props ]
+    [SCL   | 2 | Left   | generic-props ]
+    [ALERT | 3 | Right  | generic-props ]
+    [GND   | 4 | Down   | generic-props ]
+    [A[2]  | 5 | Left   | generic-props ]
+    [A[1]  | 6 | Left   | generic-props ]
+    [A[0]  | 7 | Left   | generic-props ]
+    [V+    | 8 | Up     | generic-props ]
+
+  make-box-symbol()
+  assign-landpattern(TMP75AIDR-landpattern)
+  property(self.rated-temperature) = RatedTemperature(min-max(-40.0, 125.0))
+
+public defn tie-low (net1:JITXObject, net2:JITXObject, r-val:Double) :
+  inside pcb-module:
+    inst r-tie : chip-resistor(["resistance" => r-val])
+    net (net1, r-tie.p[1])
+    net (net2, r-tie.p[2])
+
+public defn tie-low (net1:JITXObject, net2:JITXObject) :
+  tie-low(net1, net2, 330.0)
+
+public pcb-module module :
+  port supply : power
+  port comm : i2c
+
+  public inst U1 : ocdb/components/texas-instruments/TMP75AIDR/component
+  net (supply.gnd U1.GND)
+  net (supply.vdd U1.V+)
+  bypass-cap-strap(supply.vdd, supply.gnd, 0.100e-6)
+  for i in 0 to 3 do:
+    tie-low(U1.A[i], supply.gnd)
+
+  supports i2c :
+    i2c.scl => U1.SCL
+    i2c.sda => U1.SDA

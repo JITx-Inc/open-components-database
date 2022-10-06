@@ -85,7 +85,7 @@ PACKAGE_TEMPLATE = 'package {package_name} defined-in "{file_name}"\n'
 TEST_FILE_HEADER = ["#use-added-syntax(tests)\n",
                     "defpackage {package_name}:\n",
                     "  import jitx/commands\n",
-                    "  import ocdb/defaults\n"
+                    "  import ocdb/utils/defaults\n"
                     "\n"]
 DEFTEST_TEMPLATE = ["deftest {test_name}:\n",
                     "  set-rules(default-rules)"

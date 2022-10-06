@@ -1,0 +1,102 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/htcsemi/HT1302A :
+
+  import core
+  import collections
+  import math
+
+  import jitx
+  import jitx/commands
+
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/symbol-utils
+  import ocdb/utils/generic-components
+
+  import ocdb/utils/bundles
+  import ocdb/utils/box-symbol
+  import ocdb/utils/property-structs
+  import ocdb/utils/generator-utils
+  import ocdb/utils/checks
+  import ocdb/utils/land-protrusions
+
+public pcb-landpattern HT1302A-landpattern :
+  ; Create an SOIC landpattern with default density level and no thermal pad
+  make-n-pin-soic-landpattern(  8, ; the number of pins of the component
+                                1.270, ; the pitch of the pins
+                                tol(6.00, 0.020), ; the overall length of the component, from lead to lead
+                                tol(4.90, 0.100),   ; the length of the package
+                                tol(3.90, 0.100),    ; the width of the package
+                                tol(1.270 / 2.00, 0.400 / 2.00),  ; the length of the terminals
+                                tol(0.42, 0.090)) ; the width of the terminals
+
+
+public pcb-component component :
+  pin VCC2
+  pin X1  
+  pin X2  
+  pin GND 
+  pin CE  
+  pin I-O
+  pin SCLK
+  pin VCC1
+  
+  name = "HT1302A"
+  manufacturer = "HTCSEMI"
+  description = "SOP-8 Real-time Clocks (RTC) ROHS"
+  reference-prefix = "U"
+  mpn = "HT1302ARZ"
+
+  val generic-props = GenericPin(min-max(-0.3, 3.6), 1500.0)
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir| generic-pin:GenericPin]
+    [VCC2 | 1 | Up     | generic-props ]
+    [X1   | 2 | Left   | generic-props ]
+    [X2   | 3 | Left   | generic-props ]
+    [GND  | 4 | Down   | generic-props ]
+    [CE   | 5 | Left   | generic-props ]
+    [I-O  | 6 | Right  | generic-props ]
+    [SCLK | 7 | Right  | generic-props ]
+    [VCC1 | 8 | Up     | generic-props ]
+
+  make-box-symbol()
+  assign-landpattern(HT1302A-landpattern)
+  property(self.rated-temperature) = RatedTemperature(min-max(-20.0, 70.0))
+
+
+public defn tie-low (net1:JITXObject, net2:JITXObject, r-val:Double) :
+  inside pcb-module:
+    inst r-tie : chip-resistor(["resistance" => r-val])
+    net (net1, r-tie.p[1])
+    net (net2, r-tie.p[2])
+
+public defn tie-low (net1:JITXObject, net2:JITXObject) :
+  tie-low(net1, net2, 330.0)
+
+public pcb-module module :
+  port supply : power
+  pin CE
+  pin I-O
+  pin SCLK
+
+  inst U1 : ocdb/components/htcsemi/HT1302A/component
+  inst X1 : ocdb/components/citizen/CMJ206T32768DZBT/component
+  inst bat : ocdb/components/q-n-j/CR2032-BS-6-1/component
+  inst esd : ocdb/components/bencent/BV05C/component
+
+  net (supply.gnd U1.GND, X1.gnd)
+  net (supply.vdd U1.VCC2)
+  public net batt-vcc (bat.p[1] U1.VCC1)
+  net (supply.gnd bat.p[2])
+  bypass-cap-strap(supply.vdd, supply.gnd, 0.100e-6)
+
+  net (X1.p[1] U1.X1)
+  net (X1.p[2] U1.X2)
+
+  net (CE U1.CE)
+  net (I-O U1.I-O)
+  net (SCLK U1.SCLK)
+
+  net (batt-vcc esd.c)
+  net (esd.a supply.gnd)

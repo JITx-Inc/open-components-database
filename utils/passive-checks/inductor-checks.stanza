@@ -1,0 +1,97 @@
+#use-added-syntax(jitx)
+defpackage ocdb/utils/passive-checks/inductor-checks :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/design-vars
+  import ocdb/space-derating
+  import ocdb/utils/property-structs
+  import ocdb/utils/passive-checks/utils
+  import ocdb/utils/generator-utils
+
+val NAME        = "Inductor Checks"
+val DESCRIPTION = "Check inductor component properties"
+
+doc: \<s> 
+  Assigns checks to a single inductor component.
+<s>
+public defn check-inductor (l:JITXObject) :
+  check-inductor-preconditions(l)
+
+  if can-run-inductor-checks?(l) :
+    inside pcb-module :
+      check inductor-power(l)
+
+; TODO: once inside pcb-check lands, reuse/chain logic
+defn can-run-inductor-checks? (l:JITXObject) -> True|False :
+  var acc : True|False = false
+  #for prop in [operating-point, rated-power, inductance, dc-resistance] :
+    acc = acc and has-property?(l.prop)
+  acc
+
+; Checks an inductor component to see if it has the appropriate properties
+defn check-inductor-preconditions (l:JITXObject) :
+  #for prop in [operating-point, rated-power, inductance, dc-resistance] :
+    pcb-check prop (c:JITXObject) :
+      val [pass?, sub-dsc, msg] = 
+        within has-prop-msg(l, `prop) :
+          One(has-property?(l.prop))
+      #CHECK(
+        condition = pass?
+        name = NAME
+        description = DESCRIPTION
+        category = CATEGORY
+        subcheck-description = sub-dsc
+        info-message = msg
+        pass-message = msg
+        locators = [l]
+      )
+
+  inside pcb-module :
+    check operating-point(l)
+    check rated-power(l)
+    check inductance(l)
+    check dc-resistance(l)
+
+; Check that the power consumed by an inductor is 
+; below the derated maximum power.
+pcb-check inductor-power (l:JITXObject) :
+  val operating-point = property(l.operating-point)
+  val rated-power     = property(l.rated-power)
+  val inductance      = property(l.inductance)
+  val dc-resistance   = property(l.dc-resistance)
+
+  val i = max-value(peak-current(operating-point))
+  val power = dc-resistance * i * i
+  val temp = OPERATING-TEMPERATURE[1]
+  val derating = derating(l)[temp]
+  val rated-power* = derating * rated-power * DERATE-INDUCTOR-POWER
+
+  #CHECK(
+    condition = power < rated-power*
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    subcheck-description = "Check that inductor power derating meets the design requirements"
+    pass-message = "Derated power for %_ meets the design requirements: %_W < %_W"
+      % [context(l), power, rated-power*]
+    fail-message = "Derated power for %_ does not meet the design requirements: %_W < %_W"
+      % [context(l), power, rated-power*]
+  )
+
+; Return the derating of an inductor, or a default.
+defn derating (l:JITXObject) -> PWL :
+  match(property?(l.derating)) :
+    (one:One<PWL>) : value(one)
+    (none:None) :
+      PWL $ [
+        [0.0,   1.0] 
+        [70.0,  1.0] 
+        [110.0, 0.8] 
+        [150.0, 0.6] 
+        [190.0, 0.4] 
+        [240.0, 0.2] 
+        [260.0, 0.1]
+      ]
+

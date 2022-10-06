@@ -1,5 +1,5 @@
 #use-added-syntax(jitx)
-defpackage ocdb/db-parts :
+defpackage ocdb/utils/db-parts :
   import core
   import collections
   import json
@@ -13,13 +13,12 @@ defpackage ocdb/db-parts :
     prefix(Inductor) => EModel-
   import jitx/commands
 
-  import ocdb/defaults
-  import ocdb/land-patterns
-  import ocdb/generator-utils
-  import ocdb/property-structs
-  import ocdb/symbols
-  import ocdb/design-vars
-  import ocdb/tolerance
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/generator-utils
+  import ocdb/utils/property-structs
+  import ocdb/utils/symbols
+  import ocdb/utils/design-vars
 
 public deftype Component
 public defmulti x (component: Component) -> Double
@@ -41,16 +40,16 @@ public defstruct Sourcing :
 ;================= External data souring ====================
 ;============================================================
 
-public pcb-struct ocdb/db-parts/Seller :
+public pcb-struct ocdb/utils/db-parts/Seller :
   company-name: String
   resolved-price: Double
   offers: Tuple<SellerOffer>
 
-public pcb-struct ocdb/db-parts/SellerOffer :
+public pcb-struct ocdb/utils/db-parts/SellerOffer :
   inventory-level: Int
   prices: Tuple<SellerOfferPrice>
 
-public pcb-struct ocdb/db-parts/SellerOfferPrice :
+public pcb-struct ocdb/utils/db-parts/SellerOfferPrice :
   quantity: Int
   converted-price: Double
 
@@ -192,8 +191,6 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
     match(TCR: TCR): property(self.TCR) = [positive(TCR), negative(TCR)]
     spice :
       "[R] {p[1]} {p[2]} {resistance}"
-    check ocdb/checks/connected(self.p[1])
-    check ocdb/checks/connected(self.p[2])
   my-resistor
 
 ; ========================================================
@@ -382,8 +379,6 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
       else :
         spice :
           "[C] {a} {c} {capacitance(capacitor)}"
-      check ocdb/checks/connected(self.a)
-      check ocdb/checks/connected(self.c)
 
     else :
       port p : pin[1 through 2]
@@ -410,8 +405,6 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
       else :
         spice :
           "[C] {p[1]} {p[2]} {capacitance(capacitor)}"
-      check ocdb/checks/connected(self.p[1])
-      check ocdb/checks/connected(self.p[2])
 
     emodel = EModel-Capacitor(capacitance(capacitor),
                              emodel-pourcentage-tolerance(tolerance(capacitor)),
@@ -626,8 +619,6 @@ defmethod to-jitx (inductor: Inductor) -> Instantiable :
     property(self.self-resonant-frequency) = self-resonant-frequency(inductor)
     spice :
       "[L] {p[1]} {p[2]} {inductance}"
-    check ocdb/checks/connected(self.p[1])
-    check ocdb/checks/connected(self.p[2])
   my-inductor
 
 ; ========================================================
@@ -838,7 +829,7 @@ public defn optional-double (json: JObject, field: String) -> Double|False :
   val j = get?(json, field)
   j as Double when not (j is False or j is JNull)
 
-public pcb-struct ocdb/db-parts/MinMaxRange :
+public pcb-struct ocdb/utils/db-parts/MinMaxRange :
   min: Double
   max: Double
 

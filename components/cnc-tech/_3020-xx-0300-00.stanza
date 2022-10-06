@@ -1,0 +1,95 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/cnc-tech/_3020-xx-0300-00 :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/defaults
+  import ocdb/utils/design-vars
+  import ocdb/utils/landpatterns
+  import ocdb/utils/box-symbol
+  import ocdb/manufacturers/rules
+  import ocdb/utils/generic-components
+  import ocdb/utils/symbols
+  import ocdb/utils/land-protrusions
+
+defstruct CompAttributes :
+  a-dim:Double
+  b-dim:Double
+  c-dim:Double
+  pn:String
+  desc:String
+
+pcb-landpattern lp-3020-xx-0300-00 (number-of-leads:Int, a-dim:Double):
+  make-n-pin-soic-landpattern(number-of-leads, pitch, lead-span, package-length,
+      package-width, terminal-length, terminal-width, RowMajorNumbering) where : 
+    val pitch = 2.54
+    val lead-span = tol(9.5, 0.15)
+    val package-length = tol(8.75, 0.2)
+    val package-width = tol(a-dim, 0.35)
+    val terminal-length = tol((9.5 - 2.54) / 2.0, 0.15),
+    val terminal-width = tol(0.64, 0.01)
+
+defn attributes-6 () -> CompAttributes :
+  CompAttributes(15.24, 5.08, 12.94, "3020-06-0300-00", "CONN HEADER SMD 6POS 0.1 IN 2.54MM SHROUDED")  
+
+defn attributes-8 () -> CompAttributes :
+  CompAttributes(17.78, 7.62, 15.48, "3020-08-0300-00", "CONN HEADER SMD 8POS 0.1 IN 2.54MM SHROUDED")  
+
+defn attributes-10 () -> CompAttributes :
+  CompAttributes(20.32, 10.16, 18.02, "3020-10-0300-00", "CONN HEADER SMD 10POS 0.1 IN 2.54MM SHROUDED")  
+
+defn attributes-14 () -> CompAttributes :
+  CompAttributes(25.40, 15.24, 23.10, "3020-14-0300-00", "CONN HEADER SMD 14POS 0.1 IN 2.54MM SHROUDED")  
+
+defn attributes-16 () -> CompAttributes :
+  CompAttributes(27.94, 17.78, 25.64, "3020-16-0300-00", "CONN HEADER SMD 16POS 0.1 IN 2.54MM SHROUDED")  
+
+defn attributes-20 () -> CompAttributes :
+  CompAttributes(33.02, 22.86, 30.72, "3020-20-0300-00", "CONN HEADER SMD 20POS 0.1 IN 2.54MM SHROUDED")  
+
+defn attributes-26 () -> CompAttributes :
+  CompAttributes(40.64, 30.48, 38.34, "3020-26-0300-00", "CONN HEADER SMD 26POS 0.1 IN 2.54MM SHROUDED")  
+
+defn attributes-40 () -> CompAttributes :
+  CompAttributes(58.42, 48.26, 56.12, "3020-40-0300-00", "CONN HEADER SMD 40POS 0.1 IN 2.54MM SHROUDED")  
+
+defn attributes-50 () -> CompAttributes :
+  CompAttributes(71.12, 60.96, 68.82, "3020-50-0300-00", "CONN HEADER SMD 50POS 0.1 IN 2.54MM SHROUDED")  
+
+public pcb-component component (number-of-leads:Int): 
+; datasheet https://www.cnctech.us/pdfs/3020-XX-0300-00%20(9T).pdf
+  val data =
+    switch(number-of-leads) :
+      6:
+        attributes-6()
+      8:
+        attributes-8()
+      10:
+        attributes-10()
+      14:
+        attributes-14()
+      16:
+        attributes-16()
+      20:
+        attributes-20()
+      26:
+        attributes-26()
+      40:
+        attributes-40()
+      50:
+        attributes-50()
+      else:
+        fatal("Invalid number of leads passed to ocdb/components/cnc-tech/_3020-xx-0300-00.")
+  name = desc(data)
+  description = desc(data)
+  mpn = pn(data)
+  manufacturer = "CNC Tech"
+  reference-prefix = "J"
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir]
+    for i in 0 to (number-of-leads /2) do :
+      [p[1 + 2 * i] | 1 + 2 * i | Left]
+      [p[2 + 2 * i] | 2 + 2 * i | Right]
+  make-box-symbol()
+  assign-landpattern( lp-3020-xx-0300-00(number-of-leads, a-dim(data) ) )

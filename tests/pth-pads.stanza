@@ -1,0 +1,55 @@
+#use-added-syntax(jitx, tests)
+defpackage ocdb/tests/pth-pads :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/landpatterns
+  import ocdb/utils/defaults
+  import ocdb/utils/box-symbol
+
+deftest(ocdb, path-pads, design) pth-pad-hole-radius:
+  pcb-landpattern test-landpattern:
+    val radius = 0.5 
+    val width = 2.0
+    val length = 2.0
+
+    val generators = [
+      oval-pth-pad,
+      rect-pth-pad,
+      fn (r:Double, w:Double, h:Double):
+        round-rect-pth-pad(r, w, h, 0.5),
+      fn (r:Double, w:Double, h:Double):
+        chamfered-rect-pth-pad(r, w, h, 0.5),
+      fn (r:Double, w:Double, h:Double):
+        general-round-rect-pth-pad(r, w, h, [0.25, 0.35, 0.45, 0.5])
+      fn (r:Double, w:Double, h:Double):
+        general-round-rect-pth-pad(r, w, h, 0.5, CornerModifierAll)
+      fn (r:Double, w:Double, h:Double):
+        general-chamfered-rect-pth-pad(r, w, h, [0.25, 0.35, 0.45, 0.5])
+      fn (r:Double, w:Double, h:Double):
+        general-chamfered-rect-pth-pad(r, w, h, 0.5, CornerModifierAll)
+    ]
+    for (gen in generators, i in 1 to false) do: 
+      val ref = IndexRef(Ref("p"), i)
+      val def = gen(radius, width, length)
+      pad (ref): def at loc(0.0, to-double(i) * length + 0.5 * length)
+      
+      val cutout = find!({specifier(_) is Cutout}, layers(def))
+      #ASSERT(shape(cutout) is Capsule)
+      val hole-shape = shape(cutout) as Capsule
+      #EXPECT(/width(hole-shape) == 2.0 * radius)
+      #EXPECT(/height(hole-shape) == 2.0 * radius)
+
+  pcb-component test-component:
+    port p: pin[[1]]
+    make-box-symbol()
+    val lp = test-landpattern
+    landpattern = 
+      lp(p[1] => lp.p[1])
+  
+  pcb-module main-module:
+    inst i: test-component 
+    place(i) on Top
+  
+  make-default-board(main-module, 4, Rectangle(10.0, 50.0))

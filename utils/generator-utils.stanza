@@ -1,20 +1,20 @@
 #use-added-syntax(jitx)
-defpackage ocdb/generator-utils:
+defpackage ocdb/utils/generator-utils:
   import core
   import collections
+  import lang-utils with :
+    prefix(min-max) => lang-
+
   import jitx
   import jitx/commands
-
-  import ocdb/checks
-  import ocdb/generic-components
-
   import jitx/powergen/gen
 
-  import ocdb/design-vars
-  import ocdb/property-structs
-  import ocdb/power-regulators
-  import ocdb/bundles
-  import ocdb/tolerance
+  import ocdb/utils/checks
+  import ocdb/utils/generic-components
+  import ocdb/utils/design-vars
+  import ocdb/utils/property-structs
+  import ocdb/modules/power-regulators
+  import ocdb/utils/bundles
 
 ; =======================================
 ; Ciruit convenience functions
@@ -48,6 +48,32 @@ public defn add-open-drain-pullups (bus:JITXObject, vio:JITXObject, clk-rate:Dou
 ; Default is 100kHz clock rate, 100pF bus capacitance.
 public defn add-open-drain-pullups (bus:JITXObject, vio:JITXObject) :
   add-open-drain-pullups(bus, vio, 100.0e3, 100.0e-12)
+
+public pcb-enum ocdb/utils/generator-utils/USB-C-ConfigurationChannel :
+  SourceDefault
+  Source5V-1A5
+  Source5V-3A0
+  SinkDefault
+
+; Creates and attaches USB-C configuration resistors
+public defn usb-c-configuration-channel (usb-c-bundle:JITXObject, method:USB-C-ConfigurationChannel) :
+  if port-type(usb-c-bundle) != usb-c :
+    fatal("Bundle type passed to usb-c-configuration-channel must be bundle type usb-c.")
+
+  inside pcb-module:
+    switch(method) :
+      SourceDefault:
+        res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 80.0e-6) - 5.1e3, 5.0))
+        res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 80.0e-6) - 5.1e3, 5.0))
+      Source5V-1A5: 
+        res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 180.0e-6) - 5.1e3, 5.0))
+        res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 180.0e-6) - 5.1e3, 5.0))
+      Source5V-3A0: 
+        res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 330.0e-6) - 5.1e3, 5.0))
+        res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 330.0e-6) - 5.1e3, 5.0))
+      SinkDefault: 
+        res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.gnd, 5.1e3)
+        res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.gnd, 5.1e3)
 
 ; =======================================
 ; Piecewise linear functions
@@ -109,42 +135,80 @@ public defn connect-gnd-pins ():
         if port-name == Ref("gnd") :
           net (self.gnd, p)
 
+public defn is-resistor? (i: JITXObject) :
+  has-property?(i.resistance)
 
-; Replace this once nets introspection is back
-public defn propagate-rail-voltage ():
-  inside pcb-module :
-    val pins = to-tuple(seq-cat(pins, component-instances(self)))
-    for p1 in pins do :
-      if has-property?(p1.power-supply-pin) :
-        if property(p1.power-supply-pin) is PowerSupplyPin :
-          for p2 in pins do :
-            if p1 != p2 and connected?([p1, p2]) :
-              if has-property?(p2.rail-voltage) :
-                ; Override with higher voltage
-                if supply-voltage(property(p1.power-supply-pin)) as Double > property(p2.rail-voltage) as Double:
-                  property(p2.rail-voltage) = supply-voltage(property(p1.power-supply-pin))
-              else:
-                property(p2.rail-voltage) = supply-voltage(property(p1.power-supply-pin))
-              ; println("Supply %_ from %_ to %_" % [property(p2.rail-voltage) ref(p1) ref(p2)])
-              ; println(property(p2.rail-voltage))
+public defn is-capacitor? (i: JITXObject) :
+  has-property?(i.capacitance)
 
-public defn calculate-operating-points ():
+public defn is-inductor? (i: JITXObject) :
+  has-property?(i.inductance)
+
+public defn resistance! (i: JITXObject) :
+  property(i.resistance)
+
+public defn dc-resistance! (i: JITXObject) :
+  property(i.dc-resistance)
+
+public defn calculate-operating-points ()  :
   defn get-other-pin (comp:JITXObject,  p:JITXObject) :
+    ; Used on 2-pin components to get the single other pin
     for ps in pins(comp) find! :
       ps != p
 
+  defn resistor-operating-point (v: Double, r: Double) :
+    OperatingPoint(min-max(0.0, v), min-max(0.0, v / r))
+
+  defn capacitor-operating-point (v: Double) :
+    OperatingPoint(min-max(0.0, v), min-max(0.0, 0.0))
+
+  defn inductor-operating-point (v: Double, i: Double) :
+    OperatingPoint(min-max(0.0, v), min-max(0.0, i))
+
+  defn check-dual-pin-count! (i: JITXObject) : 
+    val pin-count = length(pins(i)) 
+    fatal("Resistor, capacitor or inductor %_ has %_ pins instead of 2." % [ref(i), pin-count]) when pin-count != 2
+
   inside pcb-module :
     for i in component-instances(self) do :
-      if has-property?(i.resistance) or has-property?(i.capacitance) :
-        for p in pins(i) do :
-          if has-property?(p.rail-voltage) : ;and connected?([get-other-pin(i,p), property(self.gnd)])
-            if has-property?(self.gnd) :
-              if connected?([get-other-pin(i,p), property(self.gnd)]):
-                val voltage = property(p.rail-voltage)
-                if has-property?(i.resistance) :
-                  property(i.operating-point) = OperatingPoint(min-max(0.0, voltage), min-max(0.0, voltage / property(i.resistance)))
-                else if has-property?(i.capacitance) :
-                  property(i.operating-point) = OperatingPoint(min-max(0.0, voltage), min-max(0.0, 0.0))
+      if is-resistor?(i) or is-capacitor?(i) or is-inductor?(i):
+        check-dual-pin-count!(i)
+        if has-property?(pins(i)[0].net-voltage) and has-property?(pins(i)[1].net-voltage) :
+          val p1 = property(pins(i)[0].net-voltage)
+          val p2 = property(pins(i)[1].net-voltage)
+          val voltage = abs(max((max-value(p1) - min-value(p2)), (max-value(p2) - min-value(p1))))
+          if is-resistor?(i) :
+            property(i.operating-point) = resistor-operating-point(voltage, resistance!(i))
+          if is-capacitor?(i) :
+            property(i.operating-point) = capacitor-operating-point(voltage)
+          if is-inductor?(i) :
+            property(i.operating-point) = inductor-operating-point(voltage, voltage / dc-resistance!(i))
+
+; - jitx/commands/connected-pins(p) result does not contain p.
+; - connected-group(p) contains p if it is a component pin (not net or module pin)
+defn connected-group (obj: Pin|Net) :
+  defn is-component-pin? (pin: Pin) :
+    containing-instance(pin) is Instance
+
+  val extra-pins =
+    match(obj) :
+      (pin: Pin) : [pin] when is-component-pin?(pin) else []
+      (net: Net) : []
+
+  to-tuple $ cat(extra-pins, connected-pins(obj))
+
+
+; =======================================
+; Attach the DNP (do not populate) to objects (components, array of instances, or module)
+; =======================================
+public defn do-not-populate (objs:Seqable<JITXObject>) :
+  inside pcb-module :
+    for obj in objs do :
+      match(instance-type(obj): SingleComponent) : property(obj.DNP) = true
+      else : do-not-populate $ component-instances(obj)
+
+public defn dnp (objs:Seqable<JITXObject>) :
+  do-not-populate(objs)
 
 ; =======================================
 ; Attach the power generator to designs and loads.
@@ -169,20 +233,65 @@ public defn set-power-source (pos:JITXObject, neg:JITXObject, v-in:Double):
   inside pcb-module:
     property(pos.power-input) = v-in
     property(pos.gnd-ref) = neg
-    property(pos.power-supply-pin) = PowerSupplyPin(v-in, 0.3) 
+    property(pos.power-supply-pin) = PowerSupplyPin(typ(v-in), 0.3) 
+
+public defn propagate-net-voltages () :
+  inside pcb-module:
+    for item in all-connected-items(self) do :
+      ;First gather all the voltages on all connected nets.
+      val voltages = to-tuple $ seq?({property?(_.net-voltage)}, nets(item))
+      ;If at least one net has a voltage property.
+      if not empty?(voltages) :
+        val voltage = net-voltage!(voltages, item)
+        ;Now assign the voltage to all of the component pins in the module.
+        for p in component-pins(item) do :
+          property(p.net-voltage) = voltage
+
+defn net-voltage! (voltages: Tuple<Toleranced>, item: ConnectedItems) -> Toleranced :
+  defn unnamed (idx: Int) -> Ref :
+    Ref $ to-string("unnamed-net-%_" % [idx])
+
+  ;Let's check that all the voltages happen to be the same.
+  ;If they are different, then something has gone wrong.
+  if length(voltages) > 1 and length(unique(voltages)) != 1 :
+    fatal("Mismatched voltages %_ on nets %_" % [voltages, net-names]) where :
+      ;Gather all the net names (some nets don't have names.).
+      val net-names = to-tuple $
+        for (net in nets(item), idx in 0 to false) seq :
+          call-if-false?(unnamed{idx}, ref?(net))
+
+  voltages[0]
 
 ; =======================================
 ; Run transformations to propagate voltages from sources, and run delayed evaluations
 ; =======================================
-public defn run-final-passes (module:Instantiable) :
-  var intermediate-design = transform-module(propagate-rail-voltage, module)
-  set-main-module(intermediate-design)
-  intermediate-design = run-evals(intermediate-design)
-  intermediate-design = transform-module(propagate-rail-voltage, intermediate-design)
-  intermediate-design = run-evals(intermediate-design)
-  intermediate-design = transform-module(propagate-rail-voltage, intermediate-design)
-  intermediate-design = run-evals(intermediate-design)
-  val assigned-pins = assign-pins()
-  var final = run-evals(assigned-pins)
-  final = transform-module(calculate-operating-points, final)
-  final
+public defn run-final-passes (module:Instantiable) -> Instantiable :
+  val result-module = transform-module{calculate-operating-points, _} $
+    let loop (design: Instantiable = module, i: Int = 0) :
+      defn run-eval-loop (design: Instantiable) :
+        val design* = run-evals?(design)
+        match(design*: Instantiable) : loop(design*, i + 1)
+        else : design
+
+      if i == 5 :
+        throw $ Exception("A loop executing eval-whens, propagating net voltages and assigning pins has been \
+                           encountered: 5 iterations reached. Check that no eval-when generate other eval-whens in an \
+                           infinite loop, or that there is no infinite loop of 2nd order between eval-when execution \
+                           and net voltage propagation or pin assignment.")
+
+      ;TODO: Review the order and necessity of those algos
+      design $> transform-module{propagate-net-voltages, _}
+             $> assign-pins
+             $> run-eval-loop
+
+  ; If we did not set the main module, a user forgetting to set it himself on the new module would be exporting
+  ; the module before adding operating points (the main module is set in the loop to be able to assign pins).
+  ; Such bug would be invisible.
+  set-main-module(result-module)
+  result-module
+
+; FIXME: assign-pins was obviously not meant to be used like this, it depends on the flattening
+; Is run-evals? actually accessing the information resulting from the pin assignment?
+defn assign-pins (design: Instantiable) -> Instantiable :
+  set-main-module(design)
+  assign-pins()

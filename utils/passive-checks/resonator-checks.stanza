@@ -1,0 +1,149 @@
+#use-added-syntax(jitx)
+defpackage ocdb/utils/passive-checks/resonator-checks : 
+  import core
+  import math
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/design-vars
+  import ocdb/space-derating
+  import ocdb/utils/property-structs
+  import ocdb/utils/passive-checks/utils
+  import ocdb/utils/generator-utils
+
+val NAME        = "Crystal Resonator Checks"
+val DESCRIPTION = "Check crystal resonator component properties"
+
+doc: \<s> 
+  Assigns checks to a single crystal oscillator component.
+<s>
+public defn check-resonator (x:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
+  check-resonator-preconditions(x)
+  if can-run-resonator-checks?(x) :
+    inside pcb-module :
+      check resonator-frequency-check(x, intf)
+      check resonator-gain-check(x, intf, load-cap)
+      check resonator-drive-check(x, intf, load-cap)
+      check resonator-pullability-check(x, intf, load-cap)
+
+; TODO: once inside pcb-check lands, reuse/chain logic
+defn can-run-resonator-checks? (x:JITXObject) -> True|False :
+  has-property?(x.crystal-resonator)
+
+; Checks an inductor component to see if it has the appropriate properties
+defn check-resonator-preconditions (x:JITXObject) :
+  #for prop in [crystal-resonator] :
+    pcb-check prop (c:JITXObject) :
+      val [pass?, sub-dsc, msg] = 
+        within has-prop-msg(x, `prop) :
+          One(has-property?(x.prop))
+      #CHECK(
+        condition = pass?
+        name = NAME
+        description = DESCRIPTION
+        category = CATEGORY
+        subcheck-description = sub-dsc
+        info-message = msg
+        pass-message = msg
+        locators = [x]
+      )
+
+  inside pcb-module :
+    check crystal-resonator(x)
+
+; Checks the frequency of an oscillator (o) against an interface on an IC (intf)
+public pcb-check resonator-frequency-check (o:JITXObject, intf:CrystalOscillator) :
+  ; Check critical gain point to ensure oscillation
+  #CHECK(
+    condition = frequency(property(o.crystal-resonator)) == frequency(intf),
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    subcheck-description = "Check the crystal has the correct frequency which meets the design specs",
+    pass-message = "Crystal %_ does have the correct frequency %_ to meet design specs %_" 
+      % [context(o), frequency(property(o.crystal-resonator)), frequency(intf)],
+    fail-message = "Crystal %_ does not have the correct frequency %_ to meet design specs %_" 
+      % [context(o), frequency(property(o.crystal-resonator)), frequency(intf)],
+    locators = [o]
+  )
+
+; Checks the critical gain of an oscillator (o) against an interface on an IC (intf)
+public pcb-check resonator-gain-check (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
+  ; Check critical gain point to ensure oscillation
+  val op = property(o.crystal-resonator)
+  val gain = 4.0 * ESR(op) * pow(2.0 * PI * frequency(op), 2.0) * pow(shunt-capacitance(op) + load-capacitance(op), 2.0)
+  #CHECK(
+    condition = gain < max-critical-gain(intf),
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    subcheck-description = "Check the crystal circuit gain meets the design criteria for max-critical-gain",
+    pass-message = "Crystal %_ gain %_ meets the design criteria for max-critical-gain %_" 
+      % [context(o), gain, max-critical-gain(intf)],
+    fail-message = "Crystal %_ gain %_ does not meet the design criteria for max-critical-gain %_" 
+      % [context(o), gain, max-critical-gain(intf)],
+    locators = [o]
+  )
+
+; Checks the drive level of an oscillator (o) against an interface on an IC (intf)
+public pcb-check resonator-drive-check (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
+  ; Check drive level against crystal maximum
+  #CHECK(
+    condition = drive-level(intf) <= max-drive-level(property(o.crystal-resonator)),
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    subcheck-description = "Check the crystal resonator circuit has the correct drive-level property to match crystal",
+    pass-message = "Crystal circuit %_ has the correct drive-level property %_ that matches the crystal spec %_" 
+      % [context(o), drive-level(intf), max-drive-level(property(o.crystal-resonator))],
+    fail-message = "Crystal circuit %_ does not have the correct drive-level property %_ that matches the crystal spec %_" 
+      % [context(o), drive-level(intf), max-drive-level(property(o.crystal-resonator))],
+    locators = [o]
+  )
+
+; Check pullability of crystal to ensure accuracy
+public pcb-check resonator-pullability-check (o:JITXObject, intf:CrystalOscillator, load-cap:JITXObject) :
+  val op = property(o.crystal-resonator)
+  val pullability = motional-capacitance(op) / (2.0 * pow(shunt-capacitance(op) + load-capacitance(op), 2.0))
+  
+  #CHECK(
+    condition = has-property?(load-cap.tolerance),
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    subcheck-description = "Check the crystal-tuning capacitor has the correct tolerance property",
+    pass-message =  "Capacitor %_ has the correct tolerance property for crystal tuning" 
+      % [context(load-cap)],
+    fail-message = "Capacitor %_ does not have the correct tolerance property for crystal tuning"
+       % [context(load-cap)],
+    locators = [load-cap]
+  )
+
+  #CHECK(
+    condition = has-property?(load-cap.capacitance),
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    subcheck-description = "Check the crystal-tuning capacitor has the correct capacitance property",
+    pass-message = "Capacitor %_ has the correct capacitance property for crystal tuning" 
+      % [context(load-cap)],
+    fail-message = "Capacitor %_ does not have the correct capacitance property for crystal tuning" 
+      % [context(load-cap)],
+    locators = [load-cap]
+  )
+
+  val dC = (property(load-cap.capacitance) as Double) * (property(load-cap.tolerance)[1] as Double)
+  val freq-error = (pullability as Double) * (dC as Double) * frequency(op)
+  #CHECK(
+    condition = frequency-tolerance(op) + freq-error < frequency-tolerance(intf),
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    subcheck-description = "Check the crystal frequency tolerance with pullability meets the design specification",
+    pass-message = "Crystal %_ has the correct frequency tolerance %_ that meets the design spec %_" 
+      % [context(load-cap), frequency-tolerance(op) + freq-error, frequency-tolerance(intf)],
+    fail-message = "Crystal %_ does not have the correct frequency tolerance %_ that meets the design spec %_" 
+      % [context(load-cap), frequency-tolerance(op) + freq-error, frequency-tolerance(intf)],
+    locators = [load-cap]
+  )
+

@@ -1,23 +1,22 @@
 #use-added-syntax(jitx)
-defpackage ocdb/texas-instruments/SN65HVD1781 :
+defpackage ocdb/components/texas-instruments/SN65HVD1781 :
   import core
   import collections
   import math
   import jitx
   import jitx/commands
-  import ocdb/defaults
-  import ocdb/land-patterns
-  import ocdb/symbols
-  import ocdb/symbol-utils
-  import ocdb/generic-components
-  import ocdb/box-symbol
-  import ocdb/bundles
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/symbol-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/box-symbol
+  import ocdb/utils/bundles
 
-  import ocdb/design-vars
-  import ocdb/property-structs
-  import ocdb/checks
-  import ocdb/generator-utils
-  import ocdb/tolerance
+  import ocdb/utils/design-vars
+  import ocdb/utils/property-structs
+  import ocdb/utils/checks
+  import ocdb/utils/generator-utils
 
 pcb-landpattern sn65hvd1786d-lp :
   val pad-shape = smd-pad(1.55, 0.6)
@@ -54,17 +53,17 @@ public pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "SN65HVD1781QDRQ1"
 
-  eval-when has-property?(self.VDD.rail-voltage) :
-    val vdd  = property(self.VDD.rail-voltage)
+  eval-when has-property?(self.VDD.net-voltage) :
+    val vdd  = max-value(property(self.VDD.net-voltage))
     val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.8), min-max(2.4, vdd - 0.3)), false, self.VDD, self.GND)
-    val input-props = DigitalInput(0.8, 2.0, self.VDD, self.GND, 50.0e-6)
+    val input-props = DigitalInput(typ(0.8), typ(2.0), self.VDD, self.GND, 50.0e-6)
     for o in [self.R] do :
       property(o.digital-output) = drive-props
     for i in [self.D self.DE self.NRE] do :
       property(i.digital-input) = input-props
 
 public pcb-module module (terminate:Double|False) :
-  inst xcvr : ocdb/texas-instruments/SN65HVD1781/component
+  inst xcvr : ocdb/components/texas-instruments/SN65HVD1781/component
   port power : power
   port rs485 : rs485
   port uart : uart([UART-RTS, UART-RX, UART-TX])

@@ -4,13 +4,12 @@ defpackage power-state-demo :
   import collections
   import jitx
   import jitx/commands
-  import ocdb/box-symbol
-  import ocdb/bundles
-  import ocdb/checks
-  import ocdb/generic-components
-  import ocdb/land-patterns
-  import ocdb/property-structs
-  import ocdb/tolerance
+  import ocdb/utils/box-symbol
+  import ocdb/utils/bundles
+  import ocdb/utils/checks
+  import ocdb/utils/generic-components
+  import ocdb/utils/landpatterns
+  import ocdb/utils/property-structs
 
 pcb-landpattern soic127-p8:
   make-n-pin-soic-landpattern(8, 
@@ -44,8 +43,8 @@ pcb-component Microcontroller :
                      gnd-pin,
                      leakage-current) where : 
     val logic-family = OpenCollector(tol(5.0, 1.0), 1.0)
-    val vil = 3.3
-    val vih = 5.5
+    val vil = typ(3.3)
+    val vih = typ(5.5)
     val vdd-pin = self.vcc
     val gnd-pin = self.gnd
     val leakage-current = 0.100
@@ -75,8 +74,8 @@ pcb-component Peripheral :
                      gnd-pin,
                      leakage-current) where : 
     val logic-family = OpenCollector(tol(5.0, 1.0), 1.0)
-    val vil = 3.3
-    val vih = 5.5
+    val vil = typ(3.3)
+    val vih = typ(5.5)
     val vdd-pin = self.vcc
     val gnd-pin = self.gnd
     val leakage-current = 0.100
@@ -143,7 +142,7 @@ pcb-module main-module :
   ; We set the power states of the output regulator.
   set-power-states(regulator.vout, [
     "wake"      => true,
-    "hibernate" => true
+    "hibernate" => true ; this state will cause an expected failure in the check report because of a mismatch
   ])
   
   place(mcu)        on Top
@@ -153,7 +152,7 @@ pcb-module main-module :
   propagate-power-states(self)
   check power-states(self)
 
-set-design("test-design")
+set-design-directory("test-design")
 set-main-module(main-module)
 assign-pins()
 run-checks("checks.txt")

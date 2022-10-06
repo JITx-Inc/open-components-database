@@ -1,21 +1,20 @@
 #use-added-syntax(jitx)
-defpackage ocdb/texas-instruments/TLV62130 :
+defpackage ocdb/components/texas-instruments/TLV62130 :
   import core
   import collections
   import math
   import jitx
   import jitx/commands
-  import ocdb/defaults
+  import ocdb/utils/defaults
 
-  import ocdb/land-patterns
-  import ocdb/symbols
-  import ocdb/box-symbol
-  import ocdb/bundles
-  import ocdb/generator-utils
-  import ocdb/generic-components
-  import ocdb/passive-circuits
-  import ocdb/property-structs
-  import ocdb/tolerance
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/box-symbol
+  import ocdb/utils/bundles
+  import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
+  import ocdb/modules/passive-circuits
+  import ocdb/utils/property-structs
 
 public pcb-component component :
   manufacturer = "Texas Instruments"
@@ -43,8 +42,8 @@ public pcb-component component :
   property(self.PVIN.power-pin) = PowerPin(min-max(3.0, 17.0))
   property(self.rated-temperature) = RatedTemperature(min-max(-40.0 85.0))
   
-  eval-when has-property?(self.PVIN.rail-voltage) :
-    val vin = property(self.PVIN.rail-voltage)
+  eval-when has-property?(self.PVIN.net-voltage) :
+    val vin = max-value(property(self.PVIN.net-voltage))
     property(self.PVIN.generic-pin) = GenericPin(min-max(-0.3, 20.0), 2000.0)
     property(self.AVIN.generic-pin) = GenericPin(min-max(-0.3, 20.0), 2000.0)
     property(self.EN.generic-pin)   = GenericPin(min-max(-0.3, vin + 0.3), 2000.0)
@@ -65,8 +64,8 @@ public pcb-module module (v-out:Double) :
   pin pg
   pin ss
 
-  public inst buck : ocdb/texas-instruments/TLV62130/component
-  public inst l    : ocdb/abracon/ASPI-0530HI/component(2.2)
+  public inst buck : ocdb/components/texas-instruments/TLV62130/component
+  public inst l    : ocdb/components/abracon/ASPI-0530HI/component(2.2)
 
   net (gnd buck.AGND buck.PGND buck.PAD buck.DEF buck.FSW)
   net (vin buck.AVIN buck.PVIN)
@@ -89,7 +88,7 @@ public pcb-module module (v-out:Double) :
 
   cap-strap(vout, gnd, 22.0e-6)
 
-  property(l.p[2].power-supply-pin) = PowerSupplyPin(v-out, 3.0) 
+  property(l.p[2].power-supply-pin) = PowerSupplyPin(typ(v-out), 3.0) 
   
 
 

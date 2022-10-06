@@ -1,0 +1,92 @@
+#use-added-syntax(jitx, tests)
+defpackage ocdb/tests/terminations :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+
+  import ocdb/utils/defaults
+  import ocdb/utils/symbols
+  import ocdb/utils/box-symbol
+  import ocdb/utils/landpatterns
+  import ocdb/utils/bundles
+  import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
+  import ocdb/modules/terminations
+  import ocdb/utils/symbol-utils
+
+pcb-landpattern lp (n:Int) :
+  for i in 0 to 2 * n + 2 do :
+    val d = to-double(i) * 1.5
+    pad p[i] : smd-pad(0.4 0.4) at loc(d, 0.0)
+  val len = to-double(2 * n + 2)
+  layer(Courtyard(Top)) = Rectangle( (len + 1.0) * 1.5, 2.5, loc( len * 1.5 / 2.0, 0.0 ))
+  ref-label()
+
+pcb-symbol sym (n:Int) :
+  for i in 0 to 2 * n + 2 do :
+    val d = to-double(i) * 1.5
+    pin p[i] at Point(d, 0.0) with :
+      direction = Up
+      length = 0.5
+      number-size = 0.2
+      name-size = 0.2
+  unit-line([[0.0, 0.0], [to-double(2 * n + 2), 0.0]])
+  unit-line([[to-double(2 * n + 2), 0.0], [to-double(2 * n + 2), 1.0]])
+  unit-line([[to-double(2 * n + 2), 1.0], [0.0, 1.0]])
+  unit-line([[0.0, 1.0], [0.0, 0.0]])
+
+
+pcb-component lvds-test-component (n:Int) :
+  name = "LVDS dummy component"
+  manufacturer = "JITx"
+  description = "Dummy component for LVDS testing"
+  
+  pin gnd
+  pin vdd
+  port p : lvds[n]
+
+  val sym = sym(n)
+  val lp = lp(n)
+
+  symbol = sym( gnd => sym.p[n * 2] 
+                vdd => sym.p[n * 2 + 1]
+                for i in 0 to n do : 
+                  p[i].P => sym.p[2 * i]
+                  p[i].N => sym.p[2 * i + 1])
+  landpattern = lp( gnd => lp.p[n * 2] 
+                    vdd => lp.p[n * 2 + 1]
+                    for i in 0 to n do : 
+                      p[i].P => lp.p[2 * i]
+                      p[i].N => lp.p[2 * i + 1])  
+
+deftest(ocdb, terminations) test-all-lvds-methods : 
+  pcb-module test-lvds-term :
+    val methods = [   
+      LVDSTerminationDCStd
+      LVDSTerminationDCSplitCap
+      LVDSTerminationACSimple
+      LVDSTerminationACDualResistor
+      LVDSTerminationACIntegratedTermDualResistor
+      LVDSTerminationACDualResistorSplitCap
+      LVDSTerminationACDualResistorSplitReduced ]
+
+    val num-lvds-intf = length(methods)
+    inst d : lvds-test-component(num-lvds-intf)[2]
+
+    net gnd (d[0].gnd d[1].gnd)
+    net vdd (d[0].vdd d[1].vdd)
+    symbol(vdd) = ocdb/utils/symbols/altium-power-bar-sym
+    symbol(gnd) = ocdb/utils/symbols/ground-sym
+    for (m in methods, i in 0 to false) do :
+      val t = ocdb/modules/terminations/terminate-lvds(d[0].p[i], gnd, vdd, m)
+      net (t  d[1].p[i])  
+      schematic-group(containing-instance(t) as JITXObject) = (Ref(to-string(m)))
+
+  make-default-board(test-lvds-term, 2, Rectangle(30.0, 30.0))  
+  view-board()
+  view-schematic()
+  ;not really asserting or expecting anything but a test needs these statements to run
+  #EXPECT(true)  ; all EXPECT statements are evaluated, even if any fail
+  #ASSERT(true)  ; if any ASSERT is false, test fails immediately

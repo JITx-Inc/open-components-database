@@ -1,69 +1,42 @@
 #use-added-syntax(jitx)
-defpackage ocdb/si-labs/CP2105 :
+defpackage ocdb/components/si-labs/CP2105 :
   import core
   import collections
   import math
   import jitx
   import jitx/commands
-  import ocdb/defaults
-  import ocdb/land-patterns
-  import ocdb/symbols
-  import ocdb/box-symbol
-  import ocdb/bundles
-  import ocdb/generator-utils
-  import ocdb/generic-components
-  import ocdb/property-structs
-  import ocdb/tolerance
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/box-symbol
+  import ocdb/utils/bundles
+  import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/property-structs
 
 public pcb-component component :
   manufacturer = "Silicon Labs"
   description  = "IC SGL USB-DL UART BRIDGE 24QFN"
   mpn          = "CP2105-F01-GM"
 
-  pin REGIN
-  pin VDD
-  pin RI_SCI
-  pin GND
-  pin VBUS
-  pin D+
-  pin D-
-  pin VIO
-  pin nRST
-  pin CTS_ECI
-  pin RTS_ECI
-  pin RXD_ECI
-  pin TXD_ECI
-  pin DSR_ECI
-  pin DTR_ECI
-  pin DCD_ECI
-  pin RI_ECI 
-  pin CTS_SCI
-  pin RTS_SCI
-  pin RXD_SCI
-  pin TXD_SCI
-  pin DSR_SCI
-  pin DTR_SCI
-  pin DCD_SCI
-  pin EPAD
-
   pin-properties :
     [pin:Ref | pads:Int ... | side:Dir]
-    [REGIN   | 7  | Up]
-    [VDD     | 6  | Up]
-    [RI_SCI  | 1  | Right]
+    [nRST    | 9  | Left]
+    [VIO     | 5  | Left]
+    [VDD     | 6  | Left]
+    [REGIN   | 7  | Left]
     [GND     | 2  | Down]
     [VBUS    | 8  | Left]
     [D+      | 3  | Left]
     [D-      | 4  | Left]
-    [VIO     | 5  | Left]
-    [nRST    | 9  | Left]
+    [RI_SCI  | 1  | Right]
     [CTS_ECI | 10 | Right]
     [RTS_ECI | 11 | Right]
     [RXD_ECI | 12 | Right]
     [TXD_ECI | 13 | Right]
     [DSR_ECI | 14 | Right]
     [DTR_ECI | 15 | Right]
-    [DCD_ECI | 16 | Right]
+    [VPP     | 16 | Right]
     [RI_ECI  | 17 | Right]
     [CTS_SCI | 18 | Right]
     [RTS_SCI | 19 | Right]
@@ -77,33 +50,56 @@ public pcb-component component :
   make-box-symbol()
   assign-landpattern(qfn-landpattern(0.5, 4.0, 24, 0.25, 0.4, [2.7 2.7]))
 
-  property(REGIN.power-pin) = PowerPin(min-max(3.0, 5.25))
-  property(VDD.power-pin) = PowerPin(min-max(3.0, 3.6))
-  eval-when has-property?(VDD.rail-voltage) :
-    property(VIO.power-pin) = PowerPin(min-max(1.8, property(VDD.rail-voltage)))
-  eval-when has-property?(VIO.rail-voltage) :
-    val vdd  = property(VIO.rail-voltage)
-    val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.4), min-max(vdd - 0.2, vdd)), false, VIO, GND)
-    val input-props = DigitalInput(0.6, 0.7 * vdd, VIO, GND, 50.0e-6)
-    for o in [TXD_ECI DTR_ECI RTS_ECI TXD_SCI DTR_SCI RTS_SCI] do :
+  ; two power operating modes to handle: 
+  ;  1) bus-powered with VBUS connected to REGIN, VDD is output
+  ;  2) self-powered with REGIN connected to VDD, VBUS independent
+
+  ; assume that REGIN has some power input in either mode
+  property(self.REGIN.power-pin) = PowerPin(min-max(3.0, 5.25))
+  property(self.rated-temperature) = RatedTemperature(min-max(-40.0, 85.0))
+
+
+  ; VIO can be independent of VDD/REGIN/VBUS
+  eval-when has-property?(self.VIO.net-voltage) :
+    val vdd  = max-value(property(self.VIO.net-voltage))
+    val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.4),
+                                    min-max(vdd - 0.2, vdd)), 
+                                    false, self.VIO, self.GND)
+    val input-props = DigitalInput(typ(0.6), typ(0.7 * vdd), 
+                                   self.VIO, self.GND, 50.0e-6)
+    
+    for o in [self.TXD_ECI self.DTR_ECI self.RTS_ECI self.TXD_SCI self.DTR_SCI self.RTS_SCI] do :
       property(o.digital-output) = drive-props
-    for i in [RXD_ECI RXD_SCI] do :
+    for i in [self.RXD_ECI self.RXD_SCI] do :
       property(i.digital-input) = input-props
 
-public pcb-module module :
-  port power : power
+public pcb-module module (bus-powered?:True|False):
   port usb-2 : usb-2
   port e-uart : uart([UART-DTR, UART-RTS, UART-RX, UART-TX])
   port s-uart : uart([UART-DTR, UART-RTS, UART-RX, UART-TX])
   pin reset
   pin vio
+  pin vdd
   pin gnd
   
-  public inst xcvr : ocdb/si-labs/CP2105/component
-  net (usb-2.vbus.vdd xcvr.VBUS)
-  net (power.vdd, xcvr.REGIN, xcvr.VDD)
-  net (usb-2.vbus.gnd xcvr.GND xcvr.EPAD power.gnd gnd)
-  net (xcvr.VIO vio)
+  public inst xcvr : ocdb/components/si-labs/CP2105/component
+  ; connected as bus-powered device?
+  if bus-powered? :
+    net (usb-2.vbus.vdd xcvr.VBUS xcvr.REGIN)
+    cap-strap(xcvr.REGIN, gnd, 1.0e-6)
+    eval-when has-property?(xcvr.REGIN.net-voltage) :
+      property(xcvr.VDD.power-supply-pin) = PowerSupplyPin(min-max(3.3, 3.6), 0.0815) ; 100mA - 18.5mA
+  else :
+    net (usb-2.vbus.vdd xcvr.VBUS)
+    net (xcvr.REGIN xcvr.VDD)
+    property(xcvr.VDD.power-pin) = PowerPin(min-max(3.0, 3.6)) ; now an input
+
+  net (xcvr.VIO vio) ; separate VDD and VIO
+  net (xcvr.VDD vdd)
+
+  cap-strap(xcvr.VPP, xcvr.GND, 4.7e-6) ; VPP capacitor to allow OTP ROM to be flashed over USB.
+
+  net (usb-2.vbus.gnd xcvr.GND xcvr.EPAD gnd)
   net (xcvr.nRST reset)
   net (usb-2.data.P xcvr.D+)
   net (usb-2.data.N xcvr.D-)

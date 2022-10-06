@@ -1,19 +1,20 @@
 #use-added-syntax(jitx)
-defpackage ocdb/nordic/nRF52832 :
+defpackage ocdb/components/nordic/nRF52832 :
   import core
   import collections
   import math
   import jitx
   import jitx/commands
-  import ocdb/defaults
+  import ocdb/utils/defaults
 
-  import ocdb/land-patterns
-  import ocdb/symbols
-  import ocdb/box-symbol
-  import ocdb/bundles
-  import ocdb/generator-utils
-  import ocdb/generic-components
-  import ocdb/checks
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/box-symbol
+  import ocdb/utils/bundles
+  import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/checks
+  import ocdb/utils/passive-checks/resonator-checks
 
 pcb-bundle io-pin : 
   pin p
@@ -101,7 +102,7 @@ public pcb-module module :
   pin ant
   pin gnd
   ; Chip antenna, with lpf, and t-filter matching network
-  inst proc : ocdb/nordic/nRF52832/component
+  inst proc : ocdb/components/nordic/nRF52832/component
   net (gnd, proc.gnd, power.gnd)
   net (power.vdd, proc.vdd) 
   ; ; Decoupling caps
@@ -116,7 +117,7 @@ public pcb-module module :
   property(proc.vdd.gnd-ref) = gnd
 
   ; External 32 MHz crystal
-  inst xtal : ocdb/abracon/ABM12-32-B2X-T3/component
+  inst xtal : ocdb/components/abracon/ABM12-32-B2X-T3/component
   net (gnd, xtal.gnd)
   net XC1 (proc.osc.in, xtal.p[2])
   net XC2 (proc.osc.out, xtal.p[1])
@@ -124,15 +125,15 @@ public pcb-module module :
   check-resonator(xtal, property(proc.osc), load-cap)
 
   ; External 32.768 kHz crystal
-  inst lfxtal : ocdb/epson/FC-135/component
+  inst lfxtal : ocdb/components/epson/FC-135/component
   net (proc.lfosc.in lfxtal.p[1])
   net (proc.lfosc.out lfxtal.p[2])
   val lf-cap = add-xtal-caps(lfxtal, gnd)
   check-resonator(lfxtal, property(proc.lfosc), lf-cap)
 
   net (proc.ANT ant)
-  ; inst ant : {ocdb/johanson/2450AT18A100/component}
-  ; inst lpf : {ocdb/johanson/2450FM07A0029/component}
+  ; inst ant : {ocdb/components/johanson/2450AT18A100/component}
+  ; inst lpf : {ocdb/components/johanson/2450FM07A0029/component}
   ; net (proc.ANT, lpf.in)
   ; inst t : t-filter
   ; net (lpf.out, t.in)

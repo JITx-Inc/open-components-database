@@ -1,22 +1,21 @@
 #use-added-syntax(jitx)
-defpackage ocdb/st-microelectronics/VL53L1X :
+defpackage ocdb/components/st-microelectronics/VL53L1X :
   import core
   import collections
   import math
   import jitx
   import jitx/commands
-  import ocdb/defaults
-  import ocdb/land-patterns
-  import ocdb/symbols
-  import ocdb/symbol-utils
-  import ocdb/generic-components
-  import ocdb/box-symbol
-  import ocdb/bundles
-  import ocdb/design-vars
-  import ocdb/property-structs
-  import ocdb/checks
-  import ocdb/generator-utils
-  import ocdb/tolerance
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/symbol-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/box-symbol
+  import ocdb/utils/bundles
+  import ocdb/utils/design-vars
+  import ocdb/utils/property-structs
+  import ocdb/utils/checks
+  import ocdb/utils/generator-utils
 
 pcb-landpattern vl53l1cxv0fyslash-1 :
   pad p[1]  : smd-pad(0.508, 0.508) at loc(0.8, 1.6, 90.0)
@@ -61,8 +60,11 @@ public pcb-component component :
   reference-prefix = "U"
   mpn = "VL53L1CBV0FY/1"
 
-  property(self.SCL.digital-io) = DigitalIO(OpenCollector(min-max(0.0, 0.4), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, self.AVDD, self.GND, 50.0e-9)
-  property(self.SDA.digital-io) = DigitalIO(OpenCollector(min-max(0.0, 0.4), 28.0e-3), 0.25 * 3.3, 0.75 * 3.3, self.AVDD, self.GND, 50.0e-9)
+  val dio = DigitalIO(OpenCollector(min-max(0.0, 0.4), 28.0e-3),
+                      typ(0.25 * 3.3), typ(0.75 * 3.3), 
+                      self.AVDD, self.GND, 50.0e-9)
+  property(self.SCL.digital-io) = dio
+  property(self.SDA.digital-io) = dio
 
 
 public pcb-module module :
@@ -70,7 +72,7 @@ public pcb-module module :
   port i2c : i2c
   pin x-shut 
   pin gpio1
-  public inst tof : ocdb/st-microelectronics/VL53L1X/component
+  public inst tof : ocdb/components/st-microelectronics/VL53L1X/component
   bypass-cap-strap(tof.AVDDVCSEL, tof.AVSSVCSEL, 4.7e-6)
   bypass-cap-strap(tof.AVDDVCSEL, tof.AVSSVCSEL, 0.1e-6)
   net (i2c.sda tof.SDA)

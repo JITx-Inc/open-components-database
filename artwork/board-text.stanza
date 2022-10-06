@@ -1,0 +1,58 @@
+; Place Silkscreen text on the board
+; Options to pass: title:String, size:Double, outline-size:Double
+; Examples:
+; instantiate some text 1.5mm high and an outline of thickness MinSilkscreenWidth
+;     and place it on the bottom of the board
+  ; inst pcb-name: ocdb/artwork/board-text/text("PCB, BLE MOTE", 1.5, clearance(current-rules(), MinSilkscreenWidth) )
+  ; place(pcb-name) at loc(0.0,-0.5) on Bottom
+;
+; instantiate some text 1.0mm high with no outline and place it
+;    on the bottom of the board
+  ; inst ver-rev : ocdb/artwork/board-text/text("v0 rev0", 1.0, 0.0)
+  ; place(assy-label) at loc(5.0,-5.25, 0.0) on Top
+#use-added-syntax(jitx)
+defpackage ocdb/artwork/board-text :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/generic-components
+  import ocdb/utils/symbols
+
+pcb-landpattern text-lp (text:String, size:Double, outline-size:Double) :
+  var outline-extend = 0.0
+  layer(Silkscreen("title", Top)) = Text(text, size, C, loc(0.0, 0.0))
+  outline-extend = outline-size + clearance(current-rules(), MinSolderMaskBridge) ; this needs to be silkscreen to silkscreen
+  val text-dims = dims( Text(text, size, C, loc(0.0, 0.0)) )
+  ; val width = clearance(current-rules(), MinSilkscreenWidth) + x(text-dims)
+  var width = x(text-dims)
+  var height = y(text-dims)
+  val outline-width = (width + outline-extend) / 2.0
+  val outline-height = (height + outline-extend)/ 2.0
+  if outline-size > 0.0 :
+    layer(Silkscreen("title", Top)) = Line(outline-size, [ Point(-1.0 * outline-width, -1.0 * outline-height), Point(-1.0 * outline-width, outline-height), 
+      Point(outline-width, outline-height), Point(outline-width, -1.0 * outline-height), Point(-1.0 * outline-width, -1.0 * outline-height) ])
+  layer(Courtyard(Top))  = Rectangle(2.0 * outline-width, 2.0 * outline-height, loc(0.0, 0.0))
+
+pcb-symbol generic-symbol :
+  layer("foreground") = Rectangle(5.08, 5.08, loc(0.0, 0.0))
+  layer("foreground") = Text(">VALUE", 0.762, SW, loc(-2.54, 2.84))
+  layer("foreground") = Text(">REF", 0.762, SW, loc(-2.54, 3.902))
+
+public pcb-component text (title:String, size:Double, outline-size:Double) :
+  name = title
+  description = title
+  manufacturer = "non-BOM"
+  mpn = title
+  assign-landpattern(text-lp(title, size, outline-size) )
+  val sym = generic-symbol
+  symbol = sym()
+  reference-prefix = "TXT"
+  property(self.rated-temperature) = false
+  
+public defn version-silkscreen (title:String) :
+  text(title, 1.5, 0.1)
+  

@@ -1,0 +1,314 @@
+#use-added-syntax(jitx)
+defpackage ocdb/utils/passive-checks/capacitor-checks :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/design-vars
+  import ocdb/space-derating
+  import ocdb/utils/generator-utils
+  import ocdb/utils/property-structs
+  import ocdb/utils/passive-checks/utils
+
+;==============================================================================
+;========================== Capacitor Checks ==================================
+;==============================================================================
+; Some common values re-used in this package
+val NAME        = "Capacitor Checks"
+val DESCRIPTION = "Check capacitor component properties"
+
+doc: \<s> 
+  Assigns checks to a single capacitor component.
+
+  The checks are structured hierarchically. Based on the 
+  type of the capacitor, we attempt to lookup deratings
+  and validate that the rated temperature/peak voltage
+  values are within spec.
+<s>
+public defn check-capacitor (c:JITXObject) : 
+  inside pcb-module :
+    ; First we check if the capacitor has the required
+    ; properties to do any checks.
+    check-capacitor-preconditions(c)
+    ; If this succeeds, we can perform the required checking.
+    if can-run-capacitor-checks?(c) :
+      val type = property(c.type)
+      ; If the cap has a known type, we perform our analysis with
+      ; the known deratings.
+      switch(type) :
+        "ceramic"      : check-ceramic-capacitor(c)
+        "electrolytic" : check-electrolytic-capacitor(c)
+        "mica"         : check-mica-film-capacitor(c)
+        else           : check-unknown-capacitor(c)
+
+; The basic capacitor check
+defn check-unknown-capacitor (c:JITXObject) :
+  inside pcb-module :
+    check capacitor-temp(c, false, false)
+    check capacitor-voltage(c, false, false)
+
+; TODO: once inside pcb-check lands, reuse logic.
+defn can-run-capacitor-checks? (c:JITXObject) -> True|False :
+  var acc : True|False = true
+  #for prop in [capacitance, operating-point, rated-voltage, rated-temperature, type] :
+    acc = acc and has-property?(c.prop)
+  acc
+
+; Checks a capacitor component to see if it has the approparite properties.
+defn check-capacitor-preconditions (c:JITXObject) :
+  #for prop in [capacitance, operating-point, rated-voltage, rated-temperature, type] :
+    pcb-check prop (c:JITXObject) :
+      val [pass?, sub-dsc, msg] = 
+        within has-prop-msg(c, `prop) :
+          One(has-property?(c.prop))
+      #CHECK(
+        condition = pass?
+        name = NAME
+        description = DESCRIPTION
+        category = CATEGORY
+        subcheck-description = sub-dsc
+        info-message = msg
+        pass-message = msg
+        locators = [c]
+      )
+  inside pcb-module :
+    check capacitance(c)
+    check operating-point(c)
+    check type(c)
+    check rated-temperature(c)
+    check rated-voltage(c)
+
+
+; Shared check: given a capacitor, an optional case name, and optional
+; temperature derating, check if OPERATING-TEMPERATURE is within the 
+; the rated-temperature of the capacitor.
+;
+; - c: the cap to check
+; - case?: an optional case name for the derating value
+; - derating: an optional derating value. 
+pcb-check capacitor-temp (c:JITXObject, case?:False|String, derating:False|Double) :
+  val [min-temp, max-temp] = OPERATING-TEMPERATURE
+  val rated-temp = property(c.rated-temperature)
+  
+  val rated-temp* = 
+    match(derating:Double) :
+      min-max(min-value(rated-temp), min(derating, max-value(rated-temp)))
+    else :
+      rated-temp
+  val case-str = 
+    match(case?:String) : " %_ " % [case?]
+    else : " "
+
+  #CHECK(
+    condition = in-range?(rated-temp*, min-temp) and
+                in-range?(rated-temp*, max-temp)
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    subcheck-description = "Check rated temperature meets the design requirements."
+    pass-message = "%_ rated-temperature %_ meets%_design requirements, min:%_C, max:%_C" 
+      % [context(c), rated-temp, case-str, min-temp, max-temp]
+    fail-message = "%_ rated-temperature %_ does not meet%_design requirements, min:%_C, max:%_C"
+      % [context(c), rated-temp, case-str, min-temp, max-temp]
+    locators = [c]
+  )
+
+; Shared check: given a capacitor, an optional case name, and optional derating 
+; (static or temperature-dependent), check if the peak voltage is in range.
+;
+; - c: the capacitor to check
+; - case?: an optional case name for the derating
+; - derating: an optional double or table of doubles for derating the component
+;
+pcb-check capacitor-voltage (c:JITXObject, case?:False|String, derating:False|Double|Tuple<[Double, Double]>) :
+  val peak-voltage = property(c.operating-point)
+    $> peak-voltage
+    $> max{ abs(min-value(_0)), abs(max-value(_0)) }
+  
+  val rated-voltage = property(c.rated-voltage)
+  val temp    = OPERATING-TEMPERATURE[1]
+  val derating* = 
+    match(derating) :
+      (f:False)  : 1.0
+      (d:Double) : d
+      (t:Tuple<[Double, Double]>): PWL(t)[temp]
+
+  val case-str =
+    match(case?:String) : " %_ " % [case?]
+    else : " "
+  
+  val voltage = derating* * max-value(rated-voltage)
+  #CHECK(
+      condition = peak-voltage < voltage
+      name = NAME
+      description = DESCRIPTION
+      category = CATEGORY
+      subcheck-description = "Check the %_ capacitor voltage derating matches the operating-point voltage" 
+        % [property(c.type)]
+      pass-message = "%_ peak voltage %_V is below the%_derating voltage %_V"
+        % [context(c), peak-voltage, case-str, voltage]
+      fail-message = "%_ peak voltage %_V exceeds the%_derating voltage %_V"
+        % [context(c), peak-voltage, case-str, voltage]
+      locators = [c]
+  )
+
+;==============================================================================
+;========================= Ceramic Capacitors =================================
+;==============================================================================
+
+; Ceramic capacitor checks:
+; - derated temperature
+; - derated peak voltage
+defn check-ceramic-capacitor (c:JITXObject) :
+  inside pcb-module :
+    val derate-vpk = 
+      [
+        "worst-case" => DERATE-CAPACITOR-MLCC-VPK-WC
+        "nominal" => DERATE-CAPACITOR-MLCC-VPK-NOM
+      ]
+
+    check capacitor-temp(c, false, DERATE-CAPACITOR-MLCC-TEMP)
+    for kv in derate-vpk do :
+      check capacitor-voltage(c, key(kv), value(kv))
+
+;==============================================================================
+;========================= Electrolytic Capacitors ============================
+;==============================================================================
+; Supported electrolytes for derating analysis
+val ELECTROLYTES = [
+  "manganese-dioxide"
+  "polymer"
+]
+
+; Suported anodes for derating analysis
+val ANODES = [
+  "tantalum"
+]
+
+; Checks if the electrolytic capacitor materials
+; are known to JITX.
+defn check-electrolytic-preconditions (c:JITXObject) :
+  #for prop in [anode, electrolyte] :
+    pcb-check prop (c:JITXObject, supported:Tuple<Equalable>) :
+      val [pass?, sub-dsc, msg] = 
+      within has-prop-msg(c, `prop) :
+        One(has-property?(c.prop))
+      #CHECK(
+        condition   = pass?
+        name        = NAME,
+        description = DESCRIPTION, 
+        category    = CATEGORY,
+        subcheck-description = sub-dsc
+        pass-message = msg,
+        info-message = msg
+      )
+      val value = property(c.prop) as Equalable
+      #CHECK(
+        condition = contains?(supported, value)
+        name        = NAME,
+        description = DESCRIPTION, 
+        category    = CATEGORY,
+        subcheck-description = "Check that the `%_` value is supported" 
+          % [`prop]
+        pass-message = "%_ is a supported value for the `%_` property." 
+          % [value, `prop]
+        fail-message = "%_ is not a supported value for the `%_` property. Derating analysis will not be performed." 
+          % [value, `prop]
+      )
+  inside pcb-module :
+    check anode(c, ANODES)
+    check electrolyte(c, ELECTROLYTES)
+
+defn known-electrolytic-materials? (c:JITXObject) -> True|False :
+  has-property?(c.anode) and
+  contains?(ANODES, property(c.anode) as Equalable) and
+  has-property?(c.electrolyte) and 
+  contains?(ELECTROLYTES, property(c.electrolyte))
+
+defn check-electrolytic-capacitor (c:JITXObject) :
+  inside pcb-module :
+    check-electrolytic-preconditions(c)
+    check electrolytic-cap-current(c)
+    
+    ; If we don't recognize the electrolytic cap materials, we 
+    ; perform the analysis without deratings.
+    if not known-electrolytic-materials?(c) :
+      check capacitor-temp(c, false, false)
+      check capacitor-voltage(c, false, false)
+    ; Otherwise, lookup the deratings if they exist.
+    else :
+      val anode       = property(c.anode)
+      val electrolyte = property(c.electrolyte)
+      val [derate-vpk, derate-temp] =
+        switch([anode, electrolyte]) :
+          ["tantalum", "polymer"] :
+            [
+              ; Vpk derating
+              [ 
+                false => DERATE-CAPACITOR-ETANTPOLY-VPK, 
+              ],
+              ; Temperature derating
+              [
+                false => DERATE-CAPACITOR-ETANTPOLY-TEMP,
+              ]
+            ]
+          ["tantalum", "manganese-dioxide"] :
+            [
+              ; Vpk derating
+              [
+                false => DERATE-CAPACITOR-ETANTMNO2-VPK
+                "worst-case" => DERATE-CAPACITOR-ETANTMNO2-VPK-NOM
+                "nominal"    => DERATE-CAPACITOR-ETANTMNO2-VPK-WC
+              ], 
+              ; Temperature derating
+              [
+                "worst-case" => DERATE-CAPACITOR-ETANTMNO2-TEMP-WC
+                "nominal"    => DERATE-CAPACITOR-ETANTMNO2-TEMP-NOM
+              ]
+            ]
+      
+      for kv in derate-temp do :
+        check capacitor-temp(c, key(kv), value(kv))
+      
+      for kv in derate-vpk do :
+        check capacitor-voltage(c, key(kv), value(kv))
+
+; Checks if the peak current through the cap is above the rated
+; value.
+pcb-check electrolytic-cap-current (c:JITXObject) :
+  #CHECK(
+    condition = has-property?(c.rated-current-pk)
+    name = NAME
+    description = DESCRIPTION
+    category = CATEGORY
+    subcheck-description = "Check if the capacitor has a peak current rating."
+    info-message = "%_ is missing the `rated-current-pk` property"
+    pass-message = "%_ has the `rated-current-pkg` property"
+  )
+
+  val rated-current-pk = property(c.rated-current-pk)
+  val peak-current     = property(c.operating-point)
+    $> peak-current
+  val ipk = max(abs(max-value(peak-current)), abs(min-value(peak-current)))
+
+  ; todo: rms current
+  #CHECK(
+    condition =  ipk < rated-current-pk,
+    name        = NAME
+    description = DESCRIPTION
+    category    = CATEGORY
+    subcheck-description = "Check the capacitor peak current matches the rated peak current",
+    pass-message = "%_ peak current %_A is compatible with the rated peak current %_A" 
+      % [context(c), ipk, rated-current-pk],
+    fail-message = "%_ peak current %_A is not compatible with the rated peak current %_A" 
+      % [context(c), ipk, rated-current-pk],
+    locators = [c]
+  )
+
+;==============================================================================
+;============================ Mica Film Capacitors ============================
+;==============================================================================
+defn check-mica-film-capacitor (c:JITXObject) :
+  inside pcb-module :
+    check capacitor-voltage(c, false, DERATE-CAPACITOR-MICA-VPK)  
+    check capacitor-temp(c, false, DERATE-CAPACITOR-MICA-TEMP)

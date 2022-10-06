@@ -1,0 +1,54 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/cui-devices/PJ-002BH-SMT-TR :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/symbol-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/bundles
+  import ocdb/utils/box-symbol
+
+  import ocdb/utils/property-structs
+  import ocdb/utils/generator-utils
+  import ocdb/utils/checks
+
+pcb-landpattern plug-lp :
+  pad p[1] : smd-pad(2.8, 2.4) at loc(  5.00,  2.40 / 2.00 + 4.50) ; 1.9 + 4.9
+  pad p[4] : smd-pad(2.8, 2.4) at loc( 11.10,  2.40 / 2.00 + 4.50)
+  pad p[2] : smd-pad(2.8, 2.4) at loc(  5.00,  2.40 / 2.00 - 6.90)
+  pad p[3] : smd-pad(2.8, 2.4) at loc( 11.10,  2.40 / 2.00 - 6.90)
+
+  layer(Cutout()) = Circle(Point( 5.00, 0.00), 1.70 / 2.0)
+  layer(Cutout()) = Circle(Point( 9.50, 0.00), 1.85 / 2.0)
+
+  layer(Courtyard(Top)) = Rectangle(14.8, 12.6, loc(7.40, 0.00))
+  layer(Silkscreen("f-silk", Top)) = LineRectangle(8.90, 6.50, 8.90 / 2.00, 0.00)
+;   layer(Silkscreen("f-silk", Top)) = Circle(Point( 0.00, 0.00), 1.25)
+;   layer(Silkscreen("f-silk", Top)) = Circle(Point( 0.00, 0.00), 3.20)
+;   ;layer(Silkscreen("f-silk", Top)) = LineRectangle(7.0, 7.0)
+  ;layer(Silkscreen("f-silk", Top)) = Line(0.12, [ Point(-3.5, -3.5), Point(-3.0, -4.0), Point(-2.5, -3.5) ])
+  ref-label()
+
+public pcb-component component :
+  port p : pin[[1 through 3]]
+  ; Datasheet =  https://www.cuidevices.com/product/resource/pj-002bh-smt-tr.pdf
+  manufacturer = "CUI Devices"
+  description = "Power Barrel Connector Jack 2.50mm ID (0.098\"), 5.50mm OD (0.217\") Surface Mount, Right Angle"
+  mpn = "PJ-002BH-SMT-TR"
+  pin-properties :
+    [pin:Ref     | pads:Int ...   | side:Dir]
+    [p[1] | 1 4 | Right ]
+    [p[2] | 2 | Down  ]
+    [p[3] | 3 | Left  ]
+  make-box-symbol()
+  assign-landpattern(plug-lp)
+  supports power:
+    power.vdd => self.p[1]
+    power.gnd => self.p[2]
+  property(self.rated-temperature) = RatedTemperature(min-max(-20.0, 70.0))

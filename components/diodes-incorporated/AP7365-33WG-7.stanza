@@ -1,0 +1,54 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/diodes-incorporated/AP7365-33WG-7:
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/bundles
+  import ocdb/utils/symbols
+  import ocdb/utils/box-symbol
+  import ocdb/utils/property-structs
+
+public pcb-component component :
+  pin VEN
+  pin GND
+  pin VIN
+  pin VOUT
+  pin nc
+  name = "AP7365-33WG-7"
+  manufacturer = "Diodes Incorporated"
+  description = "600-mA, Low-Dropout Regulator"
+  mpn = "AP7365-33WG-7"
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir | generic-pin:GenericPin]
+    [GND     | 2            | Down     | -]
+    [VOUT    | 5            | Right    | GenericPin(min-max(0.0, 6.0), 4.0e3)]
+    [VIN     | 1            | Left     | GenericPin(min-max(0.0, 6.0), 4.0e3)]
+    [VEN     | 3            | Left     | GenericPin(min-max(0.0, 6.0), 4.0e3)]
+    [nc      | 4            | Down     | -]
+  make-box-symbol()
+  assign-landpattern(SOT95P280X145-5N)
+
+  property(VOUT.power-supply-pin) = PowerSupplyPin(typ(3.3), 0.6)
+  property(VIN.power-pin) = PowerPin(min-max(2.0, 6.0))
+  property(self.rated-temperature) = RatedTemperature(min-max(-40.0, 85.0))
+
+public pcb-module module : 
+  port vin : power
+  port vout : power
+  pin gnd
+  pin en
+  public inst ps : ocdb/components/diodes-incorporated/AP7365-33WG-7/component
+  bypass-cap-strap(ps.VIN, gnd, 1.0e-6)
+  bypass-cap-strap(ps.VOUT, gnd, 1.0e-6)
+  net (vin.vdd, ps.VIN)
+  net (ps.VOUT vout.vdd)
+  net (gnd, ps.GND vout.gnd vin.gnd)
+  net (en, ps.VEN)
+
+  schematic-group(self) = AP7365-33WG-7

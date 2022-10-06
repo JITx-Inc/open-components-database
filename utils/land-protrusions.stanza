@@ -2,12 +2,12 @@
 ;==============================================================================
 ;========================== Land Protrusion Tables ============================
 ;==============================================================================
-defpackage ocdb/land-protrusions:
+defpackage ocdb/utils/land-protrusions:
   import core
   import collections
   import jitx
   import jitx/commands
-  import ocdb/design-vars
+  import ocdb/utils/design-vars
 
 ;TODO:
 ;  - BGA (table 3-17)
@@ -17,7 +17,7 @@ defpackage ocdb/land-protrusions:
 
 ; LandProtrusionType is a helper enum for various kinds of leads and terminations on 
 ; components. It is used to configure their generated land patterns.
-public pcb-enum ocdb/land-patterns/leads/LandProtrusionType:
+public pcb-enum ocdb/utils/landpatterns/leads/LandProtrusionType:
   SmallFlatRibbonLLeads,  ; Flat ribbon L leads for pitch less than 0.0625mm
   SmallGullWingLeads,     ; Gull wing leads with pitch less than 0.0625mm
   BigFlatRibbonLLeads,    ; Flat ribbon L leads for pitch greater than 0.0625mm
@@ -26,6 +26,7 @@ public pcb-enum ocdb/land-patterns/leads/LandProtrusionType:
   SmallRectangularLeads,  ; Leads for rectangular components (chip capacitors, resistors, inductors) smaller than 0601
   BigRectangularLeads,    ; Leads for rectangular components (chip capacitors, resistors, inductors) 0601 or larger
   CylindricalLeads,       ; Cylindrical end cap leads
+  LeadlessConcaveCastellated, ; Lead less chip carrier leads
   LeadlessChipCarrierLeads, ; Lead less chip carrier leads
   ConcaveChipArrayLeads,    ; Concave chip array leads
   ConvexChipArrayLeads,     ; Convex chip array leads
@@ -43,7 +44,7 @@ public pcb-enum ocdb/land-patterns/leads/LandProtrusionType:
 
 ; LeadFillets are extra spacing along the sides of a lead when generating a land for 
 ; a component's leads.
-public pcb-struct ocdb/land-patterns/packages/LeadFillets:
+public pcb-struct ocdb/utils/landpatterns/packages/LeadFillets:
   toe:Double  ; space away from the component towards the board
   heel:Double ; space towards the component
   side:Double ; space on the edges of the lead
@@ -69,6 +70,7 @@ public defn lead-fillets (lead-type:LandProtrusionType, p:DensityLevel) -> LeadF
     (_:JLeads): j-leads(p)
     (_:BigRectangularLeads): big-rectangular(p)
     (_:SmallRectangularLeads): small-rectangular(p)
+    (_:LeadlessConcaveCastellated): leadless-concave-castellated(p)
     (_:CylindricalLeads): cylindrical(p)
     (_:LeadlessChipCarrierLeads): leadless-chip-carrier(p)
     (_:ConcaveChipArrayLeads): concave-chip-array(p)
@@ -124,6 +126,13 @@ protected defn small-rectangular (p:DensityLevel):
     DensityLevelA: LeadFillets(0.30, 0.00, 0.00 ,0.2)
     DensityLevelB: LeadFillets(0.20, 0.00, 0.00 ,0.15)
     DensityLevelC: LeadFillets(0.10, 0.00, 0.00, 0.1)
+
+; Jh is calculated based on component height for density level B
+protected defn leadless-concave-castellated (p:DensityLevel):
+  switch(p):
+    DensityLevelA: LeadFillets(0.25, 0.65, 0.05 ,0.5)
+    DensityLevelB: LeadFillets(0.15, 0.45, 0.00 ,0.25)
+    DensityLevelC: LeadFillets(0.05, 0.45, 0.00, 0.1)
 
 protected defn cylindrical (p:DensityLevel):
   switch(p):

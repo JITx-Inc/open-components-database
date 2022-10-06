@@ -7,24 +7,24 @@ defpackage ocdb/designs/usb-accel :
   import jitx
   import jitx/commands
 
-  import ocdb/bundles
-  import ocdb/connects
-  import ocdb/defaults
-  import ocdb/design-vars
-  import ocdb/generator-utils
-  import ocdb/generic-components
-  import ocdb/property-structs
-  import ocdb/checks
-  import ocdb/micro-controllers
+  import ocdb/utils/bundles
+  import ocdb/utils/connects
+  import ocdb/utils/defaults
+  import ocdb/utils/design-vars
+  import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/property-structs
+  import ocdb/utils/checks
+  import ocdb/utils/micro-controllers
 
 val BOARD-SHAPE = RoundedRectangle(50.0, 50.0, 0.25)
 pcb-module accel:  
   port power : power
-  inst accel : ocdb/st-microelectronics/LIS3DH/module
-  inst mcu : ocdb/st-microelectronics/STM32F105VBH6/module([])
+  inst accel : ocdb/components/st-microelectronics/LIS3DH/module
+  inst mcu : ocdb/components/st-microelectronics/STM32F105VBH6/module([])
   require intrpts:gpio[2] from mcu.mcu
   inst usb : micro-usb-connector
-  inst ldo : ocdb/diodes-incorporated/AP2112/module
+  inst ldo : ocdb/components/diodes-incorporated/AP2112/module
   require spi1:spi-controller() from mcu.mcu
   connect-spi(mcu.mcu, spi1, [accel.spi])
   net (intrpts[0].gpio accel.int[1])
@@ -32,15 +32,15 @@ pcb-module accel:
 
   ; Create a protected power and data interface for USB-2
   net gnd (mcu.power.gnd usb.usb-2.vbus.gnd power.gnd)
-  val protected-usb = ocdb/protection/esd-clamp(usb.usb-2, gnd) as JITXObject
+  val protected-usb = ocdb/modules/protection/esd-clamp(usb.usb-2, gnd) as JITXObject
   net P5V0 (ldo.vin.vdd ldo.en mcu.mcu.PA[9] usb.usb-2.vbus.vdd)
   net (mcu.mcu.PA[11] usb.usb-2.data.N)
   net (mcu.mcu.PA[12] usb.usb-2.data.P)
   net P3V3 (ldo.vout.vdd accel.power.vdd mcu.power.vdd power.vdd)
   net (gnd accel.power.gnd)
-  symbol(P5V0) = ocdb/symbols/supply-sym
-  symbol(P3V3) = ocdb/symbols/supply-sym
-  symbol(gnd) = ocdb/symbols/ground-sym  
+  symbol(P5V0) = ocdb/utils/symbols/supply-sym
+  symbol(P3V3) = ocdb/utils/symbols/supply-sym
+  symbol(gnd) = ocdb/utils/symbols/ground-sym  
 
 make-default-board(accel, 4, BOARD-SHAPE)
 view-board()

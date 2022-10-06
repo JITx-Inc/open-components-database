@@ -1,28 +1,31 @@
 ; script used to generate ocdb.stanza
-defpackage ocdb/gen:
+defpackage ocdb/gen :
   import core
   import collections
 
 val ignored-paths = [
+  ".git",
+  ".github",
   "designs",
   "doc",
   "tests",
+  "deprecated-tests",
   "style-guide"
   "ocdb.stanza"
   "scripts"
 ]
 
-defn package-names (path) -> Seq<String>:
+defn package-names (path) -> Seq<String> :
   generate<String>:
     for file in dir-files(path) do:
+      ; println("Checking: %~" % [file])
       if not (contains?(ignored-paths, file)) :
         val next-path = to-string("%_/%_" % [path, file])
-        match(file-type(next-path)):
+        match(file-type(next-path)) :
           (_:DirectoryType):
-            ; println("descending into %_ ..." % [next-path])
-            for pkg in package-names(next-path) do:
+            for pkg in package-names(next-path) do :
               yield(pkg)
-          (_:?):
+          (_:?) :
             if suffix?(next-path, ".stanza"):
               ; println("extracting from %_ ..." % [next-path])
               for line in filter(prefix?{_, "defpackage"}, split(slurp(next-path), "\n")) do:
@@ -32,6 +35,6 @@ defn package-names (path) -> Seq<String>:
 
 ; get current paths
 val sbuf = StringBuffer()
-println(sbuf, "defpackage ocdb:")
-do(println{IndentedStream(sbuf), "import %_" % [_]}, package-names(resolve-path(".")))
+println(sbuf, "defpackage ocdb :")
+do(println{IndentedStream(sbuf), "import %_" % [_]}, lazy-qsort $ package-names(resolve-path(".")))
 println(to-string(sbuf))

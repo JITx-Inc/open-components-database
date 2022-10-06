@@ -1,0 +1,48 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/diodes-incorporated/KN3270012 :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/symbol-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/box-symbol
+  import ocdb/utils/bundles
+  import ocdb/utils/property-structs
+  
+pcb-landpattern osc-lp :
+  val padx = 1.8
+  val pady = 2.0
+  val padlocx = 2.2
+  val padlocy = 2.54
+  pad p[1] : smd-pad(padx, pady) at loc(-1.0 * padlocx, -1.0 * padlocy, 0.0)
+  pad p[2] : smd-pad(padx, pady) at loc( padlocx, -1.0 * padlocy, 0.0)
+  pad p[3] : smd-pad(padx, pady) at loc(padlocx, padlocy, 0.0)
+  pad p[4] : smd-pad(padx, pady) at loc(-1.0 * padlocx, padlocy, 0.0)
+
+  layer(Courtyard(Top)) = Rectangle(7.5,7.5)
+  layer(Silkscreen("f-silk", Top)) = Line(0.12, [ Point(-3.8, -3.5), Point(-3.8, -1.5) ])
+  ref-label()
+
+public pcb-component component :
+  pin-properties :
+    [pin:Ref| pads:Ref ... | side:Dir]
+    [OE     | p[1]  | Left]
+    [GND    | p[2]  | Down]
+    [OUT    | p[3]  | Right]
+    [VDD    | p[4]  | Up]
+  supports power:
+    power.vdd => self.VDD
+    power.gnd => self.GND
+  ; Datasheet =  https://datasheet.lcsc.com/lcsc/1811082113_Korean-Hroparts-Elec-K2-1102SP-C4SC-04_C127509.pdf
+  manufacturer = "Diodes Inc."
+  description = "3.3V, 7.0x5.0mm, 32.768kHz CMOS Crystal Oscillator"
+  mpn = "KN3270012"
+  assign-landpattern(osc-lp)
+  make-box-symbol()
+  property(self.rated-temperature) = RatedTemperature(min-max(-20.0, 70.0))

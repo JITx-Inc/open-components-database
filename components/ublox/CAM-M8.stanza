@@ -1,0 +1,131 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/ublox/CAM-M8 :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/symbol-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/box-symbol
+  import ocdb/utils/bundles
+  import ocdb/utils/land-protrusions
+  import ocdb/utils/connects
+
+  import ocdb/utils/property-structs
+  import ocdb/utils/generator-utils
+  import ocdb/utils/checks
+
+
+pcb-landpattern CAM-M8-LCC-landpattern :
+  ;
+  ;     p1 p1 ... p1 p1 p2
+  ;
+  ;    p3
+  ;    .
+  ;    p3
+  ;
+  ;     p1 p1 ... p1 p1 p2
+  ;
+  val pitch1 = 1.000
+  val pitch2 = 1.150
+  val pad-height = 1.500
+  val pad1-width = 0.700
+  val pad2-width = 1.000
+  val pkg-half-width = 14.000 / 2.0
+  val pkg-half-width-pad = pkg-half-width - (pad1-width / 2.0)
+  val pkg-half-width-pad3 = pkg-half-width-pad
+  val pkg-half-height = 10.300 / 2.0
+  val pkg-half-height-pad = pkg-half-height - (pad-height / 2.0)
+  val pad1 = smd-pad(pad1-width, pad-height)
+  val pad2 = smd-pad(pad2-width, pad-height)
+  val pad3 = smd-pad(pad-height, pad1-width)
+  val offset-x-1 = pitch2 - (pad1-width / 2.0)
+  val offset-x-2 = 0.550 + pad2-width / 2.0 + pitch2
+
+  for (i in 1 to 13, j in 0 to false) do :
+    pad p[i] : pad1 at loc(((- pkg-half-width) + offset-x-1 + to-double(j) * pitch1), (- pkg-half-height-pad))
+  
+  for (i in 15 to 27, j in 0 to false) do :
+    pad p[i] : pad1 at loc((pkg-half-width - offset-x-2 - to-double(j) * pitch1), pkg-half-height-pad)
+
+  for (i in 27 to 32, j in 0 to false) do :
+    pad p[i] : pad3 at loc((- pkg-half-width-pad3), to-double(2 - j) * pitch1)
+
+  pad p[13] : pad2 at loc((pkg-half-width - 0.550 - pad2-width / 2.0), (- pkg-half-height-pad))
+  pad p[14] : pad2 at loc((pkg-half-width - 0.550 - pad2-width / 2.0), pkg-half-height-pad)
+
+  layer(Courtyard(Top)) = Rectangle(pkg-half-width * 2.0 + 0.700, pkg-half-height * 2.0)
+  layer(Silkscreen("pol", Top)) = Circle((- pkg-half-width) + offset-x-1, (-1.500 - pkg-half-height-pad), 0.254)
+  ref-label()
+
+public pcb-component component :
+  pin VCC_IO      
+  pin SDA/SPI-CS_N
+  pin SCL/SPI-CLK 
+  pin EXTINT      
+  pin V_BCKP      
+  pin VCC         
+  pin RF_OUT      
+  pin RF_IN       
+  pin D_S         
+  pin RESET_N     
+  pin SAFEBOOT_N  
+  pin TXD/SPI-MISO
+  pin RXD/SPI-MOSI
+  pin TIMEPULSE   
+  pin LNA_EN      
+  pin GND     
+      
+  name = "CAM-M8C"
+  manufacturer = "UBlox"
+  description = "GNSS receiver"
+  reference-prefix = "U"
+  mpn = "CAM-M8C"
+
+  val gnd-pins = [4 5 10 11 12 13 14 15 18 19 21 22 27 31]
+  pin-properties :
+    [pin:Ref          | pads:Int ...      | side:Dir]
+    [ VCC_IO          | 1                 | Up    ] ;  IO Supply Voltage 
+    [ SDA/SPI-CS_N    | 3                 | Left  ] ;  DDC Data if D_SEL =1 (or open) SPI Chip Select if D_SEL = 0
+    [ SCL/SPI-CLK     | 6                 | Left  ] ;  DDC Clock if D_SEL =1(or open) SPI Clock if D_SEL = 0
+    [ EXTINT          | 7                 | Right ] ;  External Interrupt Pin
+    [ V_BCKP          | 8                 | Up    ] ;  Backup voltage supply
+    [ VCC             | 9                 | Up    ] ;  Supply voltage
+    [ RF_OUT          | 16                | Right ] ;  Embedded Antenna Output (50 ohm)
+    [ RF_IN           | 17                | Right ] ;  GPS/GNSS signal input
+    [ D_S             | 20                | Left  ] ;  Interface select
+    [ RESET_N         | 23                | Left  ] ;  RESET_N
+    [ SAFEBOOT_N      | 24                | Left  ] ;  SAFEBOOT_N (for future service, updates and reconfiguration, lea
+    [ TXD/SPI-MISO    | 25                | Right ] ;  Serial Port if D_SEL =1 (or open) SPI MISO if D_SEL = 0
+    [ RXD/SPI-MOSI    | 26                | Right ] ;  Serial Port if D_SEL =1 (or open) SPI MOSI if D_SEL = 0
+    [ Reserved        | 2 28              | Down  ] ;  Reserved
+    [ TIMEPULSE       | 29                | Right ] ;  Time pulse (1 PPS) 
+    [ LNA_EN          | 30                | Left  ] ;  Antenna control 
+    [ GND             | 4 5 10 11 12 13 14 15 18 19 21 22 27 31 | Down  ] ;  Ground
+
+  make-box-symbol()
+  assign-landpattern(CAM-M8-LCC-landpattern)
+  property(self.rated-temperature) = RatedTemperature(min-max(-40.0, 85.0))
+
+public pcb-module module :
+  port supply : power
+  pin rx
+  pin tx
+  pin TIMEPULSE   
+
+  public inst U1 : ocdb/components/ublox/CAM-M8/component
+  net (supply.gnd U1.GND)
+  net (supply.vdd U1.VCC U1.VCC_IO U1.V_BCKP)
+
+  bypass-cap-strap(U1.VCC, U1.GND, 4.7e-6)
+  res-strap(U1.TXD/SPI-MISO, tx, 220.0)
+  res-strap(U1.RXD/SPI-MOSI, rx, 220.0)
+  net (TIMEPULSE U1.TIMEPULSE)
+  supports uart():
+    uart().tx => tx
+    uart().rx => rx

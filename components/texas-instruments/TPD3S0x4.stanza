@@ -1,20 +1,19 @@
 #use-added-syntax(jitx)
-defpackage ocdb/texas-instruments/TPD3S0x4 :
+defpackage ocdb/components/texas-instruments/TPD3S0x4 :
   import core
   import collections
   import math
   import jitx
   import jitx/commands
-  import ocdb/defaults
+  import ocdb/utils/defaults
 
-  import ocdb/land-patterns
-  import ocdb/symbols
-  import ocdb/bundles
-  import ocdb/generator-utils
-  import ocdb/generic-components
-  import ocdb/box-symbol
-  import ocdb/property-structs
-  import ocdb/tolerance
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/bundles
+  import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/box-symbol
+  import ocdb/utils/property-structs
 
 public pcb-component component :
   manufacturer = "Texas Instruments"
@@ -31,6 +30,7 @@ public pcb-component component :
   assign-landpattern(SOT95P280X145-6N)
   make-box-symbol()
   property(self.IN.power-pin) = PowerPin(min-max(4.5, 5.5))
+  property(self.rated-temperature) = RatedTemperature(min-max(-40.0, 85.0))
 
 
 public pcb-module module :
@@ -38,7 +38,7 @@ public pcb-module module :
   port usb-out : usb-2
   pin en
 
-  public inst tpd : ocdb/texas-instruments/TPD3S0x4/component
+  public inst tpd : ocdb/components/texas-instruments/TPD3S0x4/component
   net (usb-in.vbus.vdd tpd.IN)
   net (usb-in.vbus.gnd tpd.GND usb-out.vbus.gnd)
   net (usb-out.vbus.vdd tpd.OUT)
@@ -50,8 +50,3 @@ public pcb-module module :
   cap-strap(tpd.OUT, tpd.GND, 10.0e-6)
 
   schematic-group(self) = TPD3S0x4
-
-  ; Pass through the supplied voltage
-  ; eval-when has-property?(tpd.IN.rail-voltage):
-    ; property(tpd.OUT.power-supply-pin) = PowerSupplyPin(property(tpd.IN.rail-voltage), 0.6) 
-  property(tpd.OUT.power-supply-pin) = PowerSupplyPin(5.0, 0.6) 
