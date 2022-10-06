@@ -1,0 +1,59 @@
+#use-added-syntax(jitx)
+defpackage ocdb/te-connectivity/2102735-1 :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/defaults
+  import ocdb/land-patterns
+  import ocdb/generator-utils
+  import ocdb/generic-components
+  import ocdb/bundles
+  import ocdb/symbols
+  import ocdb/box-symbol
+
+public pcb-component component:
+  name = "2102735-1"
+  manufacturer = "TE"
+  mpn = "2102735-1"
+
+  defn pin-name (r:Int, c:Int) :
+    val letter = red-alph-letter(r)
+    Ref(letter)[c + 1]
+  pin-properties :
+    [pin:Ref | pads:Ref ... | side:Dir | bank:Int]
+    for c in 0 to 8 do :
+      for r in 0 to 7 do :
+        [(pin-name(r,c)) | (pin-name(r,c)) | Right | c]
+  reference-prefix = "P"
+
+  make-box-symbol()
+  assign-landpattern(te-2102735-1-pkg)
+
+pcb-landpattern te-2102735-1-pkg :
+
+  defn make-pad (r:Int, c:Int) :
+    val x = ((to-double(8) - 1.0) / -2.0 + to-double(c)) * -1.8
+    val y = ((to-double(7) - 1.0) / 2.0 - to-double(r)) * -1.35
+    val letter = red-alph-letter(r)
+    val name = Ref(letter)[c + 1]
+
+    ;fab-note : "PLATED THROUGH HOLE PER TE 114-13056, FIGURE 4"
+    pad (name) : pth-pad(0.55 / 2.0, 0.92 / 2.0) at loc(x,y)
+
+  for c in 0 to 8 do :
+    for r in 0 to 7 do :
+      make-pad(r,c)
+
+  val post = Circle(0.56 / 2.0)
+  layer(Cutout()) = loc(3.5 * 1.8, 4.0 * 1.35) * post
+  layer(Cutout()) = loc(-0.5 * 1.8, 4.0 * 1.35) * post
+
+  layer(Courtyard(Top)) = Rectangle(16.08, 11.81, loc(0.9, 0.0))
+  layer(Silkscreen("f-silk", Top)) = LineRectangle(16.08, 11.81, 0.9, 0.0)
+  layer(BoardEdge()) = Line(0.0, [Point(1.0, -3.0 * 1.35 - 1.5), Point(-1.0, -3.0 * 1.35 - 1.5)])
+  ref-label()
+
+public pcb-module module :
+  inst c : component
