@@ -1,3 +1,4 @@
+#use-added-syntax(jitx)
 defpackage ocdb/utils/passive-checks/utils :
   import core
   import collections
@@ -10,6 +11,30 @@ public defn context (c:JITXObject) :
 
 doc:"Category used by passive component checks."
 public val CATEGORY = "Component Checks"
+
+doc:"Make sure that a component has the correct properties."
+public defn check-has-properties (name:String, 
+                                  thing:JITXObject, 
+                                  properties:Tuple<Symbol>) :
+  val missing = 
+    for prop in properties seq? :
+      match(get-property?(thing, prop)) : 
+        (one:One)   : None()
+        (none:None) : One(prop)
+
+  val condition = not empty?(missing)
+  val pass = "%_ has properties %," % [context(thing), properties]
+  val fail = "%_ is missing a properties %," % [context(thing), missing]
+
+  #CHECK( condition   = condition
+          name        = name
+          locators    = [thing, originating-instantiable(thing)]
+          description = "%_ data consistency" % [context(thing)]
+          category    = "%_ (Data)" % [CATEGORY]
+          subcheck-description = "%_ has properties %," % [context(thing), properties] 
+          info-message = pass
+          pass-message = fail )
+
 
 doc:"Helper to check if a component has a property."
 public defn has-prop-msg (condition: () -> Maybe<True|False>, 

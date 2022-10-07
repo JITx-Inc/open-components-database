@@ -16,6 +16,7 @@ defpackage ocdb/utils/generator-utils:
   import ocdb/modules/power-regulators
   import ocdb/utils/bundles
   import ocdb/utils/relative-voltages
+  import ocdb/utils/propagation
 
 ; =======================================
 ; Ciruit convenience functions
@@ -287,18 +288,22 @@ public defn run-final-passes (module:Instantiable) -> Instantiable :
                            encountered: 5 iterations reached. Check that no eval-when generate other eval-whens in an \
                            infinite loop, or that there is no infinite loop of 2nd order between eval-when execution \
                            and net voltage propagation or pin assignment.")
-
+      
+      
       ;TODO: Review the order and necessity of those algos
       design $> transform-module{propagate-net-voltages, _}
              $> transform-module{propagate-relative-voltages, _}
              $> assign-pins
              $> run-eval-loop
-
+  
+  PROPAGATION-FINISHED = true
+  val final-module = run-evals(result-module)
+  
   ; If we did not set the main module, a user forgetting to set it himself on the new module would be exporting
   ; the module before adding operating points (the main module is set in the loop to be able to assign pins).
   ; Such bug would be invisible.
-  set-main-module(result-module)
-  result-module
+  set-main-module(final-module)
+  final-module
 
 ; FIXME: assign-pins was obviously not meant to be used like this, it depends on the flattening
 ; Is run-evals? actually accessing the information resulting from the pin assignment?
