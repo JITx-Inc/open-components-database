@@ -8,11 +8,24 @@ defpackage ocdb/designs/checks/checked-design :
   import ocdb/utils/generator-utils
   import ocdb/utils/checks
   import ocdb/designs/checks/resistors 
+  import ocdb/designs/checks/capacitors
+  import ocdb/designs/checks/inductors
 
 pcb-module main-module :
   inst rs: resistors
+  inst cs: capacitors
+  inst ls: capacitors
+  
+  net VDD (rs.power.vdd, ls.power.vdd, cs.power.vdd)
+  net GND (rs.power.gnd, ls.power.gnd, cs.power.gnd)
+
+  property(VDD.net-voltage) = typ(5.0)
+  property(GND.net-voltage) = typ(0.0)
   check-design(self)
 
-set-design-directory("checked-design")
-run-final-passes(main-module)
-run-checks("checks.txt")
+defn main () :
+  set-design-directory("checked-design")
+  run-final-passes(main-module)
+  run-checks("checks.txt")
+
+main()
