@@ -2,6 +2,7 @@
 defpackage ocdb/utils/landpatterns :
   import core
   import collections
+  import lang-utils
   import math
   import jitx
   import jitx/fonts
@@ -1174,6 +1175,15 @@ public defn ipc-formula (L:Toleranced, ; the distance from edge-of-lead to edge-
   val Xmin = Wmin + 2.0 * Js + C_W ; the size of the land in the dimension orthogonal to Z and G.
   IpcResults(Zmax, Gmin, Xmin)
 
+defn corner-pad? (num-pads:Int,
+                  pad-index:Int,
+                  corner-pads:False|[Pad, Pad]) -> False|Pad :
+  match(corner-pads:[Pad, Pad]) :
+    switch(pad-index) :
+      0              : corner-pads[0]
+      (num-pads - 1) : corner-pads[1]
+      else : false
+  
 ; helper struct to contain information about how we plan 
 ; to layout the pads on a single side of a quad land pattern
 public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on the west face
@@ -1192,6 +1202,7 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
                                    terminal-width: Toleranced,  ; the dimension of the leads in the y direction on the east/west faces
                                    lead-type:  LandProtrusionType, ; the type of the leads
                                    density-level: DensityLevel,     ; the density level of the design
+                                   corner-pads?:False|[Pad, Pad], ; corner pads
                                    exposed-metal-heat-feature?: Shape|False):     ; an optional thermal pad
   val lead-fillets = lead-fillets(lead-type, density-level)  
   inside pcb-landpattern: 
@@ -1199,13 +1210,13 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
     ; compute dimensions
     val ipc-ns = ipc-formula(lead-span-x, terminal-length, terminal-width, lead-fillets)
     val ipc-ew = ipc-formula(lead-span-y, terminal-length, terminal-width, lead-fillets)
-    val pad-sz-ns = transpose(pad-size(ipc-ns))
+    val pad-sz-ns = pad-size(ipc-ns)
     val pad-sz-ew = pad-size(ipc-ew)
 
     ;----------------------------------------------------------
     ; compute pad locations 
     val x-shift = 0.5 * (Zmax(ipc-ew) - x(pad-sz-ew))
-    val y-shift = 0.5 * (Zmax(ipc-ns) - y(pad-sz-ns))
+    val y-shift = 0.5 * (Zmax(ipc-ns) - x(pad-sz-ns))
 
     val pad-1-loc = to-tuple(grid-locs(num-pins-east, 2, 2.0 * x-shift, pitch-east))[0]
     var pin-count = 0 ; accumulator, holds the number of pins we have laid out
@@ -1224,13 +1235,23 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
         Right: 
           shift-locs{x-shift, 0.0, _ } $
           reverse(to-list(col-locs(num-pins, pitch)))
-      
+      val rot = switch(dir) :
+        Left  :   0.0
+        Right : 180.0
+        Down  :  90.0
+        Up    : -90.0
+
       val pad-dims = 
-        if contains?([Left, Right], dir): pad-sz-ew
-        else: pad-sz-ns        
+        if contains?([Left, Right], dir) : 
+          pad-sz-ew
+        else : 
+          pad-sz-ns
+          
       val idx = pin-count to (pin-count + num-pins)
-      for (i in idx, loc in locs) do:
-        pad p[i + 1]: smd-pad(pad-dims) at loc
+      for (i in idx, loc in locs, n in 0 to false) do:
+        val pad* = if-false?(smd-pad(pad-dims), 
+                             corner-pad?(num-pins, n, corner-pads?))
+        pad p[i + 1]: pad* at sub-angle(loc, rot)
       pin-count = pin-count + num-pins
 
     layout-pads(Left, num-pins-east,  pitch-east)
@@ -1299,6 +1320,7 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
                         package-length, package-width,
                         terminal-length, terminal-width,
                         lead-type, density-level,
+                        false,
                         false)
 
 ; create a quad landpattern with default density level and no thermal pad
@@ -1324,6 +1346,7 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
                         package-length, package-width,
                         terminal-length, terminal-width,
                         lead-type, DENSITY-LEVEL,
+                        false,
                         false)
 
 ; Create a quad landpattern with optional thermal pad and default density level
@@ -1350,6 +1373,7 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
                         package-length, package-width,
                         terminal-length, terminal-width,
                         lead-type, DENSITY-LEVEL,
+                        false,
                         exposed-metal-heat-feature?)
 
 ; Create a quad landpattern with optional thermal pad
@@ -1359,7 +1383,8 @@ public defn make-quad-landpattern (num-pins:Int,
                                    package-size:Toleranced, 
                                    terminal-length:Toleranced, 
                                    terminal-width:Toleranced, 
-                                   lead-type:LandProtrusionType
+                                   lead-type:LandProtrusionType,
+                                   corner-pads?:False|[Pad,Pad],
                                    exposed-metal-heat-feature?:Shape|False):
   ensure-divisible!(num-pins, 4, "make-quad-landpattern(num-pins, ...)")
   make-quad-landpattern(num-pins / 4, num-pins / 4, num-pins / 4, num-pins / 4, 
@@ -1367,8 +1392,8 @@ public defn make-quad-landpattern (num-pins:Int,
                         lead-span, lead-span, 
                         package-size, package-size, 
                         terminal-length, terminal-width, lead-type, 
-                        DENSITY-LEVEL, exposed-metal-heat-feature?)
-  
+                        DENSITY-LEVEL, corner-pads?, exposed-metal-heat-feature?)
+
 ; Create a default quad landpattern with no thermal pad
 public defn make-quad-landpattern (num-pins:Int, 
                                    pitch:Double, 
@@ -1383,7 +1408,8 @@ public defn make-quad-landpattern (num-pins:Int,
                         package-size,
                         terminal-length,
                         terminal-width,
-                        lead-type
+                        lead-type,
+                        false,
                         false)
 
 ; Create a qfn landpattern with optional thermal pad
@@ -1392,6 +1418,7 @@ public defn make-qfn-landpattern (num-pins:Int,
                                   package-size:Toleranced, 
                                   terminal-length:Toleranced, 
                                   terminal-width:Toleranced,
+                                  corner-pads?:False|[Pad, Pad],
                                   exposed-metal-heat-feature?:Shape|False):
   make-quad-landpattern(num-pins,
                         pitch,
@@ -1399,6 +1426,7 @@ public defn make-qfn-landpattern (num-pins:Int,
                         package-size, 
                         terminal-length, terminal-width, 
                         QuadFlatNoLeads, 
+                        corner-pads?
                         exposed-metal-heat-feature?)
 
 ; Create a qfn landpattern with no thermal pad
@@ -1407,14 +1435,15 @@ public defn make-qfn-landpattern (num-pins:Int,
                                   package-size:Toleranced, 
                                   terminal-length:Toleranced, 
                                   terminal-width:Toleranced):
-  make-qfn-landpattern(num-pins, pitch, package-size, terminal-length, terminal-width, false)
+  make-qfn-landpattern(num-pins, pitch, package-size, terminal-length, terminal-width, false, false)
 
 ; Create a qfn landpattern with optional thermal pad and differing number of pins per side
 public defn make-qfn-landpattern (num-pins:[Int, Int, Int, Int], 
                                   pitch:Double, 
                                   package-size:Toleranced, 
-                                  terminal-length:Toleranced, 
+                                  terminal-length:Toleranced,
                                   terminal-width:Toleranced,
+                                  corner-pads?:False|[Pad, Pad],
                                   exposed-metal-heat-feature?:Shape|False):
   make-quad-landpattern(num-pins[0], num-pins[1], num-pins[2], num-pins[3], 
                         pitch, pitch, pitch, pitch,
@@ -1422,6 +1451,7 @@ public defn make-qfn-landpattern (num-pins:[Int, Int, Int, Int],
                         package-size, package-size,
                         terminal-length, terminal-width, 
                         QuadFlatNoLeads, DENSITY-LEVEL, 
+                        corner-pads?,
                         exposed-metal-heat-feature?)
 
 ; Create a QFN landpattern with no thermal pad and different number of pins per side
@@ -1430,7 +1460,10 @@ public defn make-qfn-landpattern (num-pins:[Int, Int, Int, Int],
                                   package-size:Toleranced, 
                                   terminal-length:Toleranced, 
                                   terminal-width:Toleranced):
-  make-qfn-landpattern(num-pins, pitch, package-size, terminal-length, terminal-width, false)
+  make-qfn-landpattern(num-pins, pitch, 
+                       package-size, 
+                       terminal-length, terminal-width, 
+                       false, false)
 
 ; Create a QFP land pattern with optional thermal pad
 public defn make-qfp-landpattern (num-pins:Int, 
@@ -1441,12 +1474,13 @@ public defn make-qfp-landpattern (num-pins:Int,
                                   lead-width:Toleranced
                                   exposed-metal-heat-feature?:Shape|False):
   val lead-type = BigGullWingLeads when pitch >= 0.0625 else SmallGullWingLeads
-  make-quad-landpattern(num-pins, 
+  make-quad-landpattern(num-pins,
                         pitch,
-                        lead-span, 
-                        package-length, 
+                        lead-span,
+                        package-length,
                         lead-length, lead-width,
-                        lead-type, 
+                        lead-type,
+                        false,
                         exposed-metal-heat-feature?)
 
 ; Create a QFP landpattern with no thermal pad
@@ -1456,7 +1490,11 @@ public defn make-qfp-landpattern (num-pins:Int,
                                   package-size:Toleranced, 
                                   lead-length:Toleranced, 
                                   lead-width:Toleranced):
-  make-qfp-landpattern(num-pins, pitch, component-size, package-size, lead-length, lead-width, false)
+  make-qfp-landpattern(num-pins, pitch, 
+                       component-size, 
+                       package-size, 
+                       lead-length, lead-width, 
+                       false)
 
 ; Create an `n` pin SOIC land pattern. 
 ;
