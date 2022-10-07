@@ -11,17 +11,16 @@ defpackage ocdb/utils/passive-checks/inductor-checks :
   import ocdb/utils/generator-utils
 
 val NAME        = "Inductor Checks"
-val DESCRIPTION = "Check inductor component properties"
+defn description (r:JITXObject) :
+  "%_ inductor properties" % [context(r)]
+
 
 doc: \<s> 
   Assigns checks to a single inductor component.
 <s>
 public defn check-inductor (l:JITXObject) :
-  check-inductor-preconditions(l)
-
-  if can-run-inductor-checks?(l) :
-    inside pcb-module :
-      check inductor-power(l)
+  inside pcb-module :
+    check inductor-power(l)
 
 ; TODO: once inside pcb-check lands, reuse/chain logic
 defn can-run-inductor-checks? (l:JITXObject) -> True|False :
@@ -30,33 +29,13 @@ defn can-run-inductor-checks? (l:JITXObject) -> True|False :
     acc = acc and has-property?(l.prop)
   acc
 
-; Checks an inductor component to see if it has the appropriate properties
-defn check-inductor-preconditions (l:JITXObject) :
-  #for prop in [operating-point, rated-power, inductance, dc-resistance] :
-    pcb-check prop (c:JITXObject) :
-      val [pass?, sub-dsc, msg] = 
-        within has-prop-msg(l, `prop) :
-          One(has-property?(l.prop))
-      #CHECK(
-        condition = pass?
-        name = NAME
-        description = DESCRIPTION
-        category = CATEGORY
-        subcheck-description = sub-dsc
-        info-message = msg
-        pass-message = msg
-        locators = [l]
-      )
-
-  inside pcb-module :
-    check operating-point(l)
-    check rated-power(l)
-    check inductance(l)
-    check dc-resistance(l)
-
 ; Check that the power consumed by an inductor is 
 ; below the derated maximum power.
 pcb-check inductor-power (l:JITXObject) :
+  check-has-properties(NAME, l, [`operating-point, 
+                                 `rated-power, 
+                                 `inductance, 
+                                 `dc-resistance])
   val operating-point = property(l.operating-point)
   val rated-power     = property(l.rated-power)
   val inductance      = property(l.inductance)
@@ -71,7 +50,7 @@ pcb-check inductor-power (l:JITXObject) :
   #CHECK(
     condition = power < rated-power*
     name = NAME
-    description = DESCRIPTION
+    description = description(l)
     category = CATEGORY
     subcheck-description = "Check that inductor power derating meets the design requirements"
     pass-message = "Derated power for %_ meets the design requirements: %_W < %_W"

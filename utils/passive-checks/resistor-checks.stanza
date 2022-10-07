@@ -16,17 +16,16 @@ defpackage ocdb/utils/passive-checks/resistor-checks :
 ;==============================================================================
 ; Some common values re-used in this package
 val NAME        = "Resistor Checks"
-val DESCRIPTION = "Check resistor component properties"
 
+defn description (r:JITXObject) :
+  "%_ resistor properties" % [context(r)]
 
 doc: \<s> 
   Assigns checks to a single resistor component.
 <s>
 public defn check-resistor (r:JITXObject) :
-  check-resistor-preconditions(r)
-  if can-run-resistor-checks?(r) :
-    inside pcb-module :
-      check resistor-power(r)
+  inside pcb-module :
+    check resistor-power(r)
 
 ; TODO: once inside pcb-check lands, reuse/chain logic
 defn can-run-resistor-checks? (r:JITXObject) -> True|False :
@@ -35,32 +34,11 @@ defn can-run-resistor-checks? (r:JITXObject) -> True|False :
     acc = acc and has-property?(r.prop)
   acc
 
-; Checks a resistor component to see if it has the appropriate properties
-defn check-resistor-preconditions (r:JITXObject) :
-  #for prop in [resistance, operating-point, rated-power] :
-    pcb-check prop (r:JITXObject) :
-      val [pass?, sub-dsc, msg] = 
-        within has-prop-msg(r, `prop) :
-          One(has-property?(r.prop))
-      #CHECK(
-        condition = pass?
-        name = NAME
-        description = DESCRIPTION
-        category = CATEGORY
-        subcheck-description = sub-dsc
-        info-message = msg
-        pass-message = msg
-        locators = [r]
-      )
-    
-  inside pcb-module :
-    check resistance(r)
-    check operating-point(r)
-    check rated-power(r)
-
 ; Check that the power consumed by a resistor is 
 ; below the derated maximum power.
 pcb-check resistor-power (r:JITXObject) :
+  check-has-properties(NAME, r, [`operating-point, `resistance, `rated-power])
+
   val op-point    = property(r.operating-point)
   val resistance  = property(r.resistance)
   val rated-power = property(r.rated-power)
@@ -75,7 +53,7 @@ pcb-check resistor-power (r:JITXObject) :
   #CHECK(
     condition = power < rated-power*
     name = NAME
-    description = DESCRIPTION
+    description = description(r)
     category = CATEGORY
     subcheck-description = "Check that resistor power derating meets the design requirements"
     pass-message = "Derated power for %_  meets the design requirements: %_W < %_W"
