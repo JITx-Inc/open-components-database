@@ -16,8 +16,80 @@ defpackage ocdb/designs/checks/capacitors :
   import ocdb/utils/design-vars
   import ocdb/utils/generic-components
 
+;==============================================================================
+;============================== Ceramics ======================================
+;==============================================================================
+pcb-component ceramic-cap-pass :
+  reference-prefix = "C"
+
+  pin-properties :
+    [ pin : Ref | pads : Int ... ]
+    [ p[1]      | 1              ]
+    [ p[2]      | 2              ]
+  
+  assign-landpattern(ipc-two-pin-landpattern("0603"))
+  val sym = resistor-sym()
+  symbol =
+    sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
+
+  property(self.capacitor)         = true
+  property(self.type)              = "ceramic"
+  property(self.rated-temperature) = RatedTemperature(min-max(-100.0, 100.0))
+  property(self.capacitance)       = 1.0e-9
+  property(self.rated-voltage)     = 24.0
+
+pcb-component ceramic-cap-fail :
+  reference-prefix = "C"
+
+  pin-properties :
+    [ pin : Ref | pads : Int ... ]
+    [ p[1]      | 1              ]
+    [ p[2]      | 2              ]
+  
+  assign-landpattern(ipc-two-pin-landpattern("0603"))
+  val sym = resistor-sym()
+  symbol =
+    sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
+
+  property(self.capacitor)         = true
+  property(self.type)              = "ceramic"
+  property(self.rated-temperature) = RatedTemperature(min-max(-100.0, 100.0))
+  property(self.capacitance)       = 1.0e-9
+  property(self.rated-voltage)     = 1.0
+
+pcb-component ceramic-cap-info :
+  reference-prefix = "C"
+
+  pin-properties :
+    [ pin : Ref | pads : Int ... ]
+    [ p[1]      | 1              ]
+    [ p[2]      | 2              ]
+  
+  assign-landpattern(ipc-two-pin-landpattern("0603"))
+  val sym = resistor-sym()
+  symbol =
+    sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
+
+
 public pcb-module capacitors :
   port power : ocdb/utils/bundles/power
   inst Creal : ceramic-cap(1.0e-9)
-  net VDD (power.vdd, Creal.p[1])
-  net GND (power.vdd, Creal.p[2])
+
+  inst C-cer-pass: ceramic-cap-pass
+  inst C-cer-fail: ceramic-cap-fail
+  inst C-cer-info: ceramic-cap-info
+  
+  
+
+  net VDD (power.vdd, 
+           Creal.p[1], 
+           C-cer-pass.p[1],
+           C-cer-fail.p[1],
+           C-cer-info.p[1] )
+
+  net GND (power.gnd, 
+           Creal.p[2], 
+           C-cer-pass.p[2],
+           C-cer-fail.p[2],
+           C-cer-info.p[2] )
+  
