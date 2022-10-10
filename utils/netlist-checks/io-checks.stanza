@@ -15,10 +15,10 @@ defpackage ocdb/utils/netlist-checks/io-checks :
 val NAME = "IO Checks"
 
 defn description (p:JITXObject) :
-  "%_ digital I/O Properties"
+  "%_ digital I/O Properties" % [ref(p)]
 
 defn description (p:Seqable<JITXObject>) :
-  "%, digital I/O Properties"
+  "%, digital I/O Properties" % [seq(ref, p)]
 
 doc: "Check the i/o pin nets."
 public defn check-io (module:JITXObject, connections:Connections) :
@@ -106,7 +106,6 @@ defn open-collector-fail-message (open-collectors:Tuple<DigitalPin>, action:?) :
 ; - check that generic pin/io-pin ratings agree
 defn check-open-collectors (open-collectors:Tuple<DigitalPin>,
                             pin-categories:DigitalPinCategories) :
-  println("Running open collector checks")
   inside pcb-module :
     val [pullup-resistors, net-voltages] = 
       pullup-resistors(open-collectors, pin-categories)
@@ -261,13 +260,14 @@ defn pullup-resistors (open-collectors:Tuple<DigitalPin>,
 ;
 defn parallel-resistance (resistors:Tuple<Instance>) -> Double :
   val resistances = map({property(_.resistance) as Double}, resistors)
-  
   fatal("Resistance must be positive") when any?({_ < 0.0}, resistances)
 
-  val num = product(resistances)
-  val den = sum(resistances)
-
-  0.0 when (num == 0.0) else (num / den)
+  if length(resistances) == 1:
+    resistances[0]
+  else :
+    val num = product(resistances)
+    val den = sum(resistances)
+    0.0 when (num == 0.0) else (num / den)
 
 ;==============================================================================
 ;================================ CMOS/TTL ====================================
