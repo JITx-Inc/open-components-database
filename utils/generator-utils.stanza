@@ -44,6 +44,8 @@ public defn add-open-drain-pullups (bus:JITXObject, vio:JITXObject, clk-rate:Dou
     for (p in ports(bus), i in 0 to false) do :
       net (rs.r[i].p[1] p)
       net (rs.r[i].p[2] vio)
+      eval-when has-property?(rs.r[i].p[2].net-voltage) :
+        property(rs.r[i].p[1].net-voltage) = min-max(0.0, max-value(property(rs.r[i].p[2].net-voltage)))
     rs
 
 ; Default is 100kHz clock rate, 100pF bus capacitance.
@@ -238,6 +240,16 @@ public defn set-power-source (pos:JITXObject, neg:JITXObject, v-in:Double):
 
 public defn propagate-net-voltages () :
   inside pcb-module:
+    for c in component-instances(self) do:
+      for p in pins(c) do :
+        if has-property?(p.digital-io):
+          val prop = property(p.digital-io)
+          if driver(prop) is CMOSOutput|TTLOutput :
+            property(p.net-voltage) = min-max(min-value(vol(driver(prop))) max-value(voh(driver(prop))))
+        else if has-property?(p.digital-output):
+          val prop = property(p.digital-output)
+          if driver(prop) is CMOSOutput|TTLOutput :
+            property(p.net-voltage) = min-max(min-value(vol(driver(prop))) max-value(voh(driver(prop))))
     for item in all-connected-items(self) do :
       ;First gather all the voltages on all connected nets.
       val voltages = to-tuple $ seq?({property?(_.net-voltage)}, nets(item))
