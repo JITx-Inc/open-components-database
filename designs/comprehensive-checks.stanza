@@ -349,7 +349,7 @@ pcb-module digital-io :
 
   property(VDD.net-voltage) = min-max(4.5, 5.2)
   property(GND.net-voltage) = typ(0.0)
-  
+
   for n in 0 to 2 * length(cases) do :
     inst Rpullup : ocdb/utils/generic-components/gen-res-cmp(1.0e3)
     net (source[n].gnd, sink[n].gnd, GND)
@@ -393,28 +393,28 @@ pcb-module relative-io-module :
   net (U1.io, U2.io)
 
   property(VDD.net-voltage) = min-max(0.0, 5.0)
+  property(GND.net-voltage) = typ(0.0)
+  
+  symbol(VDD) = supply-sym
   symbol(GND) = ground-sym
   
 ;==============================================================================
 ;==============================================================================
 ;==============================================================================
 pcb-module main-module : 
-  ; inst passives    : passives
-  ; inst digital-io  : digital-io
+  inst passives    : passives
+  inst digital-io  : digital-io
   inst relative-io : relative-io-module
 
-  ; schematic-group(passives) = passives
-  ; schematic-group(digital-io) = digital-io
+  schematic-group(passives) = passives
+  schematic-group(digital-io) = digital-io
   schematic-group(relative-io) = relative-io
 
   check-design(self)
 
 defn main () :
   set-design-directory("comprehensive-checks") 
-  main-module 
-    $> run-final-passes
-    $> set-main-module
-
+  run-final-passes(main-module)
   view-schematic()
   run-checks("checks.txt")
 
