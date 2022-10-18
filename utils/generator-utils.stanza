@@ -238,7 +238,17 @@ public defn propagate-net-voltages () :
   inside pcb-module:
     for item in all-connected-items(self) do :
       ;First gather all the voltages on all connected nets.
-      val voltages = to-tuple $ seq?({property?(_.net-voltage)}, nets(item))
+      val voltages = to-tuple $ 
+        for net in nets(item) seq? :
+          val prop? = property?(net.net-voltage)
+          match(prop?:One) :
+            if value(prop?) is-not Toleranced :
+              ; We cannot necessarily know which net is at issue, since 
+              ; it may not have a ref. This is a slightly better error than
+              ; previous, as downstream it will cause a type error.
+              fatal("Cannot propagate net-voltages. Found a net-voltage that is not a toleranced value: %_." % [value(prop?)])
+          prop?
+      
       ;If at least one net has a voltage property.
       if not empty?(voltages) :
         val voltage = net-voltage!(voltages, item)

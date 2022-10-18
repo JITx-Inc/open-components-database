@@ -9,7 +9,6 @@ defpackage ocdb/utils/relative-voltages :
 
 doc: "Propagate relative voltage properties throughout the netlist."
 public defn propagate-relative-voltages () :
-  ; println("propagating relative voltages for %_." % [ref(self)])
   inside pcb-module :
     propagate-relative-voltages(GlobalNetList(self))
 
@@ -54,12 +53,22 @@ defn scc-relative-voltage (netlist:GlobalNetList) -> List<List<GlobalNet>|Global
 
   stz/algorithms/strong-components(dep-table)
 
-; Replace the generic-pin and net-voltage properties 
-; of a component once propagation completes
-defn sub-max-voltage (p:JITXObject, mv:Toleranced) :
-  val gp = get-property(p, `generic-pin) as GenericPin
-  set-property(p, `net-voltage, mv)
-  set-property(p, `generic-pin, GenericPin(mv, rated-esd(gp)))
+; todo: replace with toleranced arithmetic in jitx package
+defn extrema (a:Toleranced, b:Toleranced) -> Toleranced :
+  val min = min(min-value(a), min-value(b))
+  val max = max(max-value(a), max-value(b))
+  min-max(min, max)
+
+; Update the net-voltage poperty of a pin after relative 
+; values are resolved.
+;
+; If the pin already has a net voltage, the extrema are updated.
+defn update-net-voltage (p:JITXObject, new-net-voltage:Toleranced) :
+  val net-voltage = 
+    match(get-property?(p, `net-voltage)) :
+      (one:One<Toleranced>) : extrema(value(one), new-net-voltage)
+      (none:None) :new-net-voltage
+  set-property(p, `net-voltage, net-voltage)
 
 ; If `p` is referenced from a relative voltage, return the 
 ; reference voltage to it.
@@ -71,7 +80,6 @@ defn ref-voltage? (p:JITXObject) -> False|Toleranced :
 ; Return the relative voltages on a pin, if they exists
 defn relative-voltages (p:JITXObject) -> Seqable<RelativeVoltage> :
   defn flatten (x:?) -> Seqable<Toleranced|RelativeVoltage> :
-    println("Flattening: %_ (%_)" % [ref(p), x])
     match(x) :
       (p:PowerPin)      : [recommended-voltage(p)]
       (p:DigitalInput)  : [vil(p), vih(p)]
@@ -92,11 +100,7 @@ defn relative-voltages (p:JITXObject) -> Seqable<RelativeVoltage> :
     `reset-pin
   ]
 
-  val props*   = for prop in props seq? :
-    val v = get-property?(p, prop)
-    match(v:One) :
-      println("%_.%_: %_" % [ref(p), prop, value(v)])
-    v
+  val props* = seq?(get-property?{p, _}, props)    
   val voltages = seq-cat(flatten, props*)      
   filter-by<RelativeVoltage>(voltages)
 
@@ -104,21 +108,10 @@ defn relative-voltages (p:JITXObject) -> Seqable<RelativeVoltage> :
 defn resolve-relative-voltage (net:GlobalNet) :
   for pin in pins(net) do :
     for rv in relative-voltages(pin) do :
-      println("Resolving relative voltage (%_) for pin %_" % [rv, ref(pin)])
       val mv = ref-voltage?(relative(rv))
       match(mv) :
         (t:Toleranced) :
-          sub-max-voltage(pin, resolve(rv, t))
+          update-net-voltage(pin, resolve(rv, t))
         (f:False) :
           fatal("%_ is missing a net-voltage property." 
             % [ref(relative(rv))])
-
-defenum Case :
-  GenericPin-mv
-  PowerPin-rv
-  DigitalIO-vil
-  DigitalIO-vih
-  DigitalIO-CMOSOutput-vol
-  DigitalIO-CMOSInput-voh
-  DigitalIO-CMOS
-  
