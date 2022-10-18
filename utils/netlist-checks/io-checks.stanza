@@ -203,7 +203,7 @@ pcb-check input-and-generic-pin-max-voltage-rating (net-voltage:Toleranced, pin-
     val input-prop = prop(p)
     ; Check that the min net voltage is above the rating of the input pin
     match(input-prop:DigitalInput|DigitalIO) :
-      val vih-v = eval(vih(input-prop))
+      val vih-v = eval-voltage(vih(input-prop))
 
       #CHECK(condition = min-value(net-voltage) > min-value(vih-v)
              name = NAME
@@ -283,7 +283,6 @@ defn check-cmos-and-ttl (cmos-ttl-outputs:Tuple<DigitalPin>,
         if input != output :
           check input-push-pull-levels(input, output)
 
-
 ; Helper: checks if high/low voltages for two pins are compatible.
 defn eval (v:Toleranced|RelativeVoltage) :
   match(v) :
@@ -298,10 +297,10 @@ defn vhi-vlo (i:Pin, o:Pin,
   val locators = [i, o]
 
   val [vih, voh, vil, vol] = [
-    eval(vih?),
-    eval(voh?),
-    eval(vil?),
-    eval(vol?)
+    eval-voltage(vih?),
+    eval-voltage(voh?),
+    eval-voltage(vil?),
+    eval-voltage(vol?)
   ]
 
   #CHECK(condition = min-value(voh) >= max-value(vih)
@@ -362,7 +361,7 @@ pcb-check input-push-pull-levels (input:DigitalPin, output:DigitalPin) :
 
   val generic-in-prop? = property?(inpt-pin.generic-pin)
   match(generic-in-prop?:One<GenericPin>) :
-    val vin-max = eval(max-voltage(value(generic-in-prop?) as GenericPin))
+    val vin-max = eval-voltage(max-voltage(value(generic-in-prop?) as GenericPin))
     #CHECK(condition = in-range?(vin-max, voh)
            name = NAME
            category = CATEGORY
@@ -422,10 +421,10 @@ pcb-check io-push-pull-levels (io:DigitalPin, output:DigitalPin) :
   vhi-vlo(io-pin, outp-pin, vih(io-prop), voh(driver), vil(io-prop), vol(driver))
 
   match(outp-prop:DigitalIO) :
-    val vol = eval(vol(io-driver))
-    val voh = eval(voh(io-driver))
-    val vil = eval(vil(outp-prop))
-    val vih = eval(vih(outp-prop))
+    val vol = eval-voltage(vol(io-driver))
+    val voh = eval-voltage(voh(io-driver))
+    val vil = eval-voltage(vil(outp-prop))
+    val vih = eval-voltage(vih(outp-prop))
     
     #CHECK(
       condition = min-value(voh) >= min-value(vih),
@@ -461,8 +460,8 @@ pcb-check io-push-pull-levels (io:DigitalPin, output:DigitalPin) :
 
   val generic-io-prop? = property?(io-pin.generic-pin)
   match(generic-io-prop?:One) :
-    val max-input-voltage = eval(max-voltage(value(generic-io-prop?)))
-    val voh = eval(voh(driver))
+    val max-input-voltage = eval-voltage(max-voltage(value(generic-io-prop?)))
+    val voh = eval-voltage(voh(driver))
     
     #CHECK(
       condition = in-range?(max-input-voltage, voh),
@@ -482,8 +481,8 @@ pcb-check io-push-pull-levels (io:DigitalPin, output:DigitalPin) :
 
   val generic-out-prop? = property?(outp-pin.generic-pin)
   match(generic-out-prop?: One) :
-    val max-input-voltage = eval(max-voltage(value(generic-out-prop?)))
-    val voh = eval(voh(io-driver))
+    val max-input-voltage = eval-voltage(max-voltage(value(generic-out-prop?)))
+    val voh = eval-voltage(voh(io-driver))
 
     #CHECK(
       condition = in-range?(max-input-voltage, voh),
