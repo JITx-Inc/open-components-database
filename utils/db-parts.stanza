@@ -203,7 +203,7 @@ public defn Resistor (user-properties:Tuple<KeyValue>) -> Resistor :
 public defn Resistor (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Resistor :
   Resistor(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
 
-public defn Resistor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> Resistor :
+public defn Resistor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:Toleranced|False) -> Resistor :
   val query-properties = resistor-query-properties(user-properties, exist, sort, operating-temperature)
   ;Query the database with the given properties
   Resistor $ dbquery-first(query-properties) as JObject
@@ -217,7 +217,7 @@ public defn Resistors (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Res
 defn resistor-query-properties (user-properties:Tuple<KeyValue>,
                                 exist:Tuple<String>,
                                 sort:Tuple<String>,
-                                operating-temperature:[Double, Double]|False) -> Tuple<KeyValue> :
+                                operating-temperature:Toleranced|False) -> Tuple<KeyValue> :
   query-properties(user-properties,
                    exist,
                    sort,
@@ -242,7 +242,7 @@ public defn look-up-resistors (attribute: String,
                                filter-properties:Tuple<KeyValue>,
                                exist:Tuple<String>,
                                sort:Tuple<String>,
-                               operating-temperature:[Double, Double]|False) -> Tuple :
+                               operating-temperature:Toleranced|False) -> Tuple :
   val user-properties = to-tuple $ cat(filter-properties, ["_distinct" => attribute])
   val query-properties = resistor-query-properties(user-properties, exist, sort, operating-temperature)
 
@@ -449,7 +449,7 @@ public defn Capacitor (user-properties:Tuple<KeyValue>) -> Capacitor :
 public defn Capacitor (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Capacitor :
   Capacitor(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
 
-public defn Capacitor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> Capacitor :
+public defn Capacitor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:Toleranced|False) -> Capacitor :
   val query-properties = capacitor-query-properties(user-properties, exist, sort, operating-temperature)
   ;Query the database with the given properties
   Capacitor $ dbquery-first(query-properties) as JObject
@@ -462,7 +462,7 @@ public defn Capacitors (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Ca
 defn capacitor-query-properties (user-properties:Tuple<KeyValue>,
                                 exist:Tuple<String>,
                                 sort:Tuple<String>,
-                                operating-temperature:[Double, Double]|False) -> Tuple<KeyValue> :
+                                operating-temperature:Toleranced|False) -> Tuple<KeyValue> :
   query-properties(user-properties,
                    exist,
                    sort,
@@ -487,7 +487,7 @@ public defn look-up-capacitors (attribute: String,
                                 filter-properties:Tuple<KeyValue>,
                                 exist:Tuple<String>,
                                 sort:Tuple<String>,
-                                operating-temperature:[Double, Double]|False) -> Tuple :
+                                operating-temperature:Toleranced|False) -> Tuple :
   val user-properties = to-tuple $ cat(filter-properties, ["_distinct" => attribute])
   val query-properties = capacitor-query-properties(user-properties, exist, sort, operating-temperature)
 
@@ -631,7 +631,7 @@ public defn Inductor (user-properties:Tuple<KeyValue>) -> Inductor :
 public defn Inductor (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Inductor :
   Inductor(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
 
-public defn Inductor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> Inductor :
+public defn Inductor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:Toleranced|False) -> Inductor :
   val query-properties = inductor-query-properties(user-properties, exist, sort, operating-temperature)
   ;Query the database with the given properties
   Inductor $ dbquery-first(query-properties) as JObject
@@ -648,7 +648,7 @@ public defn Inductors (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Ind
 defn inductor-query-properties (user-properties:Tuple<KeyValue>,
                                 exist:Tuple<String>,
                                 sort:Tuple<String>,
-                                operating-temperature:[Double, Double]|False) -> Tuple<KeyValue> :
+                                operating-temperature:Toleranced|False) -> Tuple<KeyValue> :
   query-properties(user-properties,
                    exist,
                    sort,
@@ -673,7 +673,7 @@ public defn look-up-inductors (attribute: String,
                                filter-properties:Tuple<KeyValue>,
                                exist:Tuple<String>,
                                sort:Tuple<String>,
-                               operating-temperature:[Double, Double]|False) -> Tuple :
+                               operating-temperature:Toleranced|False) -> Tuple :
   val user-properties = to-tuple $ cat(filter-properties, ["_distinct" => attribute])
   val query-properties = inductor-query-properties(user-properties, exist, sort, operating-temperature)
 
@@ -891,7 +891,7 @@ defn hashtable-union<K, V> (hs:Seqable<Seqable<KeyValue<K&Equalable&Hashable, V>
 public defn query-properties (user-properties:Tuple<KeyValue>,
                               exist:Tuple<String>,
                               sort:Tuple<String>,
-                              operating-temperature:[Double, Double]|False,
+                              operating-temperature:Toleranced|False,
                               category: String,
                               sourcing?: True|False) -> Tuple<KeyValue> :
   val optional-properties =
@@ -908,9 +908,9 @@ public defn query-properties (user-properties:Tuple<KeyValue>,
       ; Other design parameters
       yield("_sort" => sort) when not empty?(sort)
       yield("_exist" => exist) when not empty?(exist)
-      match(operating-temperature:[Double, Double]):
-        yield("max-rated-temperature.min" => operating-temperature[0])
-        yield("min-rated-temperature.max" => operating-temperature[1])
+      match(operating-temperature:Toleranced):
+        yield("max-rated-temperature.min" => min-value(operating-temperature))
+        yield("min-rated-temperature.max" => max-value(operating-temperature))
 
   ; `user-properties` override default properties
   to-tuple $ hashtable-union<String, ?> $ [["category" => category],

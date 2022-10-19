@@ -96,32 +96,21 @@ pcb-check rated-temperature (component:JITXObject):
     info-message =         "%_ does not have the rated-temperature property attached" % [ref(component)],
     locators =             [instance-definition(component)]
   )
-  
-  if property(component.rated-temperature) is RatedTemperature:
-    val name = "Rated temperature check"
-    val description = "Check rated temperatures for components versus design constraints"
-    val category = "Component Checks"
-    val temp = operating-temperature(property(component.rated-temperature))
-    #CHECK(
-      condition =            in-range?(temp, OPERATING-TEMPERATURE[0]),
-      name =                 "Rated temperature check"
-      description =          "Check rated temperatures for components versus design constraints"
-      category =             "Component Checks"
-      subcheck-description = "Check the min rated-temperature of a component versus min design constraint",
-      pass-message =         "%_ has an acceptable lower operating temperature versus design target (%_C <= %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[0]],
-      fail-message =         "%_ does not have an acceptable lower operating temperature versus design target (%_C > %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[0]],
-      locators =             [component]
-    )
-    #CHECK(
-      condition =            in-range?(temp, OPERATING-TEMPERATURE[1]),
-      name =                 "Rated temperature check"
-      description =          "Check rated temperatures for components versus design constraints"
-      category =             "Component Checks"
-      subcheck-description = "Check rated temperature (high) of component versus design constraints",
-      pass-message =         "%_ has higher operating temperature that is compatible with the design target(%_C >= %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[1]],
-      fail-message =         "%_ does not have an acceptable higher operating temperature versus design target (%_C < %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[1]],
-      locators =             [component]  
-    )
+
+  val name = "Rated temperature check"
+  val description = "Check rated temperatures for components versus design constraints"
+  val category = "Component Checks"
+  val temp = property(component.rated-temperature)
+  #CHECK(
+    condition =            contains?(temp, OPERATING-TEMPERATURE),
+    name =                 "Rated temperature check"
+    description =          "Check rated temperatures for components versus design constraints"
+    category =             "Component Checks"
+    subcheck-description = "Check the rated-temperature of a component against the operating temperature of the design.",
+    pass-message =         "%_ has a rated temperature %_ containing the operating temperature %_" % [ref(component), temp, OPERATING-TEMPERATURE],
+    fail-message =         "%_ does not have a rated temperature %_ containing the operating temperature %_" % [ref(component), temp, OPERATING-TEMPERATURE],
+    locators =             [component]
+  )
 
 ; Returns if a pin is a digital-output pin or capable of being one
 defn is-digital-output? (p:JITXObject) -> True|False : 
