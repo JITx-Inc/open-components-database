@@ -106,15 +106,13 @@ defn relative-voltages (p:JITXObject) -> Seqable<RelativeVoltage> :
 
 ; Resolve relative voltages for the pins on a net.
 defn resolve-relative-voltage (net:GlobalNet) :
-  for pin in pins(net) do :
-    for rv in relative-voltages(pin) do :
-      val mv = ref-voltage?(relative(rv))
-      match(mv) :
-        (t:Toleranced) :
-          update-net-voltage(pin, resolve(rv, t))
-        (f:False) :
-          fatal("%_ is missing a net-voltage property." 
-            % [ref(relative(rv))])
+  val relative-voltages = seq-cat(relative-voltages, pins(net))
+  val resolved = seq(absolute-voltage, relative-voltages)
+  
+  if not empty?(resolved) :
+    val final = reduce-right(extrema, resolved)
+    for pin in pins(net) do :
+      update-net-voltage(pin, final)
 
 ;==============================================================================
 ;==============================================================================
