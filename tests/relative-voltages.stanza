@@ -1,0 +1,102 @@
+; Quick test/harness to develop and evaluate relative
+; voltage implementation.
+#use-added-syntax(jitx)
+defpackage ocdb/tests/relative-voltages :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/property-structs
+  import ocdb/utils/generator-utils
+  import ocdb/utils/relative-voltages
+
+; A digital-io component with a single digital-io pin where :
+; 
+; vol is a fractional voltage
+; voh is a PWL voltage
+; vil is a dual offset voltage
+; vih is a single offset voltage
+;
+pcb-component IOComponent :
+  pin-properties :
+    [ pin : Ref | pads : Int ... | side:Dir ]
+    [ VDD       | 1              | Up   ]
+    [ IO        | 2              | Left ]
+    [ GND       | 3              | Down ]
+
+  ; boilerplate 
+  assign-landpattern(ocdb/utils/landpatterns/SOT23())
+  ocdb/utils/box-symbol/make-box-symbol()
+
+  ; Set up the I/O properties with RelativeVoltages
+  property(self.IO.digital-io) = 
+    DigitalIO(driver, vil, vih, self.VDD, self.GND, leakage-current)
+  where :
+    val leakage-current = 50.0e-9
+
+    val driver = 
+      CMOSOutput(vol, voh)
+    where :
+      ; vol = 0.1 * self.VDD.net-voltage
+      val vol = FractionalVoltage(0.1, self.VDD)
+      ; voh = PWL function
+      val voh = PWLVoltage(
+        PWL([[1.8, 1.32] [2.8, 2.1] [3.3, 2.2] [5.0, 3.2]]) ; min
+        PWL([[1.8, 1.8]  [2.8, 2.8] [3.3, 3.2] [5.0, 4.9]]) ; max
+        self.VDD
+      )
+
+    ; vil = self.VDD.net-voltage +0, -0.2
+    val vil = DualOffsetVoltage(-0.2, 0.0, self.VDD)
+
+    ; vih = self.vdd.net-voltage
+    val vih = OffsetVoltage(0.0, self.VDD)
+
+; Helper to retrieve vih,vil,voh,vol
+defn relative-voltages (component:JITXObject) -> [RelativeVoltage,RelativeVoltage,RelativeVoltage,RelativeVoltage] :
+  val io = get-property(component, `digital-io)
+  val driver = driver(io) as CMOSOutput
+
+  val vih = vih(io) as RelativeVoltage
+  val vil = vil(io) as RelativeVoltage
+  val voh = voh(driver) as RelativeVoltage
+  val vol = vol(driver) as RelativeVoltage
+  
+  [vih, vil, voh, vol]
+
+; Helper to print the values of a digital-io's relative voltages 
+; after they've been resolved
+defn dump (component:JITXObject) :
+  val [vih, vil, voh, vol] = relative-voltages(component)
+  println("%_ vih: %_" % [ref(component), absolute-voltage(vih)])
+  println("%_ vil: %_" % [ref(component), absolute-voltage(vil)])
+  println("%_ voh: %_" % [ref(component), absolute-voltage(voh)])
+  println("%_ vol: %_" % [ref(component), absolute-voltage(vol)])
+
+pcb-module main-module :
+  inst U1 : IOComponent
+  inst U2 : IOComponent
+
+  net VDD (U1.VDD, U2.VDD)
+  net GND (U1.GND, U2.GND)
+  net IO  (U1.IO, U2.IO)
+
+  symbol(VDD) = ocdb/utils/symbols/supply-sym
+  symbol(GND) = ocdb/utils/symbols/ground-sym
+  property(VDD.net-voltage) = typ(3.3)
+  property(GND.net-voltage) = typ(0.0)
+
+  ; Only run once the voltages have been propagated.
+  eval-when   
+      all?(has-absolute-voltage?, relative-voltages(U1.IO)) and
+      all?(has-absolute-voltage?, relative-voltages(U2.IO)) :
+    dump(U1.IO)
+    dump(U2.IO)
+  
+defn main () :
+  set-design-directory("relative-voltages-test")
+  run-final-passes(main-module)
+  view-schematic()
+  run-checks("checks-test.txt")
+
+main()

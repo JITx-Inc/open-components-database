@@ -69,12 +69,19 @@ public pcb-component component :
 
   property(self.VDD.power-pin) = PowerPin(min-typ-max(1.71, 2.5, 3.6))
   property(self.rated-temperature) = RatedTemperature(min-max(-40.0, 85.0))
-  eval-when has-property?(self.VDD-IO.net-voltage) :
-    val vdd = property(self.VDD-IO.net-voltage)
-    val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.1 * max-value(vdd)), min-max(0.9 * min-value(vdd), max-value(vdd))), false, self.VDD-IO, self.GND)
-    val input-props = DigitalInput(typ(0.2 * min-value(vdd)), typ(0.8 * max-value(vdd)), self.VDD-IO, self.GND, 50.0e-9)
-    property(self.INT[1].digital-output) = drive-props
-    property(self.CS.digital-input) = input-props
+  
+  val drive-props = DigitalOutput(
+    CMOSOutput(FractionalVoltage(0.1, self.VDD-IO)
+               FractionalVoltage(0.9, self.VDD-IO)), 
+               false, self.VDD-IO, self.GND)
+  
+  val input-props = DigitalInput(
+    FractionalVoltage(0.2, self.VDD-IO)
+    FractionalVoltage(0.8, self.VDD-IO)
+    self.VDD-IO, self.GND, 50.0e-9)
+
+  property(self.INT[1].digital-output) = drive-props
+  property(self.CS.digital-input) = input-props
 
 
 public pcb-module module :
@@ -86,7 +93,7 @@ public pcb-module module :
   port int: pin[[1 2]]
   pin vio
 
-  inst acc : ocdb/components/st-microelectronics/LIS3DH/component
+  public inst acc : ocdb/components/st-microelectronics/LIS3DH/component
 
   net (power.gnd, acc.GND, acc.RES)
   net (power.vdd, acc.VDD)

@@ -13,7 +13,7 @@ power-pin => true
 - Identifier
 vdd:Double (V)
 - Nominal positive supply voltage relative to gnd
-rated-voltage:[Double,Double] [min max] (V) 
+rated-voltage:[Double, Double] [min max] (V) 
 - Voltage safety limits of power pin relative to gnd
 
 ## Single ended receiver
@@ -21,9 +21,9 @@ Single ended digital logic receiver
 
 digital-io => true
 - Identifier
-vi:[Double,Double]
+vi:[Double, Double]
 - [Input voltage low (V), Input voltage high (V)]
-rated-voltage:[Double,Double] [min max] (V) 
+rated-voltage:[Double, Double] [min max] (V) 
 - Voltage safety limits of power pin relative to gnd
 
 
@@ -47,7 +47,7 @@ operating-point:Tuple<KeyValue<Symbol,?>>
 - Key,Value store for operating point of component
 - temperature:Double
     + Temperature of component
-- voltage-pk:[Double,Double] [min max](V)
+- voltage-pk:[Double, Double] [min max](V)
     + Voltage extrema across pin 1 and pin 2
 - current-pk (A)
     + Peak current (absolute value)

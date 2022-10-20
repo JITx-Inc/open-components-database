@@ -98,17 +98,19 @@ public pcb-component component :
   property(VDDA3P3.power-pin)    = PowerPin(min-max(2.3, 3.6))
   property(VDD3P3-CPU.power-pin) = PowerPin(min-max(1.8, 3.6))
   property(VDD3P3-RTC.power-pin) = PowerPin(min-max(3.0, 3.6))
-  eval-when has-property?(VDD3P3-CPU.net-voltage):
-    val vdd = max-value(property(VDD3P3-CPU.net-voltage))
-    val drive-props = 
-      DigitalOutput(CMOSOutput(min-max(0.0, 0.1 * vdd), min-max(0.8 * vdd, vdd)),
-                    false, VDD3P3-CPU, GND)
-    val input-props = 
-      DigitalInput(typ(0.25 * vdd), typ(0.75 * vdd), 
-                   VDD3P3-CPU, GND, 50.0e-9)
-    property(U0TXD.digital-output) = drive-props
-    property(U0RXD.digital-input) = input-props
-    property(EN.reset-pin) = ResetPin(input-props)
+
+  val drive-props = 
+    DigitalOutput(CMOSOutput(FractionalVoltage(0.1, self.VDD3P3-CPU)
+                              FractionalVoltage(0.8, self.VDD3P3-CPU)),
+                  false, VDD3P3-CPU, GND)
+  val input-props = 
+    DigitalInput(FractionalVoltage(0.25, VDD3P3-CPU),
+                  FractionalVoltage(0.75, VDD3P3-CPU), 
+                  VDD3P3-CPU, GND, 50.0e-9)
+
+  property(U0TXD.digital-output) = drive-props
+  property(U0RXD.digital-input) = input-props
+  property(EN.reset-pin) = ResetPin(input-props)
 
   ; ESP supports crossbarred IO, so use generic supports
   val reserved-io = [IO[0] IO[16] IO[17] IO[32] IO[33] IO[34] IO[35]]
@@ -261,5 +263,5 @@ pcb-landpattern pqfn50p700x700x104-49n :
   layer(Silkscreen("F-SilkS", Top)) = Line(0.127, [ Point(3.55, 3.11), Point(3.55, 3.55) ])
   layer(Silkscreen("F-SilkS", Top)) = Line(0.127, [ Point(3.55, 3.55), Point(3.11, 3.55) ])
   layer(Silkscreen("F-SilkS", Top)) = Circle(Point(-4.2, 2.8), 0.05)
-  layer(Courtyard(Top)) = Rectangle(7.1,7.1)
+  layer(Courtyard(Top)) = Rectangle(7.1, 7.1)
   ref-label()

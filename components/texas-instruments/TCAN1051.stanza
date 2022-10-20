@@ -38,15 +38,20 @@ public pcb-component component :
   property(self.VCC.power-pin) = PowerPin(min-max(4.5, 5.5))
 
   ; Figure out what the io voltage level is in the design.
-  eval-when has-property?(self.VIO.net-voltage):
-    val vdd = max-value(property(self.VIO.net-voltage))
-    val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.2 * vdd), min-max(0.8 * vdd, vdd)), false, self.VCC, self.GND)
-    val input-props = DigitalInput(typ(0.3 * vdd), typ(0.7 * vdd), 
-                                   self.VCC, self.GND, 30.0e-6)
-    property(self.TXD.digital-output) = drive-props
-    property(self.RXD.digital-input) = input-props
-    property(self.S.digital-input) = input-props
-    
+  val drive-props = DigitalOutput(
+    CMOSOutput(FractionalVoltage(0.2, self.VIO), 
+                FractionalVoltage(0.8, self.VIO)), 
+    false, self.VCC, self.GND)
+
+  val input-props = DigitalInput(
+    FractionalVoltage(0.3, self.VIO),
+    FractionalVoltage(0.7, self.VIO),
+    self.VCC, self.GND, 30.0e-6)
+
+  property(self.TXD.digital-output) = drive-props
+  property(self.RXD.digital-input) = input-props
+  property(self.S.digital-input) = input-props
+  
 public pcb-module module:
   ; Set up ports
   port can : can
