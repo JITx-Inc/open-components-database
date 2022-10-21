@@ -206,7 +206,7 @@ public defn Resistor (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> R
 public defn Resistor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> Resistor :
   val query-properties = resistor-query-properties(user-properties, exist, sort, operating-temperature)
   ;Query the database with the given properties
-  Resistor $ dbquery-first(query-properties) as JObject
+  Resistor $ dbquery-first-allow-non-stock(query-properties) as JObject
   ; Resistor("manufacturer", "mpn", "trust", 0.0, 0.0, 0.0, "mounting", false, false, Sourcing(false, 0, 0), [], "type", false, 0.0, false, false, false)
 
 public defn Resistors (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Resistor> :
@@ -452,7 +452,7 @@ public defn Capacitor (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> 
 public defn Capacitor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> Capacitor :
   val query-properties = capacitor-query-properties(user-properties, exist, sort, operating-temperature)
   ;Query the database with the given properties
-  Capacitor $ dbquery-first(query-properties) as JObject
+  Capacitor $ dbquery-first-allow-non-stock(query-properties) as JObject
 
 public defn Capacitors (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Capacitor> :
   val query-properties = capacitor-query-properties(user-properties, [], OPTIMIZE-FOR, OPERATING-TEMPERATURE)
@@ -634,7 +634,7 @@ public defn Inductor (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> I
 public defn Inductor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> Inductor :
   val query-properties = inductor-query-properties(user-properties, exist, sort, operating-temperature)
   ;Query the database with the given properties
-  Inductor $ dbquery-first(query-properties) as JObject
+  Inductor $ dbquery-first-allow-non-stock(query-properties) as JObject
 
 public defn Inductors (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Inductor> :
   val query-properties = inductor-query-properties(user-properties, [], OPTIMIZE-FOR, OPERATING-TEMPERATURE)
@@ -927,3 +927,20 @@ public defn query-distinct (query-properties: Tuple<KeyValue<String, ?>>, callee
     do(println{IndentedStream(current-output-stream()), _}, query-properties)
 
   values
+
+public defn dbquery-first-allow-non-stock (args: Tuple<KeyValue<String, Tuple<String>|Tuple<Double>|String|Double|Int>>) -> JSON :
+  try :
+    dbquery-first(args)
+  catch (e:Exception) :
+    if ALLOW-NON-STOCK :
+      println("[WARNING] %_" % [to-string(e)])
+
+      ; Do not check stock for this out-of-stock component by
+      ; removing "_stock" and "min-stock and retry
+      val args2 = to-tuple $ for entry in args filter :
+                      (key(entry) != "min-stock") and (key(entry) != "_stock")
+      dbquery-first(args2)
+    else :
+      throw(e)
+
+
