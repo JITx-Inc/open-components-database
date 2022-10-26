@@ -48,6 +48,7 @@ public defn propagate-voltages (module:Instantiable, report-file:String|False) -
                                    object-voltages,
                                    inconsistencies)
       spit(report-file, report)
+      println("Voltage propagation report saved to %~." % [report-file])
   
     ;Backannotate the design and write out all of the new solved voltages.
     back-annotate-design(connected-groups,
@@ -339,15 +340,6 @@ defn propagate-relative-relations (start:Vector<GroupVoltage>,
       add-neighbour(target-group(r), r)
       add-neighbour(anchor-group(r), r)
 
-  ;Print out the neighbour table
-  println("Neighbour Table:")
-  within indented() :
-    for entry in neighbour-table do :
-      println("Group %_:" % [key(entry)])
-      within indented() :
-        for r in value(entry) do :
-          println("Voltage of %_ = %_" % [ref?(target(r)), voltage(r)])
-
   ;Create a table for storing the computed voltages for each group.
   val voltage-table = IntTable<Double|Toleranced>()
 
@@ -410,10 +402,6 @@ defn propagate-relative-relations (start:Vector<GroupVoltage>,
           
     ;If progress was made, then iterate again.
     loop() when progress?
-
-  ;Print out results
-  for result in new-voltages do :
-    println("Computed group %_ to have voltage %_" % [id(result), voltage(result)])
 
   ;Finally resolve any remaining relations that were between
   ;objects that were not part of groups.
