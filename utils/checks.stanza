@@ -17,6 +17,8 @@ defpackage ocdb/utils/checks :
   import ocdb/utils/pin-checks/all
   import ocdb/utils/netlist-checks/all
   import ocdb/utils/netlist-checks/utils
+  import ocdb/utils/propagation
+
 ;<>
 #CHECK(
   condition = p-props is GenericPin,                    ; A boolean check                     (True|False)
@@ -49,6 +51,7 @@ Set of standard checks to run on a top-level-module.
  - Digital I/O pin checks are run, see check-io
 <S>
 
+
 public defn check-design (module:JITXObject):
   erc-check-design(module)
   drc-check-design(module)
@@ -63,7 +66,8 @@ public defn erc-check-design (module:JITXObject):
       check-inductor(i)  when has-property?(i.inductor)    
       check-pins(i)
 
-    check-netlist(module)
+    eval-when PROPAGATION-FINISHED :
+      check-netlist(module)
 
 public defn drc-check-design (module:JITXObject):
   inside pcb-module:
