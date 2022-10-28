@@ -194,12 +194,12 @@ public defn eval-voltage (v:Toleranced|RelativeVoltage) -> Toleranced :
 
 doc:"A FractionalVoltage represents a voltage rating that is some factor * net-voltage on another pin."
 public pcb-struct ocdb/utils/property-structs/FractionalVoltage <: RelativeVoltage :
-  factor:Double
+  factor:Double|Toleranced
   pin:JITXObject
 
 doc:"An OffsetVoltage represents a voltage rating that is factor + net-voltage on another pin."
 public pcb-struct ocdb/utils/property-structs/OffsetVoltage <: RelativeVoltage :
-  factor:Double
+  factor:Double|Toleranced
   pin:JITXObject
 
 doc:\<doc>
@@ -224,19 +224,10 @@ public pcb-struct ocdb/utils/property-structs/PWLVoltage <: RelativeVoltage :
   pin:JITXObject
 
 defmethod resolve (rv:FractionalVoltage, v:Toleranced) -> Toleranced :
-  min-typ-max(min, typ, max) where :
-    val conds = [ factor(rv) * min-value(v)
-                  factor(rv) * typ(v)
-                  factor(rv) * max-value(v) ]
-    val min = minimum(conds)
-    val typ = typ(v) * factor(rv)
-    val max = maximum(conds)
+  factor(rv) * v
 
 defmethod resolve (rv:OffsetVoltage, v:Toleranced) -> Toleranced :
-  Toleranced(typ, tolp, toln) where :
-    val tolp = tol+(v)
-    val typ  = factor(rv) + typ(v)
-    val toln = tol-(v)
+  factor(rv) + v
 
 defmethod resolve (rv:DualOffsetVoltage, v:Toleranced) -> Toleranced :
   val min = min-value(v) + factor-min(rv)
