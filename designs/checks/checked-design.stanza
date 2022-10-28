@@ -1,0 +1,33 @@
+#use-added-syntax(jitx)
+defpackage ocdb/designs/checks/checked-design :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/checks
+  import ocdb/utils/defaults
+  import ocdb/utils/generator-utils
+  import ocdb/designs/checks/capacitors
+  import ocdb/designs/checks/digital-io
+  import ocdb/designs/checks/inductors
+  import ocdb/designs/checks/resistors
+
+pcb-module main-module :
+  inst rs: resistors
+  inst cs: capacitors
+  inst ls: inductors
+  inst io: digital-io
+
+  net VDD (rs.power.vdd, ls.power.vdd, cs.power.vdd, io.power.vdd)
+  net GND (rs.power.gnd, ls.power.gnd, cs.power.gnd, io.power.gnd)
+
+  property(VDD.net-voltage) = typ(5.0)
+  property(GND.net-voltage) = typ(0.0)
+  check-design(self)
+
+defn main () :
+  set-design-directory("checked-design")
+  run-final-passes(main-module)
+  run-checks("checks.txt")
+
+main()

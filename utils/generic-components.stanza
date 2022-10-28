@@ -293,7 +293,7 @@ public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg-name
   property(self.capacitance) = cap
   property(self.tolerance) = tol
   property(self.rated-voltage) = max-v
-  property(self.rated-temperature) = RatedTemperature(min-max(-55.0, 125.0))
+  property(self.rated-temperature) = min-max(-55.0, 125.0)
 
 public defn gen-cap-cmp (cap:Double, tol:Double, max-v:Double) :
   gen-cap-cmp(cap, tol, max-v, "0402")
@@ -336,7 +336,7 @@ public pcb-component gen-tant-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg
   property(self.tolerance) = (tol * 0.01)
   property(self.rated-current-pk) = 3.7
   property(self.rated-current-rms) = [[25.0 0.298] [85.0 0.268] [125.0 0.119]]
-  property(self.rated-temperature) = RatedTemperature(min-max(-55.0, 125.0))
+  property(self.rated-temperature) = min-max(-55.0, 125.0)
 
 public defn gen-tant-cap-cmp (cap:Double, tol:Double, max-v:Double) :
   gen-tant-cap-cmp(cap, tol, max-v, "0402")
@@ -369,7 +369,7 @@ public pcb-component gen-res-cmp (r-type:ResistorSymbolType, res:Double, tol:Dou
   property(self.rated-power) = pwr
   property(self.derating) = [[-60.0 1.0] [70.0 1.0] [155.0 0.0]]
   property(self.TCR) = 100.0e-6
-  property(self.rated-temperature) = RatedTemperature(min-max(-55.0, 125.0))
+  property(self.rated-temperature) = min-max(-55.0, 125.0)
   property(self.tolerance) = (tol * 0.01)
   property(self.resistance) = res
   property(self.resistor) = true
@@ -505,7 +505,7 @@ public defn bypass-caps (power-pin:JITXObject|Symbol, gnd-pin:JITXObject|Symbol,
 ; ========================================================
 ; ======================= res-strap ======================
 ; ========================================================
-public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple<KeyValue>) :
+public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple<KeyValue>) -> JITXObject :
   inside pcb-module:
     inst rid : chip-resistor(params)
     net (first-pin, rid.p[1])
@@ -521,7 +521,7 @@ public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, resistance:D
 ; ========================================================
 ; ====================== cap-strap =======================
 ; ========================================================
-public defn cap-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple<KeyValue>) :
+public defn cap-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple<KeyValue>) -> JITXObject :
   inside pcb-module:
     inst cap : ceramic-cap(params)
     net (first-pin, cap.p[1])
@@ -537,7 +537,7 @@ public defn cap-strap (first-pin:JITXObject, second-pin:JITXObject, capacitance:
 ; ========================================================
 ; ====================== ind-strap =======================
 ; ========================================================
-public defn ind-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple<KeyValue>) :
+public defn ind-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple<KeyValue>) -> JITXObject :
   inside pcb-module:
     inst ind : smd-inductor(params)
     net (first-pin, ind.p[1])
@@ -560,7 +560,7 @@ public defn default-bypass (cmp:JITXObject) :
         short-trace(cap.p[1], p)
         net (cap.p[2], cmp.gnd)
 
-public defn block-cap (in:JITXObject, out:JITXObject, cap:Double) :
+public defn block-cap (in:JITXObject, out:JITXObject, cap:Double) -> JITXObject :
   inside pcb-module :
     inst block : ceramic-cap(cap)
     net (in, block.p[1])
@@ -757,7 +757,7 @@ public pcb-component mounting-hole (drill-r:Double, pad-r:Double, mask-r:Double)
   description      = to-string("%~mm mounting hole" % [2. * drill-r])
   landpattern      = (non-plated-hole-landpattern(drill-r, mask-r))()
   symbol           = unplated-hole-sym()
-  property(self.rated-temperature) = RatedTemperature(min-max(-100.0, 180.0))
+  property(self.rated-temperature) = false
 
 
 ; A mounting hole component with drill and pad radius. 
