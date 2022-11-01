@@ -86,33 +86,37 @@ defn dump (component:JITXObject) :
   println("%_ voh: %_" % [ref(component), absolute-voltage(voh)])
   println("%_ vol: %_" % [ref(component), absolute-voltage(vol)])
 
-pcb-module main-module :
-  inst U1 : IOComponent
-  inst U2 : IOComponent
+deftest relative-voltage-test :
+  pcb-module main-module :
+    inst U1 : IOComponent
+    inst U2 : IOComponent
 
-  net VDD (U1.VDD, U2.VDD)
-  net GND (U1.GND, U2.GND)
-  net IO  (U1.IO, U2.IO)
+    net VDD (U1.VDD, U2.VDD)
+    net GND (U1.GND, U2.GND)
+    net IO  (U1.IO, U2.IO)
 
-  symbol(VDD) = ocdb/utils/symbols/supply-sym
-  symbol(GND) = ocdb/utils/symbols/ground-sym
-  property(VDD.net-voltage) = typ(3.3)
-  property(GND.net-voltage) = typ(0.0)
+    symbol(VDD) = ocdb/utils/symbols/supply-sym
+    symbol(GND) = ocdb/utils/symbols/ground-sym
+    property(VDD.net-voltage) = typ(3.3)
+    property(GND.net-voltage) = typ(0.0)
 
-  ; Only run once the voltages have been propagated.
-  eval-when   
-      all?(has-absolute-voltage?, relative-voltages(U1.IO)) and
-      all?(has-absolute-voltage?, relative-voltages(U2.IO)) :
-    dump(U1.IO)
-    dump(U2.IO)
-  
-defn main () :
+    ; Only run once the voltages have been propagated.
+    eval-when   
+        all?(has-absolute-voltage?, relative-voltages(U1.IO)) and
+        all?(has-absolute-voltage?, relative-voltages(U2.IO)) :
+      dump(U1.IO)
+      dump(U2.IO)
+
+      val n1 = property(U1.IO.net-voltage)
+      val n2 = property(U2.IO.net-voltage)
+      
+      #ASSERT(n1 == n2)
+
+  ; Test logic
   set-design-directory("relative-voltages-test")
   run-final-passes(main-module)
   view-schematic()
   run-checks("checks-test.txt")
-
-; main()
 
 deftest rv-arithmetic :
   pcb-module main-module :
