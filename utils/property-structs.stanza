@@ -14,6 +14,12 @@ public pcb-struct ocdb/utils/property-structs/OperatingPoint :
   peak-voltage:Toleranced
   peak-current:Toleranced
 
+defmethod print (o:OutputStream, op:OperatingPoint) :
+  print(o, "OperatingPoint(peak-voltage: %_, peak-current: %_)" % [
+    peak-voltage(op),
+    peak-current(op)
+  ])
+
 public pcb-struct ocdb/utils/property-structs/PowerRail :
   rail:JITXObject
   voltage:Toleranced
@@ -27,8 +33,8 @@ public pcb-struct ocdb/utils/property-structs/NetVoltage :
 
 ; Library property name: generic-pin
 public pcb-struct ocdb/utils/property-structs/GenericPin :
-  max-voltage:Toleranced|RelativeVoltage
-  rated-esd:Double
+  max-voltage:Toleranced|RelativeVoltage    ; Maximum voltage that can be applied to pin (V)
+  rated-esd:Double                          ; Rated ESD voltage (V)
 
 ; Library property name: power-supply-pin
 public pcb-struct ocdb/utils/property-structs/PowerSupplyPin :
@@ -41,29 +47,27 @@ public pcb-struct ocdb/utils/property-structs/PowerPin :
   
 ; Library property name: digital-input
 public pcb-struct ocdb/utils/property-structs/DigitalInput :
-  vil:Toleranced|RelativeVoltage
-  vih:Toleranced|RelativeVoltage
-  vdd-pin:JITXObject
-  gnd-pin:JITXObject
-  leakage-current:Double
+  vil:Toleranced|RelativeVoltage    ; Range of voltages that will read as logic low (V)
+  vih:Toleranced|RelativeVoltage    ; Range of voltages that will read as logic high (V)
+  vdd-pin:JITXObject                ; Pin that powers the high reference 
+  gnd-pin:JITXObject                ; Pin that powers the low reference
+  leakage-current:Double            ; Leakage current in Amps
 
 ; Library property name: digital-output
 public pcb-struct ocdb/utils/property-structs/DigitalOutput :
-  driver:LogicFamily
-  tristateable:True|False
-  vdd-pin:JITXObject
-  gnd-pin:JITXObject
+  driver:LogicFamily          ; Driver model of the output
+  tristateable:True|False     ; Can this pin be put in a high-impedance mode?
+  vdd-pin:JITXObject          ; Pin that powers the high reference 
+  gnd-pin:JITXObject          ; Pin that powers the low reference
 
 ; Library property name: digital-io
 public pcb-struct ocdb/utils/property-structs/DigitalIO :
-  driver:LogicFamily
-  vil:Toleranced|RelativeVoltage
-  vih:Toleranced|RelativeVoltage
-  vdd-pin:JITXObject
-  gnd-pin:JITXObject
-  leakage-current:Double
-
-; property(pin.io.digital-io.vil) = computed-absolute-voltage
+  driver:LogicFamily                ; Driver model of the output
+  vil:Toleranced|RelativeVoltage    ; Range of voltages that will read as logic low (V)
+  vih:Toleranced|RelativeVoltage    ; Range of voltages that will read as logic high (V)  gnd-pin:JITXObject          ; Pin that powers the driver low reference
+  vdd-pin:JITXObject                ; Pin that powers the high reference 
+  gnd-pin:JITXObject                ; Pin that powers the low reference
+  leakage-current:Double            ; Leakage current in Amps
 
 ; Library property name: reset-pin
 public pcb-struct ocdb/utils/property-structs/ResetPin :
@@ -100,9 +104,7 @@ public pcb-struct ocdb/utils/property-structs/CrystalOscillator :
 ; === Component Property Structs ===
 ; ==================================
 
-; Library property name: rated-temperature
-public pcb-struct ocdb/utils/property-structs/RatedTemperature :
-  operating-temperature : Toleranced
+; Library property name: rated-temperature : Toleranced
 
 ; Library property name: crystal-resonator
 public pcb-struct ocdb/utils/property-structs/CrystalResonator :
@@ -114,13 +116,6 @@ public pcb-struct ocdb/utils/property-structs/CrystalResonator :
   frequency-tolerance:Double  ; Frequency tolerance in Hz                
   max-drive-level:Double      ; Max drive level in W              
 
-
-; public defn apply-enable-pin-params (obj:JITXObject, enable:JITXObject) :
-;   inside pcb-module :
-;     property(obj.digital-io) = true
-;     property(obj.type) = "i"
-;     property(obj.enable-pin) = true
-;     property(obj.active-ref) = enable
 
 ; public defn apply-lvds-params (obj:JITXObject, vol:Double, voh:Double, vo-diff:[Double, Double, Double] vo-cm:[Double, Double, Double] vi-diff:[Double, Double, Double] vi-cm:[Double, Double, Double]) :
 ;   inside pcb-module :
@@ -135,8 +130,6 @@ public pcb-struct ocdb/utils/property-structs/CrystalResonator :
 ; === Property Struct Printers ===
 ; ================================
 ;[TODO] Write print methods for other property structs.
-defmethod print (o:OutputStream, r:RatedTemperature) :
-  print(o, operating-temperature(r))
 
 doc:"A well-defined state for a device's power, for example hibernation. \
                                                                          \
@@ -188,12 +181,12 @@ public defn eval-voltage (v:Toleranced|RelativeVoltage) -> Toleranced :
 
 doc:"A FractionalVoltage represents a voltage rating that is some factor * net-voltage on another pin."
 public pcb-struct ocdb/utils/property-structs/FractionalVoltage <: RelativeVoltage :
-  factor:Double
+  factor:Double|Toleranced
   pin:JITXObject
 
 doc:"An OffsetVoltage represents a voltage rating that is factor + net-voltage on another pin."
 public pcb-struct ocdb/utils/property-structs/OffsetVoltage <: RelativeVoltage :
-  factor:Double
+  factor:Double|Toleranced
   pin:JITXObject
 
 defmethod print (o:OutputStream, v:OffsetVoltage) :
@@ -221,19 +214,10 @@ public pcb-struct ocdb/utils/property-structs/PWLVoltage <: RelativeVoltage :
   pin:JITXObject
 
 defmethod resolve (rv:FractionalVoltage, v:Toleranced) -> Toleranced :
-  min-typ-max(min, typ, max) where :
-    val conds = [ factor(rv) * min-value(v)
-                  factor(rv) * typ(v)
-                  factor(rv) * max-value(v) ]
-    val min = minimum(conds)
-    val typ = typ(v) * factor(rv)
-    val max = maximum(conds)
+  factor(rv) * v
 
 defmethod resolve (rv:OffsetVoltage, v:Toleranced) -> Toleranced :
-  Toleranced(typ, tolp, toln) where :
-    val tolp = tol+(v)
-    val typ  = factor(rv) + typ(v)
-    val toln = tol-(v)
+  factor(rv) + v
 
 defmethod resolve (rv:DualOffsetVoltage, v:Toleranced) -> Toleranced :
   val min = min-value(v) + factor-min(rv)

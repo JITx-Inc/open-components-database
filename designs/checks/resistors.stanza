@@ -1,0 +1,76 @@
+#use-added-syntax(jitx)
+defpackage ocdb/designs/checks/resistors :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/checks
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/property-structs
+  import ocdb/utils/box-symbol
+  import ocdb/utils/passive-checks/resonator-checks
+  import ocdb/utils/generator-utils
+  import ocdb/utils/micro-controllers
+  import ocdb/utils/design-vars
+  import ocdb/utils/generic-components
+
+pcb-component resistor-pass :
+  reference-prefix = "R"
+  pin-properties :
+    [ pin : Ref | pads : Int ... ]
+    [ p[1]      | 1              ]
+    [ p[2]      | 2              ]
+  
+  assign-landpattern(ipc-two-pin-landpattern("0603"))
+  val sym = resistor-sym()
+  symbol =
+    sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
+
+  property(self.resistor)    = true
+  property(self.resistance)  = 1.0e3
+  property(self.rated-power) = 1.0
+  property(self.rated-temperature) = RatedTemperature(min-max(-55.0, 100.0))
+
+pcb-component resistor-fail :
+  reference-prefix = "R"
+  pin-properties :
+    [ pin : Ref | pads : Int ... ]
+    [ p[1]      | 1              ]
+    [ p[2]      | 2              ]
+  
+  assign-landpattern(ipc-two-pin-landpattern("0603"))
+  val sym = resistor-sym()
+  symbol =
+    sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
+
+  property(self.resistor)    = true
+  property(self.resistance)  = 1.0  ; 1 ohm
+  property(self.rated-power) = 0.25 ; .25 W
+  property(self.rated-temperature) = RatedTemperature(min-max(-55.0, 100.0))
+
+pcb-component resistor-info :
+  reference-prefix = "R"
+  pin-properties :
+    [ pin : Ref | pads : Int ... ]
+    [ p[1]      | 1              ]
+    [ p[2]      | 2              ]
+  
+  assign-landpattern(ipc-two-pin-landpattern("0603"))
+  val sym = resistor-sym()
+  symbol =
+    sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
+
+  property(self.resistor) = true
+
+public pcb-module resistors :
+  port power : ocdb/utils/bundles/power
+
+  inst Rreal : chip-resistor(1.0e3)
+  inst Rfail : resistor-fail
+  inst Rpass : resistor-pass
+  inst Rinfo : resistor-info
+  
+  net (power.vdd, Rreal.p[1], Rfail.p[1], Rpass.p[1], Rinfo.p[1])
+  net (power.gnd, Rreal.p[2], Rfail.p[2], Rpass.p[2], Rinfo.p[2])
