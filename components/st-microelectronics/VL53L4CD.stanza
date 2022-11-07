@@ -1,0 +1,179 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/st-microelectronics/VL53L4CD :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/symbol-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/box-symbol
+  import ocdb/utils/bundles
+  import ocdb/utils/design-vars
+  import ocdb/utils/property-structs
+  import ocdb/utils/checks
+  import ocdb/utils/generator-utils
+
+pcb-landpattern vl53l1cxv0fyslash-1 :
+  val my-pad = smd-pad(Rectangle(0.508, 0.508), Rectangle(0.512, 0.512), Rectangle(0.500, 0.500))
+  pad p[1]  : my-pad at loc(0.8, 1.6, 90.0)
+  pad p[2]  : my-pad at loc(0.8, 0.8, 90.0)
+  pad p[3]  : my-pad at loc(0.8, -0.0, 90.0)
+  pad p[4]  : my-pad at loc(0.8, -0.8, 90.0)
+  pad p[5]  : my-pad at loc(0.8, -1.6, 90.0)
+  pad p[6]  : my-pad at loc(0.0, -1.6, 0.0)
+  pad p[7]  : my-pad at loc(-0.8, -1.6, 90.0)
+  pad p[8]  : my-pad at loc(-0.8, -0.8, 90.0)
+  pad p[9]  : my-pad at loc(-0.8, -0.0, 90.0)
+  pad p[10] : my-pad at loc(-0.8, 0.8, 90.0)
+  pad p[11] : my-pad at loc(-0.8, 1.6, 90.0)
+  pad p[12] : my-pad at loc(0.0, 1.6, 0.0)
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.1524, [
+    Point(1.651, 2.9),
+    Point(1.151, 2.9)
+  ])
+  layer(Courtyard(Top)) = Rectangle(2.75, 4.65)
+  ref-label()
+
+public pcb-component component :
+  name = "VL53L4CD"
+  reference-prefix = "U"
+  mpn = "VL53L4CDV0DH/1"
+  description = "Optical Sensor 0 ~ 51.18\" (0 ~ 130cm) I²C Output"
+
+  val generic-props = GenericPin(min-max(-0.5, 3.6), 2000.0)
+  val power-props = PowerPin(min-typ-max(2.6, 2.8, 3.5))
+  pin-properties :
+    [pin:Ref   | pads:Int ... | side:Dir  | generic-pin:GenericPin | power-pin:PowerPin ]
+    [DNC       | 8            | Right     | -                      | -                  ]
+    [GND       | 3 4 6 12     | Down      | -                      | -                  ]
+    [SCL       | 10           | Left      | generic-props          | -                  ]
+    [SDA       | 9            | Left      | generic-props          | -                  ]
+    [AVDD      | 11           | Up        | generic-props          | power-props        ]
+    [GPIO1     | 7            | Left      | generic-props          | -                  ]
+    [XSHUT     | 5            | Left      | generic-props          | -                  ]
+    [AVDDVCSEL | 1            | Up        | generic-props          | power-props        ]
+    [AVSSVCSEL | 2            | Down      | generic-props          | -                  ]
+  
+  make-box-symbol()         
+  assign-landpattern(vl53l1cxv0fyslash-1)
+
+  no-connect(self.DNC)
+
+  eval-when has-property?(self.AVDD.net-voltage):
+    val avdd = property(self.AVDD.net-voltage)
+    val dio = DigitalIO(OpenCollector(min-max(0.0, 0.4), 4.0e-3),
+                        min-max(-0.50, 0.60), min-max(1.12, avdd + 0.5),
+                        self.AVDD, self.GND, 150.0e-9)
+    property(self.SCL.digital-io) = dio
+    property(self.SDA.digital-io) = dio
+
+    val do = DigitalIO(CMOSOutput(typ(0.4), typ(avdd - 0.4)),
+                        typ(0.3 * avdd), typ(0.7 * avdd),
+                        self.AVDD, self.GND, 150.0e-9)
+    property(self.GPIO1.digital-io) = do
+
+  supports i2c:
+    i2c.sda => self.SDA
+    i2c.scl => self.SCL
+
+  ; embedded check for pull-up resistor on i2c lines:
+  ; I²C load capacitance (CL) | Pull up resistor (Ohms) | Series resistor (Ohms)
+  ; CL ≤ 90 pF                |           3.6 k         |           0
+  ; 90 pF < CL ≤ 140 pF       |           2.4 k         |           0
+  ; 140 pF < CL ≤ 270 pF      |           1.2 k         |           0
+  ; 270 pF < CL ≤ 400 pF      |           0.8 k         |           0
+
+  ; eval-when has-property?(self.SDA.total-capacitance):
+  ;   val total-cap = property(self.SDA.total-capacitance)
+  ;   val [r-pullup, message] = 
+  ;     if total-cap < 90.0e-12:
+  ;       [3600, ""]
+  ;     else if total-cap < 140.0e-12:
+  ;       [2400, ""]
+  ;     else if total-cap < 270.0e-12:
+  ;       [1200, ""]
+  ;     else if total-cap < 400.0e-12:
+  ;       [800, ""]
+  ;     else:
+  ;       [2200, to-string("Too much capacitance on SDA to enable fast mode I2C)]
+  ;
+
+  ; eval-when has-property?(self.XSHUT.total-pullup-resistance):
+  ; XSHUT pin must always be driven to avoid leakage current. A pull-up is needed if the host state is not known.
+  ; XSHUT is needed to use hardware standby mode (no I²C communication).
+  ; XSHUT and GPIO1 pull-up recommended values are 10 kOhms.
+
+
+public pcb-module module :
+  port power : power
+  port mod-i2c : i2c
+  pin x-shut 
+  pin gpio1
+
+  public inst tof : ocdb/components/st-microelectronics/VL53L4CD/component
+
+  require tof-i2c:i2c from tof
+  net (mod-i2c tof-i2c)
+
+  net (power.vdd tof.AVDDVCSEL tof.AVDD )
+  net (power.gnd tof.GND tof.AVSSVCSEL)
+  bypass-cap-strap(tof.AVDDVCSEL, tof.AVSSVCSEL, 4.7e-6)
+  bypass-cap-strap(tof.AVDDVCSEL, tof.AVSSVCSEL, 0.1e-6)
+
+  net (x-shut, tof.XSHUT)
+  net (gpio1, tof.GPIO1)
+
+public pcb-module SATEL-VL53L4CD:
+  pin EVK_XSHUT
+  pin EVK_GPIO1
+  pin EVK_SDA
+  pin EVK_SCL
+  pin EVK_VDD
+  pin GND
+
+  public inst tof : ocdb/components/st-microelectronics/VL53L4CD/component
+
+  ; eval board already has pull-ups and caps
+  ; https://www.st.com/resource/en/data_brief/satel-vl53l4cd.pdf
+
+  ; just need to add two different connectors:
+  ; 1 6-pin 0.100" center female connector
+  ; 1 6 land pattern board edge
+
+  inst conn : ocdb/components/kinghelm/KH-2_54FH-1X6P-H8_5/component
+
+  net (EVK_XSHUT  conn.p[5] tof.XSHUT)
+  net (EVK_GPIO1  conn.p[4] tof.GPIO1 )
+  net (EVK_SDA    conn.p[3] tof.SDA )
+  net (EVK_SCL    conn.p[2] tof.SCL )
+  net (EVK_VDD    conn.p[1] tof.AVDD tof.AVDDVCSEL)
+  net (GND        conn.p[0] tof.GND tof.AVSSVCSEL )
+
+  supports i2c:
+    i2c.sda => EVK_SDA
+    i2c.scl => EVK_SCL
+  
+  supports power:
+    power.vdd => EVK_VDD
+    power.gnd => GND
+
+; public pcb-pad my-pth-rectangle-pad :
+;   type = TH
+;   shape = Rectangle(1.0, 2.0)
+;   layer(Cutout()) = Circle(0.55)
+;   layer(SolderMask(Top)) = Rectangle(1.0, 2.0)
+;   layer(SolderMask(Bottom)) = Rectangle(1.0, 2.0)
+
+; public pcb-landpattern receptacle-7-pth :
+;   val pin-col-space = 2.54
+;   for j in 0 to 7 do :
+;       pad p[j + 1] : my-pth-rectangle-pad at loc(pin-col-space * (to-double(j) - 3.0), 0.0, 0.0)
+;   layer(Courtyard(Top)) = Rectangle(2.54 * 6.0 + 2.0, pin-col-space)
+;   layer(Silkscreen("values", Top)) = Text(">REF", 0.7, C, loc(0.0, 0.0))
+;   ;layer(Silkscreen("F-SilkS", Top)) = Circle(Point(-7.62 * 2.0, -55.0), 0.1)
+
+
