@@ -65,6 +65,9 @@ pcb-component IOComponent :
     ; vih = self.vdd.net-voltage
     val vih = voltage(self.VDD) - 0.1
 
+
+  property(self.VDD.net-voltage) = typ(3.3)
+
 ; Helper to retrieve vih,vil,voh,vol
 defn relative-voltages (component:JITXObject) -> [RelativeVoltage,RelativeVoltage,RelativeVoltage,RelativeVoltage] :
   val io = get-property(component, `digital-io)
@@ -86,7 +89,8 @@ defn dump (component:JITXObject) :
   println("%_ voh: %_" % [ref(component), absolute-voltage(voh)])
   println("%_ vol: %_" % [ref(component), absolute-voltage(vol)])
 
-deftest relative-voltage-test :
+; We can't run this test in CI because PWLVoltage() does not propagated correctly (yet)
+deftest(not-implemented-yet) relative-voltage-test :
   pcb-module main-module :
     inst U1 : IOComponent
     inst U2 : IOComponent
@@ -100,18 +104,21 @@ deftest relative-voltage-test :
     property(VDD.net-voltage) = typ(3.3)
     property(GND.net-voltage) = typ(0.0)
 
-    ; Only run once the voltages have been propagated.
+
     eval-when   
         all?(has-absolute-voltage?, relative-voltages(U1.IO)) and
         all?(has-absolute-voltage?, relative-voltages(U2.IO)) :
+      ; Only run once the voltages have been propagated.
+      for obj in relative-voltages(U1.IO) do:
+        println("relative(%_) => %_ (%_) is %_" % [obj, relative(obj), ref $ relative(obj), get-property?(relative(obj), `net-voltage)])
       dump(U1.IO)
       dump(U2.IO)
 
       val n1 = property(U1.IO.net-voltage)
       val n2 = property(U2.IO.net-voltage)
-      
+          
       #ASSERT(n1 == n2)
-
+      
   ; Test logic
   set-design-directory("relative-voltages-test")
   run-final-passes(main-module)
