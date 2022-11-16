@@ -48,7 +48,7 @@ public defn propagate-voltages (module:Instantiable, report-file:String|False) -
                                    object-voltages,
                                    inconsistencies)
       spit(report-file, report)
-      println("Voltage propagation report saved to %~." % [report-file])
+      ;println("Voltage propagation report saved to %~." % [report-file])
   
     ;Backannotate the design and write out all of the new solved voltages.
     back-annotate-design(connected-groups,
@@ -130,13 +130,12 @@ defn collect-connected-groups () -> Tuple<ConnectedGroup> :
 
   ;Find all the objects that are viable starting points,
   ;and put them in a trivial group if necessary.
-  for obj in self find-all-objects :
-    if not group-set[obj] :
-      val voltage = value?(property?(obj.net-voltage))
-      if voltage is Double|Toleranced :
-        ;[TODO] Type is wrong. Compute the type properly.
-        val item = Item(obj, ComponentPinType, One(voltage))
-        add(groups, ConnectedGroup(next(id-counter), [item]))
+  for item in all-items-with-properties(self, [`net-voltage]) do :
+    if not group-set[object(item)] :
+      val voltage = value(item)
+      if voltage is Double|Toleranced :      
+        val group-item = Item(object(item), ComponentPinType, One(voltage))
+        add(groups, ConnectedGroup(next(id-counter), [group-item]))
 
   ;Return the computed groups.
   to-tuple(groups)
@@ -193,37 +192,6 @@ defn starting-points (groups:Tuple<ConnectedGroup>) -> Vector<GroupVoltage> :
 
   ;Return all the starting points.
   starting-points
-
-;============================================================
-;================ All Items in Design =======================
-;============================================================
-
-;Return every single item in the current module.
-;- Nets, pins, abstract pins, etc.
-;
-;NOTE: This function is not completely correct, and should be
-;implemented as an introspection function. In a proper implementation,
-;the 'groups' argument is unnecessary.
-
-defn find-all-objects (return:JITXObject -> ?,
-                       groups:Tuple<ConnectedGroup>) :
-  defn scan (obj:JITXObject) :
-    do(return, pins(obj))
-    do(return, single-pin-nets(obj))
-    do(scan, instances(obj))
-  for item in seq-cat(items,groups) do :
-    return(object(item))
-  scan(self)
-
-;Same as above function, but without taking ConnectedGroup
-;as an argument.
-defn find-all-objects (return:JITXObject -> ?,
-                       module:JITXObject) :
-  defn scan (obj:JITXObject) :
-    do(return, pins(obj))
-    do(return, single-pin-nets(obj))
-    do(scan, instances(obj))
-  scan(self)
 
 ;============================================================
 ;============ Discover Relative Voltage Relations ===========
@@ -293,10 +261,10 @@ defn relative-relations (groups:Tuple<ConnectedGroup>) -> Vector<RelativeRelatio
 
   ;Collect all the relative relations in the design.
   val relations = Vector<RelativeRelation>()
-  for obj in groups find-all-objects :
-    val voltage = value?(property?(obj.net-voltage))
+  for item in all-items-with-properties(self, [`net-voltage]) do :
+    val voltage = value(item)
     match(voltage:FractionalVoltage|OffsetVoltage) :
-      add(relations, make-relation(obj,voltage))
+      add(relations, make-relation(object(item), voltage))
 
   ;Return all the collected relations.
   relations
@@ -710,7 +678,7 @@ defn generate-report (groups:Tuple<ConnectedGroup>,
         for (err in inconsistencies, index in 1 to false) do :
           val r = relation(err)
           Pln2("%_) Inconsistency found. The following is specified:\n" % [index])
-          Pln3(r)
+          Pln3(readable-relation(r))
           Pln2("")
           Pln2("However:\n")
           Pln3("voltage of %_ is %_\n" % [target-name(r), target-voltage(err)])
