@@ -71,27 +71,36 @@ public pcb-component component:
   property(VCCIO.power-pin) = PowerPin(min-max(1.8, 5.25))
   property(p3V3OUT.power-supply-pin) = PowerSupplyPin(typ(3.3), 0.05)
 
-  eval-when has-property?(VCCIO.net-voltage) :
-    val vdd  = max-value(property(VCCIO.net-voltage))
-    ; Datasheet gives data in tables, so use piecewise linear model to find value
-    val voh-min = PWL([[1.8 1.32] [2.8 2.1] [3.3 2.2] [5.0 3.2]])[vdd]
-    val voh-max = PWL([[1.8 1.8] [2.8 2.8] [3.3 3.2] [5.0 4.9]])[vdd]
-    val vol-max = PWL([[1.8 0.18] [2.8 0.5] [3.3 0.5] [5.0 0.6]])[vdd]
-    val vol-min = PWL([[1.8 0.06] [2.8 0.3] [3.3 0.3] [5.0 0.3]])[vdd]
-    val vih = typ(1.5)
-    val vil = typ(vdd * 0.3) ;guess
-    val drive-props = DigitalOutput(CMOSOutput(min-max(vol-min, vol-max), min-max(voh-min, voh-max)), false, VCCIO, GND)
-    val input-props = DigitalInput(vil, vih, VCCIO, GND, 1.0e-6) ; TODO: Leakage current is a guess
-    property(TXD.digital-output) = drive-props
-    property(nDTR.digital-output) = drive-props
-    property(nRTS.digital-output) = drive-props
-    property(RXD.digital-input) = input-props
-    property(nRI.digital-input) = input-props
-    property(nDSR.digital-input) = input-props
-    property(nDCD.digital-input) = input-props
-    property(nCTS.digital-input) = input-props
-    for p in pins(CBUS) do :
-      property(p.digital-io) = DigitalIO(CMOSOutput(min-max(vol-min, vol-max), min-max(voh-min, voh-max)), vil, vih, VCCIO, GND, 1.0e-6)
+  ; Datasheet gives data in tables, so use piecewise linear model to find value
+  val voh = PWLVoltage(
+    PWL([[1.8, 1.32] [2.8, 2.1] [3.3, 2.2] [5.0, 3.2]]) ; min
+    PWL([[1.8, 1.8]  [2.8, 2.8] [3.3, 3.2] [5.0, 4.9]]) ; max
+    self.VCCIO)
+  
+  val vol = PWLVoltage(
+    PWL([[1.8, 0.18] [2.8, 0.5] [3.3, 0.5] [5.0, 0.6]]), ; min
+    PWL([[1.8, 0.06] [2.8, 0.3] [3.3, 0.3] [5.0, 0.3]]), ; max
+    self.VCCIO)
+
+  val vih = typ(1.5)
+  val vil = FractionalVoltage(0.3, self.VCCIO)
+
+  val drive-props = DigitalOutput(CMOSOutput(vol, voh), false, VCCIO, GND)
+  val input-props = DigitalInput(vil, vih, VCCIO, GND, 1.0e-6) ; TODO: Leakage current is a guess
+  
+  property(TXD.digital-output)  = drive-props
+  property(nDTR.digital-output) = drive-props
+  property(nRTS.digital-output) = drive-props
+  property(RXD.digital-input)   = input-props
+  property(nRI.digital-input)   = input-props
+  property(nDSR.digital-input)  = input-props
+  property(nDCD.digital-input)  = input-props
+  property(nCTS.digital-input)  = input-props
+
+  for p in pins(CBUS) do :
+    property(p.digital-io) = DigitalIO(
+      CMOSOutput(vol, voh), 
+      vil, vih, VCCIO, GND, 1.0e-6)
 
   ; Test pin must be connected to GND for device operation
   check connected([TEST GND])

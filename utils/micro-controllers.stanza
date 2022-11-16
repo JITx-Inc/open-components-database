@@ -120,7 +120,7 @@ public defn look-up-micro-controllers (attribute: String, filter-properties:Tupl
 public defn look-up-micro-controllers (attribute: String, filter-properties:Tuple<KeyValue>, exist:Tuple<String>) -> Tuple :
   look-up-micro-controllers(attribute, filter-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
 
-public defn look-up-micro-controllers (attribute: String, filter-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> Tuple :
+public defn look-up-micro-controllers (attribute: String, filter-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:Toleranced|False) -> Tuple :
   val user-properties = to-tuple $ cat(filter-properties, ["_distinct" => attribute])
   val query-properties = micro-controller-query-properties(user-properties, exist, sort, operating-temperature)
 
@@ -176,7 +176,7 @@ public pcb-struct ocdb/utils/micro-controllers/MicroController <: Component :
   y*: Double ; with: (as-method => true)
   z: Double|False
   mounting: String
-  rated-temperature: RatedTemperature|False
+  rated-temperature: Toleranced|False
   ; Specific properties
   core: String
   core-architecture: String
@@ -280,7 +280,7 @@ public defn MicroController (properties:Tuple<KeyValue>,
 public defn MicroController (properties:Tuple<KeyValue>,
                              exist:Tuple<String>,
                              sort:Tuple<String>,
-                             operating-temperature:[Double, Double]|False) -> MicroController
+                             operating-temperature:Toleranced|False) -> MicroController
 ```
 
 Arguments:
@@ -349,7 +349,7 @@ $ jitx repl
 stanza> import jitx/commands
 stanza> import ocdb/utils/db-parts
 stanza> import json
-stanza> val jobject = dbquery-first(["category" => "microcontroller" "flash" => 32.0e3, "_stock" => 1, "_sellers" => ["Mouser"]]) as JObject
+stanza> val jobject = dbquery-first-allow-non-stock(["category" => "microcontroller" "flash" => 32.0e3, "_stock" => 1, "_sellers" => ["Mouser"]]) as JObject
 stanza> val mcu = MicroController(jobject)
 stanza> println $ mcu
 MicroController(
@@ -397,13 +397,13 @@ public defn MicroController (user-properties:Tuple<KeyValue>) -> MicroController
 public defn MicroController (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> MicroController :
   MicroController(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
 
-public defn MicroController (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:[Double, Double]|False) -> MicroController :
+public defn MicroController (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:Toleranced|False) -> MicroController :
   val query-properties = micro-controller-query-properties(user-properties, exist, OPTIMIZE-FOR, OPERATING-TEMPERATURE)
   ; - If _stock or _sellers key exist, all STM mcus are queried from the mongo database in the limit of maximum 1000,
   ; then we query the sourcing data for each, filter on stock / sellers constraints and
   ; finally we sort again if OPTIMIZE_FOR[0] is "price" or "cost".
   ; - If we don't need to filter on sourcing data (includes sorting on price), we can just query 1 mcu from the mongo database and return it
-  val jobject = dbquery-first(query-properties) as JObject
+  val jobject = dbquery-first-allow-non-stock(query-properties) as JObject
   MicroController(jobject)
 
 public defn MicroControllers (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<MicroController> :
@@ -414,7 +414,7 @@ public defn MicroControllers (user-properties:Tuple<KeyValue>, limit: Int) -> Tu
 defn micro-controller-query-properties (user-properties:Tuple<KeyValue>,
                                         exist:Tuple<String>,
                                         sort:Tuple<String>,
-                                        operating-temperature:[Double, Double]|False) -> Tuple<KeyValue> :
+                                        operating-temperature:Toleranced|False) -> Tuple<KeyValue> :
   query-properties(user-properties,
                    exist,
                    sort,

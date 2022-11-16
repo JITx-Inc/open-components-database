@@ -56,22 +56,33 @@ public pcb-component component :
 
   ; assume that REGIN has some power input in either mode
   property(self.REGIN.power-pin) = PowerPin(min-max(3.0, 5.25))
-  property(self.rated-temperature) = RatedTemperature(min-max(-40.0, 85.0))
+  property(self.rated-temperature) = min-max(-40.0, 85.0)
 
 
   ; VIO can be independent of VDD/REGIN/VBUS
-  eval-when has-property?(self.VIO.net-voltage) :
-    val vdd  = max-value(property(self.VIO.net-voltage))
-    val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.4),
-                                    min-max(vdd - 0.2, vdd)), 
-                                    false, self.VIO, self.GND)
-    val input-props = DigitalInput(typ(0.6), typ(0.7 * vdd), 
-                                   self.VIO, self.GND, 50.0e-6)
-    
-    for o in [self.TXD_ECI self.DTR_ECI self.RTS_ECI self.TXD_SCI self.DTR_SCI self.RTS_SCI] do :
-      property(o.digital-output) = drive-props
-    for i in [self.RXD_ECI self.RXD_SCI] do :
-      property(i.digital-input) = input-props
+  val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.4),
+                                  DualOffsetVoltage(-0.2, 0.0, self.VIO)), 
+                                  false, self.VIO, self.GND)
+  val input-props = DigitalInput(typ(0.6), FractionalVoltage(0.7, self.VIO), 
+                                  self.VIO, self.GND, 50.0e-6)
+  val outs = [
+    self.TXD_ECI,
+    self.DTR_ECI,
+    self.RTS_ECI,
+    self.TXD_SCI,
+    self.DTR_SCI,
+    self.RTS_SCI
+  ]
+  val ins = [
+    self.RXD_ECI,
+    self.RXD_SCI
+  ]
+  
+  for o in outs do :
+    property(o.digital-output) = drive-props
+
+  for i in ins do :
+    property(i.digital-input) = input-props
 
 public pcb-module module (bus-powered?:True|False):
   port usb-2 : usb-2
@@ -87,8 +98,8 @@ public pcb-module module (bus-powered?:True|False):
   if bus-powered? :
     net (usb-2.vbus.vdd xcvr.VBUS xcvr.REGIN)
     cap-strap(xcvr.REGIN, gnd, 1.0e-6)
-    eval-when has-property?(xcvr.REGIN.net-voltage) :
-      property(xcvr.VDD.power-supply-pin) = PowerSupplyPin(min-max(3.3, 3.6), 0.0815) ; 100mA - 18.5mA
+    property(xcvr.VDD.power-supply-pin) = PowerSupplyPin(min-max(3.3, 3.6), 0.0815) ; 100mA - 18.5mA
+ 
   else :
     net (usb-2.vbus.vdd xcvr.VBUS)
     net (xcvr.REGIN xcvr.VDD)

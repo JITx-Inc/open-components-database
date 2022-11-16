@@ -1,0 +1,62 @@
+; TODO replace Connections struct in jitx/utils/netlist-checks/utils;
+#use-added-syntax(jitx)
+defpackage ocdb/utils/connections :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import lang-utils
+
+; TODO put in jitx/commands
+defn do-not-place? (obj:JITXObject) :
+  has-property?(obj.DNP) and 
+  property(obj.DNP) is True
+
+doc:"A GlobalNet is a list of pins that are connected together."
+public defstruct GlobalNet <: Hashable&Equalable :
+  pins:Tuple<Pin>
+with :
+  printer => true
+
+defmethod hash (g:GlobalNet) : 
+  val objs = qsort(to-string{ref(_)}, pins(g))
+  hash(objs)
+
+defmethod equal? (a:GlobalNet, b:GlobalNet) :
+  val pins-a = map(to-string{ref(_)}, pins(a))
+  val pins-b = map(to-string{ref(_)}, pins(b))
+  set-equal?(pins-a, pins-b)
+
+doc: "A GlobalNetList is a list of all the GlobalNets in a module \
+     and its submodules."
+public defstruct GlobalNetList :
+  nets:Tuple<GlobalNet>
+with :
+  printer => true
+
+doc: "Create a GlobalNetlist from a module."
+public defn GlobalNetList (module:JITXObject) :
+  val visited = HashSet<Pin>()
+  
+  val components =
+    for component in component-instances(module) filter :
+      not do-not-place?(component)
+  
+  val nets = to-tuple $
+    for component in components seq-cat :
+      for pin in filter-by<Pin>(pins(component)) seq? :
+        if not visited[pin] and not no-connect?(pin) :
+          val connections = to-tuple(cat([pin], connected-pins(pin)))
+          do(add{visited, _}, connections)
+          One(GlobalNet(connections))
+        else :
+          None()
+    
+  GlobalNetList(nets)
+
+doc: "Return pins that are not connected to any other pins."
+public defn unconnected-pins (netlist:GlobalNetList) -> Tuple<Pin> :
+  to-tuple $ 
+    for net in nets(netlist) seq? :
+      if length(pins(net)) == 1 : One(pins(net)[0])
+      else : None()

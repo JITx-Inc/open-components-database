@@ -15,6 +15,10 @@ defpackage ocdb/utils/generator-utils:
   import ocdb/utils/property-structs
   import ocdb/modules/power-regulators
   import ocdb/utils/bundles
+<<<<<<< HEAD
+=======
+  import ocdb/utils/relative-voltages
+>>>>>>> f8cbb98cb134d6666eb8e3fb0eb2a414b8e04978
   import ocdb/utils/propagation
 
 ; =======================================
@@ -82,30 +86,28 @@ public defn usb-c-configuration-channel (usb-c-bundle:JITXObject, method:USB-C-C
 ; Piecewise linear functions
 ; Example call : PWL([[x0 y0] [x1 y1] ... [xn yn])[x]. Returns interpolated value of y at x
 ; =======================================
-public deftype PWL
-public defmulti get (f:PWL, x:Double) -> Double
-public defn PWL (ps:Tuple<[Double,Double]>) -> PWL :
-  new PWL :
-    defmethod get (this, x:Double) :
-      val n = length(ps)
-      if x < ps[0][0] :
-        ; println("Warning: PWL is extrapolating with zero-order hold")
-        ps[0][1]
-      else if x >= ps[0][0] and x <= ps[n - 1][0] :
-        val i = for i in 0 to n find! :
-          ps[i][0] >= x
-        val j = for i in reverse(0 to n) find! :
-          ps[i][0] <= x
-        if i == j :
-          ps[i][1]
-        else :
-          val dydx = (ps[i][1] - ps[j][1]) / (ps[i][0] - ps[j][0])
-          dydx * (x - ps[j][0]) + ps[j][1]
-      else if x > ps[n - 1][0] :
-        ; println("Warning: PWL is extrapolating with zero-order hold")
-        ps[n - 1][1]
-      else  :
-        fatal("Something is wrong in PWL with x = %_" % [x])
+public pcb-struct ocdb/utils/generator-utils/PWL :
+  ps:Tuple<[Double, Double]>
+
+public defn get (f:PWL, x:Double) :
+  val ps = ps(f)
+  val n = length(ps)
+  if x < ps[0][0] :
+    ps[0][1]
+  else if x >= ps[0][0] and x <= ps[n - 1][0] :
+    val i = for i in 0 to n find! :
+      ps[i][0] >= x
+    val j = for i in reverse(0 to n) find! :
+      ps[i][0] <= x
+    if i == j :
+      ps[i][1]
+    else :
+      val dydx = (ps[i][1] - ps[j][1]) / (ps[i][0] - ps[j][0])
+      dydx * (x - ps[j][0]) + ps[j][1]
+  else if x > ps[n - 1][0] :
+    ps[n - 1][1]
+  else  :
+    fatal("Something is wrong in PWL with x = %_" % [x])
 
 ; =======================================
 ; Assign schematic and layout groups
@@ -230,7 +232,7 @@ public defn generate-power () :
     for i in component-instances(self) do :
       for p in pins(i) do : ; [TODO] public-pins or pins?
         if has-property?(p.power-input) :
-          generate-power-system(property(p.power-input), OPERATING-TEMPERATURE[1], p, property(p.gnd-ref))
+          generate-power-system(property(p.power-input), max-value(OPERATING-TEMPERATURE), p, property(p.gnd-ref))
 
 public defn set-power-source (pos:JITXObject, neg:JITXObject, v-in:Double):
   inside pcb-module:
@@ -252,7 +254,17 @@ public defn propagate-net-voltages () :
             property(p.net-voltage) = min-max(min-value(vol(driver(prop))) max-value(voh(driver(prop))))
     for item in all-connected-items(self) do :
       ;First gather all the voltages on all connected nets.
-      val voltages = to-tuple $ seq?({property?(_.net-voltage)}, nets(item))
+      val voltages = to-tuple $ 
+        for net in nets(item) seq? :
+          val prop? = property?(net.net-voltage)
+          match(prop?:One) :
+            if value(prop?) is-not Toleranced :
+              ; We cannot necessarily know which net is at issue, since 
+              ; it may not have a ref. This is a slightly better error than
+              ; previous, as downstream it will cause a type error.
+              fatal("Cannot propagate net-voltages. Found a net-voltage that is not a toleranced value: %_." % [value(prop?)])
+          prop?
+      
       ;If at least one net has a voltage property.
       if not empty?(voltages) :
         val voltage = net-voltage!(voltages, item)
@@ -294,7 +306,10 @@ public defn run-final-passes (module:Instantiable) -> Instantiable :
       
       
       ;TODO: Review the order and necessity of those algos
-      design $> transform-module{propagate-net-voltages, _}
+      val filename = to-string("voltage-propagation-iteration%_.txt" % [i])
+      design $> ocdb/utils/voltage-propagation/propagate-voltages{_, filename}
+             ;$> transform-module{propagate-net-voltages, _}
+             ;$> transform-module{propagate-relative-voltages, _}
              $> assign-pins
              $> run-eval-loop
   

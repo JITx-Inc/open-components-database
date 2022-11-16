@@ -224,15 +224,16 @@ public defn connect-power (stm:JITXObject, power-port-name:String, vdd-net:PwrPi
           make-net(to-symbol(gnd-net), [self.(power-port-symbol).gnd, p])
         property(vdd-pin-list[0].gnd-ref) = gnd-pin-list[0] 
         val v-range = recommended-voltage(property(vdd-pin-list[0].power-pin))
-        if in-range?(v-range, 3.3) :
-          property(vdd-pin-list[0].power-request) = [3.3, 0.1, 3.3 * 0.03]
-        else if in-range?(v-range, 2.5) :
-          property(vdd-pin-list[0].power-request) = [2.5, 0.1, 2.5 * 0.03]
-        else if in-range?(v-range, 1.8) :
-          property(vdd-pin-list[0].power-request) = [1.8, 0.1, 1.8 * 0.03]
-        else if in-range?(v-range, 1.2) :
-          property(vdd-pin-list[0].power-request) = [1.2, 0.1, 1.2 * 0.03]
-        true ; need this in order to check for missing pins in the outer if statements
+        match(v-range:Toleranced) :
+          if in-range?(v-range, 3.3) :
+            property(vdd-pin-list[0].power-request) = [3.3, 0.1, 3.3 * 0.03]
+          else if in-range?(v-range, 2.5) :
+            property(vdd-pin-list[0].power-request) = [2.5, 0.1, 2.5 * 0.03]
+          else if in-range?(v-range, 1.8) :
+            property(vdd-pin-list[0].power-request) = [1.8, 0.1, 1.8 * 0.03]
+          else if in-range?(v-range, 1.2) :
+            property(vdd-pin-list[0].power-request) = [1.2, 0.1, 1.2 * 0.03]
+          true ; need this in order to check for missing pins in the outer if statements
 
 public defn connect-power (stm:JITXObject) :
   connect-power(stm, "power", VDD, VSS)
@@ -307,14 +308,16 @@ public defn connect-por (stm:JITXObject, por-net:ResetPinNames, vdd-net:PwrPinNa
       val power-pins = power-pins-list(stm, vdd-net)
       val gnd-pins = gnd-pins-list(stm, gnd-net)
       if not empty?(power-pins) and not empty?(gnd-pins) :
+        ; TODO handle RelativeVoltage
         val v-range = recommended-voltage(property(power-pins[0].power-pin))
-        if in-range?(v-range, 1.8) :
-          inst mon : ocdb/components/on-semiconductor/NCP30x/component(1.8)
-          bypass-cap-strap(por-pin[0], gnd-pins[0], 0.1e-6) ; hardcoded value for now (eek)
-          net (mon.gnd, gnd-pins[0])
-          net (mon.input, power-pins[0])
-          net (mon.output, por-pin[0])
-          true
+        match(v-range:Toleranced) :
+          if in-range?(v-range, 1.8) :
+            inst mon : ocdb/components/on-semiconductor/NCP30x/component(1.8)
+            bypass-cap-strap(por-pin[0], gnd-pins[0], 0.1e-6) ; hardcoded value for now (eek)
+            net (mon.gnd, gnd-pins[0])
+            net (mon.input, power-pins[0])
+            net (mon.output, por-pin[0])
+            true
 
 public defn connect-por (stm:JITXObject, por-net:ResetPinNames) :
   connect-por(stm, por-net, VDD, VSS)

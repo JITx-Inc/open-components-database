@@ -6,11 +6,11 @@ defpackage ocdb/utils/netlist-checks/power-states :
   import jitx/commands
   import lang-utils
   import ocdb/utils/netlist-checks/utils
-  
+  import ocdb/utils/connections
 
-public defn check-power-states (module:JITXObject, connections:Connections) :
+public defn check-power-states (module:JITXObject, netlist:GlobalNetList) :
   inside pcb-module :
-    check power-states(module, connections)
+    check power-states(module, netlist)
 
 doc: "This check will make sure that components connected to each other \
       over digital-io have matching power states, that is to say if a   \
@@ -18,9 +18,9 @@ doc: "This check will make sure that components connected to each other \
       connected to, this checks that they are both powered on or off.   \
                                                                         \
       - module: the module to check."
-public pcb-check power-states (module:JITXObject, connections:Connections) :
-  for connected-group in connected-groups(connections) do :
-    val pin-categories = categorize-digital-pins(connected-group)
+public pcb-check power-states (module:JITXObject, netlist:GlobalNetList) :
+  for net in nets(netlist) do :
+    val pin-categories = categorize-digital-pins(pins(net))
     val digital-pins = to-tuple $ cat-all([inputs(pin-categories),
                                            outputs(pin-categories),
                                            ios(pin-categories)])
