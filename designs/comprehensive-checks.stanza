@@ -21,6 +21,7 @@ defpackage ocdb/designs/comprehensive-checks :
   import ocdb/utils/box-symbol
   import ocdb/utils/passive-checks/resonator-checks
   import ocdb/utils/generator-utils
+  import ocdb/utils/bundles
 
 
 ;==============================================================================
@@ -87,7 +88,7 @@ pcb-component ceramic-cap :
   property(self.type)              = "ceramic"
   property(self.rated-temperature) = min-max(-100.0, 100.0)
   property(self.capacitance)       = 1.0e-9
-  property(self.rated-voltage)     = min-max(-1.0, 24.0)
+  property(self.rated-voltage)     = 24.0
 
 pcb-component electrolytic-cap :
   reference-prefix = "C"
@@ -106,7 +107,7 @@ pcb-component electrolytic-cap :
   property(self.type)              = "electrolytic"
   property(self.rated-temperature) = min-max(-100.0, 100.0)
   property(self.capacitance)       = 1.0e-6
-  property(self.rated-voltage)     = min-max(-1.0, 24.0)
+  property(self.rated-voltage)     = 24.0
   property(self.anode)             = "tantalum"
   property(self.electrolyte)       = "manganese-dioxide"
   property(self.rated-current-pk)  = 1.0e-6
@@ -128,7 +129,7 @@ pcb-component mica-cap :
   property(self.type)              = "mica"
   property(self.rated-temperature) = min-max(-100.0, 100.0)
   property(self.capacitance)       = 1.0e-6
-  property(self.rated-voltage)     = min-max(-1.0, 24.0)
+  property(self.rated-voltage)     = 24.0
 
 pcb-component mylar-cap :
   reference-prefix = "C"
@@ -147,7 +148,7 @@ pcb-component mylar-cap :
   property(self.type)              = "mylar"
   property(self.rated-temperature) = min-max(-100.0, 100.0)
   property(self.capacitance)       = 1.0e-6
-  property(self.rated-voltage)     = min-max(-1.0, 24.0)
+  property(self.rated-voltage)     = 24.0
 
 
 ;==============================================================================
@@ -398,6 +399,35 @@ pcb-module relative-io-module :
   symbol(VDD) = supply-sym
   symbol(GND) = ground-sym
   
+
+pcb-module realistic-design :
+  port source : power
+  inst j : ocdb/utils/generic-components/pin-header(2)
+  net VIN (j.p[1] source.vdd)
+  net GND (j.p[2] source.gnd)
+
+  property(VIN.net-voltage) = min-max(4.2 5.5)
+  property(GND.net-voltage) = typ(5.0)
+
+  inst ldo : ocdb/components/diodes-incorporated/AP2112/module
+  net (ldo.vin source)
+
+  inst stm : ocdb/components/st-microelectronics/STM32F031F4P6/module([])[4]
+
+  net (ldo.vout stm[0].power stm[2].power)
+  net (source stm[1].power stm[3].power)
+
+  require i2c-0 : i2c from stm[0].mcu
+  require i2c-1 : i2c from stm[1].mcu
+  require i2c-2 : i2c from stm[2].mcu
+  require i2c-3 : i2c from stm[3].mcu
+
+  net (i2c-0 i2c-2)
+
+
+
+  
+
 ;==============================================================================
 ;==============================================================================
 ;==============================================================================
@@ -405,17 +435,23 @@ pcb-module main-module :
   inst passives    : passives
   inst digital-io  : digital-io
   inst relative-io : relative-io-module
+  inst real : realistic-design
 
   schematic-group(passives) = passives
   schematic-group(digital-io) = digital-io
   schematic-group(relative-io) = relative-io
+  schematic-group(real) = real
 
   check-design(self)
 
 defn main () :
   set-design-directory("comprehensive-checks") 
-  run-final-passes(main-module)
-  view-schematic()
+  set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-jlc2313, Rectangle(100.0 100.0)))
+  set-rules(ocdb/manufacturers/rules/jlcpcb-rules)
+  set-main-module(ocdb/utils/generator-utils/run-final-passes(main-module))
   run-checks("checks.txt")
+  view-board()
+  view-schematic()
+  ; view-design-explorer()
 
 main()
