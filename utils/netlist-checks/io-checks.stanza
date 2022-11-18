@@ -120,10 +120,10 @@ defn check-open-collectors (open-collectors:Tuple<DigitalPin>,
     
     for p in open-collectors do :
       check no-net-voltage(pin(p))
+      if not empty?(pullup-resistors) :
+        check net-voltages-equal([p], net-voltages, pullup-resistors)
+      check pullup-resistor-exists([p], pullup-resistors)
 
-    if not empty?(pullup-resistors) :
-      check net-voltages-equal(open-collectors, net-voltages, pullup-resistors)
-    check pullup-resistor-exists(open-collectors, pullup-resistors)
 
     val resistance?  = parallel-resistance(pullup-resistors) when not empty?(pullup-resistors)
     val net-voltage? = net-voltages[0] when not empty?(net-voltages)
@@ -317,7 +317,7 @@ defn vhi-vlo (i:Pin, o:Pin,
   ]
 
   #CHECK(condition = min-value(voh) >= max-value(vih)
-         name = NAME
+         name = name([i, o])
          category = CATEGORY
          description = description([i, o])
          subcheck-description = "Check that the min voh is greater than max vih"
@@ -332,7 +332,7 @@ defn vhi-vlo (i:Pin, o:Pin,
          locators = locators)
 
   #CHECK(condition = max-value(vol) <= min-value(vil)
-         name = NAME
+         name = name([i, o])
          category = CATEGORY
          description = description([i, o])
          subcheck-description = "Check that the max vol is less than min vil"
@@ -349,7 +349,7 @@ defn vhi-vlo (i:Pin, o:Pin,
 defn gnd-pins (i:Pin, o:Pin, ip:DigitalInput|DigitalIO, op:DigitalOutput|DigitalIO) :
   val locators = [i, o]
   #CHECK(condition = connected?([gnd-pin(ip), gnd-pin(op)])
-         name = NAME
+         name = name([i, o])
          category = CATEGORY
          description = description([i, o])
          locators = locators
@@ -376,7 +376,7 @@ pcb-check input-push-pull-levels (input:DigitalPin, output:DigitalPin) :
   match(generic-in-prop?:One<GenericPin>) :
     val vin-max = eval-voltage(max-voltage(value(generic-in-prop?) as GenericPin))
     #CHECK(condition = in-range?(vin-max, voh)
-           name = NAME
+           name = name([inpt-pin, outp-pin])
            category = CATEGORY
            description = description([inpt-pin, outp-pin])
            locators = [inpt-pin, outp-pin]
@@ -398,9 +398,9 @@ pcb-check io-push-pull-levels (io:DigitalPin, output:DigitalPin) :
 
   #CHECK(
     condition = driver? is CMOSOutput|TTLOutput
-    name = NAME
+    name = name(locators)
     description = description(locators)
-    category = CATEGORY
+    category = "IO Checks (Data)"
     locators = locators
     subcheck-description = "Check digital output's driver pin is CMOSOutput|TTLOutput"
     pass-message = "Output driver pin is supported LogicFamily"
@@ -408,9 +408,9 @@ pcb-check io-push-pull-levels (io:DigitalPin, output:DigitalPin) :
   )
   #CHECK(
     condition = driver? is CMOSOutput|TTLOutput
-    name = NAME
+    name = name(outp-pin)
     description = description(outp-pin)
-    category = CATEGORY
+    category = "IO Checks (Data)"
     locators = [outp-pin]
     subcheck-description = "Check digital output's driver pin is CMOSOutput|TTLOutput"
     pass-message = "Output driver pin is supported LogicFamily"
@@ -418,9 +418,9 @@ pcb-check io-push-pull-levels (io:DigitalPin, output:DigitalPin) :
   )
   #CHECK(
     condition = io-driver? is CMOSOutput|TTLOutput
-    name = NAME
+    name = name(io-pin)
     description = description(io-pin)
-    category = CATEGORY
+    category = "IO Checks (Data)"
     locators = [io-pin]
     subcheck-description = "Check digital i/o's driver pin is CMOSOutput|TTLOutput"
     pass-message = "i/o driver pin is supported LogicFamily"
@@ -441,7 +441,7 @@ pcb-check io-push-pull-levels (io:DigitalPin, output:DigitalPin) :
     
     #CHECK(
       condition = min-value(voh) >= min-value(vih),
-      name = NAME
+      name = name(locators)
       description = description(locators)
       category = CATEGORY
       locators = locators
@@ -457,7 +457,7 @@ pcb-check io-push-pull-levels (io:DigitalPin, output:DigitalPin) :
 
     #CHECK(
       condition = max-value(vol) <= min-value(vil),
-      name = NAME
+      name = name(locators)
       description = description(locators)
       category = CATEGORY
       locators = locators
@@ -478,7 +478,7 @@ pcb-check io-push-pull-levels (io:DigitalPin, output:DigitalPin) :
     
     #CHECK(
       condition = in-range?(max-input-voltage, voh),
-      name = NAME
+      name = name(locators)
       description = description(locators)
       category = CATEGORY
       locators = locators
@@ -499,7 +499,7 @@ pcb-check io-push-pull-levels (io:DigitalPin, output:DigitalPin) :
 
     #CHECK(
       condition = in-range?(max-input-voltage, voh),
-      name = NAME
+      name = name(locators)
       description = description(locators)
       category = CATEGORY
       locators = locators
