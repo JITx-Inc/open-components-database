@@ -21,6 +21,7 @@ defpackage ocdb/designs/comprehensive-checks :
   import ocdb/utils/box-symbol
   import ocdb/utils/passive-checks/resonator-checks
   import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
   import ocdb/utils/bundles
 
 
@@ -71,7 +72,7 @@ pcb-component inductor :
 ;==============================================================================
 ;============================ Capacitor Properties =============================
 ;==============================================================================
-pcb-component ceramic-cap :
+pcb-component ceramic-capacitor :
   reference-prefix = "C"
 
   pin-properties :
@@ -185,7 +186,7 @@ pcb-component crystal-resonator :
 
 pcb-module resonator-module :
   public inst X1 : crystal-resonator
-  public inst C1 : ceramic-cap
+  public inst C1 : ceramic-capacitor
   property(C1.tolerance) = [0.99, 1.01]
   val intf = CrystalOscillator(
     max-critical-gain, drive-level, 
@@ -224,7 +225,7 @@ pcb-module passives :
   inst U1 : component
 
   ; Capacitors
-  inst C1 : ceramic-cap
+  inst C1 : ceramic-capacitor
   inst C2 : electrolytic-cap
   inst C3 : mica-cap
   inst C4 : mylar-cap
@@ -423,9 +424,10 @@ pcb-module realistic-design :
   require i2c-3 : i2c from stm[3].mcu
 
   net (i2c-0 i2c-2)
-  add-open-drain-pullups(i2c-0, VIN)
+  res-strap(i2c-0.sda ldo.vout.vdd, 4.7e3)
+  res-strap(i2c-0.scl ldo.vout.vdd, 4.7e3)
   ; add-open-drain-pullups(i2c-0, ldo.vout.vdd)
-  ; Causes
+  ; Causes:
   ; Uncaught Exception: Invalid reference to out of scope variable.
   ; in ocdb/utils/voltage-propagation/collect-connected-groups
     ; at utils\voltage-propagation.stanza:105.32
