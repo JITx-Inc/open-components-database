@@ -17,6 +17,7 @@ defpackage ocdb/utils/generator-utils:
   import ocdb/utils/bundles
   import ocdb/utils/relative-voltages
   import ocdb/utils/propagation
+  import ocdb/utils/voltage-propagation
 
 ; =======================================
 ; Ciruit convenience functions
@@ -288,36 +289,68 @@ defn net-voltage! (voltages: Tuple<Toleranced>, item: ConnectedItems) -> Toleran
 ; Run transformations to propagate voltages from sources, and run delayed evaluations
 ; =======================================
 public defn run-final-passes (module:Instantiable) -> Instantiable :
-  val result-module = transform-module{calculate-operating-points, _} $
-    let loop (design: Instantiable = module, i: Int = 0) :
-      defn run-eval-loop (design: Instantiable) :
-        val design* = run-evals?(design)
-        match(design*: Instantiable) : loop(design*, i + 1)
-        else : design
+  ;Helper: Throw error message indicating that the maximum number of iterations
+  ;has been reached.
+  defn throw-max-iterations-error () :
+    val msg = "The 'run-final-passes' utility has reached the maximum number of iterations without \
+               converging. This occurs most commonly when an 'eval-when' block generates more \
+               'eval-when' blocks which contain further 'eval-when' blocks."
+    throw(Exception(msg))           
 
-      if i == 5 :
-        throw $ Exception("A loop executing eval-whens, propagating net voltages and assigning pins has been \
-                           encountered: 5 iterations reached. Check that no eval-when generate other eval-whens in an \
-                           infinite loop, or that there is no infinite loop of 2nd order between eval-when execution \
-                           and net voltage propagation or pin assignment.")
-      
-      
-      ;TODO: Review the order and necessity of those algos
-      val filename = to-string("voltage-propagation-iteration%_.txt" % [i])
-      design $> ocdb/utils/voltage-propagation/propagate-voltages{_, filename}
-             ;$> transform-module{propagate-net-voltages, _}
-             ;$> transform-module{propagate-relative-voltages, _}
-             $> assign-pins
-             $> run-eval-loop
-  
+
+  ;On each iteration:
+  ;  1) Assign pins
+  ;  2) Propagate voltages.
+  ;  3) Run eval whens
+  ;  4) If progress is made, then loop again if the total number of iterations
+  ;     hasn't been reached.
+  ;Arguments:
+  ;- num-iterations: The number of iterations performed thus far.
+  ;  On the initial call, this starts from 0.
+  defn iteratively-run-eval-whens (design:Instantiable,
+                                   num-iterations:Int) -> Instantiable :
+    val max-iterations = 5
+    val voltage-prop-report = to-string("voltage-propagation-iteration%_.txt" % [num-iterations])
+    val assigned-pins = assign-pins(design)
+    val annotated-voltages = propagate-voltages(assigned-pins, voltage-prop-report)
+    val new-design = run-evals?(annotated-voltages)
+    match(new-design:Instantiable) :
+      val new-num-iterations = num-iterations + 1
+      if new-num-iterations < max-iterations :
+        iteratively-run-eval-whens(new-design, new-num-iterations)
+      else :
+        throw-max-iterations-error()
+    else :
+      annotated-voltages
+
+  ;Main flow:
+  ;  1) Iteratively run evals
+  ;  2) Calculate the operating points.
+  ;  3) Iteratively run evals to finish.
+  ;  4) Flag the global variable PROPAGATION-FINISHED as true.
+  ;  5) Now that it is flagged, run evals one last time.
+
+  ;Steps 1, 2, 3:
+  val new-design = module
+                $> iteratively-run-eval-whens{_, 0}
+                $> transform-module{calculate-operating-points, _}
+                $> iteratively-run-eval-whens{_, 0}
+  set-main-module(new-design)
+
+  ;Step 4.
   PROPAGATION-FINISHED = true
-  val final-module = run-evals(result-module)
-  
-  ; If we did not set the main module, a user forgetting to set it himself on the new module would be exporting
-  ; the module before adding operating points (the main module is set in the loop to be able to assign pins).
-  ; Such bug would be invisible.
-  set-main-module(final-module)
-  final-module
+
+  ;Step 5.
+  match(run-evals?(new-design)) :
+    ;Case: Evals were ran. Set it as the main module, and
+    ;return it.
+    (design:Instantiable) :
+      set-main-module(design)
+      design
+      
+    ;Case: Nothing ran, just return the design as is.
+    (f:False) :
+      new-design
 
 ; FIXME: assign-pins was obviously not meant to be used like this, it depends on the flattening
 ; Is run-evals? actually accessing the information resulting from the pin assignment?
