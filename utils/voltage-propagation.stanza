@@ -28,33 +28,31 @@ public defn propagate-voltages (module:Instantiable, report-file:String|False) -
 
     ;Perform voltage propagation here.
     val [group-voltages, object-voltages] = propagate-relative-relations(
-                                              groups(starting-points),
+                                              starting-points,
                                               relations)
 
     ;Check for any inconsistencies now that all voltages are solved.
     val inconsistencies = check-consistency(
-                            groups(starting-points),
+                            starting-points,
                             group-voltages,
                             object-voltages,
                             relations)
 
-    ;Generate a human-readable report of the algorithm results.
-    val report = generate-report(connected-groups,
-                                 starting-points,
-                                 relations,
-                                 group-voltages,
-                                 object-voltages,
-                                 inconsistencies)
-    ;Write the entirety of the report to a file, if desired.
+    ;Generate a human-readable report of the algorithm results, and
+    ;save it to a file.
     match(report-file:String) :
+      val report = generate-report(connected-groups,
+                                   starting-points,
+                                   relations,
+                                   group-voltages,
+                                   object-voltages,
+                                   inconsistencies)
       spit(report-file, report)
-      
-    ;Print out just the inconsistency section to the screen.
-    print(/inconsistencies(report))
-
+      ;println("Voltage propagation report saved to %~." % [report-file])
+  
     ;Backannotate the design and write out all of the new solved voltages.
     back-annotate-design(connected-groups,
-                         groups(starting-points),
+                         starting-points,
                          group-voltages,
                          object-voltages)
 
@@ -101,7 +99,7 @@ defn collect-connected-groups () -> Tuple<ConnectedGroup> :
   ;for each.
   val groups = Vector<ConnectedGroup>()
   for items in all-connected-items(self) do :
-
+  
     ;Bundle information into an item.
     defn make-item (obj:JITXObject, type:ItemType) -> Item :
       Item(obj, type, property?(obj.net-voltage))
@@ -135,7 +133,7 @@ defn collect-connected-groups () -> Tuple<ConnectedGroup> :
   for item in all-items-with-properties(self, [`net-voltage]) do :
     if not group-set[object(item)] :
       val voltage = value(item)
-      if voltage is Double|Toleranced :
+      if voltage is Double|Toleranced :      
         val group-item = Item(object(item), ComponentPinType, One(voltage))
         add(groups, ConnectedGroup(next(id-counter), [group-item]))
 
@@ -145,17 +143,6 @@ defn collect-connected-groups () -> Tuple<ConnectedGroup> :
 ;============================================================
 ;============= Discover the Starting Points =================
 ;============================================================
-
-;Represents the result of the starting point analysis.
-defstruct StartingPoints :
-  groups:Tuple<GroupVoltage>
-  groups-with-multiple-voltages:Tuple<MultiVoltageGroup>
-
-;Represents a group containing multiple items with different
-;absolute voltages.
-defstruct MultiVoltageGroup :
-  id:Int
-  items:Tuple<Item>
 
 ;Represents a group with a known voltage.
 ;- id: The identifier of the group.
@@ -173,7 +160,7 @@ defn voltage (v:GroupVoltage) -> Double|Toleranced :
 ;we know the absolute voltage. Find all the starting points
 ;for the propagation algorithm.
 
-defn starting-points (groups:Tuple<ConnectedGroup>) -> StartingPoints :
+defn starting-points (groups:Tuple<ConnectedGroup>) -> Vector<GroupVoltage> :
 
   ;Return true if the item has an absolute voltage.
   ;Checks whether its voltage is Double|Toleranced.
@@ -194,41 +181,17 @@ defn starting-points (groups:Tuple<ConnectedGroup>) -> StartingPoints :
   ;Accumulate all the starting points here.
   val starting-points = Vector<GroupVoltage>()
 
-  ;Accumulate all the groups with multiple voltages here.
-  val multi-voltage-groups = Vector<MultiVoltageGroup>()
-
   ;Scan through each group and check whether there exists
   ;an item with an absolute voltage. If there is, then add
   ;a new GroupVoltage object to 'starting-points'.
   for group in groups do :
-    val annotated-items = to-tuple $
-      filter(has-absolute-voltage?, items(group))
+    val annotated-items = filter(has-absolute-voltage?, items(group))
     if not empty?(annotated-items) :
-      ;Select the most specific source to proceed with
-      ;the rest of the algorithm.
       val source = minimum(specificity, annotated-items)
-      add(starting-points, GroupVoltage(id(group), source))
-      
-      ;If there are ambiguities, then record that for the
-      ;error report later.
-      if length(annotated-items) > 1 :
-        ;Return true if a and b have the same voltage.
-        defn same-voltage? (a:Item, b:Item) -> True|False :
-          value!(voltage(a)) == value!(voltage(b))
-
-        ;Compute whether all of the items in the group have the
-        ;same absolute voltage.
-        val all-same-voltage? = 
-          for i in 1 to length(annotated-items) all? :
-            same-voltage?(annotated-items[i], annotated-items[0])
-            
-        ;If they do not, then add it to the error report.
-        if not all-same-voltage? :
-          add(multi-voltage-groups, MultiVoltageGroup(id(group), annotated-items))      
+      add(starting-points, GroupVoltage(id(group), source))        
 
   ;Return all the starting points.
-  StartingPoints(to-tuple(starting-points)
-                 to-tuple(multi-voltage-groups))
+  starting-points
 
 ;============================================================
 ;============ Discover Relative Voltage Relations ===========
@@ -270,7 +233,7 @@ defn relative-relations (groups:Tuple<ConnectedGroup>) -> Vector<RelativeRelatio
 
   ;An entry, OBJ => G, means that object 'OBJ' is in connected group 'G'.
   val group-table = HashTable<JITXObject,Int>()
-
+  
   ;An entry, OBJ => ITEM, means that object 'OBJ' corresponds to item 'ITEM'.
   val item-table = HashTable<JITXObject,Item>()
 
@@ -324,7 +287,7 @@ defstruct ObjectVoltageFromRelativeRelation :
   relation:RelativeRelation
   voltage:Double|Toleranced
 
-defn propagate-relative-relations (start:Tuple<GroupVoltage>,
+defn propagate-relative-relations (start:Vector<GroupVoltage>,
                                    relations:Vector<RelativeRelation>)
                                 ->[Vector<GroupVoltageFromRelativeRelation>
                                    Vector<ObjectVoltageFromRelativeRelation>]:
@@ -394,7 +357,7 @@ defn propagate-relative-relations (start:Tuple<GroupVoltage>,
 
   ;Propagate voltages until we make no more progress.
   let loop () :
-
+  
     ;Track whether we made progress on this iteration.
     var progress? = false
 
@@ -404,7 +367,7 @@ defn propagate-relative-relations (start:Tuple<GroupVoltage>,
       if not key?(voltage-table, key(entry)) :
         if compute-voltage(key(entry), value(entry)) :
           progress? = true
-
+          
     ;If progress was made, then iterate again.
     loop() when progress?
 
@@ -416,7 +379,7 @@ defn propagate-relative-relations (start:Tuple<GroupVoltage>,
       if applicable-primary-relation?(r) :
         val voltage = resolve-voltage(r)
         add(object-voltages, ObjectVoltageFromRelativeRelation(target(r), r, voltage))
-
+    
   ;Return the results
   [new-voltages, object-voltages]
 
@@ -442,11 +405,11 @@ defstruct InconsistentRelation :
   anchor-voltage: Double|Toleranced
   relation:RelativeRelation
 
-defn check-consistency (start:Tuple<GroupVoltage>
+defn check-consistency (start:Vector<GroupVoltage>
                         group-voltages:Vector<GroupVoltageFromRelativeRelation>
                         object-voltages:Vector<ObjectVoltageFromRelativeRelation>
                         relations:Vector<RelativeRelation>) :
-  ;Build table of voltages.
+  ;Build table of voltages. 
   val group-voltage-table = IntTable<Double|Toleranced>()
   val object-voltage-table = HashTable<JITXObject,Double|Toleranced>()
   for v in start do :
@@ -493,7 +456,7 @@ defn check-consistency (start:Tuple<GroupVoltage>
 ;'.net-voltage' properties in the design.
 
 defn back-annotate-design (groups:Tuple<ConnectedGroup>,
-                           start:Tuple<GroupVoltage>
+                           start:Vector<GroupVoltage>
                            group-voltages:Vector<GroupVoltageFromRelativeRelation>
                            object-voltages:Vector<ObjectVoltageFromRelativeRelation>) :
   inside pcb-module :
@@ -537,7 +500,7 @@ defstruct ResultSummary :
 
 ;Summarize all of the solved and unsolved voltages.
 defn summarize-results (group:Tuple<ConnectedGroup>,
-                        starting-points:Tuple<GroupVoltage>,
+                        starting-points:Vector<GroupVoltage>,
                         group-voltages:Vector<GroupVoltageFromRelativeRelation>,
                         object-voltages:Vector<ObjectVoltageFromRelativeRelation>) -> ResultSummary :
   ;Build group table.
@@ -570,33 +533,26 @@ defn summarize-results (group:Tuple<ConnectedGroup>,
   ;Return summary.
   ResultSummary(
     to-tuple(solved),
-    unsolved)
-
+    unsolved)  
+    
 
 ;============================================================
 ;===================== Save Report ==========================
 ;============================================================
 
-;Represents the final report summary.
-deftype Report
-
-;Retrieve only the detected inconsistencies.
-defmulti inconsistencies (r:Report) -> ?
-
-;Compute a report summarizing the voltage propagation.
 defn generate-report (groups:Tuple<ConnectedGroup>,
-                      starting-points:StartingPoints,
+                      starting-points:Vector<GroupVoltage>,
                       relations:Vector<RelativeRelation>,
                       group-voltages:Vector<GroupVoltageFromRelativeRelation>,
                       object-voltages:Vector<ObjectVoltageFromRelativeRelation>,
-                      inconsistencies:Vector<InconsistentRelation>) -> Report :
+                      inconsistencies:Vector<InconsistentRelation>) :
 
   ;Summarize all of the results.
   val summary = summarize-results(groups,
-                                  /groups(starting-points),
+                                  starting-points,
                                   group-voltages,
                                   object-voltages)
-
+                      
   ;Helper: Return a human readable name for the given item if there
   ;is a sensible one.
   defn readable-name? (item:Item) -> String|False :
@@ -646,7 +602,7 @@ defn generate-report (groups:Tuple<ConnectedGroup>,
   ;Helper: Create a human readable description of the given relative relation.
   defn readable-relation (r:RelativeRelation) -> String :
     match(voltage(r)) :
-      (v:FractionalVoltage) :
+      (v:FractionalVoltage) :        
         to-string("voltage of %_ = %_ V * voltage of %_" % [target-name(r), factor(v), anchor-name(r)])
       (v:OffsetVoltage) :
         to-string("voltage of %_ = %_ V + voltage of %_" % [target-name(r), factor(v), anchor-name(r)])
@@ -655,37 +611,7 @@ defn generate-report (groups:Tuple<ConnectedGroup>,
   defn item-name (v:SolvedVoltage) -> String :
     readable-name(object(v), item(v))
 
-  ;Helper: Print out just the inconsistencies.
-  defn print-inconsistencies (o:OutputStream) -> False :
-      ;Shorthands
-      val o2 = IndentedStream(o)
-      val o3 = IndentedStream(o2)
-      defn Pln (x) : println(o, x)
-      defn Pln2 (x) : println(o2, x)
-      defn Pln3 (x) : println(o3, x)
-
-      ;Print out groups with multiple voltages.
-      for group in groups-with-multiple-voltages(starting-points) do :
-        Pln("Group %_ contains multiple items annotated with different absolute voltages:\n" % [id(group)])
-        for item in items(group) do :
-          Pln2("Voltage of %_ is %_\n" % [readable-name!(item), value!(voltage(item))])
-          
-      ;Print out inconsistencies in the voltage relationships.
-      for (err in inconsistencies, index in 1 to false) do :
-        val r = relation(err)
-        Pln2("%_) Inconsistency found. The following is specified:\n" % [index])
-        Pln3(readable-relation(r))
-        Pln2("")
-        Pln2("However:\n")
-        Pln3("voltage of %_ is %_\n" % [target-name(r), target-voltage(err)])
-        Pln3("voltage of %_ is %_\n" % [anchor-name(r), anchor-voltage(err)])      
-
-  new Report :
-    defmethod inconsistencies (this) :
-      new Printable :
-        defmethod print (o:OutputStream, this) :
-          print-inconsistencies(o)
-          
+  new Printable :
     defmethod print (o:OutputStream, this) :
       ;Shorthands
       val o2 = IndentedStream(o)
@@ -693,7 +619,7 @@ defn generate-report (groups:Tuple<ConnectedGroup>,
       defn Pln (x) : println(o, x)
       defn Pln2 (x) : println(o2, x)
       defn Pln3 (x) : println(o3, x)
-
+      
       Pln("### Performing voltage propagation analysis ###\n")
       Pln("Detect which items are electrically connected together:\n")
       for group in groups do :
@@ -708,7 +634,7 @@ defn generate-report (groups:Tuple<ConnectedGroup>,
       Pln("Voltage propagation starts by searching for items that have a\n\
            '.net-voltage' property of type 'Double' or 'Toleranced'.\n")
       Pln("The following starting points were found:\n")
-      for start in /groups(starting-points) do :
+      for start in starting-points do :
         Pln2("%_ in group %_ has voltage %_\n" % [readable-name!(source(start)), id(start), voltage(start)])
 
       Pln("### Relative Voltages ###\n")
@@ -721,7 +647,7 @@ defn generate-report (groups:Tuple<ConnectedGroup>,
         for r in relations do :
           Pln2(readable-relation(r))
           Pln2("")
-
+        
       Pln("### Propagation of Relative Voltages ###\n")
       Pln("From these relative voltages, we can compute the voltages of\n\
            other pins and nets.\n")
@@ -746,22 +672,23 @@ defn generate-report (groups:Tuple<ConnectedGroup>,
       Pln("### Final Check for Inconsistencies ###\n")
       Pln("Finally, check whether all the computed voltages are consistent\n\
            with what was declared in the design.\n")
-
-      ;Compute whether or not there are any inconsistencies.
-      val no-inconsistencies? = empty?(groups-with-multiple-voltages(starting-points))
-                            and empty?(inconsistencies)
-
-      ;If there are no inconsistencies
-      if no-inconsistencies? :
+      if empty?(inconsistencies) :
         Pln("No inconsistencies found.\n")
       else :
-        print-inconsistencies(o)
-
+        for (err in inconsistencies, index in 1 to false) do :
+          val r = relation(err)
+          Pln2("%_) Inconsistency found. The following is specified:\n" % [index])
+          Pln3(readable-relation(r))
+          Pln2("")
+          Pln2("However:\n")
+          Pln3("voltage of %_ is %_\n" % [target-name(r), target-voltage(err)])
+          Pln3("voltage of %_ is %_\n" % [anchor-name(r), anchor-voltage(err)])      
+          
       Pln("### Final Summary ###\n")
       Pln("Solved Voltages:\n")
       for s in solved(summary) do :
         Pln2("voltage of %_ is %_\n" % [item-name(s), voltage(s)])
-
+        
       Pln("Unsolved Voltages:\n")
       for group in unsolved(summary) do :
         Pln2("Connected group %_:" % [id(group)])
@@ -769,12 +696,12 @@ defn generate-report (groups:Tuple<ConnectedGroup>,
           match(readable-name?(item)) :
             (s:String) : Pln3(s)
             (f:False) : false
-        Pln2("")
+        Pln2("")        
 
 ;<doc>=======================================================
 ;===================== Report Example =======================
 ;============================================================
-
+      
 ### Performing voltage progagation analysis ###
 
 Detect which items are electrically connected together:
@@ -784,13 +711,13 @@ Detect which items are electrically connected together:
     component pin r[3]
     abstract pin r[4]
     net GND
-
+    
   Connected group 1:
     module pin r[3]
     component pin r[3]
     abstract pin r[4]
     net GND
-
+    
   etc...
 
 ### Starting Points ###
@@ -820,7 +747,7 @@ The following relative voltages were found:
 ### Propagation of Relative Voltages ###
 
 From these relative voltages, we can compute the voltages of
-other pins and nets.
+other pins and nets. 
 
 1) From knowing:
 
