@@ -1,0 +1,117 @@
+#use-added-syntax(jitx)
+defpackage ocdb/utils/lcsc :
+  import core
+  import collections
+  import json
+  import jitx
+
+;======================================
+;============ Public API ==============
+;======================================
+
+public defn make-landpattern (json: JObject) -> LandPattern :
+  val landpattern = LandPatternCode(json)
+  to-jitx(landpattern)
+
+;======================================
+;============= Internals ==============
+;======================================
+
+; FIXME!
+pcb-pad rect-smd-pad :
+  type = SMD
+  shape = Rectangle(0.8, 0.864008)
+  layer(SolderMask(Top)) = Rectangle(0.8, 0.864008)
+  layer(Paste(Top)) = Rectangle(0.8, 0.864008)
+
+public defstruct LandPatternCode :
+  name: String    ; originally def-name
+  pads: Tuple<LandPatternPadCode>
+  ;layers: Tuple<PCBLayerCode>
+  ;geometries: Tuple<GeomCode>
+  ;model3ds: Tuple<Model3D>
+
+public defstruct LandPatternPadCode :
+  name: Ref
+  pad: String ; FIXME!: Linked to table of pad variables
+  pose: Pose
+  side: Side
+
+defn LandPatternCode (json: JObject) -> LandPatternCode :
+  LandPatternCode(json["def-name"] as String,
+                  map(LandPatternPadCode, json["pads"] as Tuple<JObject>),
+                  )
+                  ;FIXME!
+                  ;map(PCBLayerCode, json["layers"] as Tuple<JObject>),
+                  ;map(GeomCode, json["geometries"] as Tuple<JObject>),
+                  ;map(GeomCode, json["model3ds"] as Tuple<JObject>))
+
+defn LandPatternPadCode (json: JObject) -> LandPatternPadCode :
+  LandPatternPadCode(to-ref!(json["def-name"] as String),
+                     (json["pad"] as JObject)["name"] as String,
+                     Pose(json["pose"] as JObject),
+                     Side(json["side"] as String))
+
+defn Pose (json: JObject) -> Pose :
+  Pose(Point(json["center"] as JObject),
+       json["angle"] as Double,
+       json["flip-x?"] as True|False)
+
+defn Point (json: JObject) -> Point :
+  Point(json["x"] as Double, json["y"] as Double)
+
+defn Side (s: String) -> Side :
+  switch(s) :
+    "Top": Top
+    "Bottom": Bottom
+
+defn to-jitx (lp: LandPatternCode) -> LandPattern :
+  pcb-landpattern my-landpattern :
+    name = name(lp)
+    for p in pads(lp) do :
+      to-jitx(p)
+
+  my-landpattern
+
+defn to-jitx (p: LandPatternPadCode) :
+  inside pcb-landpattern :
+    pad (name(p)) : rect-smd-pad at pose(p) on side(p)
+
+;======================================
+;============== Utils =================
+;======================================
+
+;FIXME! : Replace Ref String by JObject in json because the code below does not handle `\|` escaping
+
+;Ref constructor for a String: inverse of print
+;e.g.: "a[2].rty" -> FieldRef(IndexRef(VarRef(`a), 2), VarRef(`rty))
+public defn to-ref! (x: String) -> Ref :
+  try :
+    string-to-ref!(x)
+  catch (e: Exception) :
+    throw(Exception("Invalid string input for to-ref!. %_" % [to-string(e)]))
+
+;Inverse of print(r: Ref)
+;Take the print out of a Ref as a String and return the Ref.
+;e.g.: a[2].rty -> FieldRef(IndexRef(VarRef(`a), 2), VarRef(`rty))
+defn string-to-ref! (text: String) -> Ref :
+  if text[length(text) - 1] == ']' :
+    match(last-index-of-char(text, '[')) :
+      (separator-idx:Int) :
+        val index-str = text[(separator-idx + 1) to (length(text) - 1)]
+        match(to-int(index-str)) :
+          (index: Int) :
+            IndexRef(ref, index) where :
+              val ref = string-to-ref!(text[0 to separator-idx])
+          (_: False) :
+            throw(Exception("IndexRef index is not an integer, got '%_'." % [index-str]))
+      (_: False) :
+        throw(Exception("No matching '[' for ']', input: `%_`." % [text]))
+  else :
+    match(last-index-of-char(text, '.')) :
+      (separator-idx: Int) :
+        FieldRef(ref, field) where :
+          val ref = string-to-ref!(text[0 to separator-idx])
+          val field = Ref(text[(separator-idx + 1) to false])
+      (_: False) :
+        Ref(text)
