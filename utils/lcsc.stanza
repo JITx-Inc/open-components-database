@@ -15,23 +15,25 @@ defpackage ocdb/utils/lcsc :
 ; FIXME!: should inline LandpatternCode in ComponentCode and delete separate make-landpattern?
 ; Not if in the future I get a tuple of components that share the same landpatterns
 public defn database-part (json: JObject) -> Instantiable :
-  val pads = make-pads(json["pads"] as Tuple<JObject>)
+  val pads = map(make-pad, json["pads"] as Tuple<JObject>)
   val landpattern = make-landpattern(json["landpattern"] as JObject,
                                      pads)
+  ; FIXME!; Simplify json to remove SymbolCode?
+  val symbol-units = map(make-symbol, json["symbol-units"] as Tuple<JObject>)
   make-component(json["component"] as JObject,
                  landpattern)
 
 public defn make-component (json: JObject, landpattern: LandPattern) -> Instantiable :
-  val component = ComponentCode(json, landpattern)
-  to-jitx(component)
+  to-jitx $ ComponentCode(json, landpattern)
 
-public defn make-pads (json: Tuple<JObject>) -> Tuple<Pad> :
-  val pads = map(PadCode, json)
-  map(to-jitx, pads)
+public defn make-pad (json: JObject) -> Pad :
+  to-jitx $ PadCode(json)
 
 public defn make-landpattern (json: JObject, pads: Tuple<Pad>) -> LandPattern :
-  val landpattern = LandPatternCode(json, pads)
-  to-jitx(landpattern)
+  to-jitx $ LandPatternCode(json, pads)
+
+public defn make-symbol (json: JObject) -> SchematicSymbol :
+  to-jitx $ SymbolUnitCode(json)
 
 ;======================================
 ;============= Internals ==============
@@ -493,7 +495,85 @@ defn to-jitx (g: Model3D) :
 ;--------------- Symbol ---------------
 ;--------------------------------------
 
+public defstruct SymbolUnitCode :
+  name: String
+  pins: Tuple<SymbolPinCode>
+  layers: Tuple<SymbolLayerCode>
 
+public defstruct SymbolPinCode :
+  name: Ref
+  point: Point
+  direction: Dir
+  length: Double
+  number-size: Double|False
+  name-size: Double|False
+
+public defstruct SymbolLayerCode :
+  name: String
+  shape: Shape
+
+defn SymbolUnitCode (json: JObject) -> SymbolUnitCode :
+  SymbolUnitCode(json["def-name"] as String,
+                 map(SymbolPinCode, json["pins"] as Tuple<JObject>),
+                 map(SymbolLayerCode, json["layers"] as Tuple<JObject>))
+
+defn SymbolPinCode (json: JObject) -> SymbolPinCode :
+  SymbolPinCode(to-ref!(json["def-name"] as String),
+                Point(json["point"] as JObject),
+                Dir(json["direction"] as String),
+                json["length"] as Double,
+                json["number-size"] as Double|False,
+                json["name-size"] as Double|False)
+
+defn SymbolLayerCode (json: JObject) -> SymbolLayerCode :
+  SymbolLayerCode(json["name"] as String,
+                  Shape(json["shape"] as JObject))
+
+defn Dir (s: String) -> Dir :
+  switch(s) :
+    "Up": Up
+    "Down": Down
+    "Left": Left
+    "Right": Right
+
+defn to-jitx (s: SymbolUnitCode) -> SchematicSymbol :
+  pcb-symbol my-symbol :
+    name = name(s)
+
+    do(to-jitx, pins(s))
+    do(to-jitx, layers(s))
+
+  my-symbol
+
+defn to-jitx (p: SymbolPinCode) :
+  inside pcb-symbol :
+    val number-size = number-size(p)
+    val name-size = name-size(p)
+    match(number-size, name-size) :
+      (number-size: Double, name-size: Double) :
+        pin (name(p)) at point(p) with :
+          direction = direction(p)
+          length = length(p)
+          number-size = number-size
+          name-size = name-size
+      (number-size: Double, name-size: False) :
+        pin (name(p)) at point(p) with :
+          direction = direction(p)
+          length = length(p)
+          number-size = number-size
+      (number-size: False, name-size: Double) :
+        pin (name(p)) at point(p) with :
+          direction = direction(p)
+          length = length(p)
+          name-size = name-size
+      (number-size: False, name-size: False) :
+        pin (name(p)) at point(p) with :
+          direction = direction(p)
+          length = length(p)
+
+defn to-jitx (l: SymbolLayerCode) :
+  inside pcb-symbol :
+    layer(name(l)) = shape(l)
 
 ;======================================
 ;============== Utils =================
