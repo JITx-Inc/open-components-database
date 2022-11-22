@@ -3,26 +3,84 @@ defpackage ocdb/utils/lcsc :
   import core
   import collections
   import json
+  import lang-utils
+
   import jitx
+  import jitx/commands
 
 ;======================================
 ;============ Public API ==============
 ;======================================
 
-public defn make-landpattern (json: JObject) -> LandPattern :
-  val landpattern = LandPatternCode(json)
+public defn make-component (json: JObject) -> False : ;FIXME!: Instantiable
+  val pads = make-pads(json["pads"] as Tuple<JObject>)
+  val landpattern = make-landpattern(json["landpattern"] as JObject,
+                                     pads)
+  false
+
+public defn make-pads (json: Tuple<JObject>) -> Tuple<Pad> :
+  val pads = map(PadCode, json)
+  map(to-jitx, pads)
+
+public defn make-landpattern (json: JObject, pads: Tuple<Pad>) -> LandPattern :
+  val landpattern = LandPatternCode(json, pads)
   to-jitx(landpattern)
 
 ;======================================
 ;============= Internals ==============
 ;======================================
 
-; FIXME!
-pcb-pad rect-smd-pad :
-  type = SMD
-  shape = Rectangle(0.8, 0.864008)
-  layer(SolderMask(Top)) = Rectangle(0.8, 0.864008)
-  layer(Paste(Top)) = Rectangle(0.8, 0.864008)
+;--------------------------------------
+;---------------- Pad -----------------
+;--------------------------------------
+
+public defstruct PadCode :
+  def-name: String    ; referenced by the landpattern to use the pad
+  description: String|False
+  type: PadType
+  shape: Shape
+  ;layers: Tuple<PCBLayerCode>
+
+defn PadCode (json: JObject) -> PadCode :
+  ;val name = json["name"] as String|False    ; Useful?
+
+  PadCode(json["def-name"] as String,
+          json["description"] as String|False,
+          PadType(json["type"] as String),
+          Shape(json["shape"] as JObject),
+          )
+          ;map(PCBLayerCode, json["layers"] as Tuple<JObject>))
+
+defn PadType (s: String) -> PadType :
+  switch(s) :
+    "SMD": SMD
+    "TH": TH
+
+defn Shape (json: JObject) -> Shape :
+  ; FIXME!
+  EmptyShape()
+
+;defn PCBLayerCode (json: JObject) -> PCBLayerCode :
+;  FIXME!
+;  PCBLayerCode(Cutout(), EmptyShape())
+
+defn to-jitx (p: PadCode) -> Pad :
+  pcb-pad my-pad :
+    ; name is actually def-name because needed to be connected to landpattern referencing def-name
+    name = def-name(p)
+    val description = description(p)
+    match(description: String) :
+      description = description
+    type = type(p)
+    shape = shape(p)
+
+    ;do(to-jitx, layers(p))
+
+  my-pad
+
+;--------------------------------------
+;------------ Landpattern -------------
+;--------------------------------------
 
 public defstruct LandPatternCode :
   name: String    ; originally def-name
@@ -33,22 +91,26 @@ public defstruct LandPatternCode :
 
 public defstruct LandPatternPadCode :
   name: Ref
-  pad: String ; FIXME!: Linked to table of pad variables
+  pad: Pad ; FIXME!: Linked to table of pad variables
   pose: Pose
   side: Side
 
-defn LandPatternCode (json: JObject) -> LandPatternCode :
+defn LandPatternCode (json: JObject,
+                      pads: Tuple<Pad>) -> LandPatternCode :
+  val pad-table = to-hashtable(name, pads)
   LandPatternCode(json["def-name"] as String,
-                  map(LandPatternPadCode, json["pads"] as Tuple<JObject>),
+                  map(LandPatternPadCode{_, pad-table}, json["pads"] as Tuple<JObject>),
                   )
                   ;FIXME!
                   ;map(PCBLayerCode, json["layers"] as Tuple<JObject>),
                   ;map(GeomCode, json["geometries"] as Tuple<JObject>),
                   ;map(GeomCode, json["model3ds"] as Tuple<JObject>))
 
-defn LandPatternPadCode (json: JObject) -> LandPatternPadCode :
+defn LandPatternPadCode (json: JObject,
+                         pad-table: HashTable<String, Pad>) -> LandPatternPadCode :
+  val pad-def-name = (json["pad"] as JObject)["name"] as String
   LandPatternPadCode(to-ref!(json["def-name"] as String),
-                     (json["pad"] as JObject)["name"] as String,
+                     pad-table[pad-def-name],
                      Pose(json["pose"] as JObject),
                      Side(json["side"] as String))
 
@@ -68,14 +130,16 @@ defn Side (s: String) -> Side :
 defn to-jitx (lp: LandPatternCode) -> LandPattern :
   pcb-landpattern my-landpattern :
     name = name(lp)
-    for p in pads(lp) do :
-      to-jitx(p)
+    do(to-jitx, pads(lp))
+    ;do(to-jitx, layers(lp))
+    ;do(to-jitx, geometries(lp))
+    ;do(to-jitx, model3ds(lp))
 
   my-landpattern
 
 defn to-jitx (p: LandPatternPadCode) :
   inside pcb-landpattern :
-    pad (name(p)) : rect-smd-pad at pose(p) on side(p)
+    pad (name(p)) : /pad(p) at pose(p) on side(p)
 
 ;======================================
 ;============== Utils =================
