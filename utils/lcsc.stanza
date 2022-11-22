@@ -8,6 +8,8 @@ defpackage ocdb/utils/lcsc :
   import jitx
   import jitx/commands
 
+  import ocdb/utils/box-symbol
+
 ;======================================
 ;============ Public API ==============
 ;======================================
@@ -21,10 +23,13 @@ public defn database-part (json: JObject) -> Instantiable :
   ; FIXME!; Simplify json to remove SymbolCode?
   val symbol-units = map(make-symbol, json["symbol-units"] as Tuple<JObject>)
   make-component(json["component"] as JObject,
-                 landpattern)
+                 landpattern,
+                 symbol-units)
 
-public defn make-component (json: JObject, landpattern: LandPattern) -> Instantiable :
-  to-jitx $ ComponentCode(json, landpattern)
+public defn make-component (json: JObject,
+                            landpattern: LandPattern,
+                            symbol-units: Tuple<SchematicSymbol>) -> Instantiable :
+  to-jitx $ ComponentCode(json, landpattern, symbol-units)
 
 public defn make-pad (json: JObject) -> Pad :
   to-jitx $ PadCode(json)
@@ -43,7 +48,7 @@ public defn make-symbol (json: JObject) -> SchematicSymbol :
 ;------------- Component --------------
 ;--------------------------------------
 
-public defstruct ComponentCode :
+defstruct ComponentCode :
   name: String
   description: String|False
   manufacturer: String|False
@@ -52,13 +57,27 @@ public defstruct ComponentCode :
   ;pin-properties: False|PinPropertiesCode
   ;no-connects: Tuple<NoConnectCode>
   land-pattern: LandPattern   ; FIXME!: Should just be LandPatternCode?
-  ;symbols:Tuple<SymbolAssignmentCode>
+  symbols:Tuple<SymbolAssignmentCode>
   ;properties: Tuple<PropertyCode>
 
-defn ComponentCode (json: JObject, landpattern: LandPattern) -> ComponentCode :
+deftype SymbolAssignmentCode
+defmulti bank (s: SymbolAssignmentCode) -> String|False
+
+defstruct StandardSymbolAssignmentCode <: SymbolAssignmentCode :
+  name: SchematicSymbol
+  bank: String|False with: (as-method => true)
+
+defstruct BoxSymbolAssignmentCode <: SymbolAssignmentCode :
+  bank: String|False with: (as-method => true)
+
+defn ComponentCode (json: JObject,
+                    landpattern: LandPattern,
+                    symbol-units: Tuple<SchematicSymbol>) -> ComponentCode :
   val lp-def-name = json["land-pattern"] as String    ; FIXME!: ensure better that can never be False
   if name(landpattern) != lp-def-name :               ; FIXME!: make sure name is def-name
     fatal("Landpattern name %_ 1= %_" % [name(landpattern), lp-def-name])
+
+  val symbol-unit-table = to-hashtable(name, symbol-units)
 
   val def-name = json["def-name"] as String
   val name = json["name"] as String|False ; FIXME!: Unify field in json
@@ -71,9 +90,20 @@ defn ComponentCode (json: JObject, landpattern: LandPattern) -> ComponentCode :
                 ;PinPropertiesCode(json["pin-properties"] as JObject),
                 ;map(NoConnectCode, json["no-connects"] as Tuple<JObject>),
                 landpattern
-                ;map(SymbolAssignmentCode, json["symbols"] as Tuple<JObject>),
+                map(SymbolAssignmentCode{_, symbol-unit-table}, json["symbols"] as Tuple<JObject>),
                 ;map(PropertyCode, json["properties"] as Tuple<JObject>)
                 )
+
+defn SymbolAssignmentCode (json: JObject,
+                           symbol-unit-table: HashTable<String, SchematicSymbol>) -> SymbolAssignmentCode :
+  val box? = json["box?"] as True|False
+  val bank = json["def-name"] as String|False
+  if box? :
+    val def-name = json["def-name"] as String
+    StandardSymbolAssignmentCode(symbol-unit-table[def-name],
+                                 bank)
+  else :
+    BoxSymbolAssignmentCode(bank)
 
 defn to-jitx (c: ComponentCode) -> Instantiable :
   pcb-component my-component :
@@ -109,26 +139,26 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
 
     assign-landpattern(land-pattern(c))
 
-    ;; FIXME!: Can delete this paragraph and keep multi symbol case
-    ;val symbol-assignments = symbols(c)
-    ;if length(symbol-assignments) == 1 :
-    ;  val symbol = symbol-assignments[0]
-    ;  if box?(symbol) :
-    ;    make-box-symbol()
-    ;  else :
-    ;    ; FIXME!: define symbol-table
-    ;    assign-symbol(symbol-table[def-name(symbol)])
+    ; FIXME!: Can delete this paragraph and keep multi symbol case
+    val symbol-assignments = symbols(c)
+    if length(symbol-assignments) == 1 :
+      val symbol = symbol-assignments[0]
+      match(symbol: StandardSymbolAssignmentCode) :
+        assign-symbol(name(symbol))
+      else :
+        make-box-symbol()
 
-    ;else if length(symbol-assignments) > 1 :
-    ;; FIXME!: Can do so that bank always exist
-    ;  assign-symbols(
-    ;    for symbol in symbol-assignments map :
-    ;      val bank = bank(symbol)
-    ;      match(bank:String) :
-    ;        ; FIXME!: define symbol-table
-    ;        val symbol-name = BoxSymbol() when box?(symbol) else symbol-table[def-name(symbol)]
-    ;        Ref(bank) => symbol-name
-    ;  )
+    else if length(symbol-assignments) > 1 :
+    ; FIXME!: Can do so that bank always exist
+      assign-symbols(
+        for symbol in symbol-assignments map :
+          val bank = bank(symbol) as String
+          Ref(bank) =>
+            match(symbol: StandardSymbolAssignmentCode) :
+              name(symbol)
+            else :
+              BoxSymbol()
+      )
 
     ;do(to-jitx, properties(c))
 
@@ -138,14 +168,14 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
 ;---------------- Pad -----------------
 ;--------------------------------------
 
-public defstruct PadCode :
+defstruct PadCode :
   def-name: String    ; referenced by the landpattern to use the pad
   description: String|False
   type: PadType
   shape: Shape
   layers: Tuple<PCBLayerCode>
 
-public defstruct PCBLayerCode :
+defstruct PCBLayerCode :
   layer: LayerSpecifier
   shape: Shape
 
@@ -359,14 +389,14 @@ defn to-jitx (l: PCBLayerCode) :
 ;------------ Landpattern -------------
 ;--------------------------------------
 
-public defstruct LandPatternCode :
+defstruct LandPatternCode :
   name: String    ; originally def-name
   pads: Tuple<LandPatternPadCode>
   layers: Tuple<PCBLayerCode>
   geometries: Tuple<GeomCode>
   model3ds: Tuple<Model3D>
 
-public defstruct LandPatternPadCode :
+defstruct LandPatternPadCode :
   name: Ref
   pad: Pad ; FIXME!: Linked to table of pad variables
   pose: Pose
@@ -375,18 +405,18 @@ public defstruct LandPatternPadCode :
 ;Represents a via, copper, or pour.
 public deftype GeomCode <: Comparable
 
-public defstruct CopperCode <: GeomCode :
+defstruct CopperCode <: GeomCode :
   layer:LayerIndex
   shape:Shape
 
-public defstruct PourCode <: GeomCode :
+defstruct PourCode <: GeomCode :
   layer:LayerIndex
   shape:Shape
   isolate:Double
   rank:Int
   orphans:True|False
 
-public defstruct ViaCode <: GeomCode :
+defstruct ViaCode <: GeomCode :
   type:ViaType
   start:LayerIndex
   end:LayerIndex
@@ -495,12 +525,12 @@ defn to-jitx (g: Model3D) :
 ;--------------- Symbol ---------------
 ;--------------------------------------
 
-public defstruct SymbolUnitCode :
+defstruct SymbolUnitCode :
   name: String
   pins: Tuple<SymbolPinCode>
   layers: Tuple<SymbolLayerCode>
 
-public defstruct SymbolPinCode :
+defstruct SymbolPinCode :
   name: Ref
   point: Point
   direction: Dir
@@ -508,7 +538,7 @@ public defstruct SymbolPinCode :
   number-size: Double|False
   name-size: Double|False
 
-public defstruct SymbolLayerCode :
+defstruct SymbolLayerCode :
   name: String
   shape: Shape
 
