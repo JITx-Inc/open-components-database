@@ -39,7 +39,11 @@ public defstruct PadCode :
   description: String|False
   type: PadType
   shape: Shape
-  ;layers: Tuple<PCBLayerCode>
+  layers: Tuple<PCBLayerCode>
+
+public defstruct PCBLayerCode :
+  layer: LayerSpecifier
+  shape: Shape
 
 defn PadCode (json: JObject) -> PadCode :
   ;val name = json["name"] as String|False    ; Useful?
@@ -48,8 +52,7 @@ defn PadCode (json: JObject) -> PadCode :
           json["description"] as String|False,
           PadType(json["type"] as String),
           Shape(json["shape"] as JObject),
-          )
-          ;map(PCBLayerCode, json["layers"] as Tuple<JObject>))
+          map(PCBLayerCode, json["layers"] as Tuple<JObject>))
 
 defn PadType (s: String) -> PadType :
   switch(s) :
@@ -57,12 +60,178 @@ defn PadType (s: String) -> PadType :
     "TH": TH
 
 defn Shape (json: JObject) -> Shape :
-  ; FIXME!
-  EmptyShape()
+  switch(json["__object_type__"] as String) :
+    "EmptyShape": EmptyShape()
+    "Point": Point(json)
+    "Polygon": Polygon(json)
+    "Circle": Circle(json)
+    "Segment": Segment(json)
+    "Arc": Arc(json)
+    "Rectangle": Rectangle(json)
+    "Capsule": Capsule(json)
+    "RoundedRectangle": RoundedRectangle(json)
+    "ChamferedRectangle": ChamferedRectangle(json)
+    "DShape": DShape(json)
+    "Line": Line(json)
+    "Polyline": Polyline(json)
+    "PolygonWithArcs": PolygonWithArcs(json)
+    "Union": Union(json)
+    "Text": Text(json)
+    "GeneralRoundedRectangle": GeneralRoundedRectangle(json)
+    "GeneralChamferedRectangle": GeneralChamferedRectangle(json)
+    "Difference": Difference(json)
 
-;defn PCBLayerCode (json: JObject) -> PCBLayerCode :
-;  FIXME!
-;  PCBLayerCode(Cutout(), EmptyShape())
+defn Point (json: JObject) -> Point :
+  Point(json["x"] as Double,
+        json["y"] as Double)
+
+defn Polygon (json: JObject) -> Polygon :
+  Polygon $ map(Point, json["points"] as Tuple<JObject>)
+
+defn Circle (json: JObject) -> Circle :
+  Circle(Point(json["center"] as JObject),
+         json["radius"] as Double)
+
+defn Segment (json: JObject) -> Segment :
+  Segment(Point(json["source"] as JObject),
+          Point(json["target"] as JObject))
+
+defn Arc (json: JObject) -> Arc :
+  Arc(Point(json["center"] as JObject),
+      json["radius"] as Double,
+      json["start-angle"] as Double,
+      json["angle"] as Double)
+
+defn Rectangle (json: JObject) -> Rectangle :
+  Rectangle(json["width"] as Double,
+            json["height"] as Double,
+            Pose(json["pose"] as JObject))
+
+defn Capsule (json: JObject) -> Capsule :
+  Capsule(json["width"] as Double,
+            json["height"] as Double,
+            Pose(json["pose"] as JObject))
+
+defn RoundedRectangle (json: JObject) -> RoundedRectangle :
+  RoundedRectangle(json["width"] as Double,
+                   json["height"] as Double,
+                   json["radius"] as Double,
+                   Pose(json["pose"] as JObject))
+
+defn ChamferedRectangle (json: JObject) -> ChamferedRectangle :
+  ChamferedRectangle(json["width"] as Double,
+                     json["height"] as Double,
+                     json["radius"] as Double,
+                     Pose(json["pose"] as JObject))
+
+defn DShape (json: JObject) -> DShape :
+  DShape(json["width"] as Double,
+         json["height"] as Double,
+         json["radius"] as Double,
+         Pose(json["pose"] as JObject))
+
+defn Line (json: JObject) -> Line :
+  Line(json["width"] as Double,
+       map(Point, json["points"] as Tuple<JObject>))
+
+defn Polyline (json: JObject) -> Polyline :
+  Polyline(json["width"] as Double,
+           map(Shape, json["elements"] as Tuple<JObject>))
+
+defn PolygonWithArcs (json: JObject) -> PolygonWithArcs :
+  PolygonWithArcs $ map(Shape, json["elements"] as Tuple<JObject>)
+
+defn Union (json: JObject) -> Union :
+  Union(map(Shape, json["shapes"] as Tuple<JObject>)) as Union
+
+defn Text (json: JObject) -> Text :
+  Text(json["string"] as String,
+       json["size"] as Double,
+       Anchor(json["anchor"] as String),
+       Pose(json["pose"] as JObject),
+       json["font"] as String)
+
+defn Anchor (s: String) -> Anchor :
+  switch(s) :
+    "N": N
+    "S": S
+    "E": E
+    "W": W
+    "NE": NE
+    "SE": SE
+    "SW": SW
+    "NW": NW
+    "C": C
+
+defn TextKind (s: String) -> TextKind :
+  switch(s) :
+    "StrokeFont": StrokeFont
+    "TrueTypeFont": TrueTypeFont
+    "BarCode": BarCode
+
+defn GeneralRoundedRectangle (json: JObject) -> GeneralRoundedRectangle :
+  GeneralRoundedRectangle(json["width"] as Double,
+            json["height"] as Double,
+            json["radii"] as Tuple<Double>,
+            Pose(json["pose"] as JObject))
+
+defn GeneralChamferedRectangle (json: JObject) -> GeneralChamferedRectangle :
+  GeneralChamferedRectangle(json["width"] as Double,
+            json["height"] as Double,
+            json["radii"] as Tuple<Double>,
+            Pose(json["pose"] as JObject))
+
+defn Difference (json: JObject) -> Difference :
+  Difference(Shape(json["shape1"] as JObject),
+             Shape(json["shape2"] as JObject))
+
+defn PCBLayerCode (json: JObject) -> PCBLayerCode :
+  PCBLayerCode(LayerSpecifier(json["layer"] as JObject),
+               Shape(json["shape"] as JObject))
+
+defn LayerSpecifier (json: JObject) -> LayerSpecifier :
+  switch(json["__object_type__"] as String) :
+    "Cutout": Cutout()
+    "Courtyard": Courtyard(json)
+    "SolderMask": SolderMask(json)
+    "Paste": Paste(json)
+    "Glue": Glue(json)
+    "Finish": Finish(json)
+    "Silkscreen": Silkscreen(json)
+    "ForbidCopper": ForbidCopper(json)
+    "ForbidVia": ForbidVia()
+    "BoardEdge": BoardEdge()
+    "CustomLayer": CustomLayer(json)
+
+defn Courtyard (json: JObject) -> Courtyard :
+  Courtyard(Side(json["side"] as String))
+
+defn SolderMask (json: JObject) -> SolderMask :
+  SolderMask(Side(json["side"] as String))
+
+defn Paste (json: JObject) -> Paste :
+  Paste(Side(json["side"] as String))
+
+defn Glue (json: JObject) -> Glue :
+  Glue(Side(json["side"] as String))
+
+defn Finish (json: JObject) -> Finish :
+  Finish(Side(json["side"] as String))
+
+defn Silkscreen (json: JObject) -> Silkscreen :
+  Silkscreen(json["name"] as String,
+             Side(json["side"] as String))
+
+defn ForbidCopper (json: JObject) -> ForbidCopper :
+  ForbidCopper(LayerIndex(json["start"] as JObject),
+               LayerIndex(json["end"] as JObject))
+
+defn LayerIndex (json: JObject) -> LayerIndex :
+  LayerIndex(json["index"] as Int,
+             Side(json["side"] as String))
+
+defn CustomLayer (json: JObject) -> CustomLayer :
+  CustomLayer(json["name"] as String)
 
 defn to-jitx (p: PadCode) -> Pad :
   pcb-pad my-pad :
@@ -74,9 +243,13 @@ defn to-jitx (p: PadCode) -> Pad :
     type = type(p)
     shape = shape(p)
 
-    ;do(to-jitx, layers(p))
+    do(to-jitx, layers(p))
 
   my-pad
+
+defn to-jitx (l: PCBLayerCode) :
+  inside pcb-pad :
+    layer(/layer(l)) = shape(l)
 
 ;--------------------------------------
 ;------------ Landpattern -------------
@@ -118,9 +291,6 @@ defn Pose (json: JObject) -> Pose :
   Pose(Point(json["center"] as JObject),
        json["angle"] as Double,
        json["flip-x?"] as True|False)
-
-defn Point (json: JObject) -> Point :
-  Point(json["x"] as Double, json["y"] as Double)
 
 defn Side (s: String) -> Side :
   switch(s) :
