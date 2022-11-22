@@ -8,7 +8,7 @@ defpackage ocdb/utils/pin-checks/power-pin-checks :
   import ocdb/utils/pin-checks/utils
 
 val NAME        = "Power Pin Checks"
-val DESCRIPTION = "Check Power Pin Properties"
+val DESCRIPTION = "Check voltage on power pins"
 
 public defn check-power-pin (p:JITXObject) :
   inside pcb-module :
@@ -19,8 +19,8 @@ pcb-check power-pin (p:JITXObject) :
 
   #CHECK(
     condition = p-props is PowerPin
-    name = NAME
-    category = CATEGORY
+    name = context(p)
+    category = "Power Pin Checks (Data)"
     description = DESCRIPTION
     subcheck-description = "Verify the power pin has the correct PowerPin property attached"
     pass-message = "Pin %_ has the correct PowerPin property attached" 
@@ -32,26 +32,27 @@ pcb-check power-pin (p:JITXObject) :
 
   #CHECK(
     condition = has-property?(p.net-voltage)
-    name = NAME
-    category = CATEGORY
+    name = context(p)
+    category = "Power Pin Checks (Data)"
     description = DESCRIPTION
-    subcheck-description = "Verify the power pin has the correct net-voltage property attached",
-    pass-message = "Pin %_ has the correct net-voltage property attached of %_V" 
+    subcheck-description = "Verify the power pin has a correct net-voltage property",
+    pass-message = "Pin %_ has a net-voltage property of %_V" 
       % [context(p), property(p.net-voltage)],
-    fail-message =  "Pin %_ does not have the correct net-voltage property attached" 
+    info-message =  "Pin %_ does not have known net-voltage property." 
       % [context(p)]
     locators = [p]
   )
 
+  val recommended-voltage = eval-voltage(recommended-voltage(p-props))
   #CHECK(
-    condition = in-range?(recommended-voltage(p-props), property(p.net-voltage))
-    name = NAME
-    category = CATEGORY
+    condition = in-range?(recommended-voltage, property(p.net-voltage))
+    name = context(p)
+    category = "Power Pin Checks"
     description = DESCRIPTION
     subcheck-description = "Check the power pin's net-voltage property is within the design specification",
-    pass-message = "Pin %_ net voltage %_V is correctly within the design specification %_V" 
-      % [context(p), property(p.net-voltage), recommended-voltage(p-props)],
-    fail-message = "Pin %_ net voltage %_V is not correctly within the design specification %_V" 
-      % [context(p), property(p.net-voltage), recommended-voltage(p-props)],
+    pass-message = "net-voltage %_V on pin %_ is within the recommended operating range %_V" 
+      % [property(p.net-voltage), context(p), recommended-voltage],
+    fail-message = "net-voltage %_V on pin %_ is outside the recommended operating range %_V" 
+      % [property(p.net-voltage), context(p), recommended-voltage],
     locators = [p]
   )

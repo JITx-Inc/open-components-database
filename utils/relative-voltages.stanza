@@ -1,0 +1,137 @@
+#use-added-syntax(jitx)
+defpackage ocdb/utils/relative-voltages :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/connections
+  import ocdb/utils/property-structs
+
+doc: "Propagate relative voltage properties throughout the netlist."
+public defn propagate-relative-voltages () :
+  inside pcb-module :
+    propagate-relative-voltages(GlobalNetList(self))
+
+; TODO reuse netlist computation for other propagations and checks
+public defn propagate-relative-voltages (netlist:GlobalNetList) :
+  val sccs   = scc-relative-voltage(netlist)
+  val cycles = Vector<List>()
+  val nets   = Vector<GlobalNet>()
+  
+  for scc in sccs do :
+    match(scc) :
+      (n:GlobalNet) : 
+        add(nets, n)
+      (l:List) : 
+        add(cycles, l)
+  
+  if not empty?(cycles) :
+    fatal("Net list contains relative voltage cycles: %," % [cycles])
+  
+  do(resolve-relative-voltage, nets)
+
+
+;==============================================================================
+;============================ Implementation ==================================
+;==============================================================================
+
+; Compute the strongly connected components of a graph of global nets
+defn scc-relative-voltage (netlist:GlobalNetList) -> List<List<GlobalNet>|GlobalNet> :
+  val pin-table = to-hashtable<JITXObject, GlobalNet> $
+    for net in nets(netlist) seq-cat :
+      for pin in pins(net) seq :
+        pin => net
+  
+  defn dependencies (p:Pin) -> Seq<GlobalNet> :
+    seq(get{pin-table, relative(_)}, relative-voltages(p))
+
+  val dep-table = to-hashtable<GlobalNet, List<GlobalNet>> $ 
+    for net in nets(netlist) seq :
+      net => to-list $
+        for pin in pins(net) seq-cat :
+          dependencies(pin)
+
+  stz/algorithms/strong-components(dep-table)
+
+; todo: replace with toleranced arithmetic in jitx package
+defn extrema (a:Toleranced, b:Toleranced) -> Toleranced :
+  val min = min(min-value(a), min-value(b))
+  val max = max(max-value(a), max-value(b))
+  min-max(min, max)
+
+; Update the net-voltage poperty of a pin after relative 
+; values are resolved.
+;
+; If the pin already has a net voltage, the extrema are updated.
+defn update-net-voltage (p:JITXObject, new-net-voltage:Toleranced) :
+  val net-voltage = 
+    match(get-property?(p, `net-voltage)) :
+      (one:One<Toleranced>) : extrema(value(one), new-net-voltage)
+      (none:None) :new-net-voltage
+  set-property(p, `net-voltage, net-voltage)
+
+; If `p` is referenced from a relative voltage, return the 
+; reference voltage to it.
+defn ref-voltage? (p:JITXObject) -> False|Toleranced :
+  val np = get-property?(p, `net-voltage)
+  match(np:One<Toleranced>) : 
+    value(np)
+
+; Return the relative voltages on a pin, if they exists
+defn relative-voltages (p:JITXObject) -> Seqable<RelativeVoltage> :
+  defn flatten (x:?) -> Seqable<Toleranced|RelativeVoltage> :
+    match(x) :
+      (p:PowerPin)      : [recommended-voltage(p)]
+      (p:DigitalInput)  : [vil(p), vih(p)]
+      (p:DigitalOutput) : flatten(driver(p))
+      (p:DigitalIO)     : cat-all([flatten(driver(p)), [vil(p), vih(p)]])
+      (p:ResetPin)      : flatten(input(p))
+      (p:CMOSOutput)    : [vol(p), voh(p)]
+      (p:TTLOutput)     : [vol(p), voh(p)]
+      (p:OpenCollector) : [vol(p)]
+      (x:?) :
+        println("Warning: unhandled case of %_, cannot resolve RelativeVoltage" % [p])
+        []
+      
+  val props = [
+    `digital-io
+    `digital-input
+    `digital-output
+    `generic-pin
+    `power-pin
+    `reset-pin
+  ]
+
+  val props* = seq?(get-property?{p, _}, props)    
+  val voltages = seq-cat(flatten, props*)      
+  filter-by<RelativeVoltage>(voltages)
+
+; Resolve relative voltages for the pins on a net.
+defn resolve-relative-voltage (net:GlobalNet) :
+  val relative-voltages = seq-cat(relative-voltages, pins(net))
+  val resolved = seq(absolute-voltage, relative-voltages)
+  
+  if not empty?(resolved) :
+    val final = reduce-right(extrema, resolved)
+    for pin in pins(net) do :
+      update-net-voltage(pin, final)
+
+;==============================================================================
+;==============================================================================
+;==============================================================================
+
+defstruct Voltage :
+  reference:JITXObject
+
+public defn voltage (o:JITXObject) -> Voltage :
+  Voltage(o)
+
+public defn times (a:Double|Toleranced, v:Voltage) -> RelativeVoltage :
+  FractionalVoltage(a, reference(v))
+
+public defn plus (a:Double|Toleranced, v:Voltage) -> RelativeVoltage :
+  OffsetVoltage(a, reference(v))
+
+public defn minus (v:Voltage, a:Double|Toleranced) -> RelativeVoltage :
+  OffsetVoltage(-1.0 * a, reference(v))
+

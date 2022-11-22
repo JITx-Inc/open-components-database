@@ -15,6 +15,9 @@ defpackage ocdb/utils/generator-utils:
   import ocdb/utils/property-structs
   import ocdb/modules/power-regulators
   import ocdb/utils/bundles
+  import ocdb/utils/relative-voltages
+  import ocdb/utils/propagation
+  import ocdb/utils/voltage-propagation
 
 ; =======================================
 ; Ciruit convenience functions
@@ -43,6 +46,8 @@ public defn add-open-drain-pullups (bus:JITXObject, vio:JITXObject, clk-rate:Dou
     for (p in ports(bus), i in 0 to false) do :
       net (rs.r[i].p[1] p)
       net (rs.r[i].p[2] vio)
+      eval-when has-property?(rs.r[i].p[2].net-voltage) :
+        property(rs.r[i].p[1].net-voltage) = min-max(0.0, max-value(property(rs.r[i].p[2].net-voltage)))
     rs
 
 ; Default is 100kHz clock rate, 100pF bus capacitance.
@@ -79,30 +84,28 @@ public defn usb-c-configuration-channel (usb-c-bundle:JITXObject, method:USB-C-C
 ; Piecewise linear functions
 ; Example call : PWL([[x0 y0] [x1 y1] ... [xn yn])[x]. Returns interpolated value of y at x
 ; =======================================
-public deftype PWL
-public defmulti get (f:PWL, x:Double) -> Double
-public defn PWL (ps:Tuple<[Double,Double]>) -> PWL :
-  new PWL :
-    defmethod get (this, x:Double) :
-      val n = length(ps)
-      if x < ps[0][0] :
-        ; println("Warning: PWL is extrapolating with zero-order hold")
-        ps[0][1]
-      else if x >= ps[0][0] and x <= ps[n - 1][0] :
-        val i = for i in 0 to n find! :
-          ps[i][0] >= x
-        val j = for i in reverse(0 to n) find! :
-          ps[i][0] <= x
-        if i == j :
-          ps[i][1]
-        else :
-          val dydx = (ps[i][1] - ps[j][1]) / (ps[i][0] - ps[j][0])
-          dydx * (x - ps[j][0]) + ps[j][1]
-      else if x > ps[n - 1][0] :
-        ; println("Warning: PWL is extrapolating with zero-order hold")
-        ps[n - 1][1]
-      else  :
-        fatal("Something is wrong in PWL with x = %_" % [x])
+public pcb-struct ocdb/utils/generator-utils/PWL :
+  ps:Tuple<[Double, Double]>
+
+public defn get (f:PWL, x:Double) :
+  val ps = ps(f)
+  val n = length(ps)
+  if x < ps[0][0] :
+    ps[0][1]
+  else if x >= ps[0][0] and x <= ps[n - 1][0] :
+    val i = for i in 0 to n find! :
+      ps[i][0] >= x
+    val j = for i in reverse(0 to n) find! :
+      ps[i][0] <= x
+    if i == j :
+      ps[i][1]
+    else :
+      val dydx = (ps[i][1] - ps[j][1]) / (ps[i][0] - ps[j][0])
+      dydx * (x - ps[j][0]) + ps[j][1]
+  else if x > ps[n - 1][0] :
+    ps[n - 1][1]
+  else  :
+    fatal("Something is wrong in PWL with x = %_" % [x])
 
 ; =======================================
 ; Assign schematic and layout groups
@@ -227,7 +230,7 @@ public defn generate-power () :
     for i in component-instances(self) do :
       for p in pins(i) do : ; [TODO] public-pins or pins?
         if has-property?(p.power-input) :
-          generate-power-system(property(p.power-input), OPERATING-TEMPERATURE[1], p, property(p.gnd-ref))
+          generate-power-system(property(p.power-input), max-value(OPERATING-TEMPERATURE), p, property(p.gnd-ref))
 
 public defn set-power-source (pos:JITXObject, neg:JITXObject, v-in:Double):
   inside pcb-module:
@@ -237,9 +240,29 @@ public defn set-power-source (pos:JITXObject, neg:JITXObject, v-in:Double):
 
 public defn propagate-net-voltages () :
   inside pcb-module:
+    for c in component-instances(self) do:
+      for p in pins(c) do :
+        if has-property?(p.digital-io):
+          val prop = property(p.digital-io)
+          if driver(prop) is CMOSOutput|TTLOutput :
+            property(p.net-voltage) = min-max(min-value(vol(driver(prop))) max-value(voh(driver(prop))))
+        else if has-property?(p.digital-output):
+          val prop = property(p.digital-output)
+          if driver(prop) is CMOSOutput|TTLOutput :
+            property(p.net-voltage) = min-max(min-value(vol(driver(prop))) max-value(voh(driver(prop))))
     for item in all-connected-items(self) do :
       ;First gather all the voltages on all connected nets.
-      val voltages = to-tuple $ seq?({property?(_.net-voltage)}, nets(item))
+      val voltages = to-tuple $ 
+        for net in nets(item) seq? :
+          val prop? = property?(net.net-voltage)
+          match(prop?:One) :
+            if value(prop?) is-not Toleranced :
+              ; We cannot necessarily know which net is at issue, since 
+              ; it may not have a ref. This is a slightly better error than
+              ; previous, as downstream it will cause a type error.
+              fatal("Cannot propagate net-voltages. Found a net-voltage that is not a toleranced value: %_." % [value(prop?)])
+          prop?
+      
       ;If at least one net has a voltage property.
       if not empty?(voltages) :
         val voltage = net-voltage!(voltages, item)
@@ -266,29 +289,68 @@ defn net-voltage! (voltages: Tuple<Toleranced>, item: ConnectedItems) -> Toleran
 ; Run transformations to propagate voltages from sources, and run delayed evaluations
 ; =======================================
 public defn run-final-passes (module:Instantiable) -> Instantiable :
-  val result-module = transform-module{calculate-operating-points, _} $
-    let loop (design: Instantiable = module, i: Int = 0) :
-      defn run-eval-loop (design: Instantiable) :
-        val design* = run-evals?(design)
-        match(design*: Instantiable) : loop(design*, i + 1)
-        else : design
+  ;Helper: Throw error message indicating that the maximum number of iterations
+  ;has been reached.
+  defn throw-max-iterations-error () :
+    val msg = "The 'run-final-passes' utility has reached the maximum number of iterations without \
+               converging. This occurs most commonly when an 'eval-when' block generates more \
+               'eval-when' blocks which contain further 'eval-when' blocks."
+    throw(Exception(msg))           
 
-      if i == 5 :
-        throw $ Exception("A loop executing eval-whens, propagating net voltages and assigning pins has been \
-                           encountered: 5 iterations reached. Check that no eval-when generate other eval-whens in an \
-                           infinite loop, or that there is no infinite loop of 2nd order between eval-when execution \
-                           and net voltage propagation or pin assignment.")
 
-      ;TODO: Review the order and necessity of those algos
-      design $> transform-module{propagate-net-voltages, _}
-             $> assign-pins
-             $> run-eval-loop
+  ;On each iteration:
+  ;  1) Assign pins
+  ;  2) Propagate voltages.
+  ;  3) Run eval whens
+  ;  4) If progress is made, then loop again if the total number of iterations
+  ;     hasn't been reached.
+  ;Arguments:
+  ;- num-iterations: The number of iterations performed thus far.
+  ;  On the initial call, this starts from 0.
+  defn iteratively-run-eval-whens (design:Instantiable,
+                                   num-iterations:Int) -> Instantiable :
+    val max-iterations = 5
+    val voltage-prop-report = to-string("voltage-propagation-iteration%_.txt" % [num-iterations])
+    val assigned-pins = assign-pins(design)
+    val annotated-voltages = propagate-voltages(assigned-pins, voltage-prop-report)
+    val new-design = run-evals?(annotated-voltages)
+    match(new-design:Instantiable) :
+      val new-num-iterations = num-iterations + 1
+      if new-num-iterations < max-iterations :
+        iteratively-run-eval-whens(new-design, new-num-iterations)
+      else :
+        throw-max-iterations-error()
+    else :
+      annotated-voltages
 
-  ; If we did not set the main module, a user forgetting to set it himself on the new module would be exporting
-  ; the module before adding operating points (the main module is set in the loop to be able to assign pins).
-  ; Such bug would be invisible.
-  set-main-module(result-module)
-  result-module
+  ;Main flow:
+  ;  1) Iteratively run evals
+  ;  2) Calculate the operating points.
+  ;  3) Iteratively run evals to finish.
+  ;  4) Flag the global variable PROPAGATION-FINISHED as true.
+  ;  5) Now that it is flagged, run evals one last time.
+
+  ;Steps 1, 2, 3:
+  val new-design = module
+                $> iteratively-run-eval-whens{_, 0}
+                $> transform-module{calculate-operating-points, _}
+                $> iteratively-run-eval-whens{_, 0}
+  set-main-module(new-design)
+
+  ;Step 4.
+  PROPAGATION-FINISHED = true
+
+  ;Step 5.
+  match(run-evals?(new-design)) :
+    ;Case: Evals were ran. Set it as the main module, and
+    ;return it.
+    (design:Instantiable) :
+      set-main-module(design)
+      design
+      
+    ;Case: Nothing ran, just return the design as is.
+    (f:False) :
+      new-design
 
 ; FIXME: assign-pins was obviously not meant to be used like this, it depends on the flattening
 ; Is run-evals? actually accessing the information resulting from the pin assignment?

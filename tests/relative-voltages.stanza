@@ -1,0 +1,149 @@
+; Quick test/harness to develop and evaluate relative
+; voltage implementation.
+#use-added-syntax(jitx, tests)
+defpackage ocdb/tests/relative-voltages :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/property-structs
+  import ocdb/utils/generator-utils
+  import ocdb/utils/relative-voltages
+
+; A digital-io component with a single digital-io pin where :
+; 
+; vol is a fractional voltage
+; voh is a PWL voltage
+; vil is a dual offset voltage
+; vih is a single offset voltage
+;
+pcb-component IOComponent :
+  pin-properties :
+    [ pin : Ref | pads : Int ... | side:Dir ]
+    [ VDD       | 1              | Up   ]
+    [ IO        | 2              | Left ]
+    [ GND       | 3              | Down ]
+
+  ; boilerplate 
+  assign-landpattern(ocdb/utils/landpatterns/SOT23())
+  ocdb/utils/box-symbol/make-box-symbol()
+
+  ; Set up the I/O properties with RelativeVoltages
+  property(self.IO.digital-io) = 
+    DigitalIO(driver, vil, vih, self.VDD, self.GND, leakage-current)
+  where :
+    val leakage-current = 50.0e-9
+
+    val driver = 
+      CMOSOutput(vol, voh)
+    where :
+      ; Example: Given a table of min/max values for 
+      ;          vol, create PWL table for known 
+      ;          supply voltages 
+      val vol = PWLVoltage(
+        ; min
+        PWL([[1.8, 0.06]
+             [2.8, 0.30]
+             [3.3, 0.30]
+             [5.0, 0.30]]),
+        ; max
+        PWL([[1.8, 0.18]
+             [2.8, 0.50]
+             [3.3, 0.50]
+             [5.0, 0.60]]),
+        ; relative to this pin
+        self.VDD
+      )
+      
+      ; Example: Offset the voltage by -1.1 for 
+      ;          voh min, -0.1 for voh max.
+      val voh = min-max(-1.1, -0.1) + voltage(self.VDD)
+
+    ; vil = self.VDD.net-voltage * 0.1
+    val vil = 0.1 * voltage(self.VDD)
+
+    ; vih = self.vdd.net-voltage
+    val vih = voltage(self.VDD) - 0.1
+
+
+  property(self.VDD.net-voltage) = typ(3.3)
+
+; Helper to retrieve vih,vil,voh,vol
+defn relative-voltages (component:JITXObject) -> [RelativeVoltage,RelativeVoltage,RelativeVoltage,RelativeVoltage] :
+  val io = get-property(component, `digital-io)
+  val driver = driver(io) as CMOSOutput
+
+  val vih = vih(io) as RelativeVoltage
+  val vil = vil(io) as RelativeVoltage
+  val voh = voh(driver) as RelativeVoltage
+  val vol = vol(driver) as RelativeVoltage
+  
+  [vih, vil, voh, vol]
+
+; Helper to print the values of a digital-io's relative voltages 
+; after they've been resolved
+defn dump (component:JITXObject) :
+  val [vih, vil, voh, vol] = relative-voltages(component)
+  println("%_ vih: %_" % [ref(component), absolute-voltage(vih)])
+  println("%_ vil: %_" % [ref(component), absolute-voltage(vil)])
+  println("%_ voh: %_" % [ref(component), absolute-voltage(voh)])
+  println("%_ vol: %_" % [ref(component), absolute-voltage(vol)])
+
+; We can't run this test in CI because PWLVoltage() does not propagated correctly (yet)
+deftest(not-implemented-yet) relative-voltage-test :
+  pcb-module main-module :
+    inst U1 : IOComponent
+    inst U2 : IOComponent
+
+    net VDD (U1.VDD, U2.VDD)
+    net GND (U1.GND, U2.GND)
+    net IO  (U1.IO, U2.IO)
+
+    symbol(VDD) = ocdb/utils/symbols/supply-sym
+    symbol(GND) = ocdb/utils/symbols/ground-sym
+    property(VDD.net-voltage) = typ(3.3)
+    property(GND.net-voltage) = typ(0.0)
+
+
+    eval-when   
+        all?(has-absolute-voltage?, relative-voltages(U1.IO)) and
+        all?(has-absolute-voltage?, relative-voltages(U2.IO)) :
+      ; Only run once the voltages have been propagated.
+      for obj in relative-voltages(U1.IO) do:
+        println("relative(%_) => %_ (%_) is %_" % [obj, relative(obj), ref $ relative(obj), get-property?(relative(obj), `net-voltage)])
+      dump(U1.IO)
+      dump(U2.IO)
+
+      val n1 = property(U1.IO.net-voltage)
+      val n2 = property(U2.IO.net-voltage)
+          
+      #ASSERT(n1 == n2)
+      
+  ; Test logic
+  set-design-directory("relative-voltages-test")
+  run-final-passes(main-module)
+  view-schematic()
+  run-checks("checks-test.txt")
+
+deftest rv-arithmetic :
+  pcb-module main-module :
+    net VDD ()
+    property(VDD.net-voltage) = typ(1.0)
+
+    let :
+      val e1 = 1.0 + voltage(VDD)
+      #EXPECT(eval-voltage(e1) == typ(2.0))
+    
+    let :
+      val e1 = min-max(-1.0, 1.0) + voltage(VDD)
+      #EXPECT(eval-voltage(e1) == min-max(0.0, 2.0))
+    
+    let :
+      val e1 = 3.1 * voltage(VDD)
+      #EXPECT(eval-voltage(e1) == typ(3.1))
+    
+    let :
+      val e1 = min-max(0.12, 3.1) * voltage(VDD)
+      #EXPECT(eval-voltage(e1) == min-max(0.12, 3.1))
+    
+  evaluate(main-module)

@@ -17,6 +17,8 @@ defpackage ocdb/utils/checks :
   import ocdb/utils/pin-checks/all
   import ocdb/utils/netlist-checks/all
   import ocdb/utils/netlist-checks/utils
+  import ocdb/utils/propagation
+
 ;<>
 #CHECK(
   condition = p-props is GenericPin,                    ; A boolean check                     (True|False)
@@ -51,21 +53,22 @@ Set of standard checks to run on a top-level-module.
 public var check-flag : True|False
 check-flag = false
 
+
 public defn check-design (module:JITXObject):
   erc-check-design(module)
-  drc-check-design(module)
+  ; drc-check-design(module)
 
 public defn erc-check-design (module:JITXObject):
   inside pcb-module:
-    eval-when check-flag == true:
-      for i in populated-components(module) do :
-        check rated-temperature(i)
-        
-        check-capacitor(i) when has-property?(i.capacitor)
-        check-resistor(i)  when has-property?(i.resistor)
-        check-inductor(i)  when has-property?(i.inductor)    
-        check-pins(i)
+    for i in populated-components(module) do :
+      check rated-temperature(i)
+      
+      check-capacitor(i) when has-property?(i.capacitor)
+      check-resistor(i)  when has-property?(i.resistor)
+      check-inductor(i)  when has-property?(i.inductor)    
+      check-pins(i)
 
+    eval-when PROPAGATION-FINISHED :
       check-netlist(module)
 
 public defn drc-check-design (module:JITXObject):
@@ -99,32 +102,18 @@ pcb-check rated-temperature (component:JITXObject):
     info-message =         "%_ does not have the rated-temperature property attached" % [ref(component)],
     locators =             [instance-definition(component)]
   )
-  
-  if property(component.rated-temperature) is RatedTemperature:
-    val name = "Rated temperature check"
-    val description = "Check rated temperatures for components versus design constraints"
-    val category = "Component Checks"
-    val temp = operating-temperature(property(component.rated-temperature))
-    #CHECK(
-      condition =            in-range?(temp, OPERATING-TEMPERATURE[0]),
-      name =                 "Rated temperature check"
-      description =          "Check rated temperatures for components versus design constraints"
-      category =             "Component Checks"
-      subcheck-description = "Check the min rated-temperature of a component versus min design constraint",
-      pass-message =         "%_ has an acceptable lower operating temperature versus design target (%_C <= %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[0]],
-      fail-message =         "%_ does not have an acceptable lower operating temperature versus design target (%_C > %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[0]],
-      locators =             [component]
-    )
-    #CHECK(
-      condition =            in-range?(temp, OPERATING-TEMPERATURE[1]),
-      name =                 "Rated temperature check"
-      description =          "Check rated temperatures for components versus design constraints"
-      category =             "Component Checks"
-      subcheck-description = "Check rated temperature (high) of component versus design constraints",
-      pass-message =         "%_ has higher operating temperature that is compatible with the design target(%_C >= %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[1]],
-      fail-message =         "%_ does not have an acceptable higher operating temperature versus design target (%_C < %_C)" % [ref(component), temp, OPERATING-TEMPERATURE[1]],
-      locators =             [component]  
-    )
+
+  val temp = property(component.rated-temperature)
+  #CHECK(
+    condition =            in-range?(temp, OPERATING-TEMPERATURE),
+    name =                 "Rated temperature check"
+    description =          "Check rated temperatures for components versus design constraints"
+    category =             "Component Checks"
+    subcheck-description = "Check the rated-temperature of a component against the operating temperature of the design.",
+    pass-message =         "%_ has a rated temperature %_ containing the operating temperature %_" % [ref(component), temp, OPERATING-TEMPERATURE],
+    fail-message =         "%_ does not have a rated temperature %_ containing the operating temperature %_" % [ref(component), temp, OPERATING-TEMPERATURE],
+    locators =             [component]
+  )
 
 ; Returns if a pin is a digital-output pin or capable of being one
 defn is-digital-output? (p:JITXObject) -> True|False : 
@@ -234,8 +223,8 @@ public pcb-check check-min-copper-copper-space (lp:LandPattern, side:Side) :
       description =          "Check min copper spacing"
       category =             "Manufacturing Checks"
       subcheck-description = "Check landpattern copper minimum spacing",
-      pass-message =         "Landpattern %_ min spacing %_ does not violate min spacing rules %_" % [/name(lp),min-space,min-copper-copper-space],
-      fail-message =         "Landpattern %_ min spacing %_ violates min spacing rules %_" % [/name(lp),min-space,min-copper-copper-space],
+      pass-message =         "Landpattern %_ min spacing %_ does not violate min spacing rules %_" % [/name(lp), min-space, min-copper-copper-space],
+      fail-message =         "Landpattern %_ min spacing %_ violates min spacing rules %_" % [/name(lp), min-space, min-copper-copper-space],
       locators =             [lp]
     )
 
@@ -255,8 +244,8 @@ public pcb-check check-min-copper-width (lp:LandPattern, side:Side) :
       description =          "Check min copper width"
       category =             "Manufacturing Checks"
       subcheck-description = "Check landpattern copper minimum width",
-      pass-message =         "Landpattern %_ min width %_ does not violate min width rules %_" % [/name(lp),min-width,min-copper-width],
-      fail-message =         "Landpattern %_ min width %_ violates min width rules %_" % [/name(lp),min-width,min-copper-width],
+      pass-message =         "Landpattern %_ min width %_ does not violate min width rules %_" % [/name(lp), min-width, min-copper-width],
+      fail-message =         "Landpattern %_ min width %_ violates min width rules %_" % [/name(lp), min-width, min-copper-width],
       locators =             [lp]
     )
 
@@ -272,8 +261,8 @@ public pcb-check check-bga-pitch (lp:LandPattern) :
     description =          "Check bga pad pitch"
     category =             "Manufacturing Checks"
     subcheck-description = "Check landpattern bga minimum pitch",
-    pass-message =         "Landpattern %_ min bga pitch %_ does not violate min bga pitch rules %_" % [/name(lp),min-pitch(lp),min-pitch-bga],
-    fail-message =         "Landpattern %_ min bga pitch %_ violates min bga pitch rules %_" % [/name(lp),min-pitch(lp),min-pitch-bga],
+    pass-message =         "Landpattern %_ min bga pitch %_ does not violate min bga pitch rules %_" % [/name(lp), min-pitch(lp), min-pitch-bga],
+    fail-message =         "Landpattern %_ min bga pitch %_ violates min bga pitch rules %_" % [/name(lp), min-pitch(lp), min-pitch-bga],
     locators =             [lp]
   )
 
@@ -290,8 +279,8 @@ public pcb-check check-leaded-pitch (lp:LandPattern) :
     description =          "Check leaded pad pitch"
     category =             "Manufacturing Checks"
     subcheck-description = "Check landpattern leaded minimum pitch",
-    pass-message =         "Landpattern %_ min leaded pitch %_ does not violate min leaded pitch rules %_" % [/name(lp),min-pitch,min-pitch-leaded],
-    fail-message =         "Landpattern %_ min leaded pitch %_ violates min leaded pitch rules %_" % [/name(lp),min-pitch,min-pitch-leaded],
+    pass-message =         "Landpattern %_ min leaded pitch %_ does not violate min leaded pitch rules %_" % [/name(lp), min-pitch, min-pitch-leaded],
+    fail-message =         "Landpattern %_ min leaded pitch %_ violates min leaded pitch rules %_" % [/name(lp), min-pitch, min-pitch-leaded],
     locators =             [lp]
   )
 
@@ -311,8 +300,8 @@ public pcb-check check-min-solder-mask-sliver (lp:LandPattern, shapes:Seqable<Sh
       description =          "Check min soldermask size"
       category =             "Manufacturing Checks"
       subcheck-description = "Check landpattern minimum soldermask bridge spacing",
-      pass-message =         "Landpattern %_ min soldermask spacing %_ does not violate min rules %_" % [/name(lp),min-space,rule-space],
-      fail-message =         "Landpattern %_ min soldermask spacing %_ violates min rules %_" % [/name(lp),min-space,rule-space],
+      pass-message =         "Landpattern %_ min soldermask spacing %_ does not violate min rules %_" % [/name(lp), min-space, rule-space],
+      fail-message =         "Landpattern %_ min soldermask spacing %_ violates min rules %_" % [/name(lp), min-space, rule-space],
       locators =             [lp]
     )
 
@@ -383,7 +372,7 @@ public defn propagate-power-states (module:JITXObject) :
     for i in populated-components(module) seq-cat :
       pins(i)
   
-  ; println("pins: %," % [seq(ref,all-pins)])
+  ; println("pins: %, " % [seq(ref, all-pins)])
 
   ; Find the pins with the power-states property
   val roots =

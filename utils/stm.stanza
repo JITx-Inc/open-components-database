@@ -38,6 +38,22 @@ public pcb-struct ocdb/utils/stm/STMPinPropertiesRow :
   generic-props?: True|False
   power-props?: True|False
 
+public defn bank? (r:STMPinPropertiesRow) -> False|Ref :
+  val bank-letters = "ABCDEFGH"
+  val pin-name = to-string(pin(r))
+  val bank =
+    for bank in bank-letters first :
+      if prefix?(pin-name, to-string("P%_" % [bank])) :
+        One(bank)
+      else :
+        None()
+  
+  match(bank:One) :
+    Ref(value(bank))
+
+public defn bank! (r:STMPinPropertiesRow) :
+  bank?(r) as Ref
+
 ;Bundle definition to be created in JITX
 ;pcb-bundle {name} :
 ;  pin p
@@ -268,7 +284,6 @@ public defn create-pin-properties (json1:JSON) -> STMPinProperties :
               "Left" : Left,
               "Right" : Right
           (side-val) : stm-exception!("Invalid Pin Name")
-        
         val power-props? = match(pin-item["power-pin?"]) :
           (power-val:True) : power-val
           (power-val:False) : power-val
