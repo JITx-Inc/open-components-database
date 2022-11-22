@@ -53,9 +53,9 @@ defstruct ComponentCode :
   description: String|False
   manufacturer: String|False
   mpn: String|False
-  ;emodel: EModel|False
+  emodel: EModel|False
   ;pin-properties: False|PinPropertiesCode
-  ;no-connects: Tuple<NoConnectCode>
+  no-connects: Tuple<NoConnectCode>
   land-pattern: LandPattern   ; FIXME!: Should just be LandPatternCode?
   symbols:Tuple<SymbolAssignmentCode>
   ;properties: Tuple<PropertyCode>
@@ -69,6 +69,9 @@ defstruct StandardSymbolAssignmentCode <: SymbolAssignmentCode :
 
 defstruct BoxSymbolAssignmentCode <: SymbolAssignmentCode :
   bank: String|False with: (as-method => true)
+
+defstruct NoConnectCode :
+  pin: Ref
 
 defn ComponentCode (json: JObject,
                     landpattern: LandPattern,
@@ -85,10 +88,10 @@ defn ComponentCode (json: JObject,
                 json["description"] as String|False,
                 json["manufacturer"] as String|False,
                 json["mpn"] as String|False,
+                call?(EModel{_ as JObject}, json["emodel"]),
                 ; FIXME!
-                ;call?(EModel, json["emodel"] as JObject),
                 ;PinPropertiesCode(json["pin-properties"] as JObject),
-                ;map(NoConnectCode, json["no-connects"] as Tuple<JObject>),
+                map(NoConnectCode, json["no-connects"] as Tuple<JObject>),
                 landpattern
                 map(SymbolAssignmentCode{_, symbol-unit-table}, json["symbols"] as Tuple<JObject>),
                 ;map(PropertyCode, json["properties"] as Tuple<JObject>)
@@ -104,6 +107,80 @@ defn SymbolAssignmentCode (json: JObject,
                                  bank)
   else :
     BoxSymbolAssignmentCode(bank)
+
+defn EModel (json: JObject) -> EModel :
+  switch(json["__object_type__"] as String) :
+    "Resistor": Resistor(json)
+    "Capacitor": Capacitor(json)
+    "Inductor": Inductor(json)
+    "Diode": Diode(json)
+
+defn Resistor (json: JObject) -> Resistor :
+  Resistor(double-or-unknown(json["resistance"]),
+           double-or-unknown(json["tolerance"]),
+           double-or-unknown(json["max-power"]))
+
+defn Capacitor (json: JObject) -> Capacitor :
+  Capacitor(double-or-unknown(json["capacitance"]),
+            double-or-unknown(json["tolerance"]),
+            double-or-unknown(json["max-voltage"]),
+            bool-or-unknown(json["polarized?"]),
+            bool-or-unknown(json["low-esr?"]),
+            string-or-unknown(json["temperature-coefficient"]),
+            string-or-unknown(json["dielectric"]))
+
+defn Inductor (json: JObject) -> Inductor :
+  Inductor(double-or-unknown(json["inductance"]),
+           double-or-unknown(json["tolerance"]),
+           double-or-unknown(json["max-current"]))
+
+defn Diode (json: JObject) -> Diode :
+  Diode(double-or-unknown(json["forward-current"]),
+           double-or-unknown(json["forward-voltage"]),
+           double-or-unknown(json["max-current"]),
+           double-or-unknown(json["max-reverse-voltage"]),
+           color-or-unknown(json["color"]),
+           double-or-unknown(json["luminous-intensity"]))
+
+defn double-or-unknown (json: JSON) -> Double|UNKNOWN :
+  match(json):
+    (d: Double) :
+      d
+    (s: String) :
+      fatal("Expected string \"UNKNOWN\", got %~" % [s]) when s != "UNKNOWN"
+      UNKNOWN
+
+defn bool-or-unknown (json: JSON) -> True|False|UNKNOWN :
+  match(json):
+    (d: True|False) :
+      d
+    (s: String) :
+      fatal("Expected string \"UNKNOWN\", got %~" % [s]) when s != "UNKNOWN"
+      UNKNOWN
+
+; Note that "UNKNOWN" will never be parsed as a string even if it was such before `to-json()`
+defn string-or-unknown (json: JSON) -> String|UNKNOWN :
+  val s = json as String
+  if s == "UNKNOWN" :
+    UNKNOWN
+  else :
+    s
+
+defn color-or-unknown (json: JSON) -> ColorSpec|UNKNOWN :
+  match(json):
+    (json: JObject) :
+      ColorSpec(json)
+    (s: String) :
+      fatal("Expected string \"UNKNOWN\", got %~" % [s]) when s != "UNKNOWN"
+      UNKNOWN
+
+defn ColorSpec (json: JObject) -> ColorSpec :
+  switch(json["__object_type__"] as String) :
+    ; NamedColor is the only subtype of ColorSpec at the time of this writing
+    "NamedColor": NamedColor(json["name"] as String)
+
+defn NoConnectCode (json: JObject) -> NoConnectCode :
+  NoConnectCode $ to-ref!(json["pin"] as String)
 
 defn to-jitx (c: ComponentCode) -> Instantiable :
   pcb-component my-component :
@@ -121,7 +198,7 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
     match(mpn: String) :
       mpn = mpn
 
-    ;val emodel = emodel(c)
+    val emodel = emodel(c)
     ;match(emodel: String) :
     ;  emodel = emodel
 
@@ -135,7 +212,7 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
     ;    for pin in pins(pin-props) do :
     ;      [pin-name(pin) | vs[0] | vs[1] | vs[2]]
 
-    ;do(to-jitx, no-connects(c))
+    do(to-jitx, no-connects(c))
 
     assign-landpattern(land-pattern(c))
 
@@ -163,6 +240,10 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
     ;do(to-jitx, properties(c))
 
   my-component
+
+defn to-jitx (nc: NoConnectCode) :
+  inside pcb-component :
+    no-connect(self.(pin(nc)))
 
 ;--------------------------------------
 ;---------------- Pad -----------------
