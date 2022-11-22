@@ -96,7 +96,7 @@ pcb-check rated-temperature (component:JITXObject):
     condition =            has-property?(component.rated-temperature),
     name =                 "Rated temperature check"
     description =          "Check rated temperatures for components versus design constraints"
-    category =             "Component Checks"
+    category =             "Component Checks (Data)"
     subcheck-description = "Check the rated-temperature of component versus the design constraints",
     pass-message =         "%_ has a property for rated-temperature of %_C" % [ref(component) property(component.rated-temperature)],
     info-message =         "%_ does not have the rated-temperature property attached" % [ref(component)],
@@ -104,16 +104,17 @@ pcb-check rated-temperature (component:JITXObject):
   )
 
   val temp = property(component.rated-temperature)
-  #CHECK(
-    condition =            in-range?(temp, OPERATING-TEMPERATURE),
-    name =                 "Rated temperature check"
-    description =          "Check rated temperatures for components versus design constraints"
-    category =             "Component Checks"
-    subcheck-description = "Check the rated-temperature of a component against the operating temperature of the design.",
-    pass-message =         "%_ has a rated temperature %_ containing the operating temperature %_" % [ref(component), temp, OPERATING-TEMPERATURE],
-    fail-message =         "%_ does not have a rated temperature %_ containing the operating temperature %_" % [ref(component), temp, OPERATING-TEMPERATURE],
-    locators =             [component]
-  )
+  if temp is Toleranced:
+    #CHECK(
+      condition =            in-range?(temp, OPERATING-TEMPERATURE),
+      name =                 "Rated temperature check"
+      description =          "Check rated temperatures for components versus design constraints"
+      category =             "Component Checks"
+      subcheck-description = "Check the rated-temperature of a component against the operating temperature of the design.",
+      pass-message =         "%_ has a rated temperature %_ containing the operating temperature %_" % [ref(component), temp, OPERATING-TEMPERATURE],
+      fail-message =         "%_ does not have a rated temperature %_ containing the operating temperature %_" % [ref(component), temp, OPERATING-TEMPERATURE],
+      locators =             [component]
+    )
 
 ; Returns if a pin is a digital-output pin or capable of being one
 defn is-digital-output? (p:JITXObject) -> True|False : 
@@ -147,9 +148,9 @@ public pcb-check within? (t:Toleranced, value:Toleranced) :
     )
 
 public pcb-check connected (p:JITXObject|Tuple<JITXObject>) :
-  val name = "connected net checks"
+  val name = "Connected pin checks"
   val description = "Check that the object(s) are connected"
-  val category = "Net Checks"
+  val category = "Connected Checks"
 
   ;Helper function used by object-connected-message and objects-connected-message
   defn connected-str (connected?:True|False) -> String :
@@ -176,9 +177,9 @@ public pcb-check connected (p:JITXObject|Tuple<JITXObject>) :
 
   #CHECK(
     condition =            connected?(p),
-    name =                 "connected net checks"
+    name =                 name
     description =          "Check that the object(s) are connected"
-    category =             "Net Checks"
+    category =             category
     subcheck-description = "Verify the design object is connected",
     pass-message =         pass-message,
     fail-message =         fail-message,
