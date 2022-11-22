@@ -259,8 +259,8 @@ public defstruct LandPatternCode :
   name: String    ; originally def-name
   pads: Tuple<LandPatternPadCode>
   layers: Tuple<PCBLayerCode>
-  ;geometries: Tuple<GeomCode>
-  ;model3ds: Tuple<Model3D>
+  geometries: Tuple<GeomCode>
+  model3ds: Tuple<Model3D>
 
 public defstruct LandPatternPadCode :
   name: Ref
@@ -268,16 +268,78 @@ public defstruct LandPatternPadCode :
   pose: Pose
   side: Side
 
+;Represents a via, copper, or pour.
+public deftype GeomCode <: Comparable
+
+public defstruct CopperCode <: GeomCode :
+  layer:LayerIndex
+  shape:Shape
+
+public defstruct PourCode <: GeomCode :
+  layer:LayerIndex
+  shape:Shape
+  isolate:Double
+  rank:Int
+  orphans:True|False
+
+public defstruct ViaCode <: GeomCode :
+  type:ViaType
+  start:LayerIndex
+  end:LayerIndex
+  center-point:Point
+  radius:Double
+  hole-radius:Double
+
 defn LandPatternCode (json: JObject,
                       pads: Tuple<Pad>) -> LandPatternCode :
   val pad-table = to-hashtable(name, pads)
   LandPatternCode(json["def-name"] as String,
                   map(LandPatternPadCode{_, pad-table}, json["pads"] as Tuple<JObject>),
                   map(PCBLayerCode, json["layers"] as Tuple<JObject>),
-                  )
-                  ;FIXME!
-                  ;map(GeomCode, json["geometries"] as Tuple<JObject>),
-                  ;map(GeomCode, json["model3ds"] as Tuple<JObject>))
+                  map(GeomCode, json["geometries"] as Tuple<JObject>),
+                  map(Model3D, json["model3ds"] as Tuple<JObject>))
+
+defn GeomCode (json: JObject) -> GeomCode :
+  switch(json["__object_type__"] as String) :
+    "CopperCode": CopperCode(json)
+    "PourCode": PourCode(json)
+    "ViaCode": ViaCode(json)
+
+defn CopperCode (json: JObject) -> CopperCode :
+  CopperCode(LayerIndex(json["layer"] as JObject),
+             Shape(json["shape"] as JObject))
+
+defn PourCode (json: JObject) -> PourCode :
+  PourCode(LayerIndex(json["layer"] as JObject),
+           Shape(json["shape"] as JObject),
+           json["isolate"] as Double,
+           json["rank"] as Int,
+           json["orphans"] as True|False)
+
+defn ViaCode (json: JObject) -> ViaCode :
+  ViaCode(ViaType(json["type"] as String),
+          LayerIndex(json["start"] as JObject),
+          LayerIndex(json["end"] as JObject),
+          Point(json["center-point"] as JObject),
+          json["radius"] as Double,
+          json["hole-radius"] as Double)
+
+defn ViaType (s: String) -> ViaType :
+  switch(s) :
+    "THVia": THVia
+    "MicroVia": MicroVia
+    "BlindVia": BlindVia
+
+defn Model3D (json: JObject) -> Model3D :
+  Model3D(json["filename"] as String,
+          Vec3D(json["position"] as JObject),
+          Vec3D(json["scale"] as JObject),
+          Vec3D(json["rotation"] as JObject))
+
+defn Vec3D (json: JObject) -> Vec3D :
+  Vec3D(json["x"] as Double,
+        json["y"] as Double,
+        json["z"] as Double)
 
 defn LandPatternPadCode (json: JObject,
                          pad-table: HashTable<String, Pad>) -> LandPatternPadCode :
@@ -302,14 +364,28 @@ defn to-jitx (lp: LandPatternCode) -> LandPattern :
     name = name(lp)
     do(to-jitx, pads(lp))
     do(to-jitx, layers(lp))
-    ;do(to-jitx, geometries(lp))
-    ;do(to-jitx, model3ds(lp))
+    do(to-jitx, geometries(lp))
+    do(to-jitx, model3ds(lp))
 
   my-landpattern
 
 defn to-jitx (p: LandPatternPadCode) :
   inside pcb-landpattern :
     pad (name(p)) : /pad(p) at pose(p) on side(p)
+
+defn to-jitx (g: GeomCode) :
+  inside pcb-landpattern :
+    match(g) :
+      (g:CopperCode) :
+        copper(layer(g)) = shape(g)
+      (g:PourCode) :
+        copper-pour(layer(g), isolate = isolate(g), rank = rank(g), orphans = orphans(g)) = shape(g)
+      (g:ViaCode) :
+        via(start(g), end(g), type = type(g), radius = radius(g), hole-radius = hole-radius(g)) at center-point(g)
+
+defn to-jitx (g: Model3D) :
+  inside pcb-landpattern :
+    model3d = g
 
 ;======================================
 ;============== Utils =================
