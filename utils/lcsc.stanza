@@ -78,9 +78,7 @@ defstruct NoConnectCode :
   pin: Ref
 
 defstruct PinPropertiesCode :
-  ; FIXME!: hardcoded header in json and adjust pin prop type in json
-  ;         add bank column needed I think
-  ; header: Tuple<PinPropertiesHeaderCode>
+  header: Tuple<Symbol>
   pins: Tuple<PinPropertyCode>
 
 defstruct PinPropertyCode :
@@ -272,13 +270,23 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
 
 defn to-jitx (pin-props: PinPropertiesCode) :
   inside pcb-component :
+    ; Header can be for example:
+    ; [pin:Ref | pads:Ref ... | side:Dir | bank:Ref | electrical-type:String]
+    ; [pin:Ref | side:Dir | bank:Ref | graphical-style:String | electrical-type:String]
+    ; [pin:Ref | side:Dir | graphical-style:String | electrical-type:String]
+    ; However we assume the component to have a landpattern so pin, pads and side are mandatory
     pin-properties :
-      [pin:Ref | pads:Ref ... | side:Dir | electrical-type:String]
+      [pin:Ref | pads:Ref ... | side:Dir]
       for pin in pins(pin-props) do :
         val vs = values(pin)
         ; FIXME! Change datastruct
         val pad-refs = map(to-ref!, vs[0] as Tuple<String>)
-        [(pin-name(pin)) | (pad-refs)... | vs[1] as Dir | vs[2] as String ]
+        [(pin-name(pin)) | (pad-refs)... | vs[1] as Dir]
+
+    for pin in pins(pin-props) do :
+      for (h in header(pin-props)[3 to false], v in values(pin)[2 to false]) do :
+        set-property(self.(pin-name(pin)), h, v)
+
 
 defn to-jitx (symbol-assignments: Tuple<SymbolAssignmentCode>) :
   inside pcb-component :
