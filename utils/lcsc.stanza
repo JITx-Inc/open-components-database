@@ -86,7 +86,7 @@ defstruct PinPropertiesCode :
 
 defstruct PinPropertyCode :
   pin-name: Ref
-  values: Tuple<JITXValue|Dir>
+  values: Tuple<JITXValue>
 
 defn ComponentCode (json: JObject,
                     landpattern: LandPattern,
@@ -116,51 +116,28 @@ defn PropertyCode (json: JObject) -> PropertyCode :
                JITXValue(json["value"]))
 
 defn PinPropertiesCode (json: JObject) -> PinPropertiesCode :
-  PinPropertiesCode(map(PinPropertyCode, json["pins"] as Tuple<JObject>))
+  PinPropertiesCode(map({to-symbol(_["title"])}, json["header"] as Tuple<JObject>),
+                    map(PinPropertyCode, json["pins"] as Tuple<JObject>))
 
 defn PinPropertyCode (json: JObject) -> PinPropertyCode :
-  defn value-or-dir (j: JSON) -> JITXValue|Dir :
-    match(j: String) :
-      ; Note: String "Top" would be converted to Dir even if it was an actual string before to-json()
-      if contains?(`("Right", "Left", "Up", "Down"), j) :
-        Dir(j)
-      else :
-        JITXValue(j)
-    else :
-      JITXValue(j)
-
   PinPropertyCode(to-ref!(json["pin-name"] as String),
-                  map(value-or-dir, json["values"] as Tuple<JSON>))
+                  map(JITXValue, json["values"] as Tuple<JSON>))
 
 defn JITXValue (json: JSON) -> JITXValue :
   ; Char|Byte|Long|Float|Symbol|List<T>|Ref are turned into other types during json roundtrip
   match(json) :
     (json: String) :
-      ; Note: String "ANSI-A0" would be converted to Paper even if it was an actual string before to-json()
-      ;if contains?(`("ANSI-A0",
-      ;               "ANSI-A1",
-      ;               "ANSI-A2",
-      ;               "ANSI-A3",
-      ;               "ANSI-A4",
-      ;               "ANSI-A5",
-      ;               "ANSI-A",
-      ;               "ANSI-B",
-      ;               "ANSI-C",
-      ;               "ANSI-D",
-      ;               "ANSI-E"),
-      ;             json) :
-      ;  Paper(json)
-      ;else if contains?(`("Top",
-      ;                    "Bottom"),
-      ;                  json) :
-      ;  Side(json)
-      ;else if contains?(`("Left",
-      ;                    "Right",
-      ;                    "Down",
-      ;                    "Up"),
-      ;                  json) :
-      ;  Dir(json)
-      ;else :
+      if contains?(`("Top",
+                          "Bottom"),
+                        json) :
+        Side(json)
+      else if contains?(`("Left",
+                          "Right",
+                          "Down",
+                          "Up"),
+                        json) :
+        Dir(json)
+      else :
         json
     (json: True|False|Int|Double) :
       json
@@ -169,20 +146,6 @@ defn JITXValue (json: JSON) -> JITXValue :
     (json: JObject) :
       ; Not handling them particularly: EmptyValue|WrappedSymbol|SimpleStanzaId|StanzaCall
       to-string(json)
-
-defn Paper (s: String) -> Paper :
-  switch(s) :
-    "ANSI-A0": ANSI-A0
-    "ANSI-A1": ANSI-A1
-    "ANSI-A2": ANSI-A2
-    "ANSI-A3": ANSI-A3
-    "ANSI-A4": ANSI-A4
-    "ANSI-A5": ANSI-A5
-    "ANSI-A": ANSI-A
-    "ANSI-B": ANSI-B
-    "ANSI-C": ANSI-C
-    "ANSI-D": ANSI-D
-    "ANSI-E": ANSI-E
 
 defn SymbolAssignmentCode (json: JObject,
                            symbol-unit-table: HashTable<String, SchematicSymbol>) -> SymbolAssignmentCode :
