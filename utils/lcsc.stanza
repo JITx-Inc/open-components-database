@@ -7,6 +7,7 @@ defpackage ocdb/utils/lcsc :
 
   import jitx
   import jitx/commands
+  import jitx/value
 
   import ocdb/utils/box-symbol
 
@@ -58,7 +59,11 @@ defstruct ComponentCode :
   no-connects: Tuple<NoConnectCode>
   land-pattern: LandPattern   ; FIXME!: Should just be LandPatternCode?
   symbols:Tuple<SymbolAssignmentCode>
-  ;properties: Tuple<PropertyCode>
+  properties: Tuple<PropertyCode>
+
+defstruct PropertyCode :
+  key: Ref
+  value: JITXValue  ; type NetClassCode is not supported
 
 deftype SymbolAssignmentCode
 defmulti bank (s: SymbolAssignmentCode) -> String|False
@@ -81,18 +86,7 @@ defstruct PinPropertiesCode :
 
 defstruct PinPropertyCode :
   pin-name: Ref
-  values: Tuple<ValueCode>
-
-public deftype ValueCode :
-  True <: ValueCode
-  False <: ValueCode
-  Int <: ValueCode
-  Double <: ValueCode
-  String <: ValueCode
-  Tuple<T> <: ValueCode
-  Dir <: ValueCode
-  Side <: ValueCode
-  Paper <: ValueCode
+  values: Tuple<JITXValue|Dir>
 
 defn ComponentCode (json: JObject,
                     landpattern: LandPattern,
@@ -114,51 +108,64 @@ defn ComponentCode (json: JObject,
                 map(NoConnectCode, json["no-connects"] as Tuple<JObject>),
                 landpattern
                 map(SymbolAssignmentCode{_, symbol-unit-table}, json["symbols"] as Tuple<JObject>),
-                ; FIXME!
-                ;map(PropertyCode, json["properties"] as Tuple<JObject>)
+                map(PropertyCode, json["properties"] as Tuple<JObject>)
                 )
+
+defn PropertyCode (json: JObject) -> PropertyCode :
+  PropertyCode(to-ref!(json["key"] as String),
+               JITXValue(json["value"]))
 
 defn PinPropertiesCode (json: JObject) -> PinPropertiesCode :
   PinPropertiesCode(map(PinPropertyCode, json["pins"] as Tuple<JObject>))
 
 defn PinPropertyCode (json: JObject) -> PinPropertyCode :
-  PinPropertyCode(to-ref!(json["pin-name"] as String),
-                  map(ValueCode, json["values"] as Tuple<JSON>))
+  defn value-or-dir (j: JSON) -> JITXValue|Dir :
+    match(j: String) :
+      ; Note: String "Top" would be converted to Dir even if it was an actual string before to-json()
+      if contains?(`("Right", "Left", "Up", "Down"), j) :
+        Dir(j)
+      else :
+        JITXValue(j)
+    else :
+      JITXValue(j)
 
-defn ValueCode (json: JSON) -> ValueCode :
+  PinPropertyCode(to-ref!(json["pin-name"] as String),
+                  map(value-or-dir, json["values"] as Tuple<JSON>))
+
+defn JITXValue (json: JSON) -> JITXValue :
   ; Char|Byte|Long|Float|Symbol|List<T>|Ref are turned into other types during json roundtrip
   match(json) :
     (json: String) :
       ; Note: String "ANSI-A0" would be converted to Paper even if it was an actual string before to-json()
-      if contains?(`("ANSI-A0",
-                     "ANSI-A1",
-                     "ANSI-A2",
-                     "ANSI-A3",
-                     "ANSI-A4",
-                     "ANSI-A5",
-                     "ANSI-A",
-                     "ANSI-B",
-                     "ANSI-C",
-                     "ANSI-D",
-                     "ANSI-E"),
-                   json) :
-        Paper(json)
-      else if contains?(`("Top",
-                          "Bottom"),
-                        json) :
-        Side(json)
-      else if contains?(`("Left",
-                          "Right",
-                          "Down",
-                          "Up"),
-                        json) :
-        Dir(json)
-      else :
-        json as ValueCode
+      ;if contains?(`("ANSI-A0",
+      ;               "ANSI-A1",
+      ;               "ANSI-A2",
+      ;               "ANSI-A3",
+      ;               "ANSI-A4",
+      ;               "ANSI-A5",
+      ;               "ANSI-A",
+      ;               "ANSI-B",
+      ;               "ANSI-C",
+      ;               "ANSI-D",
+      ;               "ANSI-E"),
+      ;             json) :
+      ;  Paper(json)
+      ;else if contains?(`("Top",
+      ;                    "Bottom"),
+      ;                  json) :
+      ;  Side(json)
+      ;else if contains?(`("Left",
+      ;                    "Right",
+      ;                    "Down",
+      ;                    "Up"),
+      ;                  json) :
+      ;  Dir(json)
+      ;else :
+        json
     (json: True|False|Int|Double) :
-      json as ValueCode
+      json
     (json: Tuple<JSON>) :
-      map(ValueCode, json)
+      map(JITXValue, json)
     (json: JObject) :
       ; Not handling them particularly: EmptyValue|WrappedSymbol|SimpleStanzaId|StanzaCall
       to-string(json)
@@ -290,10 +297,9 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
 
     assign-landpattern(land-pattern(c))
 
-    ; FIXME!: Can delete this paragraph and keep multi symbol case
     to-jitx $ symbols(c)
 
-    ;do(to-jitx, properties(c))
+    do(to-jitx, properties(c))
 
   my-component
 
@@ -305,11 +311,11 @@ defn to-jitx (pin-props: PinPropertiesCode) :
         val vs = values(pin)
         ; FIXME! Change datastruct
         val pad-refs = map(to-ref!, vs[0] as Tuple<String>)
-        ; FIXME!: Only hardcode first pad
-        [(pin-name(pin)) | (pad-refs[0]) | vs[1] as Dir | vs[2] as String ]
+        [(pin-name(pin)) | (pad-refs)... | vs[1] as Dir | vs[2] as String ]
 
 defn to-jitx (symbol-assignments: Tuple<SymbolAssignmentCode>) :
   inside pcb-component :
+    ; FIXME!: Can delete this paragraph and keep multi symbol case ?
     if length(symbol-assignments) == 1 :
       val symbol = symbol-assignments[0]
       match(symbol: StandardSymbolAssignmentCode) :
@@ -332,6 +338,15 @@ defn to-jitx (symbol-assignments: Tuple<SymbolAssignmentCode>) :
 defn to-jitx (nc: NoConnectCode) :
   inside pcb-component :
     no-connect(self.(pin(nc)))
+
+defn to-jitx (prop: PropertyCode) :
+  ; FIXME!: Change type of PropertyCode.key
+  val key = to-string(key(prop))
+  if not prefix?(key, "self.") :
+    fatal("Only supporting properties on self.")
+  val field = to-symbol(key[5 to false])
+  inside pcb-component :
+    set-property(self, field, value(prop))
 
 ;--------------------------------------
 ;---------------- Pad -----------------
