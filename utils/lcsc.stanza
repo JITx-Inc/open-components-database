@@ -54,7 +54,7 @@ defstruct ComponentCode :
   manufacturer: String|False
   mpn: String|False
   emodel: EModel|False
-  ;pin-properties: False|PinPropertiesCode
+  pin-properties: False|PinPropertiesCode
   no-connects: Tuple<NoConnectCode>
   land-pattern: LandPattern   ; FIXME!: Should just be LandPatternCode?
   symbols:Tuple<SymbolAssignmentCode>
@@ -73,6 +73,27 @@ defstruct BoxSymbolAssignmentCode <: SymbolAssignmentCode :
 defstruct NoConnectCode :
   pin: Ref
 
+defstruct PinPropertiesCode :
+  ; FIXME!: hardcoded header in json and adjust pin prop type in json
+  ;         add bank column needed I think
+  ; header: Tuple<PinPropertiesHeaderCode>
+  pins: Tuple<PinPropertyCode>
+
+defstruct PinPropertyCode :
+  pin-name: Ref
+  values: Tuple<ValueCode>
+
+public deftype ValueCode :
+  True <: ValueCode
+  False <: ValueCode
+  Int <: ValueCode
+  Double <: ValueCode
+  String <: ValueCode
+  Tuple<T> <: ValueCode
+  Dir <: ValueCode
+  Side <: ValueCode
+  Paper <: ValueCode
+
 defn ComponentCode (json: JObject,
                     landpattern: LandPattern,
                     symbol-units: Tuple<SchematicSymbol>) -> ComponentCode :
@@ -89,13 +110,72 @@ defn ComponentCode (json: JObject,
                 json["manufacturer"] as String|False,
                 json["mpn"] as String|False,
                 call?(EModel{_ as JObject}, json["emodel"]),
-                ; FIXME!
-                ;PinPropertiesCode(json["pin-properties"] as JObject),
+                PinPropertiesCode(json["pin-properties"] as JObject),
                 map(NoConnectCode, json["no-connects"] as Tuple<JObject>),
                 landpattern
                 map(SymbolAssignmentCode{_, symbol-unit-table}, json["symbols"] as Tuple<JObject>),
+                ; FIXME!
                 ;map(PropertyCode, json["properties"] as Tuple<JObject>)
                 )
+
+defn PinPropertiesCode (json: JObject) -> PinPropertiesCode :
+  PinPropertiesCode(map(PinPropertyCode, json["pins"] as Tuple<JObject>))
+
+defn PinPropertyCode (json: JObject) -> PinPropertyCode :
+  PinPropertyCode(to-ref!(json["pin-name"] as String),
+                  map(ValueCode, json["values"] as Tuple<JSON>))
+
+defn ValueCode (json: JSON) -> ValueCode :
+  ; Char|Byte|Long|Float|Symbol|List<T>|Ref are turned into other types during json roundtrip
+  match(json) :
+    (json: String) :
+      ; Note: String "ANSI-A0" would be converted to Paper even if it was an actual string before to-json()
+      if contains?(`("ANSI-A0",
+                     "ANSI-A1",
+                     "ANSI-A2",
+                     "ANSI-A3",
+                     "ANSI-A4",
+                     "ANSI-A5",
+                     "ANSI-A",
+                     "ANSI-B",
+                     "ANSI-C",
+                     "ANSI-D",
+                     "ANSI-E"),
+                   json) :
+        Paper(json)
+      else if contains?(`("Top",
+                          "Bottom"),
+                        json) :
+        Side(json)
+      else if contains?(`("Left",
+                          "Right",
+                          "Down",
+                          "Up"),
+                        json) :
+        Dir(json)
+      else :
+        json as ValueCode
+    (json: True|False|Int|Double) :
+      json as ValueCode
+    (json: Tuple<JSON>) :
+      map(ValueCode, json)
+    (json: JObject) :
+      ; Not handling them particularly: EmptyValue|WrappedSymbol|SimpleStanzaId|StanzaCall
+      to-string(json)
+
+defn Paper (s: String) -> Paper :
+  switch(s) :
+    "ANSI-A0": ANSI-A0
+    "ANSI-A1": ANSI-A1
+    "ANSI-A2": ANSI-A2
+    "ANSI-A3": ANSI-A3
+    "ANSI-A4": ANSI-A4
+    "ANSI-A5": ANSI-A5
+    "ANSI-A": ANSI-A
+    "ANSI-B": ANSI-B
+    "ANSI-C": ANSI-C
+    "ANSI-D": ANSI-D
+    "ANSI-E": ANSI-E
 
 defn SymbolAssignmentCode (json: JObject,
                            symbol-unit-table: HashTable<String, SchematicSymbol>) -> SymbolAssignmentCode :
@@ -199,25 +279,37 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
       mpn = mpn
 
     val emodel = emodel(c)
-    ;match(emodel: String) :
-    ;  emodel = emodel
+    match(emodel: EModel) :
+      emodel = emodel
 
-    ;val pin-props = pin-properties(c)
-    ; FIXME!: hardcoded header in json and adjust pin prop type in json
-    ;         add bank column needed I think
-    ;match(pin-props: PinPropertiesCode) :
-    ;  val vs = values(pin)
-    ;  pin-properties :
-    ;    [pin:Ref | pads:Ref ... | side:Dir | electrical-type:String]
-    ;    for pin in pins(pin-props) do :
-    ;      [pin-name(pin) | vs[0] | vs[1] | vs[2]]
+    val pin-props = pin-properties(c)
+    match(pin-props: PinPropertiesCode) :
+      to-jitx(pin-props)
 
     do(to-jitx, no-connects(c))
 
     assign-landpattern(land-pattern(c))
 
     ; FIXME!: Can delete this paragraph and keep multi symbol case
-    val symbol-assignments = symbols(c)
+    to-jitx $ symbols(c)
+
+    ;do(to-jitx, properties(c))
+
+  my-component
+
+defn to-jitx (pin-props: PinPropertiesCode) :
+  inside pcb-component :
+    pin-properties :
+      [pin:Ref | pads:Ref ... | side:Dir | electrical-type:String]
+      for pin in pins(pin-props) do :
+        val vs = values(pin)
+        ; FIXME! Change datastruct
+        val pad-refs = map(to-ref!, vs[0] as Tuple<String>)
+        ; FIXME!: Only hardcode first pad
+        [(pin-name(pin)) | (pad-refs[0]) | vs[1] as Dir | vs[2] as String ]
+
+defn to-jitx (symbol-assignments: Tuple<SymbolAssignmentCode>) :
+  inside pcb-component :
     if length(symbol-assignments) == 1 :
       val symbol = symbol-assignments[0]
       match(symbol: StandardSymbolAssignmentCode) :
@@ -236,10 +328,6 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
             else :
               BoxSymbol()
       )
-
-    ;do(to-jitx, properties(c))
-
-  my-component
 
 defn to-jitx (nc: NoConnectCode) :
   inside pcb-component :
