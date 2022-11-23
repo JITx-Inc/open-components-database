@@ -62,7 +62,7 @@ defstruct ComponentCode :
   properties: Tuple<PropertyCode>
 
 defstruct PropertyCode :
-  key: Ref
+  key: Symbol
   value: JITXValue  ; type NetClassCode is not supported
 
 deftype SymbolAssignmentCode
@@ -112,7 +112,12 @@ defn ComponentCode (json: JObject,
                 )
 
 defn PropertyCode (json: JObject) -> PropertyCode :
-  PropertyCode(to-ref!(json["key"] as String),
+  val key-str = json["key"] as String
+  if not prefix?(key-str, "self.") :
+    fatal("Only supporting properties on self.")
+  val key = to-symbol(key-str[5 to false])
+
+  PropertyCode(key,
                JITXValue(json["value"]))
 
 defn PinPropertiesCode (json: JObject) -> PinPropertiesCode :
@@ -287,7 +292,6 @@ defn to-jitx (symbol-assignments: Tuple<SymbolAssignmentCode>) :
         make-box-symbol()
 
     else if length(symbol-assignments) > 1 :
-    ; FIXME!: Can do so that bank always exist
       assign-symbols(
         for symbol in symbol-assignments map :
           val bank = bank(symbol) as String
@@ -303,13 +307,8 @@ defn to-jitx (nc: NoConnectCode) :
     no-connect(self.(pin(nc)))
 
 defn to-jitx (prop: PropertyCode) :
-  ; FIXME!: Change type of PropertyCode.key
-  val key = to-string(key(prop))
-  if not prefix?(key, "self.") :
-    fatal("Only supporting properties on self.")
-  val field = to-symbol(key[5 to false])
   inside pcb-component :
-    set-property(self, field, value(prop))
+    set-property(self, key(prop), value(prop))
 
 ;--------------------------------------
 ;---------------- Pad -----------------
