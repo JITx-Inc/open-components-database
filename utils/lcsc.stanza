@@ -145,8 +145,19 @@ defn JITXValue (json: JSON) -> JITXValue :
     (json: Tuple<JSON>) :
       map(JITXValue, json)
     (json: JObject) :
-      ; Not handling them particularly: EmptyValue|WrappedSymbol|SimpleStanzaId|StanzaCall
-      to-string(json)
+      ; Not handling them particularly: EmptyValue|WrappedSymbol|SimpleStanzaId|StanzaCall, they should not be ValudeCode in th first place
+      val type? = get?(json, "__object_type__")
+      match(type?: String) :
+        if type? == "KeyValue" :
+          KeyValue(json)
+        else :
+          to-string(json)
+      else :
+        to-string(json)
+
+defn KeyValue (json: JObject) -> KeyValue :
+  KeyValue(json["key"] as String,
+           json["value"] as String)
 
 defn SymbolAssignmentCode (json: JObject) -> SymbolAssignmentCode :
   val box? = json["box?"] as True|False
