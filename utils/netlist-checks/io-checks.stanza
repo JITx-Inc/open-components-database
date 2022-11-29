@@ -112,10 +112,11 @@ defn check-open-collectors (open-collectors:Tuple<DigitalPin>,
       pullup-resistors(open-collectors, pin-categories)
     
     for p in open-collectors do :
-      check no-net-voltage(pin(p))
+      check not-tied-to-supply-net(pin(p))
+      ; check no-net-voltage(pin(p))
 
-    check net-voltages-equal(open-collectors, net-voltages, pullup-resistors)
     check pullup-resistor-exists(open-collectors, pullup-resistors)
+    check net-voltages-equal(open-collectors, net-voltages, pullup-resistors)
 
     val resistance?  = parallel-resistance(pullup-resistors) when not empty?(pullup-resistors)
     val net-voltage? = net-voltages[0] when not empty?(net-voltages)
@@ -142,6 +143,27 @@ pcb-check net-voltages-equal (ps:Tuple<DigitalPin>, nvs:Tuple<Toleranced>, rs:Tu
           % [seq(ref, rs)]),
     locators = locators
   )
+
+; Check that a pin is tied to a supply net directly
+pcb-check not-tied-to-supply-net (p:Pin) :
+  val ps-pins = to-tuple $
+    for x in connected-pins(p) filter :
+      has-property?(x.power-supply-pin)
+  #CHECK(
+    condition = empty?(ps-pins),
+    name = NAME
+    description = description(p)
+    category = CATEGORY
+    subcheck-description =
+      "Check that open-collector pins are not directly connected to a net driven by a power-supply-pin.",
+    pass-message =
+      "%_ is not connected to a power supply net."
+        % [context(p)],
+    fail-message =
+      "%_ is connected to a power-supply net driven by pin(s): %,."
+        % [context(p), map(ref,ps-pins)],
+    locators = [p])
+
 
 ; Check that a pin does not have a net voltage
 pcb-check no-net-voltage (p:Pin) :
