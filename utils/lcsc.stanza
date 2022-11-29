@@ -15,30 +15,37 @@ defpackage ocdb/utils/lcsc :
 ;============ Public API ==============
 ;======================================
 
+public defstruct Code :
+  component: ComponentCode
+  landpattern: LandPatternCode
+  pads: Tuple<PadCode>
+  symbols: Tuple<SymbolUnitCode>
+
+public defn Code (json: JObject) -> Code :
+  val json-pads = json["pads"] as Tuple<JObject>
+  val json-landpattern = json["landpattern"] as JObject
+  val json-symbol-units = json["symbol-units"] as Tuple<JObject>
+  val json-component = json["component"] as JObject
+
+  val pads = map(PadCode, json-pads)
+  val landpattern = LandPatternCode(json-landpattern)
+  val symbol-units = map(SymbolUnitCode, json-symbol-units)
+  val component = ComponentCode(json-component)
+
+  Code(component,
+       landpattern,
+       pads,
+       symbol-units)
+
 ; FIXME!: should inline LandpatternCode in ComponentCode and delete separate make-landpattern?
 ; Not if in the future I get a tuple of components that share the same landpatterns
 public defn database-part (json: JObject) -> Instantiable :
-  val pads = map(make-pad, json["pads"] as Tuple<JObject>)
-  val landpattern = make-landpattern(json["landpattern"] as JObject,
-                                     pads)
-  val symbol-units = map(make-symbol, json["symbol-units"] as Tuple<JObject>)
-  make-component(json["component"] as JObject,
-                 landpattern,
-                 symbol-units)
+  to-jitx $ Code(json)
 
-public defn make-component (json: JObject,
-                            landpattern: LandPattern,
-                            symbol-units: Tuple<SchematicSymbol>) -> Instantiable :
-  to-jitx $ ComponentCode(json, landpattern, symbol-units)
-
-public defn make-pad (json: JObject) -> Pad :
-  to-jitx $ PadCode(json)
-
-public defn make-landpattern (json: JObject, pads: Tuple<Pad>) -> LandPattern :
-  to-jitx $ LandPatternCode(json, pads)
-
-public defn make-symbol (json: JObject) -> SchematicSymbol :
-  to-jitx $ SymbolUnitCode(json)
+public defn to-jitx (code: Code) -> Instantiable :
+  to-jitx(component(code), landpattern-def, symbol-defs) where :
+    val landpattern-def = to-jitx(landpattern(code), pads(code))
+    val symbol-defs = map(to-jitx, symbols(code))
 
 ;======================================
 ;============= Internals ==============
@@ -56,7 +63,7 @@ defstruct ComponentCode :
   emodel: EModel|False
   pin-properties: False|PinPropertiesCode
   no-connects: Tuple<NoConnectCode>
-  land-pattern: LandPattern
+  landpattern: String
   symbols:Tuple<SymbolAssignmentCode>
   properties: Tuple<PropertyCode>
 
@@ -68,7 +75,7 @@ deftype SymbolAssignmentCode
 defmulti bank (s: SymbolAssignmentCode) -> String|False
 
 defstruct StandardSymbolAssignmentCode <: SymbolAssignmentCode :
-  name: SchematicSymbol
+  name: String
   bank: String|False with: (as-method => true)
 
 defstruct BoxSymbolAssignmentCode <: SymbolAssignmentCode :
@@ -85,15 +92,7 @@ defstruct PinPropertyCode :
   pin-name: Ref
   values: Tuple<JITXValue>
 
-defn ComponentCode (json: JObject,
-                    landpattern: LandPattern,
-                    symbol-units: Tuple<SchematicSymbol>) -> ComponentCode :
-  val lp-def-name = json["land-pattern"] as String    ; FIXME!: ensure better that can never be False
-  if name(landpattern) != lp-def-name :               ; FIXME!: make sure name is def-name
-    fatal("Landpattern name %_ 1= %_" % [name(landpattern), lp-def-name])
-
-  val symbol-unit-table = to-hashtable(name, symbol-units)
-
+defn ComponentCode (json: JObject) -> ComponentCode :
   val def-name = json["def-name"] as String
   val name = json["name"] as String|False ; FIXME!: Unify field in json
   ComponentCode(if-false?(def-name, name),
@@ -103,8 +102,8 @@ defn ComponentCode (json: JObject,
                 call?(EModel{_ as JObject}, json["emodel"]),
                 PinPropertiesCode(json["pin-properties"] as JObject),
                 map(NoConnectCode, json["no-connects"] as Tuple<JObject>),
-                landpattern
-                map(SymbolAssignmentCode{_, symbol-unit-table}, json["symbols"] as Tuple<JObject>),
+                json["land-pattern"] as String,
+                map(SymbolAssignmentCode, json["symbols"] as Tuple<JObject>),
                 map(PropertyCode, json["properties"] as Tuple<JObject>)
                 )
 
@@ -146,16 +145,26 @@ defn JITXValue (json: JSON) -> JITXValue :
     (json: Tuple<JSON>) :
       map(JITXValue, json)
     (json: JObject) :
-      ; Not handling them particularly: EmptyValue|WrappedSymbol|SimpleStanzaId|StanzaCall
-      to-string(json)
+      ; Not handling them particularly: EmptyValue|WrappedSymbol|SimpleStanzaId|StanzaCall, they should not be ValudeCode in th first place
+      val type? = get?(json, "__object_type__")
+      match(type?: String) :
+        if type? == "KeyValue" :
+          KeyValue(json)
+        else :
+          to-string(json)
+      else :
+        to-string(json)
 
-defn SymbolAssignmentCode (json: JObject,
-                           symbol-unit-table: HashTable<String, SchematicSymbol>) -> SymbolAssignmentCode :
+defn KeyValue (json: JObject) -> KeyValue :
+  KeyValue(json["key"] as String,
+           JITXValue(json["value"]))
+
+defn SymbolAssignmentCode (json: JObject) -> SymbolAssignmentCode :
   val box? = json["box?"] as True|False
   val bank = json["def-name"] as String|False
   if box? :
     val def-name = json["def-name"] as String
-    StandardSymbolAssignmentCode(symbol-unit-table[def-name],
+    StandardSymbolAssignmentCode(def-name,
                                  bank)
   else :
     BoxSymbolAssignmentCode(bank)
@@ -234,7 +243,11 @@ defn ColorSpec (json: JObject) -> ColorSpec :
 defn NoConnectCode (json: JObject) -> NoConnectCode :
   NoConnectCode $ to-ref!(json["pin"] as String)
 
-defn to-jitx (c: ComponentCode) -> Instantiable :
+defn to-jitx (c: ComponentCode, landpattern-def, symbol-defs: Tuple<SchematicSymbol>) -> Instantiable :
+  val lp-def-name = landpattern(c)
+  if name(landpattern-def) != lp-def-name :
+    fatal("Landpattern name %_ 1= %_" % [name(landpattern-def), lp-def-name])
+
   pcb-component my-component :
     name = name(c)
 
@@ -260,9 +273,9 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
 
     do(to-jitx, no-connects(c))
 
-    assign-landpattern(land-pattern(c))
+    assign-landpattern(landpattern-def)
 
-    to-jitx $ symbols(c)
+    to-jitx(symbols(c), symbol-defs)
 
     do(to-jitx, properties(c))
 
@@ -288,13 +301,16 @@ defn to-jitx (pin-props: PinPropertiesCode) :
         set-property(self.(pin-name(pin)), h, v)
 
 
-defn to-jitx (symbol-assignments: Tuple<SymbolAssignmentCode>) :
+defn to-jitx (symbol-assignments: Tuple<SymbolAssignmentCode>,
+              symbol-defs: Tuple<SchematicSymbol>) :
+  val symbol-table = to-hashtable(name, symbol-defs)
+
   inside pcb-component :
     ; FIXME!: Can delete this paragraph and keep multi symbol case ?
     if length(symbol-assignments) == 1 :
       val symbol = symbol-assignments[0]
       match(symbol: StandardSymbolAssignmentCode) :
-        assign-symbol(name(symbol))
+        assign-symbol(symbol-table[name(symbol)])
       else :
         make-box-symbol()
 
@@ -304,7 +320,7 @@ defn to-jitx (symbol-assignments: Tuple<SymbolAssignmentCode>) :
           val bank = bank(symbol) as String
           Ref(bank) =>
             match(symbol: StandardSymbolAssignmentCode) :
-              name(symbol)
+              symbol-table[name(symbol)]
             else :
               BoxSymbol()
       )
@@ -551,7 +567,7 @@ defstruct LandPatternCode :
 
 defstruct LandPatternPadCode :
   name: Ref
-  pad: Pad
+  pad: String
   pose: Pose
   side: Side
 
@@ -577,11 +593,9 @@ defstruct ViaCode <: GeomCode :
   radius:Double
   hole-radius:Double
 
-defn LandPatternCode (json: JObject,
-                      pads: Tuple<Pad>) -> LandPatternCode :
-  val pad-table = to-hashtable(name, pads)
+defn LandPatternCode (json: JObject) -> LandPatternCode :
   LandPatternCode(json["def-name"] as String,
-                  map(LandPatternPadCode{_, pad-table}, json["pads"] as Tuple<JObject>),
+                  map(LandPatternPadCode, json["pads"] as Tuple<JObject>),
                   map(PCBLayerCode, json["layers"] as Tuple<JObject>),
                   map(GeomCode, json["geometries"] as Tuple<JObject>),
                   map(Model3D, json["model3ds"] as Tuple<JObject>))
@@ -628,11 +642,10 @@ defn Vec3D (json: JObject) -> Vec3D :
         json["y"] as Double,
         json["z"] as Double)
 
-defn LandPatternPadCode (json: JObject,
-                         pad-table: HashTable<String, Pad>) -> LandPatternPadCode :
+defn LandPatternPadCode (json: JObject) -> LandPatternPadCode :
   val pad-def-name = (json["pad"] as JObject)["name"] as String
   LandPatternPadCode(to-ref!(json["def-name"] as String),
-                     pad-table[pad-def-name],
+                     pad-def-name,
                      Pose(json["pose"] as JObject),
                      Side(json["side"] as String))
 
@@ -646,19 +659,22 @@ defn Side (s: String) -> Side :
     "Top": Top
     "Bottom": Bottom
 
-defn to-jitx (lp: LandPatternCode) -> LandPattern :
+defn to-jitx (lp: LandPatternCode, pads: Tuple<PadCode>) -> LandPattern :
+  val pad-defs = map(to-jitx, pads)
+  val pad-table = to-hashtable(name, pad-defs)
+
   pcb-landpattern my-landpattern :
     name = name(lp)
-    do(to-jitx, pads(lp))
+    do(to-jitx{_, pad-table}, /pads(lp))
     do(to-jitx, layers(lp))
     do(to-jitx, geometries(lp))
     do(to-jitx, model3ds(lp))
 
   my-landpattern
 
-defn to-jitx (p: LandPatternPadCode) :
+defn to-jitx (p: LandPatternPadCode, pad-table: HashTable<String, Pad>) :
   inside pcb-landpattern :
-    pad (name(p)) : /pad(p) at pose(p) on side(p)
+    pad (name(p)) : pad-table[/pad(p)] at pose(p) on side(p)
 
 defn to-jitx (g: GeomCode) :
   inside pcb-landpattern :
