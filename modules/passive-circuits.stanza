@@ -23,11 +23,12 @@ defpackage ocdb/modules/passive-circuits :
 
 public pcb-module voltage-divider ( input-voltage:Toleranced
                                     output-voltage:Toleranced
-                                    current:Double) :
+                                    current:Toleranced
+                                    input-ref?:True|False) :
   pin in
   pin out
   pin lo
-  val solution = voltage-divider-solver(input-voltage, output-voltage, current)
+  val solution = voltage-divider-solver(input-voltage, output-voltage, current, input-ref?)
   match(solution: VoltageDividerSolution) :
     public inst r-hi : to-jitx(r1(solution))
     public inst r-lo : to-jitx(r2(solution))
@@ -36,110 +37,184 @@ public pcb-module voltage-divider ( input-voltage:Toleranced
     net (r-lo.p[2] lo)
     property(r-lo.operating-point) = OperatingPoint(min-max(0.0, typ-value(output-voltage)),       min-max(0.0, typ-value(output-voltage) / property(r-lo.resistance)))
     property(r-hi.operating-point) = OperatingPoint(min-max(0.0, typ-value(input-voltage) - typ-value(output-voltage)), min-max(0.0, (typ-value(input-voltage) - typ-value(output-voltage))/ property(r-hi.resistance)))
-    property(self.output-voltage) = vx(solution)
-
+    if input-ref?:
+      property(self.input-voltage) = vi(solution)
+    else:
+      property(self.output-voltage) = vo(solution)
   else :
-    fatal("No solution for voltage divider.")
+    fatal("No solution for voltage divider requested (input %_) (output %_) (current %_) (input-ref? %_)." % [input-voltage, output-voltage, current input-ref?])
+
+
+public pcb-module voltage-divider ( input-voltage:Toleranced
+                                    output-voltage:Toleranced
+                                    current:Toleranced) :
+  voltage-divider(input-voltage, output-voltage, current, false)
+
 
 public pcb-module voltage-divider ( input-voltage:Double
                                     output-voltage:Double
                                     tolerance:Double
-                                    current:Double) :
+                                    current:Toleranced,
+                                    input-ref?:True|False) :
   pin in
   pin out
   pin lo
-  val solution = voltage-divider-solver(typ(input-voltage), tol%(output-voltage, 10.0), current, tolerance / 100.0, 0.15)
+  val solution = voltage-divider-solver(typ(input-voltage), tol%(output-voltage, 10.0), current, tolerance / 100.0, input-ref?)
   match(solution: VoltageDividerSolution) :
     public inst r-hi : to-jitx(r1(solution))
     public inst r-lo : to-jitx(r2(solution))
     net (r-hi.p[1] in)
     net (r-lo.p[1] r-hi.p[2] out)
     net (r-lo.p[2] lo)
-    property(r-lo.operating-point) = OperatingPoint(min-max(0.0, output-voltage),       min-max(0.0, output-voltage / property(r-lo.resistance)))
-    property(r-hi.operating-point) = OperatingPoint(min-max(0.0, input-voltage - output-voltage), min-max(0.0, (input-voltage - output-voltage)/ property(r-hi.resistance)))
-    property(self.output-voltage) = vx(solution)
+    property(r-lo.operating-point) = OperatingPoint(min-max(0.0, output-voltage),
+                                                    min-max(0.0, output-voltage / property(r-lo.resistance)))
+    property(r-hi.operating-point) = OperatingPoint(min-max(0.0, input-voltage - output-voltage), 
+                                                    min-max(0.0, (input-voltage - output-voltage)/ property(r-hi.resistance)))
+    if input-ref?:
+      property(self.input-voltage) = vi(solution)
+    else:
+      property(self.output-voltage) = vo(solution)
 
   else :
-    fatal("No solution for voltage divider.")
+    fatal("No solution for voltage divider requested (input %_) (output %_) (tolerance %_) (current %_) (input-ref? %_)." % 
+                                                                              [input-voltage, output-voltage, tolerance, current, input-ref?])
 
-public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
-                                  v-out:Toleranced) :
-  ; Target current through divider is 10x input current (if known), otherwise set current to be 1ma
+
+
+public pcb-module voltage-divider ( input-voltage:Double
+                                    output-voltage:Double
+                                    tolerance:Double
+                                    current:Toleranced) :
+  voltage-divider(input-voltage, output-voltage, tolerance, current, false)
+
+public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject, v-target:Toleranced) :
+  ; Target current through divider is 10x input current (if known), otherwise set current to be 1 mA
   val current =
-    if has-property?(out.i-input) : property(out.i-input) * 10.0
-    else : 1.0e-3
-  make-voltage-divider(in, out, lo, v-out, current)
+    if has-property?(out.i-input) : 
+      10.0 * property(out.i-input) as Toleranced
+    else : 
+      typ(1.0e-3)
+  make-voltage-divider(in, out, lo, v-target, current)
 
-public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
-                                  v-out:Toleranced,
-                                  current:Double) :
-  println("Solving voltage divider [in=%_, out=%_, low=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A]"
-          % [ref(in), ref(out), ref(lo), min-value(v-out), typ-value(v-out), max-value(v-out), current])
-  ;Extract voltages from input pin
-  val v-in = property(in.voltage)
+public defn make-voltage-divider (in:JITXObject, 
+                                  out:JITXObject, 
+                                  lo:JITXObject, 
+                                  v-target:Toleranced, 
+                                  current:Toleranced) :
+  make-voltage-divider(in, out, lo, v-target, current, false)
 
-  val solution = voltage-divider-solver(v-in, v-out, current)
+
+
+public defn make-voltage-divider (in:JITXObject, 
+                                  out:JITXObject, 
+                                  lo:JITXObject, 
+                                  v-target:Toleranced, 
+                                  current:Toleranced,
+                                  input-ref?:True|False) :
+  println("Solving voltage divider [in=%_, out=%_, low=%_, v-target=%_V, current=%_A input-ref?=%_]" % 
+                                            [ref(in), ref(out), ref(lo), v-target, current, input-ref?])
+
+
+  val pin-known = 
+    if input-ref? : 
+      out
+    else :
+      in
+
+  val v-known = 
+    if has-property?(pin-known.net-voltage):
+      property(pin-known.net-voltage)
+    else:
+      fatal("No property named net-voltage on the given pin (%_)" % [ref(pin-known)])
+
+  val solution = voltage-divider-solver(v-known, v-target, current, input-ref?)
+
+
   match(solution: VoltageDividerSolution) :
-    make-voltage-divider-module(in, out, lo, v-out, to-jitx(r1(solution)), to-jitx(r2(solution)), vx(solution))
+    val vx = 
+      if input-ref? :
+        vi(solution)
+      else :
+        vo(solution)
+      make-voltage-divider-module(in, out, lo, v-target, to-jitx(r1(solution)), to-jitx(r2(solution)), vx, input-ref?)
   else :
-    fatal("No solution for voltage divider.")
+    fatal("No solution for voltage divider requested (v-known %_) (v-target %_) (current %_)." % 
+                                                                                  [v-known, v-target, current])
 
 public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
                                   v-in:Toleranced,
                                   v-out:Toleranced,
-                                  current:Double) :
-  ; println("Solving voltage divider [in=%_, out=%_, low=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A]"
-  ;         % [ref(in), ref(out), ref(lo), v-out[0], v-out[1], v-out[2], current])
-  ;Extract voltages from input pin
-  val solution = voltage-divider-solver(v-in, v-out, current)
-  match(solution: VoltageDividerSolution) :
-    make-voltage-divider-module(in, out, lo, v-out, to-jitx(r1(solution)), to-jitx(r2(solution)), vx(solution))
-  else :
-    fatal("No solution for voltage divider.")
+                                  current:Toleranced) :
+  
+  make-voltage-divider(in, out, lo, v-out, current, false)
 
 ; Generator function for voltage-divider module. This gets called at the top level
 ; Parameters
 ; ------------
-; in : input pin, with annotated voltage [min nom max] (V)
-; out : output pin. Gets annotated with [min nom max] (V)
+; in : input pin, with a Toleranced voltage (V)
+; out : output pin. Gets annotated with a Toleranced voltage (V)
 ; lo : low side pin (usually gnd)
-; v-out : Allowable output voltage range [min nom max] (V)
-; current : desired dc current of voltage divider (A) assumes output is connected to high-impedance.
-; tol : desired tolerance of resistor (in %)
+; v-out : Allowable output voltage range as a Toleranced voltage (V)
+; current : desired dc current of voltage divider (A) assumes output is connected to high impedance.
+; tol : desired tolerance of resistors (in %)
 ; returns true if fitting resistors were found else false
-public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
-                                  v-out:Toleranced,
-                                  current:Double,
-                                  tol:Double) :
-  val current-tol = 10.
-  make-voltage-divider(in, out, lo, v-out, current, tol, current-tol)
 
-; current-tol : Tolerance on the output current (in %)
 public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
-                                  v-out:Toleranced,
-                                  current:Double,
+                                  v-target:Toleranced,
+                                  current:Toleranced,
                                   tol:Double,
-                                  current-tol: Double) :
-  println("Solving voltage divider [in=%_, out=%_, low=%_, v-out=(min=%_V, nom=%_V, max=%_V), current=%_A, resistor-tol=%_%%]"
-          % [ref(in), ref(out), ref(lo), min-value(v-out), typ-value(v-out), max-value(v-out), current, tol])
+                                  input-ref?:True|False) :
+  println("Solving voltage divider [in=%_, out=%_, low=%_, v-target=(%_V), current=%_A, resistor-tol=%_%%, input-ref?=%_]"
+          % [ref(in), ref(out), ref(lo), v-target, current, tol, input-ref?])
   val tolerance = tol / 100.
-  val current-tolerance = current-tol / 100.
-  val v-in = property(in.voltage)
+  val given-pin =
+    if input-ref? :
+      out
+    else :
+      in
+  val v-given = 
+    if has-property?(given-pin.net-voltage) :
+      property(given-pin.net-voltage)
+    else:
+      fatal("No net-voltage property on given pin (%_)" % [ref(given-pin)])
 
-  val solution = voltage-divider-solver(v-in, v-out, current, tolerance, current-tolerance)
+  val solution = voltage-divider-solver(v-given, v-target, current, tolerance, input-ref?)
   match(solution: VoltageDividerSolution) :
-    make-voltage-divider-module(in, out, lo, v-out, to-jitx(r1(solution)), to-jitx(r2(solution)), vx(solution))
+    val vx = 
+      if input-ref?:
+        vi(solution)
+      else:
+        vo(solution)
+    make-voltage-divider-module(in, out, lo, v-target, to-jitx(r1(solution)), to-jitx(r2(solution)), vx, input-ref?)
     solution
   else :
     fatal("No solution for voltage divider.")
 
+public defn make-voltage-divider (in:JITXObject, out:JITXObject, lo:JITXObject,
+                                  v-target:Toleranced,
+                                  current:Toleranced,
+                                  tol:Double) :
+  
+  make-voltage-divider(in, out, lo, v-target, current, tol, false)
+
+
 defn make-voltage-divider-module (in: JITXObject, out: JITXObject, lo: JITXObject,
-                                  v-out: Toleranced,
+                                  v-target: Toleranced,
                                   r-hi-cmp: InstantiableType, r-lo-cmp: InstantiableType,
-                                  vo: Toleranced) :
+                                  v-solved: Toleranced, 
+                                  input-ref?: True|False) :
 
   inside pcb-module :
-    property(out.voltage) = vo
+    val given-pin = 
+      if input-ref? :
+        in
+      else :
+        out
+    if not has-property?(given-pin.net-voltage) :
+      property(given-pin.net-voltage) = v-solved
+    else :
+      println("Warning net-voltage property conflict on net(%_): prior(%_), update(%_) not applied!" % 
+                                    [ref(given-pin), property(given-pin.net-voltage), v-solved])
 
     ; Instantiate resistors, create netlist
     inst r-hi : r-hi-cmp
@@ -148,9 +223,25 @@ defn make-voltage-divider-module (in: JITXObject, out: JITXObject, lo: JITXObjec
     net (r-lo.p[1] r-hi.p[2] out)
     net (r-lo.p[2] lo)
 
-    val vin = typ-value(vo) * (property(r-lo.resistance) + property(r-hi.resistance)) / property(r-lo.resistance)
-    property(r-lo.operating-point) = OperatingPoint(min-max(0.0, typ-value(vo)),       min-max(0.0, typ-value(vo) / property(r-lo.resistance)))
-    property(r-hi.operating-point) = OperatingPoint(min-max(0.0, vin - typ-value(vo)), min-max(0.0, (vin - typ-value(vo))/ property(r-hi.resistance)))
+    val v-other = 
+      if input-ref? :
+        v-solved * property(r-lo.resistance) / (property(r-hi.resistance) + property(r-lo.resistance))
+      else :
+        v-solved * (property(r-lo.resistance) + property(r-hi.resistance)) / property(r-lo.resistance)
+
+
+    val v1 = 
+      if input-ref? : v-other
+      else : v-solved
+
+    val v2 = 
+      if input-ref? : v-solved
+      else :  v-other
+
+    property(r-lo.operating-point) = OperatingPoint(min-max(0.0, typ-value(v1)),
+                                                    min-max(0.0, typ-value(v1) / property(r-lo.resistance)))
+    property(r-hi.operating-point) = OperatingPoint(min-max(0.0, typ-value(v2) - typ-value(v1)),
+                                                    min-max(0.0, (typ-value(v2) - typ-value(v1)) / property(r-hi.resistance)))
 
     ; [TODO] check. voltage-levels and other check.stanza functions already adapted for JITXObjects.
     ; Check true output against requirement
