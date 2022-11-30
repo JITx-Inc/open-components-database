@@ -62,7 +62,7 @@ defmethod print (o:OutputStream, s:SellerOfferPrice) :
 ;====================== LCSC Part ===========================
 ;============================================================
 
-public defstruct LCSCPart <: Component :
+public defstruct Part <: Component :
   ; Generic properties
   manufacturer: String
   mpn: String
@@ -77,7 +77,7 @@ public defstruct LCSCPart <: Component :
   code: Code
 
 
-defmethod print (o:OutputStream, r:LCSCPart) :
+defmethod print (o:OutputStream, r:Part) :
   val items = [
     "mpn = %_" % [mpn(r)]
     "trust = %_" % [trust(r)]
@@ -86,9 +86,9 @@ defmethod print (o:OutputStream, r:LCSCPart) :
     "sourcing = %_" % [sourcing(r)]
     "metadata = %_" % [indented-list(metadata(r))]]
 
-  print(o, "LCSCPart(%_)" % [indented-list(items)])
+  print(o, "Part(%_)" % [indented-list(items)])
 
-public defn LCSCPart (raw-json: JObject) -> LCSCPart :
+public defn Part (raw-json: JObject) -> Part :
   val json = filter-json(raw-json)
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
 
@@ -100,7 +100,7 @@ public defn LCSCPart (raw-json: JObject) -> LCSCPart :
     else :
       entries(metadata-json as JObject)
 
-  LCSCPart(json["manufacturer"] as String,
+  Part(json["manufacturer"] as String,
            json["mpn"] as String,
            json["trust"] as String,
            x,
@@ -111,32 +111,32 @@ public defn LCSCPart (raw-json: JObject) -> LCSCPart :
            metadata,
            Code(json["code"] as JObject))
 
-defmethod to-jitx (part: LCSCPart) -> Instantiable :
+defmethod to-jitx (part: Part) -> Instantiable :
   to-jitx $ code(part)
 
-public defn LCSCPart (mpn: String) -> LCSCPart :
-  LCSCPart(["mpn" => mpn])
+public defn Part (mpn: String) -> Part :
+  Part(["mpn" => mpn])
 
-public defn LCSCPart (mpn: String, manufacturer: String) -> LCSCPart :
-  LCSCPart(["mpn" => mpn, "manufacturer" => manufacturer])
+public defn Part (mpn: String, manufacturer: String) -> Part :
+  Part(["mpn" => mpn, "manufacturer" => manufacturer])
 
-public defn LCSCPart (user-properties:Tuple<KeyValue>) -> LCSCPart :
+public defn Part (user-properties:Tuple<KeyValue>) -> Part :
   val query-properties = remove-duplicate-keys $ [["_type" => "LCSC"],
                                                   user-properties]
-  LCSCPart $ dbquery-first-allow-non-stock(query-properties) as JObject
+  Part $ dbquery-first-allow-non-stock(query-properties) as JObject
 
 defn remove-duplicate-keys (hs:Seqable<Seqable<KeyValue<String, ?>>>) -> Tuple<KeyValue<String, ?>> :
   to-tuple $ to-hashtable<String, ?>(cat-all(hs))
 
-public defn look-up-lcsc-components (attribute: String) -> Tuple :
-  look-up-lcsc-components(attribute, [])
+public defn look-up-components (attribute: String) -> Tuple :
+  look-up-components(attribute, [])
 
-public defn look-up-lcsc-components (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
+public defn look-up-components (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
   val query-properties = remove-duplicate-keys $ [["_type" => "LCSC"],
                                                   filter-properties,
                                                   ["_distinct" => attribute]]
 
-  query-distinct(query-properties, "look-up-lcsc-components")
+  query-distinct(query-properties, "look-up-components")
 
 ;============================================================
 ;====================== Resistor ============================
