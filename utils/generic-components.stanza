@@ -129,6 +129,20 @@ public defn closest-std-val (v:Double, tol:Double) :
 
   match-val * pow(10.0, expon)
 
+
+; ========================================================
+; ===================== LCSC Parts =======================
+; ========================================================
+
+public defn lcsc-database-part (mpn: String) -> Instantiable :
+  to-jitx $ LCSCPart(["mpn" => mpn])
+
+public defn lcsc-database-part (mpn: String, manufacturer: String) -> Instantiable :
+  to-jitx $ LCSCPart(mpn, manufacturer)
+
+public defn lcsc-database-part (user-properties:Tuple<KeyValue>) -> Instantiable :
+  to-jitx $ LCSCPart(user-properties)
+
 ; ========================================================
 ; ========== Generic passive components ==================
 ; ========================================================
@@ -149,7 +163,8 @@ defn remove-duplicate-keys (hs:Seqable<Seqable<KeyValue<String, ?>>>) -> Tuple<K
 
 ; Generic ceramic capacitor from database (of 600k options)
 public defn ceramic-cap (user-params:Tuple<KeyValue>) -> Instantiable :
-  val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+  val params = remove-duplicate-keys $ [["type" => "ceramic"]
+                                        voltage-cap-property()
                                         smd-query-properties()
                                         user-params]
   to-jitx $ Capacitor(params)
@@ -161,7 +176,8 @@ public defn ceramic-cap (cap:Double, tolerance:Double) -> Instantiable :
   ceramic-cap(["capacitance" => cap "tolerance" => tolerance])
 
 public defn ceramic-caps (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
-  val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+  val params = remove-duplicate-keys $ [["type" => "ceramic"]
+                                        voltage-cap-property()
                                         smd-query-properties()
                                         user-params]
   map(to-jitx, Capacitors(params, limit))
@@ -174,7 +190,8 @@ public defn look-up-ceramic-caps (attribute: String) -> Tuple :
   look-up-ceramic-caps(attribute, [])
 
 public defn look-up-ceramic-caps (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
-  val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+  val params = remove-duplicate-keys $ [["type" => "ceramic"]
+                                        voltage-cap-property()
                                         smd-query-properties()
                                         filter-properties]
   look-up-capacitors(attribute, params)
@@ -184,7 +201,8 @@ public defn look-up-ceramic-caps (attribute: String, filter-properties:Tuple<Key
 ; ========================================================
 ; Use for adding an instance of a tantalum cap from the JITX database to your design.
 public defn tantalum-cap (user-params:Tuple<KeyValue>) -> Instantiable :
-  val params = remove-duplicate-keys $ [["anode" => "tantalum" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+  val params = remove-duplicate-keys $ [["anode" => "tantalum"]
+                                        voltage-cap-property()
                                         smd-query-properties()
                                         user-params]
   to-jitx $ Capacitor(params)
@@ -196,10 +214,17 @@ public defn tantalum-cap (cap:Double, tolerance:Double) -> Instantiable :
   tantalum-cap(["capacitance" => cap "tolerance" => tolerance])
 
 public defn tantalum-caps (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
-  val params = remove-duplicate-keys $ [["anode" => "tantalum" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+  val params = remove-duplicate-keys $ [["anode" => "tantalum"]
+                                        voltage-cap-property()
                                         smd-query-properties()
                                         user-params]
   map(to-jitx, Capacitors(params, limit))
+
+defn voltage-cap-property () -> [KeyValue<String, Double>]|[] :
+  match(MIN-CAP-VOLTAGE: Double) :
+    ["min-rated-voltage" => MIN-CAP-VOLTAGE]
+  else :
+    []
 
 ; ========================================================
 ; =============== look-up-tantalum-caps ===================
@@ -209,7 +234,8 @@ public defn look-up-tantalum-caps (attribute: String) -> Tuple :
   look-up-tantalum-caps(attribute, [])
 
 public defn look-up-tantalum-caps (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
-  val params = remove-duplicate-keys $ [["anode" => "tantalum" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+  val params = remove-duplicate-keys $ [["anode" => "tantalum"]
+                                        voltage-cap-property()
                                         smd-query-properties()
                                         filter-properties]
   look-up-capacitors(attribute, params)
@@ -894,4 +920,3 @@ public defn add-rgb-indicator (brightness:Double, proc:JITXObject, vin:JITXObjec
     net (vin, rgb.led.l.a)
     net (control-pins rgb.control-pins)
     rgb
-

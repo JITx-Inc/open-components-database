@@ -20,6 +20,8 @@ public defstruct Code :
   landpattern: LandPatternCode
   pads: Tuple<PadCode>
   symbols: Tuple<SymbolUnitCode>
+with :
+  printer => true
 
 public defn Code (json: JObject) -> Code :
   val json-pads = json["pads"] as Tuple<JObject>
@@ -37,10 +39,6 @@ public defn Code (json: JObject) -> Code :
        pads,
        symbol-units)
 
-; FIXME!: should inline LandpatternCode in ComponentCode and delete separate make-landpattern?
-; Not if in the future I get a tuple of components that share the same landpatterns
-public defn database-part (json: JObject) -> Instantiable :
-  to-jitx $ Code(json)
 
 public defn to-jitx (code: Code) -> Instantiable :
   to-jitx(component(code), landpattern-def, symbol-defs) where :
@@ -66,6 +64,8 @@ defstruct ComponentCode :
   landpattern: String
   symbols:Tuple<SymbolAssignmentCode>
   properties: Tuple<PropertyCode>
+with :
+  printer => true
 
 defstruct PropertyCode :
   key: Symbol
@@ -155,7 +155,7 @@ defn JITXValue (json: JSON) -> JITXValue :
       else :
         to-string(json)
 
-defn KeyValue (json: JObject) -> KeyValue :
+public defn KeyValue (json: JObject) -> KeyValue :
   KeyValue(json["key"] as String,
            JITXValue(json["value"]))
 
