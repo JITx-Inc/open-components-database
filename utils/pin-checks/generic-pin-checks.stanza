@@ -8,7 +8,7 @@ defpackage ocdb/utils/pin-checks/generic-pin-checks :
   import ocdb/utils/pin-checks/utils
   
 val NAME        = "Generic Pin Checks"
-val DESCRIPTION = "Check Generic Pin Properties"
+val DESCRIPTION = "Check voltage on generic pins"
 
 doc: "Check a generic pin"
 public defn check-generic-pin (p:JITXObject) :
@@ -20,8 +20,8 @@ pcb-check generic-pin (p:JITXObject) :
   if (connected?(p)) :
     #CHECK(
         condition = has-property?(p.net-voltage)
-        name = NAME
-        category = CATEGORY
+        name = context(p)
+        category = "Generic pin checks (Data)"
         description = DESCRIPTION
         subcheck-description = "Verify the generic pin has a net-voltage property attached"
         pass-message = "Pin %_ has the net-voltage property (%_V) attached" % 
@@ -33,14 +33,14 @@ pcb-check generic-pin (p:JITXObject) :
 
       #CHECK(
         condition = in-range?(max-voltage(g-props), property(p.net-voltage)),
-        name = NAME
-        category = CATEGORY
+        name = context(p)
+        category = "Generic pin checks"
         description = DESCRIPTION      
-        subcheck-description = "Verify the max voltage of a generic pin is within the designs' supply voltage range",
-        pass-message = "Generic pin %_ max-voltage %_ is compatible with the supply voltage range %_" 
-          % [context(p), max-voltage(g-props), property(p.net-voltage)],
-        fail-message = "Generic pin %_ max-voltage %_ is not compatible with the supply voltage range %_" 
-          % [context(p), max-voltage(g-props), property(p.net-voltage)],
+        subcheck-description = "Verify the max voltage on a generic pin is within its allowable range",
+        pass-message = "net-voltage %_V on pin %_ is within the recommended operating range %_V"
+          % [property(p.net-voltage), context(p), max-voltage(g-props)],
+        fail-message = "net-voltage %_V on pin %_ is outside the recommended operating range %_V" 
+          % [property(p.net-voltage), context(p), max-voltage(g-props)],
         locators = [p]
       )
     

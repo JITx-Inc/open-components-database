@@ -7,6 +7,7 @@ defpackage ocdb/designs/checks/checked-design :
   import ocdb/utils/checks
   import ocdb/utils/defaults
   import ocdb/utils/generator-utils
+  import ocdb/utils/property-structs
   import ocdb/designs/checks/capacitors
   import ocdb/designs/checks/digital-io
   import ocdb/designs/checks/inductors
@@ -18,10 +19,15 @@ pcb-module main-module :
   inst ls: inductors
   inst io: digital-io
 
-  net VDD (rs.power.vdd, ls.power.vdd, cs.power.vdd, io.power.vdd)
+  net VDD (rs.power.vdd, ls.power.vdd, cs.power.vdd)
   net GND (rs.power.gnd, ls.power.gnd, cs.power.gnd, io.power.gnd)
 
+  inst tp : ocdb/components/keystone/500xx/component("yellow")
+  property(tp.p.power-supply-pin) = PowerSupplyPin(typ(5.0), 0.1)
+  net PS-VDD (tp.p io.power.vdd)
+
   property(VDD.net-voltage) = typ(5.0)
+  property(PS-VDD.net-voltage) = typ(5.0)
   property(GND.net-voltage) = typ(0.0)
   check-design(self)
 
