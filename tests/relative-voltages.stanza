@@ -59,14 +59,14 @@ pcb-component IOComponent :
       ;          voh min, -0.1 for voh max.
       val voh = min-max(-1.1, -0.1) + voltage(self.VDD)
 
-    ; vil = self.VDD.net-voltage * 0.1
+    ; vil = self.VDD.voltage * 0.1
     val vil = 0.1 * voltage(self.VDD)
 
-    ; vih = self.vdd.net-voltage
+    ; vih = self.vdd.voltage
     val vih = voltage(self.VDD) - 0.1
 
 
-  property(self.VDD.net-voltage) = typ(3.3)
+  property(self.VDD.voltage) = typ(3.3)
 
 ; Helper to retrieve vih,vil,voh,vol
 defn relative-voltages (component:JITXObject) -> [RelativeVoltage,RelativeVoltage,RelativeVoltage,RelativeVoltage] :
@@ -101,8 +101,8 @@ deftest(not-implemented-yet) relative-voltage-test :
 
     symbol(VDD) = ocdb/utils/symbols/supply-sym
     symbol(GND) = ocdb/utils/symbols/ground-sym
-    property(VDD.net-voltage) = typ(3.3)
-    property(GND.net-voltage) = typ(0.0)
+    property(VDD.voltage) = typ(3.3)
+    property(GND.voltage) = typ(0.0)
 
 
     eval-when   
@@ -110,12 +110,12 @@ deftest(not-implemented-yet) relative-voltage-test :
         all?(has-absolute-voltage?, relative-voltages(U2.IO)) :
       ; Only run once the voltages have been propagated.
       for obj in relative-voltages(U1.IO) do:
-        println("relative(%_) => %_ (%_) is %_" % [obj, relative(obj), ref $ relative(obj), get-property?(relative(obj), `net-voltage)])
+        println("relative(%_) => %_ (%_) is %_" % [obj, relative(obj), ref $ relative(obj), get-property?(relative(obj), `voltage)])
       dump(U1.IO)
       dump(U2.IO)
 
-      val n1 = property(U1.IO.net-voltage)
-      val n2 = property(U2.IO.net-voltage)
+      val n1 = property(U1.IO.voltage)
+      val n2 = property(U2.IO.voltage)
           
       #ASSERT(n1 == n2)
       
@@ -128,7 +128,7 @@ deftest(not-implemented-yet) relative-voltage-test :
 deftest rv-arithmetic :
   pcb-module main-module :
     net VDD ()
-    property(VDD.net-voltage) = typ(1.0)
+    property(VDD.voltage) = typ(1.0)
 
     let :
       val e1 = 1.0 + voltage(VDD)
