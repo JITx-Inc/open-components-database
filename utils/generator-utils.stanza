@@ -45,8 +45,6 @@ public defn add-open-drain-pullups (bus:JITXObject, vio:JITXObject, clk-rate:Dou
     for (p in ports(bus), i in 0 to false) do :
       net (rs.r[i].p[1] p)
       net (rs.r[i].p[2] vio)
-      eval-when has-property?(rs.r[i].p[2].voltage) :
-        property(rs.r[i].p[1].voltage) = min-max(0.0, max-value(property(rs.r[i].p[2].voltage)))
     rs
 
 ; Default is 100kHz clock rate, 100pF bus capacitance.
@@ -175,9 +173,9 @@ public defn calculate-operating-points ()  :
     for i in component-instances(self) do :
       if is-resistor?(i) or is-capacitor?(i) or is-inductor?(i):
         check-dual-pin-count!(i)
-        if has-property?(pins(i)[0].voltage) and has-property?(pins(i)[1].voltage) :
-          val p1 = property(pins(i)[0].voltage)
-          val p2 = property(pins(i)[1].voltage)
+        if has-property?(pins(i)[0].net-voltage) and has-property?(pins(i)[1].net-voltage) :
+          val p1 = property(pins(i)[0].net-voltage)
+          val p2 = property(pins(i)[1].net-voltage)
           val voltage = abs(max((max-value(p1) - min-value(p2)), (max-value(p2) - min-value(p1))))
           if is-resistor?(i) :
             property(i.operating-point) = resistor-operating-point(voltage, resistance!(i))
@@ -237,39 +235,29 @@ public defn set-power-source (pos:JITXObject, neg:JITXObject, v-in:Double):
     property(pos.gnd-ref) = neg
     property(pos.power-supply-pin) = PowerSupplyPin(typ(v-in), 0.3) 
 
-public defn propagate-voltages () :
+public defn propagate-net-voltages () :
   inside pcb-module:
-    for c in component-instances(self) do:
-      for p in pins(c) do :
-        if has-property?(p.digital-io):
-          val prop = property(p.digital-io)
-          if driver(prop) is CMOSOutput|TTLOutput :
-            property(p.voltage) = min-max(min-value(vol(driver(prop))) max-value(voh(driver(prop))))
-        else if has-property?(p.digital-output):
-          val prop = property(p.digital-output)
-          if driver(prop) is CMOSOutput|TTLOutput :
-            property(p.voltage) = min-max(min-value(vol(driver(prop))) max-value(voh(driver(prop))))
     for item in all-connected-items(self) do :
       ;First gather all the voltages on all connected nets.
       val voltages = to-tuple $ 
         for net in nets(item) seq? :
-          val prop? = property?(net.voltage)
+          val prop? = property?(net.net-voltage)
           match(prop?:One) :
             if value(prop?) is-not Toleranced :
               ; We cannot necessarily know which net is at issue, since 
               ; it may not have a ref. This is a slightly better error than
               ; previous, as downstream it will cause a type error.
-              fatal("Cannot propagate voltages. Found a voltage that is not a toleranced value: %_." % [value(prop?)])
+              fatal("Cannot propagate net-voltages. Found a net-voltage that is not a toleranced value: %_." % [value(prop?)])
           prop?
       
       ;If at least one net has a voltage property.
       if not empty?(voltages) :
-        val voltage = voltage!(voltages, item)
+        val voltage = net-voltage!(voltages, item)
         ;Now assign the voltage to all of the component pins in the module.
         for p in component-pins(item) do :
-          property(p.voltage) = voltage
+          property(p.net-voltage) = voltage
 
-defn voltage! (voltages: Tuple<Toleranced>, item: ConnectedItems) -> Toleranced :
+defn net-voltage! (voltages: Tuple<Toleranced>, item: ConnectedItems) -> Toleranced :
   defn unnamed (idx: Int) -> Ref :
     Ref $ to-string("unnamed-net-%_" % [idx])
 
@@ -303,10 +291,8 @@ public defn run-final-passes (module:Instantiable) -> Instantiable :
       
       
       ;TODO: Review the order and necessity of those algos
-      val filename = to-string("voltage-propagation-iteration%_.txt" % [i])
-      design $> ocdb/utils/voltage-propagation/propagate-voltages{_, filename}
-             ;$> transform-module{propagate-voltages, _}
-             ;$> transform-module{propagate-relative-voltages, _}
+      design $> transform-module{propagate-net-voltages, _}
+             $> transform-module{propagate-relative-voltages, _}
              $> assign-pins
              $> run-eval-loop
   

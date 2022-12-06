@@ -59,21 +59,21 @@ defn extrema (a:Toleranced, b:Toleranced) -> Toleranced :
   val max = max(max-value(a), max-value(b))
   min-max(min, max)
 
-; Update the voltage property of a pin after relative 
+; Update the net-voltage poperty of a pin after relative 
 ; values are resolved.
 ;
 ; If the pin already has a net voltage, the extrema are updated.
-defn update-voltage (p:JITXObject, new-voltage:Toleranced) :
-  val voltage = 
-    match(get-property?(p, `voltage)) :
-      (one:One<Toleranced>) : extrema(value(one), new-voltage)
-      (none:None) :new-voltage
-  set-property(p, `voltage, voltage)
+defn update-net-voltage (p:JITXObject, new-net-voltage:Toleranced) :
+  val net-voltage = 
+    match(get-property?(p, `net-voltage)) :
+      (one:One<Toleranced>) : extrema(value(one), new-net-voltage)
+      (none:None) :new-net-voltage
+  set-property(p, `net-voltage, net-voltage)
 
 ; If `p` is referenced from a relative voltage, return the 
 ; reference voltage to it.
 defn ref-voltage? (p:JITXObject) -> False|Toleranced :
-  val np = get-property?(p, `voltage)
+  val np = get-property?(p, `net-voltage)
   match(np:One<Toleranced>) : 
     value(np)
 
@@ -89,9 +89,7 @@ defn relative-voltages (p:JITXObject) -> Seqable<RelativeVoltage> :
       (p:CMOSOutput)    : [vol(p), voh(p)]
       (p:TTLOutput)     : [vol(p), voh(p)]
       (p:OpenCollector) : [vol(p)]
-      (x:?) :
-        println("Warning: unhandled case of %_, cannot resolve RelativeVoltage" % [p])
-        []
+      (x:?) : []
       
   val props = [
     `digital-io
@@ -114,7 +112,7 @@ defn resolve-relative-voltage (net:GlobalNet) :
   if not empty?(resolved) :
     val final = reduce-right(extrema, resolved)
     for pin in pins(net) do :
-      update-voltage(pin, final)
+      update-net-voltage(pin, final)
 
 ;==============================================================================
 ;==============================================================================

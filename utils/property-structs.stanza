@@ -24,7 +24,7 @@ public pcb-struct ocdb/utils/property-structs/PowerRail :
   rail:JITXObject
   voltage:Toleranced
 
-; Voltage on a net. library-name = voltage
+; Voltage on a net. library-name = net-voltage
 public pcb-struct ocdb/utils/property-structs/NetVoltage :
   voltage:Toleranced
 
@@ -151,7 +151,7 @@ public defn set-power-states (obj:JITXObject, states:Tuple<KeyValue<String, True
 ;============================== Relative Voltages =============================
 ;==============================================================================
 doc:"A RelativeVoltage represents a relationship between a pin's voltage rating \
-     and the voltage on another object."
+     and the net-voltage on another object."
 public deftype RelativeVoltage <: Equalable&Hashable&jitx/value/JITXValue
 
 doc:"Compute the voltage."
@@ -162,15 +162,15 @@ public defmulti relative (rv:RelativeVoltage) -> JITXObject
 
 doc:"Check if the relative voltage has a known absolute voltage."
 public defn has-absolute-voltage? (rv:RelativeVoltage) -> True|False :
-  get-property?(relative(rv), `voltage) is One
+  get-property?(relative(rv), `net-voltage) is One
 
 doc:"Return the absolute voltage of a RelativeVoltage structure."
 public defn absolute-voltage (rv:RelativeVoltage) -> Toleranced :
-  val nv = get-property?(relative(rv), `voltage)
+  val nv = get-property?(relative(rv), `net-voltage)
   match(nv:One<Toleranced>) :
     resolve(rv, value(nv))
   else :
-    fatal("%_ is missing a voltage property. run-final-passes(...) must be called" % [ref(relative(rv))])
+    fatal("%_ is missing a net-voltage property. run-final-passes(...) must be called" % [ref(relative(rv))])
 
 doc:"Given a Toleranced|RelativeVoltage, return the absolute voltage."
 public defn eval-voltage (v:Toleranced|RelativeVoltage) -> Toleranced :
@@ -179,25 +179,22 @@ public defn eval-voltage (v:Toleranced|RelativeVoltage) -> Toleranced :
     (rv:RelativeVoltage) : absolute-voltage(rv)
 
 
-doc:"A FractionalVoltage represents a voltage rating that is some factor * voltage on another pin."
+doc:"A FractionalVoltage represents a voltage rating that is some factor * net-voltage on another pin."
 public pcb-struct ocdb/utils/property-structs/FractionalVoltage <: RelativeVoltage :
   factor:Double|Toleranced
   pin:JITXObject
 
-doc:"An OffsetVoltage represents a voltage rating that is factor + voltage on another pin."
+doc:"An OffsetVoltage represents a voltage rating that is factor + net-voltage on another pin."
 public pcb-struct ocdb/utils/property-structs/OffsetVoltage <: RelativeVoltage :
   factor:Double|Toleranced
   pin:JITXObject
-
-defmethod print (o:OutputStream, v:OffsetVoltage) :
-  print(o, "%_ volts relative to %_" % [factor(v), pin(v)])
 
 doc:\<doc>
   A DualOffsetVoltage is a voltage rating that is equal to \
      
   ```stanza
-    min-max(min-value(voltage) - factor-min, 
-            max-value(voltage) + factor-max)
+    min-max(min-value(net-voltage) - factor-min, 
+            max-value(net-voltage) + factor-max)
   ```
 
 <doc>                  
