@@ -39,7 +39,7 @@ cd ..
 
 echo "Launching ocdb tests, they can depend on jitx-client..."
 cd open-components-database
-$JITX_RUN_TEST tests/all.stanza -not-tagged part-query long
+$JITX_RUN_TEST tests/all.stanza -not-tagged part-query long not-implemented-yet
 cd ..
 
 #==============================================
