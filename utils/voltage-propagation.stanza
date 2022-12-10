@@ -11,7 +11,7 @@ defpackage ocdb/utils/voltage-propagation :
 ;============================================================
 
 ;Perform voltage propagation on the given module.
-;Returns a new module backannotated with the .net-voltage property.
+;Returns a new module backannotated with the .voltage property.
 
 public defn propagate-voltages (module:Instantiable, report-file:String|False) -> Instantiable :
   within transform-module(module) :
@@ -70,7 +70,7 @@ defstruct ConnectedGroup :
 ;Represents an item that may contain voltage information.
 ;- object: The JITXObject (net/pin).
 ;- type: The type of object. Used for nice error messages.
-;- voltage: The annotated '.net-voltage' property on the object.
+;- voltage: The annotated '.voltage' property on the object.
 defstruct Item :
   object:JITXObject
   type:ItemType
@@ -102,7 +102,7 @@ defn collect-connected-groups () -> Tuple<ConnectedGroup> :
   
     ;Bundle information into an item.
     defn make-item (obj:JITXObject, type:ItemType) -> Item :
-      Item(obj, type, property?(obj.net-voltage))
+      Item(obj, type, property?(obj.voltage))
 
     ;Call 'make-item' on every object in the sequence.
     defn make-items (objs:Seqable<JITXObject>, type:ItemType) -> Seq<Item> :
@@ -130,7 +130,7 @@ defn collect-connected-groups () -> Tuple<ConnectedGroup> :
 
   ;Find all the objects that are viable starting points,
   ;and put them in a trivial group if necessary.
-  for item in all-items-with-properties(self, [`net-voltage]) do :
+  for item in all-items-with-properties(self, [`voltage]) do :
     if not group-set[object(item)] :
       val voltage = value(item)
       if voltage is Double|Toleranced :      
@@ -261,7 +261,7 @@ defn relative-relations (groups:Tuple<ConnectedGroup>) -> Vector<RelativeRelatio
 
   ;Collect all the relative relations in the design.
   val relations = Vector<RelativeRelation>()
-  for item in all-items-with-properties(self, [`net-voltage]) do :
+  for item in all-items-with-properties(self, [`voltage]) do :
     val voltage = value(item)
     match(voltage:FractionalVoltage|OffsetVoltage) :
       add(relations, make-relation(object(item), voltage))
@@ -453,7 +453,7 @@ defn check-consistency (start:Vector<GroupVoltage>
 ;============================================================
 
 ;Write all the computed voltages back out into the
-;'.net-voltage' properties in the design.
+;'.voltage' properties in the design.
 
 defn back-annotate-design (groups:Tuple<ConnectedGroup>,
                            start:Vector<GroupVoltage>
@@ -465,11 +465,11 @@ defn back-annotate-design (groups:Tuple<ConnectedGroup>,
     val group-table = to-inttable<ConnectedGroup> $
       for g in groups seq : id(g) => g
 
-    ;Set the .net-voltage property on the object in the given group.
+    ;Set the .voltage property on the object in the given group.
     defn annotate-obj (obj:JITXObject, voltage:Double|Toleranced) :
-      property(obj.net-voltage) = voltage
+      property(obj.voltage) = voltage
 
-    ;Set the .net-voltage property on all items in the given group.
+    ;Set the .voltage property on all items in the given group.
     defn annotate-group (group-id:Int, voltage:Double|Toleranced) :
       val group = group-table[group-id]
       for item in items(group) do :
@@ -632,7 +632,7 @@ defn generate-report (groups:Tuple<ConnectedGroup>,
 
       Pln("### Starting Points ###\n")
       Pln("Voltage propagation starts by searching for items that have a\n\
-           '.net-voltage' property of type 'Double' or 'Toleranced'.\n")
+           '.voltage' property of type 'Double' or 'Toleranced'.\n")
       Pln("The following starting points were found:\n")
       for start in starting-points do :
         Pln2("%_ in group %_ has voltage %_\n" % [readable-name!(source(start)), id(start), voltage(start)])
@@ -723,7 +723,7 @@ Detect which items are electrically connected together:
 ### Starting Points ###
 
 Voltage propagation starts by searching for items that have a
-'.net-voltage' property of type 'Double' or 'Toleranced'.
+'.voltage' property of type 'Double' or 'Toleranced'.
 
 The following starting points were found:
 
