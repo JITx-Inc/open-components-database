@@ -270,10 +270,11 @@ public pcb-pad testpoint-pad (testpoint-shape:Shape):
 public defn testpoint-pad (diameter:Double) :
   testpoint-pad(Circle(0.5 * diameter))
 
-public pcb-pad pth-pad (pad-shape:Shape, solder-mask-layer:Shape|False, paste-layer:Shape|False, hole-shape:Shape):
+public pcb-pad pth-pad (pad-shape:Shape, hole-shape:Shape, solder-mask-layer:Shape|False, paste-layer:Shape|False):
   name = "PTH Pad"
   shape = pad-shape
   type = TH
+  layer(Cutout()) = hole-shape
   if paste-layer is Shape: ; Enables paste-in-pad
     layer(Paste(Top)) = paste-layer as Shape
   match(solder-mask-layer):
@@ -282,22 +283,24 @@ public pcb-pad pth-pad (pad-shape:Shape, solder-mask-layer:Shape|False, paste-la
     (mask:Shape) :
       layer(SolderMask(Top)) = mask
       layer(SolderMask(Bottom)) = mask
-  layer(Cutout()) = hole-shape
+
+public defn pth-pad (pad-shape:Shape, hole-shape:Shape, mask:Shape):
+  pth-pad(pad-shape, hole-shape, mask, false)
 
 public defn pth-pad (pad-shape:Shape, hole-shape:Shape):
-  pth-pad(pad-shape, false, false, hole-shape)
+  pth-pad(pad-shape, hole-shape, false, false)
 
-public defn pth-pad (drill-r:Double, pad-r:Double):
+public defn pth-pad (pad-r:Double, drill-r:Double):
   pth-pad(Circle(pad-r), Circle(drill-r))
 
 ; Create a through hole circular pad
-public defn pth-pad (anchor:Anchor, drill-radius:Double, pad-radius:Double) :
+public defn pth-pad (anchor:Anchor, pad-radius:Double, drill-radius:Double) :
   pth-pad(Circle(anchor, pad-radius),  Circle(anchor, drill-radius))
 
 ; Create a through hole circular pad with drill radius and anchor
 public defn pth-pad (anchor:Anchor, drill-radius:Double) :
-  val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
-  pth-pad(anchor, drill-radius, drill-radius + 0.25)
+  val exp-pad = clearance(current-rules(), MinThPadExpandOuter)
+  pth-pad(anchor, drill-radius + exp-pad, drill-radius)
 
 public defn pth-pad (drill-radius:Double):
   pth-pad(C, drill-radius)
@@ -317,16 +320,18 @@ public defn npth-pad (anchor:Anchor, drill-radius:Double) :
   npth-pad(Circle(anchor, drill-radius))
 
 ; Create an ovalcut pad, the shape is a Circle with a Capsule shaped hole.
-public defn pth-ovalcut-pad (anchor:Anchor, drill-size:Dims, pad-radius:Double, mask-radius:Double):
-  pth-pad(Circle(anchor, pad-radius), capsule(anchor, x(drill-size), y(drill-size)))
+public defn pth-ovalcut-pad (anchor:Anchor, pad-radius:Double, drill-size:Dims, mask-radius:Double):
+  pth-pad(Circle(anchor, pad-radius), capsule(anchor, x(drill-size), y(drill-size)), Circle(anchor, mask-radius))
   
-; Create an ocvalcut pad, the shape is a Circle with a Capsule shaped hole.
-public defn pth-ovalcut-pad (anchor:Anchor, drill-width:Double, drill-height:Double, pad-radius:Double, mask-radius:Double) :
-  pth-ovalcut-pad(anchor, Dims(drill-width, drill-height), pad-radius, mask-radius)
+; Create an ovalcut pad, the shape is a Circle with a Capsule shaped hole.
+public defn pth-ovalcut-pad (anchor:Anchor, pad-radius:Double, drill-width:Double, drill-height:Double, mask-radius:Double) :
+  pth-ovalcut-pad(anchor, pad-radius, Dims(drill-width, drill-height), mask-radius)
 
 ; Create an ovalcut pad with a given drill width, drill height, and mask radius.
 public defn pth-ovalcut-pad (drill-w:Double, drill-h:Double, mask-r:Double) :
-  pth-ovalcut-pad(C, drill-w, drill-h, mask-r, mask-r)
+  val exp-pad = clearance(current-rules(), MinThPadExpandOuter)
+  val mpad = max(drill-w, drill-h)
+  pth-ovalcut-pad(C, mpad + exp-pad, drill-w, drill-h, mask-r)
 
 ; Create a capsule shaped SMD pad with an anchor
 public defn oval-smd-pad (anchor:Anchor, width:Double, height:Double) :
@@ -337,39 +342,39 @@ public defn oval-smd-pad (w:Double, h:Double) :
   oval-smd-pad(C, w, h)
 
 ; Create a capsule shaped TH pad with anchor
-public defn oval-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
+public defn oval-pth-pad (anchor:Anchor, pad-w:Double, pad-h:Double, drill-w:Double, drill-h:Double,) :
   val shape = capsule(anchor, pad-w, pad-h)
   val hole  = capsule(anchor, drill-w, drill-h)
   pth-pad(shape, hole)
 
 ; Create a capsule shaped TH pad with a circular hole
-public defn oval-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
-  oval-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h)
+public defn oval-pth-pad (pad-w:Double, pad-h:Double, drill-r:Double) :
+  oval-pth-pad(C, pad-w, pad-h, drill-r, drill-r)
 
 ; Create a capsule shaped pth pad
-public defn oval-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
-  oval-pth-pad(C, drill-w, drill-h, pad-w, pad-h)
+public defn oval-pth-pad ( pad-w:Double, pad-h:Double, drill-w:Double, drill-h:Double) :
+  oval-pth-pad(C, pad-w, pad-h, drill-w, drill-h)
 
 ; Create a rectangle pth pad with anchor, width, height, pad width, and pad height
-public defn rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double):
+public defn rect-pth-pad (anchor:Anchor, pad-w:Double, pad-h:Double, drill-w:Double, drill-h:Double):
   val shape = rectangle(anchor, pad-w, pad-h)
   val hole  = capsule(anchor, drill-w, drill-h)
   pth-pad(shape, hole)
 
 ; Create a rectangle pth pad with drill 
-public defn rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
-  rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h)
+public defn rect-pth-pad (pad-w:Double, pad-h:Double, drill-r:Double) :
+  rect-pth-pad(C, pad-w, pad-h, drill-r, drill-r)
 
-public defn rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
-  rect-pth-pad(C, drill-w, drill-h, pad-w, pad-h)
+public defn rect-pth-pad (pad-w:Double, pad-h:Double, drill-w:Double, drill-h:Double) :
+  rect-pth-pad(C, pad-w, pad-h, drill-w, drill-h)
 
-public defn round-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+public defn round-rect-pth-pad (anchor:Anchor, pad-w:Double, pad-h:Double, pad-r:Double, drill-w:Double, drill-h:Double) :
   val shape = round-rect(anchor, pad-w, pad-h, pad-r)
   val hole  = capsule(anchor, drill-w, drill-h)
   pth-pad(shape, hole)
 
-public defn round-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
-  round-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r)
+public defn round-rect-pth-pad (pad-w:Double, pad-h:Double, pad-r:Double, drill-r:Double) :
+  round-rect-pth-pad(C, pad-w, pad-h, pad-r, drill-r, drill-r)
 
 public defn round-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
   smd-pad(round-rect(anchor, w, h, r))
@@ -377,16 +382,16 @@ public defn round-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
 public defn round-rect-smd-pad (w:Double, h:Double, r:Double) :
   round-rect-smd-pad(C, w, h, r)
 
-public defn chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
+public defn chamfered-rect-pth-pad (anchor:Anchor, pad-w:Double, pad-h:Double, pad-r:Double, drill-w:Double, drill-h:Double) :
   val shape = chamfered(anchor, pad-w, pad-h, pad-r)
   val hole  = capsule(anchor, drill-w, drill-h)
   pth-pad(shape, hole)
 
-public defn chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
-  chamfered-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r)
+public defn chamfered-rect-pth-pad (pad-w:Double, pad-h:Double, pad-r:Double, drill-r:Double, ) :
+  chamfered-rect-pth-pad(C, pad-w, pad-h, pad-r, drill-r, drill-r)
 
-public defn chamfered-rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
-  chamfered-rect-pth-pad(C, drill-w, drill-h, pad-w, pad-h, pad-r)
+public defn chamfered-rect-pth-pad (pad-w:Double, pad-h:Double, pad-r:Double, drill-w:Double, drill-h:Double) :
+  chamfered-rect-pth-pad(C, pad-w, pad-h, pad-r, drill-w, drill-h)
 
 public defn chamfered-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
   smd-pad(chamfered(anchor, w, h, r))
@@ -394,13 +399,13 @@ public defn chamfered-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double)
 public defn chamfered-rect-smd-pad (w:Double, h:Double, r:Double):
   chamfered-rect-smd-pad(C, w, h, r)
 
-public defn dshape-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) : 
+public defn dshape-pth-pad (anchor:Anchor, pad-w:Double, pad-h:Double, pad-r:Double, drill-w:Double, drill-h:Double) : 
   val shape = DShape(anchor, pad-w, pad-h, pad-r)
   val hole  = capsule(anchor drill-w, drill-h)
   pth-pad(shape, hole)
 
-public defn dshape-pth-pad (drill-w:Double, drill-h:Double, w:Double, h:Double, r:Double) : 
-  dshape-pth-pad(C, drill-w, drill-h, w, h, r)
+public defn dshape-pth-pad (w:Double, h:Double, r:Double, drill-w:Double, drill-h:Double) : 
+  dshape-pth-pad(C, w, h, r, drill-w, drill-h)
 
 public defn dshape-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
   smd-pad(DShape(anchor, w, h, r))
@@ -408,13 +413,13 @@ public defn dshape-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
 public defn dshape-smd-pad (w:Double, h:Double, r:Double) : 
   dshape-smd-pad(C, w, h, r)
 
-public defn general-round-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Tuple<Double>) :
+public defn general-round-rect-pth-pad (anchor:Anchor, pad-w:Double, pad-h:Double, pad-r:Tuple<Double>, drill-w:Double, drill-h:Double) :
   val shape = GeneralRoundedRectangle(anchor, pad-w, pad-h, pad-r)
   val hole  = capsule(anchor, drill-w, drill-h)
   pth-pad(shape, hole)
  
-public defn general-round-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Tuple<Double>) :
-  general-round-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r)
+public defn general-round-rect-pth-pad (pad-w:Double, pad-h:Double, pad-r:Tuple<Double>, drill-r:Double) :
+  general-round-rect-pth-pad(C, pad-w, pad-h, pad-r, drill-r, drill-r)
 
 public defn general-round-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Tuple<Double>) :
   smd-pad(GeneralRoundedRectangle(anchor, w, h, r))
@@ -422,12 +427,12 @@ public defn general-round-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Tup
 public defn general-round-rect-smd-pad (w:Double, h:Double, r:Tuple<Double>) :
   general-round-rect-smd-pad(C, w, h, r)
 
-public defn general-round-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double, cm:CornerModifier) :
+public defn general-round-rect-pth-pad (anchor:Anchor, pad-w:Double, pad-h:Double, pad-r:Double, drill-w:Double, drill-h:Double, cm:CornerModifier) :
   val shape = GeneralRoundedRectangle(anchor, pad-w, pad-h, pad-r, cm)
   val hole  = capsule(anchor, drill-w, drill-h)
   pth-pad(shape, hole)
 
-public defn general-round-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double, cm:CornerModifier) :
+public defn general-round-rect-pth-pad (pad-h:Double, pad-r:Double, drill-r:Double, pad-w:Double, cm:CornerModifier) :
   general-round-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r, cm)
 
 public defn general-round-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double, cm:CornerModifier) :
@@ -436,13 +441,18 @@ public defn general-round-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Dou
 public defn general-round-rect-smd-pad (w:Double, h:Double, r:Double, cm:CornerModifier) :
   general-round-rect-smd-pad(C, w, h, r, cm)
 
-public defn general-chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Tuple<Double>) :
+public defn general-chamfered-rect-pth-pad (anchor:Anchor, pad-w:Double, pad-h:Double, pad-r:Double, drill-w:Double, drill-h:Double) :
+  val shape = GeneralChamferedRectangle(anchor, pad-w, pad-h, [pad-r])
+  val hole  = capsule(anchor, drill-w, drill-h)
+  pth-pad(shape, hole)
+
+public defn general-chamfered-rect-pth-pad (anchor:Anchor, pad-w:Double, pad-h:Double, pad-r:Tuple<Double>, drill-w:Double, drill-h:Double) :
   val shape = GeneralChamferedRectangle(anchor, pad-w, pad-h, pad-r)
   val hole  = capsule(anchor, drill-w, drill-h)
   pth-pad(shape, hole)
 
-public defn general-chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Tuple<Double>) :
-  general-chamfered-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r)
+public defn general-chamfered-rect-pth-pad (pad-w:Double, pad-h:Double, pad-r:Tuple<Double>, drill-r:Double) :
+  general-chamfered-rect-pth-pad(C, pad-w, pad-h, pad-r, drill-r, drill-r)
 
 public defn general-chamfered-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Tuple<Double>) :
   smd-pad(GeneralChamferedRectangle(anchor, w, h, r))
@@ -450,12 +460,12 @@ public defn general-chamfered-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r
 public defn general-chamfered-rect-smd-pad (w:Double, h:Double, r:Tuple<Double>) :
   general-chamfered-rect-smd-pad(C, w, h, r)
 
-public defn general-chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double, cm:CornerModifier) :
+public defn general-chamfered-rect-pth-pad (anchor:Anchor, pad-w:Double, pad-h:Double, pad-r:Double, drill-w:Double, drill-h:Double, cm:CornerModifier) :
   val shape = GeneralChamferedRectangle(anchor, pad-w, pad-h, pad-r, cm)
   val hole  = capsule(anchor, drill-w, drill-h)
   pth-pad(shape, hole)
 
-public defn general-chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double, cm:CornerModifier) :
+public defn general-chamfered-rect-pth-pad (pad-w:Double, pad-h:Double, pad-r:Double, drill-r:Double, cm:CornerModifier) :
   general-chamfered-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r, cm)
 
 public defn general-chamfered-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double, cm:CornerModifier) :
@@ -2113,7 +2123,7 @@ public defn make-two-pin-radial-landpattern (component-length:Toleranced, ; the 
     ;------------------------------------------------------------
     ; Compute the pad definition
     val [pad-diameter, hole-diameter] = pth-pad-sizes(lead-diameter, density-level)
-    val pad-def = pth-pad(hole-diameter * 0.5, pad-diameter * 0.5)
+    val pad-def = pth-pad(pad-diameter * 0.5, hole-diameter * 0.5)
 
     ;------------------------------------------------------------
     ; Place the pads
