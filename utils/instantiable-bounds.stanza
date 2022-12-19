@@ -1,0 +1,49 @@
+defpackage ocdb/utils/instantiable-bounds :
+  import core
+
+  import jitx
+  import jitx/utils/box
+  import jitx/commands
+
+
+
+public defn compute-rectangle (m: Instance) -> Rectangle :
+  val box = bounds $ compute-bounds(m)
+  Rectangle(x(hi) - x(lo), y(hi) - y(lo), loc(lo + 0.5 * (hi - lo))) where :
+    val lo = lo(box)
+    val hi = hi(box)
+
+defn compute-bounds (m: Instance) -> Shape :
+  match(instance-type(m)) :
+    (t: InstanceArray) :
+      ; Assumes indexes are 0, .1, ... length(t) - 1
+      Union $ seq(compute-bounds{m[_] as Instance}, 0 to length(m))
+    (t: SingleComponent) :
+      compute-component-bounds $ instance-definition(m)
+    (t: SingleModule) :
+      val poses = package-poses $ instance-definition(m)
+      val u = Union $
+        for p in poses map :
+          ; FIXME!: depends on anchor
+          val i = inst(p)
+          val pose =  pose(p)
+          match(pose: Pose) :
+            val shape = pose * compute-bounds(i)
+            shape
+          else :
+            throw $ Exception("Missing pose on %_" % [ref(i)])
+      u
+
+defn compute-component-bounds (c: Instantiable) -> Shape :
+  val lp = landpattern(c)
+  val layers = layers(lp)
+  val courtyards = to-tuple $ filter({specifier(_) is Courtyard}, layers)
+  if length(courtyards) > 1 :
+    throw $ Exception("Several courtyard in landpattern.")
+  if length(courtyards) == 1 :
+    shape(courtyards[0])
+  else :
+    Union $ map(get-pad-with-loc, pads(lp))
+
+defn get-pad-with-loc (x: LandPatternPad) -> Shape :
+  pose(x) * pad-shape(pad(x))
