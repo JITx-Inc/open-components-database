@@ -6,8 +6,7 @@ defpackage ocdb/designs/grid-resistors :
   import jitx/commands
   import ocdb/utils/defaults
   import ocdb/utils/generic-components
-
-val board-shape = RoundedRectangle(10.0, 10.0, 0.5)
+  import ocdb/utils/instantiable-bounds
 
 pcb-module series-resistor :
   pin a
@@ -27,6 +26,7 @@ pcb-module series-resistors (n: Int) :
   var previous-pin = a
   for idx in 1 through n do :
     inst r : chip-resistor(to-double(idx) * 1.0e3)
+    place(r) at loc(0.0, 3.0 * to-double(idx - 1)) on Top
     net (previous-pin r.p[1])
 
     previous-pin = r.p[2]
@@ -37,12 +37,14 @@ pcb-module grid-resistors (s-count: Int, p-count: Int) :
   pin a
   pin b
 
-  for _ in 0 to p-count do :
+  for idx in 0 to p-count do :
     inst s : series-resistors(s-count)
+    place(s) at loc(3.0 * to-double(idx), 0.0) on Top
     net (a s.a)
     net (b s.b)
 
 defn run-design (circuit: Instantiable) :
+  val board-shape = offset(compute-rectangle(circuit), 0.5)
   make-default-board(circuit, 2, board-shape)
 
   view-board()
