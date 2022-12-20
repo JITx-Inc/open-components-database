@@ -41,7 +41,7 @@ public defn add-open-drain-pullups (bus:JITXObject, vio:JITXObject, clk-rate:Dou
     val r = closest-std-val(rise-time / (0.8473 * bus-capacitance), 10.0)
     pcb-module collector (r-val:Double, count:Int):
       public inst r : chip-resistor(r-val)[count]
-    inst rs:collector(r, length(ports(bus)))
+    public inst rs:collector(r, length(ports(bus)))
     for (p in ports(bus), i in 0 to false) do :
       net (rs.r[i].p[1] p)
       net (rs.r[i].p[2] vio)
@@ -60,24 +60,28 @@ public pcb-enum ocdb/utils/generator-utils/USB-C-ConfigurationChannel :
   SinkDefault
 
 ; Creates and attaches USB-C configuration resistors
-public defn usb-c-configuration-channel (usb-c-bundle:JITXObject, method:USB-C-ConfigurationChannel) :
+public defn usb-c-configuration-channel (usb-c-bundle:JITXObject, method:USB-C-ConfigurationChannel) -> [JITXObject JITXObject] :
   if port-type(usb-c-bundle) != usb-c :
     fatal("Bundle type passed to usb-c-configuration-channel must be bundle type usb-c.")
 
   inside pcb-module:
     switch(method) :
       SourceDefault:
-        res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 80.0e-6) - 5.1e3, 5.0))
-        res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 80.0e-6) - 5.1e3, 5.0))
+        [ res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 80.0e-6) - 5.1e3, 5.0))
+          res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 80.0e-6) - 5.1e3, 5.0))
+        ]
       Source5V-1A5: 
-        res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 180.0e-6) - 5.1e3, 5.0))
-        res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 180.0e-6) - 5.1e3, 5.0))
+        [ res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 180.0e-6) - 5.1e3, 5.0))
+          res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 180.0e-6) - 5.1e3, 5.0))
+        ]
       Source5V-3A0: 
-        res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 330.0e-6) - 5.1e3, 5.0))
-        res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 330.0e-6) - 5.1e3, 5.0))
+        [ res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 330.0e-6) - 5.1e3, 5.0))
+          res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.vdd, closest-std-val((5.0 / 330.0e-6) - 5.1e3, 5.0))
+        ]
       SinkDefault: 
-        res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.gnd, 5.1e3)
-        res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.gnd, 5.1e3)
+        [ res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.gnd, 5.1e3)
+          res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.gnd, 5.1e3)
+        ]
 
 ; =======================================
 ; Piecewise linear functions
