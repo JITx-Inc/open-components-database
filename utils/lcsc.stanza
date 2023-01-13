@@ -45,6 +45,25 @@ public defn to-jitx (code: Code) -> Instantiable :
     val landpattern-def = to-jitx(landpattern(code), pads(code))
     val symbol-defs = map(to-jitx, symbols(code))
 
+public defstruct Footprint :
+  landpattern: LandPatternCode
+  pads: Tuple<PadCode>
+with :
+  printer => true
+
+public defn Footprint (json: JObject) -> Footprint :
+  val json-pads = json["pads"] as Tuple<JObject>
+  val json-landpattern = json["landpattern"] as JObject
+
+  val pads = map(PadCode, json-pads)
+  val landpattern = LandPatternCode(json-landpattern)
+
+  Footprint(landpattern, pads)
+
+
+public defn to-jitx (fp: Footprint) -> LandPattern :
+  to-jitx(landpattern(fp), pads(fp))
+
 ;======================================
 ;============= Internals ==============
 ;======================================
@@ -58,6 +77,7 @@ public defstruct ComponentCode :
   description: String|False
   manufacturer: String|False
   mpn: String|False
+  reference-prefix: String|False
   emodel: EModel|False
   pin-properties: False|PinPropertiesCode
   no-connects: Tuple<NoConnectCode>
@@ -99,6 +119,7 @@ defn ComponentCode (json: JObject) -> ComponentCode :
                 json["description"] as String|False,
                 json["manufacturer"] as String|False,
                 json["mpn"] as String|False,
+                get?(json, "reference-prefix", false) as String|False,
                 call?(EModel{_ as JObject}, json["emodel"]),
                 PinPropertiesCode(json["pin-properties"] as JObject),
                 map(NoConnectCode, json["no-connects"] as Tuple<JObject>),
@@ -263,6 +284,10 @@ defn to-jitx (c: ComponentCode, landpattern-def, symbol-defs: Tuple<SchematicSym
     match(mpn: String) :
       mpn = mpn
 
+    val reference-prefix = reference-prefix(c)
+    match(reference-prefix: String) :
+      reference-prefix = reference-prefix
+
     val emodel = emodel(c)
     match(emodel: EModel) :
       emodel = emodel
@@ -343,6 +368,7 @@ public defstruct PadCode :
   type: PadType
   shape: Shape
   layers: Tuple<PCBLayerCode>
+  solder-mask-registration?: Double|False
 
 public defstruct PCBLayerCode :
   layer: LayerSpecifier
@@ -355,7 +381,8 @@ defn PadCode (json: JObject) -> PadCode :
           json["description"] as String|False,
           PadType(json["type"] as String),
           Shape(json["shape"] as JObject),
-          map(PCBLayerCode, json["layers"] as Tuple<JObject>))
+          map(PCBLayerCode, json["layers"] as Tuple<JObject>),
+          json["solder-mask-registration?"] as Double|False)
 
 defn PadType (s: String) -> PadType :
   switch(s) :
@@ -448,11 +475,18 @@ defn Union (json: JObject) -> Union :
   Union(map(Shape, json["shapes"] as Tuple<JObject>)) as Union
 
 defn Text (json: JObject) -> Text :
+  val text-kind =
+    if key?(json, "text-kind"):
+      TextKind(json["text-kind"] as String)
+    else :
+      TrueTypeFont
+
   Text(json["string"] as String,
        json["size"] as Double,
        Anchor(json["anchor"] as String),
        Pose(json["pose"] as JObject),
-       json["font"] as String)
+       get?(json, "font", "") as String,
+       text-kind)
 
 defn Anchor (s: String) -> Anchor :
   switch(s) :
@@ -547,6 +581,17 @@ defn to-jitx (p: PadCode) -> Pad :
     shape = shape(p)
 
     do(to-jitx, layers(p))
+
+    ; TODO: if this is used in a design, use the design soldermask expansion rule
+    ;  else if visualized on its own, use the soldermask expansion value from the JSON.
+    ;  Currently there is no way to know which case we are in so we use the json value if it exists (it does for JLCPCB),
+    ;  else we use the soldermask expansion rule. If outside of a design, rules default to `default-rules`
+    ;  which has soldermask expansion of 0.15mm (3x JLCPCB value)
+    val solder-mask-expansion = solder-mask-registration?(p)
+    match(solder-mask-expansion: Double) :
+      ocdb/utils/landpatterns/apply-soldermask(solder-mask-expansion)
+    else:
+      ocdb/utils/landpatterns/apply-soldermask()
 
   my-pad
 
