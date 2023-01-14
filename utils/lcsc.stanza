@@ -369,6 +369,7 @@ public defstruct PadCode :
   shape: Shape
   layers: Tuple<PCBLayerCode>
   solder-mask-registration?: Double|False
+  paste-mask-registration?: Double|False
 
 public defstruct PCBLayerCode :
   layer: LayerSpecifier
@@ -382,7 +383,8 @@ defn PadCode (json: JObject) -> PadCode :
           PadType(json["type"] as String),
           Shape(json["shape"] as JObject),
           map(PCBLayerCode, json["layers"] as Tuple<JObject>),
-          json["solder-mask-registration?"] as Double|False)
+          json["solder-mask-registration?"] as Double|False,
+          json["paste-mask-registration?"] as Double|False)
 
 defn PadType (s: String) -> PadType :
   switch(s) :
@@ -592,6 +594,15 @@ defn to-jitx (p: PadCode) -> Pad :
       ocdb/utils/landpatterns/apply-soldermask(solder-mask-expansion)
     else:
       ocdb/utils/landpatterns/apply-soldermask()
+
+    val paste-mask-expansion = paste-mask-registration?(p)
+    match(paste-mask-expansion: Double) :
+      if type(p) is TH :
+        fatal("Invalid operation. Cannot expand the paste layer over a pad because it is of type TH.")
+
+      val paste-shape = offset(shape(p), paste-mask-expansion)
+      if paste-shape is-not EmptyShape :
+        layer(Paste(Top)) = paste-shape
 
   my-pad
 
