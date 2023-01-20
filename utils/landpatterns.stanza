@@ -16,32 +16,32 @@ defpackage ocdb/utils/landpatterns :
 ;==============================================================================
 ; ====== Argument constraint Helpers ===========================================
 ; Ensure that a value is even and positive.
-defn ensure-even-positive! (value: Int, name: String):
+defn ensure-even-positive! (value: Int, name: String) :
   if value < 2 or value % 2 == 1:
     fatal("%_ only supports a positive even number of pins." % [name])
 
-defn ensure-divisible! (value:Int, divisor:Int, name: String):
+defn ensure-divisible! (value:Int, divisor:Int, name: String) :
   if divisor < 2:
     fatal("%_ must be > 2" % [value])
-  if (value < divisor) or (value % 2 != 0):
+  if (value < divisor) or (value % 2 != 0) :
     fatal("%_ must be positive and divisible by %_." % [value])
 
 ; ====== Silk screen helpers ===================================================
 ; Create a reference label at (0, 0)
 ; ====== Reference Label Helpers ===============================================
 ; Creates a reference label from pose and anchor
-public defn ref-label (pose:Pose, anchor:Anchor):
+public defn ref-label (pose:Pose, anchor:Anchor) :
   inside pcb-landpattern:
     val min-silkscreen-text-height = clearance(current-rules(), MinSilkscreenTextHeight)
     layer(Silkscreen("values", Top)) = Text(">REF", min-silkscreen-text-height, anchor, pose)
 
 ; Creates a reference label at a fixed pose
-public defn ref-label (pose:Pose):
+public defn ref-label (pose:Pose) :
   ref-label(pose, C)
 
 ; DEPRECATED: prefer ref-label(loc(x, y))
 ; Creates a reference label at an x, y position and anchor
-public defn ref-label (x:Double, y:Double, anchor:Anchor):
+public defn ref-label (x:Double, y:Double, anchor:Anchor) :
   ref-label(loc(x, y), anchor)
 
 ; DEPRECATED: prefer ref-label(loc(x, y))
@@ -56,7 +56,7 @@ public defn ref-label () :
 ; Helper function to convert an anchor into a point.
 defn normalize-to-point (anchor:Anchor) -> Point:
   val [v, h] = components(anchor)
-  val dx = match(h):
+  val dx = match(h) :
     (hr:W) :  1.0
     (hr:C) :  0.0
     (hr:E) : -1.0
@@ -77,40 +77,40 @@ defn normalize-rotation (width:Double, height:Double) -> [Double, Double, Double
   [max(width, height), min(width, height), rot]
 
 ; Normalize the position of a shape given an anchor and rotation.
-defn normalize-loc (s:Shape, anchor:Anchor, rot:Double):
+defn normalize-loc (s:Shape, anchor:Anchor, rot:Double) :
   val pose = Pose((0.5 * normalize-to-point(anchor)) * dims(s), rot, false)
   pose * s 
 
 ; Create a rectangle with normalized rotation and position.
-defn rectangle (anchor:Anchor, width:Double, height:Double):
+defn rectangle (anchor:Anchor, width:Double, height:Double) :
   val [length, width_, rot] = normalize-rotation(width, height)
   normalize-loc(Rectangle(width, height), anchor, rot)
 
 ; Create a capsule with normalized rotation and position.
-defn capsule (anchor:Anchor, width:Double, height:Double):
+defn capsule (anchor:Anchor, width:Double, height:Double) :
   val [length, width_, rot] = normalize-rotation(width, height)
   normalize-loc(Capsule(length, width_), anchor, rot)
 
 ; Create a rounded rectangle with normalized rotation and position.
-defn round-rect (anchor:Anchor, width:Double, height:Double, r:Double):
+defn round-rect (anchor:Anchor, width:Double, height:Double, r:Double) :
   val [length, width_, rot] = normalize-rotation(width, height)
   normalize-loc(RoundedRectangle(length, width_ r), anchor, rot)
   
 ; Create a chamfered rectangle with normalized rotation and position.
-defn chamfered (anchor:Anchor, width:Double, height:Double, r:Double):
+defn chamfered (anchor:Anchor, width:Double, height:Double, r:Double) :
   val [length, width_, rot] = normalize-rotation(width, height)
   normalize-loc(ChamferedRectangle(length, width_, r), anchor, rot)
 
 ;==============================================================================
 ;=========================== Geometric Helpers ================================
 ;==============================================================================
-defn shift-locs (x:Double, y:Double, s:Seqable<Pose>):
+defn shift-locs (x:Double, y:Double, s:Seqable<Pose>) :
   seq({loc(x, y) * _}, s)
 
 defn max-distance (p1:Point, p2:Point) -> Point:
-  defn radius (p:Point):
+  defn radius (p:Point) :
     sqrt(x(p) * x(p) + y(p) * y(p))
-  if radius(p1) > radius(p2):
+  if radius(p1) > radius(p2) :
     p1
   else:
     p2
@@ -136,11 +136,11 @@ public defn LineRectangle (w:Double, h:Double) :
   LineRectangle(w, h, 0.0, 0.0)
 
 ; Create a rectangle from dims structure
-public defn LineRectangle (d:Dims): 
+public defn LineRectangle (d:Dims) : 
   LineRectangle(x(d), y(d))
 
 ; Create a rectangle around another shape
-public defn outline-bounding-box (s:Shape):
+public defn outline-bounding-box (s:Shape) :
   LineRectangle(dims(s))
 
 ; Create a "+" symbol with a fixed length at a center point
@@ -158,7 +158,7 @@ public defn PlusSymbol (x:Double, y:Double) -> Shape:
 ;================================= Pads =======================================
 ;==============================================================================
 ; Apply a shape to the soldermask layer of a pcb-pad. 
-public defn apply-soldermask (mask-shape:Shape):
+public defn apply-soldermask (mask-shape:Shape) :
   inside pcb-pad:
     layer(SolderMask(Top)) = mask-shape
     if pad-type(self) == TH:
@@ -167,12 +167,12 @@ public defn apply-soldermask (mask-shape:Shape):
 ; Create the soldermask layers based on the pad shape, using a fixed factor.
 ; when expand? is true the soldermask shape is computed with expand(), else it is
 ; computed with offset()
-public defn apply-soldermask (amount:Double):
+public defn apply-soldermask (amount:Double) :
   val mask-shape = 
-    match(pad-shape(self)):
-      (s:Rectangle|Circle|RoundedRectangle|Capsule|DShape|ChamferedRectangle):
+    match(pad-shape(self)) :
+      (s:Rectangle|Circle|RoundedRectangle|Capsule|DShape|ChamferedRectangle) :
         expand(s, amount)
-      (s:Shape):
+      (s:Shape) :
         ; FIXME: for other shapes we need an implementation of offset
         s
 
@@ -181,14 +181,14 @@ public defn apply-soldermask (amount:Double):
 
 ; Apply a default soldermask layer to a pcb-pad, using the solder-mask-registration
 ; design rule and offset() method.
-public defn apply-soldermask ():
+public defn apply-soldermask () :
   apply-soldermask(clearance(current-rules(), SolderMaskRegistration))
 
 ; A "solder mask defined pad" is one where the soldermask opening is smaller than 
 ; the pad shape. This method takes a pad as an argument and converts it into a 
 ; soldermask-defined version based on its soldermask layer, if it exists, or the
 ; pad shape if it does not.
-public defn soldermask-defined (p:Pad):
+public defn soldermask-defined (p:Pad) :
   ; extract the pad data before conversion
   val mask?   = find({specifier(_) is SolderMask}, layers(p))  
   ; special case: the mask is smaller than the shape already
@@ -207,36 +207,36 @@ public defn soldermask-defined (p:Pad):
     SMD-p
 
 ; Convert a landpattern to solder mask defined. Geoms will be ignored. 
-public defn soldermask-defined (lp:LandPattern):
+public defn soldermask-defined (lp:LandPattern) :
   pcb-landpattern SMD-l:
     name = to-string("%_, soldermask defined" % [name(lp)])
     for pad_ in pads(lp) do:
-      pad (ref(pad_)): soldermask-defined(def-pad(pad_)) at pose(pad_)
+      pad (ref(pad_)) : soldermask-defined(def-pad(pad_)) at pose(pad_)
     for layer_ in layers(lp) do:
       layer(specifier(layer_)) = shape(layer_)
 
   SMD-l
 
-public pcb-pad smd-pad (copper-layer:Shape, solder-mask-layer:Shape|False, paste-layer:Shape):
+public pcb-pad smd-pad (copper-layer:Shape, solder-mask-layer:Shape|False, paste-layer:Shape) :
   name  = "SMD Pad"
   type  = SMD
   shape = copper-layer
   layer(Paste(Top)) = paste-layer
-  match(solder-mask-layer):
+  match(solder-mask-layer) :
     (mask:False) : 
       apply-soldermask()
     (mask:Shape) :
       layer(SolderMask(Top)) = mask
 
-public defn smd-pad (s:Shape):
+public defn smd-pad (s:Shape) :
   smd-pad(s, false, s)
 
 ; Create an rectangular SMD pad 
-public defn smd-pad (anchor:Anchor, width:Double, height:Double):
+public defn smd-pad (anchor:Anchor, width:Double, height:Double) :
   smd-pad(Rectangle(anchor, width, height))
 
 ; Create a rectangular SMD pad 
-public defn smd-pad (d:Dims):
+public defn smd-pad (d:Dims) :
   smd-pad(Rectangle(d))
 
 ; Create an SMD pad with a given width and height
@@ -251,7 +251,7 @@ public defn bga-pad (diameter:Double) :
 public pcb-pad soldermask-defined-bga-pad (
   soldermask-opening-diameter:Double ; the diameter of the soldermask opening
   overlap:Double                     ; the amount the soldermask overlaps the pad beneath
-):
+) :
   val mask-shape = Circle(soldermask-opening-diameter * 0.5)
   name  = "SMD BGA Pad"
   shape = offset(mask-shape, -1. * overlap) as Circle
@@ -260,7 +260,7 @@ public pcb-pad soldermask-defined-bga-pad (
   layer(Paste(Top)) = mask-shape
 
 ; Create an arbitrary testpoint pad
-public pcb-pad testpoint-pad (testpoint-shape:Shape):
+public pcb-pad testpoint-pad (testpoint-shape:Shape) :
   name = "Test Point Pad"
   shape = testpoint-shape
   type = SMD
@@ -270,13 +270,13 @@ public pcb-pad testpoint-pad (testpoint-shape:Shape):
 public defn testpoint-pad (diameter:Double) :
   testpoint-pad(Circle(0.5 * diameter))
 
-public pcb-pad pth-pad (pad-shape:Shape, solder-mask-layer:Shape|False, paste-layer:Shape|False, hole-shape:Shape):
+public pcb-pad pth-pad (hole-shape:Shape, pad-shape:Shape, solder-mask-layer:Shape|False, paste-layer:Shape|False) :
   name = "PTH Pad"
   shape = pad-shape
   type = TH
   if paste-layer is Shape: ; Enables paste-in-pad
     layer(Paste(Top)) = paste-layer as Shape
-  match(solder-mask-layer):
+  match(solder-mask-layer) :
     (mask:False) : 
       apply-soldermask()
     (mask:Shape) :
@@ -284,27 +284,41 @@ public pcb-pad pth-pad (pad-shape:Shape, solder-mask-layer:Shape|False, paste-la
       layer(SolderMask(Bottom)) = mask
   layer(Cutout()) = hole-shape
 
-public defn pth-pad (pad-shape:Shape, hole-shape:Shape):
-  pth-pad(pad-shape, false, false, hole-shape)
+public defn pth-pad (hole-shape:Shape, pad-shape:Shape) :
+  pth-pad(hole-shape, pad-shape, false, false)
 
-public defn pth-pad (drill-r:Double, pad-r:Double):
-  pth-pad(Circle(pad-r), Circle(drill-r))
+public defn pth-pad (drill-r:Double, pad-r:Double) :
+  pth-pad(Circle(drill-r), Circle(pad-r))
 
 ; Create a through hole circular pad
 public defn pth-pad (anchor:Anchor, drill-radius:Double, pad-radius:Double) :
-  pth-pad(Circle(anchor, pad-radius),  Circle(anchor, drill-radius))
+  pth-pad(Circle(anchor, drill-radius), Circle(anchor, pad-radius))
 
 ; Create a through hole circular pad with drill radius and anchor
 public defn pth-pad (anchor:Anchor, drill-radius:Double) :
-  val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
-  pth-pad(anchor, drill-radius, drill-radius + 0.25)
+  val pad-exp = clearance(current-rules(), MinThPadExpandOuter) as Double
+  pth-pad(anchor, drill-radius, drill-radius + pad-exp)
 
-public defn pth-pad (drill-radius:Double):
+public defn pth-pad (drill-radius:Double) :
   pth-pad(C, drill-radius)
 
+; non-plated TH pad
+public pcb-pad npth-pad (hole-shape:Shape) :
+  name = "NPTH Pad"
+  shape = hole-shape
+  type = TH
+  layer(Cutout()) = hole-shape
+
+public defn npth-pad (drill-r:Double) :
+  npth-pad(Circle(drill-r))
+
+; Create a through hole circular pad
+public defn npth-pad (anchor:Anchor, drill-radius:Double) :
+  npth-pad(Circle(anchor, drill-radius))
+
 ; Create an ovalcut pad, the shape is a Circle with a Capsule shaped hole.
-public defn pth-ovalcut-pad (anchor:Anchor, drill-size:Dims, pad-radius:Double, mask-radius:Double):
-  pth-pad(Circle(anchor, pad-radius), capsule(anchor, x(drill-size), y(drill-size)))
+public defn pth-ovalcut-pad (anchor:Anchor, drill-size:Dims, pad-radius:Double, mask-radius:Double) :
+  pth-pad(capsule(anchor, x(drill-size), y(drill-size)), Circle(anchor, pad-radius))
   
 ; Create an ocvalcut pad, the shape is a Circle with a Capsule shaped hole.
 public defn pth-ovalcut-pad (anchor:Anchor, drill-width:Double, drill-height:Double, pad-radius:Double, mask-radius:Double) :
@@ -326,7 +340,7 @@ public defn oval-smd-pad (w:Double, h:Double) :
 public defn oval-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
   val shape = capsule(anchor, pad-w, pad-h)
   val hole  = capsule(anchor, drill-w, drill-h)
-  pth-pad(shape, hole)
+  pth-pad(hole, shape)
 
 ; Create a capsule shaped TH pad with a circular hole
 public defn oval-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
@@ -337,10 +351,10 @@ public defn oval-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Do
   oval-pth-pad(C, drill-w, drill-h, pad-w, pad-h)
 
 ; Create a rectangle pth pad with anchor, width, height, pad width, and pad height
-public defn rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double):
+public defn rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double) :
   val shape = rectangle(anchor, pad-w, pad-h)
   val hole  = capsule(anchor, drill-w, drill-h)
-  pth-pad(shape, hole)
+  pth-pad(hole, shape)
 
 ; Create a rectangle pth pad with drill 
 public defn rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double) :
@@ -352,7 +366,7 @@ public defn rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Do
 public defn round-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   val shape = round-rect(anchor, pad-w, pad-h, pad-r)
   val hole  = capsule(anchor, drill-w, drill-h)
-  pth-pad(shape, hole)
+  pth-pad(hole, shape)
 
 public defn round-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   round-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r)
@@ -366,7 +380,7 @@ public defn round-rect-smd-pad (w:Double, h:Double, r:Double) :
 public defn chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   val shape = chamfered(anchor, pad-w, pad-h, pad-r)
   val hole  = capsule(anchor, drill-w, drill-h)
-  pth-pad(shape, hole)
+  pth-pad(hole, shape)
 
 public defn chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double) :
   chamfered-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r)
@@ -377,13 +391,13 @@ public defn chamfered-rect-pth-pad (drill-w:Double, drill-h:Double, pad-w:Double
 public defn chamfered-rect-smd-pad (anchor:Anchor, w:Double, h:Double, r:Double) :
   smd-pad(chamfered(anchor, w, h, r))
 
-public defn chamfered-rect-smd-pad (w:Double, h:Double, r:Double):
+public defn chamfered-rect-smd-pad (w:Double, h:Double, r:Double) :
   chamfered-rect-smd-pad(C, w, h, r)
 
 public defn dshape-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double) : 
   val shape = DShape(anchor, pad-w, pad-h, pad-r)
   val hole  = capsule(anchor drill-w, drill-h)
-  pth-pad(shape, hole)
+  pth-pad(hole, shape)
 
 public defn dshape-pth-pad (drill-w:Double, drill-h:Double, w:Double, h:Double, r:Double) : 
   dshape-pth-pad(C, drill-w, drill-h, w, h, r)
@@ -397,7 +411,7 @@ public defn dshape-smd-pad (w:Double, h:Double, r:Double) :
 public defn general-round-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Tuple<Double>) :
   val shape = GeneralRoundedRectangle(anchor, pad-w, pad-h, pad-r)
   val hole  = capsule(anchor, drill-w, drill-h)
-  pth-pad(shape, hole)
+  pth-pad(hole, shape)
  
 public defn general-round-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Tuple<Double>) :
   general-round-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r)
@@ -411,7 +425,7 @@ public defn general-round-rect-smd-pad (w:Double, h:Double, r:Tuple<Double>) :
 public defn general-round-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double, cm:CornerModifier) :
   val shape = GeneralRoundedRectangle(anchor, pad-w, pad-h, pad-r, cm)
   val hole  = capsule(anchor, drill-w, drill-h)
-  pth-pad(shape, hole)
+  pth-pad(hole, shape)
 
 public defn general-round-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double, cm:CornerModifier) :
   general-round-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r, cm)
@@ -425,7 +439,7 @@ public defn general-round-rect-smd-pad (w:Double, h:Double, r:Double, cm:CornerM
 public defn general-chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Tuple<Double>) :
   val shape = GeneralChamferedRectangle(anchor, pad-w, pad-h, pad-r)
   val hole  = capsule(anchor, drill-w, drill-h)
-  pth-pad(shape, hole)
+  pth-pad(hole, shape)
 
 public defn general-chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Tuple<Double>) :
   general-chamfered-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r)
@@ -439,7 +453,7 @@ public defn general-chamfered-rect-smd-pad (w:Double, h:Double, r:Tuple<Double>)
 public defn general-chamfered-rect-pth-pad (anchor:Anchor, drill-w:Double, drill-h:Double, pad-w:Double, pad-h:Double, pad-r:Double, cm:CornerModifier) :
   val shape = GeneralChamferedRectangle(anchor, pad-w, pad-h, pad-r, cm)
   val hole  = capsule(anchor, drill-w, drill-h)
-  pth-pad(shape, hole)
+  pth-pad(hole, shape)
 
 public defn general-chamfered-rect-pth-pad (drill-r:Double, pad-w:Double, pad-h:Double, pad-r:Double, cm:CornerModifier) :
   general-chamfered-rect-pth-pad(C, 2.0 * drill-r, 2.0 * drill-r, pad-w, pad-h, pad-r, cm)
@@ -454,7 +468,7 @@ public defn general-chamfered-rect-smd-pad (w:Double, h:Double, r:Double, cm:Cor
 ;========================= Land Patterns ======================================
 ;==============================================================================
 ; Create a non-plated hole of arbitrary shape for hole and mask
-public pcb-landpattern non-plated-hole-landpattern (hole:Shape, mask:Shape):
+public pcb-landpattern non-plated-hole-landpattern (hole:Shape, mask:Shape) :
   layer(Cutout())           = hole
   layer(SolderMask(Top))    = mask
   layer(SolderMask(Bottom)) = mask
@@ -463,7 +477,7 @@ public pcb-landpattern non-plated-hole-landpattern (hole:Shape, mask:Shape):
   layer(Courtyard(Bottom)) = Rectangle(x(d), y(d))
 
 ; Create a non-plated hole landpattern with a hole shape
-public defn non-plated-hole-landpattern (hole:Shape):
+public defn non-plated-hole-landpattern (hole:Shape) :
   val solder-mask-registration = clearance(current-rules(), SolderMaskRegistration)
   non-plated-hole-landpattern(hole, offset(hole,  solder-mask-registration))
 
@@ -489,15 +503,15 @@ public pcb-struct ocdb/utils/landpatterns/PinPadMapping:
   pose:      Pose,    ; the pose of the pad
 
 ; A generic landpattern created from a sequence of PinPadMappings
-public defn make-generic-landpattern (pads:Seqable<PinPadMapping>):
+public defn make-generic-landpattern (pads:Seqable<PinPadMapping>) :
   inside pcb-landpattern:
     for p in pads do:
-      pad (pad-name(p)): (pad-shape(p) as Pad) at pose(p)
+      pad (pad-name(p)) : (pad-shape(p) as Pad) at pose(p)
 
 ; Create a generic landpattern with a uniform pad
 public defn make-generic-landpattern (pad-names:Seqable<Ref>,
                                       poses:Seqable<Pose>,
-                                      pad-shape:JITXDef):
+                                      pad-shape:JITXDef) :
   val pads = 
     for (pn in pad-names, pp in poses) seq:
       PinPadMapping(pn, pad-shape, pp) 
@@ -505,9 +519,9 @@ public defn make-generic-landpattern (pad-names:Seqable<Ref>,
 
 ; Naming for a 2-column arrangment of pins 
 public defn soic-naming-convention (row:Int, column:Int, num-pins:Int) -> Ref:
-  if (column < 0) or (column > 1): 
+  if (column < 0) or (column > 1) : 
     fatal("soic naming convention supports a maximum of 2 columns")
-  switch(column):
+  switch(column) :
     0: IndexRef(Ref("p"), row + 1)
     1: IndexRef(Ref("p"), num-pins - row)
   
@@ -535,8 +549,8 @@ public defn make-grid-landpattern (num-rows:Int,
                                    row-pitch:Double,
                                    col-pitch:Double,
                                    naming-convention: (Int, Int) -> Ref,
-                                   pad-convention: (Int, Int) -> JITXDef):
-  make-grid-landpattern(num-rows, num-cols, row-pitch, col-pitch, naming-convention, pad-convention, fn (r, c): true)
+                                   pad-convention: (Int, Int) -> JITXDef) :
+  make-grid-landpattern(num-rows, num-cols, row-pitch, col-pitch, naming-convention, pad-convention, fn (r, c) : true)
 
 ; Create a grid landpattern
 public defn make-grid-landpattern (num-rows:Int,
@@ -545,7 +559,7 @@ public defn make-grid-landpattern (num-rows:Int,
                                    col-pitch:Double,
                                    naming-convention: (Int, Int) -> Ref,
                                    pad-convention: (Int, Int) -> JITXDef,
-                                   ignore?: (Int, Int) -> True|False):
+                                   ignore?: (Int, Int) -> True|False) :
   val rcs = 
     for r in 0 to num-rows seq-cat:
       for c in 0 to num-cols seq:
@@ -553,7 +567,7 @@ public defn make-grid-landpattern (num-rows:Int,
   val mapping = to-tuple $ 
     for (coord in rcs, pose in grid-locs(num-rows, num-cols, row-pitch, col-pitch)) seq?:
       val [c, r] = coord
-      if not ignore?(r, c):
+      if not ignore?(r, c) :
         One(PinPadMapping(naming-convention(r, c), pad-convention(r, c), pose))
       else:
         None()
@@ -561,7 +575,7 @@ public defn make-grid-landpattern (num-rows:Int,
 
 ; 2D array of pins
 public defn make-pin-grid (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double, pad-ref, offset-x:Double, offset-y:Double) :
-  defn normalize (i:Int):
+  defn normalize (i:Int) :
     0.5 * to-double(i - 1)
   
   inside pcb-landpattern:
@@ -605,7 +619,7 @@ val PKG-RECTANGLE = ["009005", "0301m", "01005", "0402m", "0201", "0603m", "0202
 public defn check-valid-rectangle-pkg-list (pkg: String) -> True|False :
   contains?(PKG-RECTANGLE, pkg)
 
-public pcb-landpattern dummy-landpattern (n:Int, courtyard:[Double, Double]):
+public pcb-landpattern dummy-landpattern (n:Int, courtyard:[Double, Double]) :
   val r = (max(courtyard[0], courtyard[1]) - 0.2) / 2.0
   for i in 0 to n do :
     var theta = (2.0 * PI / to-double(n)) * to-double(i) + PI
@@ -638,20 +652,20 @@ public defn make-two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:
     if courtyard? : 
       layer(Courtyard(Top)) = Rectangle(w, h)
 
-public defn make-two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
+public defn make-two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double) :
   make-two-pin-landpattern(Z, G, X, w, h, true, false)
 
-public pcb-landpattern two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
+public pcb-landpattern two-pin-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double) :
   make-two-pin-landpattern(Z, G, X, w, h, true, false)
 
-public pcb-landpattern two-pin-polarized-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double):
+public pcb-landpattern two-pin-polarized-landpattern (Z:Double, G:Double, X:Double, w:Double, h:Double) :
   make-two-pin-landpattern(Z, G, X, w, h, true, true)
 
 public defn make-ipc-two-pin-landpattern (part-name:String,
                                           height:Toleranced,
                                           courtyard?:True|False,
                                           density:DensityLevel,
-                                          polarized?:True|False):
+                                          polarized?:True|False) :
   inside pcb-landpattern :
     val                 [length,                        width,                         lead-length,                   lead-width] = switch contains?{_, part-name} : 
       ;imperial, metric
@@ -700,7 +714,7 @@ public defn make-ipc-two-pin-landpattern (part-name:String) :
 public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, polarized?:True|False) :
   make-ipc-two-pin-landpattern(part-name, courtyard?, DENSITY-LEVEL, polarized?)
 
-public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, density:DensityLevel, polarized?:True|False):
+public defn make-ipc-two-pin-landpattern (part-name:String, courtyard?:True|False, density:DensityLevel, polarized?:True|False) :
   make-ipc-two-pin-landpattern(part-name, tol(0.4, 0.01), courtyard?, density, polarized?)
 
 ;<test>
@@ -838,7 +852,7 @@ public defn make-qfn-landpattern (pin-pitch:Double, lead-span:Double, n-pins:Int
     val pin-pad = smd-pad(S, pad-width, pad-length + 0.3)
 
     defn place-pads (pose:Pose, i:Int, ub:Int, lb:Int) :
-      match(corner-pads:[Pad, Pad]):
+      match(corner-pads:[Pad, Pad]) :
         if i == lb:
           pad p[i + 1] : corner-pads[0] at pose
         else if i == ub:
@@ -959,7 +973,7 @@ public defn make-bga-pkg (pitch:Double, pad-diam:Double, n-pads:[Int Int], court
       val y = ((to-double(n-pads[1]) - 1.0) / 2.0 - to-double(r)) * pitch
       val name = pad-names[r, c]
 
-      match(omit-pads:Tuple<Ref>):
+      match(omit-pads:Tuple<Ref>) :
         if not contains?(omit-pads, name) :
           pad (name) : pin-pad at loc(x, y)
       else :
@@ -1137,7 +1151,7 @@ public defstruct IpcResults:
   Gmin:Double,
   Xmin:Double,
 
-defmethod print (o:OutputStream, i:IpcResults):
+defmethod print (o:OutputStream, i:IpcResults) :
   print(o, "IpcResults(Zmax:%_, Gmin:%_, Xmin:%_" % [Zmax(i), Gmin(i), Xmin(i)])
 
 ; Helper to compute the pad size from the formula results
@@ -1146,10 +1160,10 @@ public defn pad-size (i:IpcResults) -> Dims:
 
 ; Helper function to apply a thermal pad shape, if it is provided. Assumes that the
 ; land pattern is centered at (0.0, 0.0).
-defn make-thermal-pad (shape?:False|Shape, num-pins:Int):
+defn make-thermal-pad (shape?:False|Shape, num-pins:Int) :
   if num-pins < 0:
     fatal("make-thermal-pad(...) failed: num-pins must positive. Called with %_" % [num-pins])
-  match(shape?:Shape):
+  match(shape?:Shape) :
     val thermal-dims = dims(shape?)
     inside pcb-landpattern:
       pad p[num-pins + 1]: smd-pad(shape?) at loc(0.0, 0.0)
@@ -1158,7 +1172,7 @@ defn make-thermal-pad (shape?:False|Shape, num-pins:Int):
 public defn ipc-formula (L:Toleranced, ; the distance from edge-of-lead to edge-of-lead on the exterior of the land pattern
                   T:Toleranced, ; the nominal size of the leads, in the same dimension as L
                   W:Toleranced, ; the nominal size of the leads, in the dimension orthogonal to L
-                  fillets:LeadFillets): ; looked up using lead-fillets(lead-type, density-level)
+                  fillets:LeadFillets) : ; looked up using lead-fillets(lead-type, density-level)
   ; compute root-mean-squared of a sequence of numbers
   val [Jt, Jh, Js, _] = to-tuple(fillets)
   val Lmax = max-value(L)
@@ -1203,7 +1217,7 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
                                    lead-type:  LandProtrusionType, ; the type of the leads
                                    density-level: DensityLevel,     ; the density level of the design
                                    corner-pads?:False|[Pad, Pad], ; corner pads
-                                   exposed-metal-heat-feature?: Shape|False):     ; an optional thermal pad
+                                   exposed-metal-heat-feature?: Shape|False) :     ; an optional thermal pad
   val lead-fillets = lead-fillets(lead-type, density-level)  
   inside pcb-landpattern: 
     ;----------------------------------------------------------
@@ -1221,8 +1235,8 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
     val pad-1-loc = to-tuple(grid-locs(num-pins-east, 2, 2.0 * x-shift, pitch-east))[0]
     var pin-count = 0 ; accumulator, holds the number of pins we have laid out
 
-    defn layout-pads (dir:Dir, num-pins:Int, pitch:Double):
-      val locs = switch(dir):
+    defn layout-pads (dir:Dir, num-pins:Int, pitch:Double) :
+      val locs = switch(dir) :
         Up: 
           shift-locs{0.0, y-shift, _ } $
           reverse(to-list(row-locs(num-pins, pitch)))
@@ -1313,7 +1327,7 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
                                    terminal-width: Toleranced, ; the dimension of the leads in the y direction on the east/west faces
                                    lead-type:  LandProtrusionType, ; the type of the leads
                                    density-level: DensityLevel   ; the density level of the design
-):
+) :
   make-quad-landpattern(num-pins-west, num-pins-south, num-pins-east, num-pins-north,
                         pitch-west,    pitch-south,    pitch-east,    pitch-north,
                         component-length, component-width, 
@@ -1339,7 +1353,7 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
                                    terminal-length: Toleranced, ; the dimension of the leads in the x direction on the east/west faces
                                    terminal-width: Toleranced, ; the dimension of the leads in the y direction on the east/west faces
                                    lead-type:  LandProtrusionType, ; the type of the leads
-):
+) :
   make-quad-landpattern(num-pins-west, num-pins-south, num-pins-east, num-pins-north,
                         pitch-west,    pitch-south,    pitch-east,    pitch-north,
                         component-length, component-width, 
@@ -1366,7 +1380,7 @@ public defn make-quad-landpattern (num-pins-west: Int,  ; the number of pins on 
                                    terminal-width: Toleranced, ; the dimension of the leads in the y direction on the east/west faces
                                    lead-type:  LandProtrusionType, ; the type of the leads
                                    exposed-metal-heat-feature?: Shape|False, ; the thermal pad
-):
+) :
   make-quad-landpattern(num-pins-west, num-pins-south, num-pins-east, num-pins-north,
                         pitch-west,    pitch-south,    pitch-east,    pitch-north,
                         component-length, component-width, 
@@ -1385,7 +1399,7 @@ public defn make-quad-landpattern (num-pins:Int,
                                    terminal-width:Toleranced, 
                                    lead-type:LandProtrusionType,
                                    corner-pads?:False|[Pad, Pad],
-                                   exposed-metal-heat-feature?:Shape|False):
+                                   exposed-metal-heat-feature?:Shape|False) :
   ensure-divisible!(num-pins, 4, "make-quad-landpattern(num-pins, ...)")
   make-quad-landpattern(num-pins / 4, num-pins / 4, num-pins / 4, num-pins / 4, 
                         pitch, pitch, pitch, pitch, 
@@ -1401,7 +1415,7 @@ public defn make-quad-landpattern (num-pins:Int,
                                    package-size:Toleranced, 
                                    terminal-length:Toleranced, 
                                    terminal-width:Toleranced, 
-                                   lead-type:LandProtrusionType):
+                                   lead-type:LandProtrusionType) :
   make-quad-landpattern(num-pins,
                         pitch,
                         lead-span,
@@ -1419,7 +1433,7 @@ public defn make-qfn-landpattern (num-pins:Int,
                                   terminal-length:Toleranced, 
                                   terminal-width:Toleranced,
                                   corner-pads?:False|[Pad, Pad],
-                                  exposed-metal-heat-feature?:Shape|False):
+                                  exposed-metal-heat-feature?:Shape|False) :
   make-quad-landpattern(num-pins,
                         pitch,
                         package-size,
@@ -1434,7 +1448,7 @@ public defn make-qfn-landpattern (num-pins:Int,
                                   pitch:Double, 
                                   package-size:Toleranced, 
                                   terminal-length:Toleranced, 
-                                  terminal-width:Toleranced):
+                                  terminal-width:Toleranced) :
   make-qfn-landpattern(num-pins, pitch, package-size, terminal-length, terminal-width, false, false)
 
 ; Create a qfn landpattern with optional thermal pad and differing number of pins per side
@@ -1444,7 +1458,7 @@ public defn make-qfn-landpattern (num-pins:[Int, Int, Int, Int],
                                   terminal-length:Toleranced,
                                   terminal-width:Toleranced,
                                   corner-pads?:False|[Pad, Pad],
-                                  exposed-metal-heat-feature?:Shape|False):
+                                  exposed-metal-heat-feature?:Shape|False) :
   make-quad-landpattern(num-pins[0], num-pins[1], num-pins[2], num-pins[3], 
                         pitch, pitch, pitch, pitch,
                         package-size, package-size,
@@ -1459,7 +1473,7 @@ public defn make-qfn-landpattern (num-pins:[Int, Int, Int, Int],
                                   pitch:Double, 
                                   package-size:Toleranced, 
                                   terminal-length:Toleranced, 
-                                  terminal-width:Toleranced):
+                                  terminal-width:Toleranced) :
   make-qfn-landpattern(num-pins, pitch, 
                        package-size, 
                        terminal-length, terminal-width, 
@@ -1472,7 +1486,7 @@ public defn make-qfp-landpattern (num-pins:Int,
                                   package-length:Toleranced, 
                                   lead-length:Toleranced, 
                                   lead-width:Toleranced
-                                  exposed-metal-heat-feature?:Shape|False):
+                                  exposed-metal-heat-feature?:Shape|False) :
   val lead-type = BigGullWingLeads when pitch >= 0.0625 else SmallGullWingLeads
   make-quad-landpattern(num-pins,
                         pitch,
@@ -1489,7 +1503,7 @@ public defn make-qfp-landpattern (num-pins:Int,
                                   component-size:Toleranced, 
                                   package-size:Toleranced, 
                                   lead-length:Toleranced, 
-                                  lead-width:Toleranced):
+                                  lead-width:Toleranced) :
   make-qfp-landpattern(num-pins, pitch, 
                        component-size, 
                        package-size, 
@@ -1516,7 +1530,7 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number 
                                          terminal-width:Toleranced,    ; the width of the terminals
                                          density-level:DensityLevel,   ; the density level of the design
                                          exposed-metal-heat-feature?:False|Shape,    ; an optional shape of a thermal pad
-                                         pin-numbering:PinNumbering):
+                                         pin-numbering:PinNumbering) :
   fatal("n must be even") when (num-pins % 2) != 0
   val lead-fillets = lead-fillets(lead-type, density-level)
 
@@ -1586,7 +1600,7 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number 
                                          terminal-length:Toleranced,   ; the length of the terminals
                                          terminal-width:Toleranced,    ; the width of the terminals
                                          density-level:DensityLevel,   ; the density level of the design
-                                         exposed-metal-heat-feature?:False|Shape):    ; an optional shape of a thermal pad
+                                         exposed-metal-heat-feature?:False|Shape) :    ; an optional shape of a thermal pad
   make-n-pin-soic-landpattern(num-pins,
                               pitch
                               lead-span,
@@ -1609,7 +1623,7 @@ public defn make-n-pin-soic-landpattern (num-pins:Int,                 ; number 
                                          terminal-width:Toleranced,    ; the width of the terminals
                                         ;  density-level:DensityLevel,   ; the density level of the design
                                         ;  exposed-metal-heat-feature?:False|Shape,    ; an optional shape of a thermal pad
-                                         pin-numbering:PinNumbering):
+                                         pin-numbering:PinNumbering) :
   val lead-type = BigGullWingLeads when pitch > 0.0625 else SmallGullWingLeads
   make-n-pin-soic-landpattern(num-pins,
                               pitch
@@ -1666,7 +1680,7 @@ public defn make-dfn-land-pattern (num-pins:Int,                 ; number of pin
                                   package-width:Toleranced,     ; the width of the package
                                   terminal-length:Toleranced,   ; the length of the terminals
                                   terminal-width:Toleranced,    ; the width of the terminals
-                                  exposed-metal-heat-feature?:False|Shape):    ; an optional shape of a thermal pad
+                                  exposed-metal-heat-feature?:False|Shape) :    ; an optional shape of a thermal pad
   make-n-pin-soic-landpattern(num-pins, 
                               pitch,
                               package-length, 
@@ -1770,7 +1784,7 @@ public defn make-dual-row-smd-landpattern (
   terminal-length: Toleranced, ; the length of the terminals of the package
   terminal-width:  Toleranced, ; the width of the terminals of the package 
   with-pol-marker?: True|False ; optional parameter to include or remove the polarity marker
-): 
+) : 
   make-dual-row-smd-landpattern(primary-num-pins, secondary-num-pins, 
                              primary-pin-pitch, secondary-pin-pitch, 
                              lead-span, package-length, package-width, 
@@ -1808,7 +1822,7 @@ public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vert
                                            density-level:DensityLevel,   ; the density level of the design (DensityLevelA|DensityLevelB|DensityLevelC)
                                            anode-and-cathode?:True|False, ; whether the pads should be named `a` and `c` (if false, p[1] and p[2])
                                            polarized?:True|False         ; whether a polarity marker is required or not
-                                           ):
+                                           ) :
   make-two-pin-chip-landpattern(
     length, width, tol(0.4, 0.01), lead-length, lead-width?, 
     density-level, anode-and-cathode?, polarized?
@@ -1822,7 +1836,7 @@ public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vert
                                            lead-width?:False|Toleranced, ; the width (horizontal) dimension of the conductors/leads of the package, if different from `length`
                                            density-level:DensityLevel,   ; the density level of the design (DensityLevelA|DensityLevelB|DensityLevelC)
                                            polarized?:True|False         ; whether a polarity marker is required or not
-                                           ):
+                                           ) :
   make-two-pin-chip-landpattern(
     length, width, height, lead-length, lead-width?, 
     density-level, polarized?, polarized?
@@ -1836,7 +1850,7 @@ public defn make-two-pin-chip-landpattern (length:Toleranced, ; the length (vert
                                            density-level:DensityLevel,   ; the density level of the design (DensityLevelA|DensityLevelB|DensityLevelC)
                                            anode-and-cathode?:True|False, ; whether the pads should be named `a` and `c` (if false, p[1] and p[2])
                                            polarized?:True|False         ; whether a polarity marker is required or not
-                                           ):
+                                           ) :
   inside pcb-landpattern:
     ; compute the solder fillets based on the protrusion type
     ; if > 16xx (1.6mm), use big rectangular leads
@@ -1936,7 +1950,7 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
                                            lead-length:Toleranced,
                                            lead-width?:False|Toleranced,
                                            density-level:DensityLevel,
-                                           polarized?:True|False):
+                                           polarized?:True|False) :
   make-two-pin-chip-landpattern(
     length, width, lead-length, lead-width?, 
     density-level, polarized?, polarized?
@@ -1946,7 +1960,7 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
                                            width:Toleranced,
                                            lead-length:Toleranced,
                                            density-level:DensityLevel,
-                                           polarized?:True|False):
+                                           polarized?:True|False) :
   make-two-pin-chip-landpattern(
     length, width, lead-length, false, 
     density-level, polarized?
@@ -1956,7 +1970,7 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
 public defn make-two-pin-chip-landpattern (length:Toleranced,
                                            width:Toleranced,
                                            lead-length:Toleranced,
-                                           polarized?:True|False):
+                                           polarized?:True|False) :
   make-two-pin-chip-landpattern(
     length, width, lead-length, false, 
     DENSITY-LEVEL, polarized?
@@ -1965,7 +1979,7 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
 ; Create a two pin chip land pattern with default density level and default polarity
 public defn make-two-pin-chip-landpattern (length:Toleranced,
                                            width:Toleranced,
-                                           lead-length:Toleranced):
+                                           lead-length:Toleranced) :
   make-two-pin-chip-landpattern(length, width, lead-length, false)
 
 ; Create a two pin chip land pattern with default density level, optional polarity and custom 
@@ -1974,7 +1988,7 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
                                            width:Toleranced,
                                            lead-length:Toleranced,
                                            lead-width:Toleranced
-                                           polarized?:True|False):
+                                           polarized?:True|False) :
   make-two-pin-chip-landpattern(
     length, width, lead-length, lead-width, 
     DENSITY-LEVEL, polarized?
@@ -1985,7 +1999,7 @@ public defn make-two-pin-chip-landpattern (length:Toleranced,
 public defn make-two-pin-chip-landpattern (length:Toleranced,
                                            width:Toleranced,
                                            lead-length:Toleranced
-                                           lead-width:Toleranced):
+                                           lead-width:Toleranced) :
   make-two-pin-chip-landpattern(length, width, lead-length, lead-width, false)
 
 ; Create a two pin chip landpattern factoring in factory tolerances and controlling 
@@ -1995,7 +2009,7 @@ public pcb-landpattern two-pin-chip-landpattern (length:Toleranced,
                                                  lead-length:Toleranced,
                                                  lead-width?:False|Toleranced,
                                                  density-level:DensityLevel,
-                                                 polarized?:True|False):
+                                                 polarized?:True|False) :
   make-two-pin-chip-landpattern(
     length, width, lead-length, lead-width?,
     density-level, polarized?, polarized?
@@ -2007,7 +2021,7 @@ public defn two-pin-chip-landpattern (length:Toleranced,
                                       width:Toleranced,
                                       lead-length:Toleranced,
                                       density-level:DensityLevel,
-                                      polarized?:True|False):
+                                      polarized?:True|False) :
   two-pin-chip-landpattern(
     length, width, lead-length, false, 
     density-level, polarized?
@@ -2017,7 +2031,7 @@ public defn two-pin-chip-landpattern (length:Toleranced,
 public defn two-pin-chip-landpattern (length:Toleranced,
                                       width:Toleranced,
                                       lead-length:Toleranced,
-                                      polarized?:True|False):
+                                      polarized?:True|False) :
   two-pin-chip-landpattern(
     length, width, lead-length, false, 
     DENSITY-LEVEL, polarized?
@@ -2025,13 +2039,13 @@ public defn two-pin-chip-landpattern (length:Toleranced,
 
 ; Helper function to lookup the hole-to-lead diameter based on the density level of the design.
 defn hole-to-lead-diameter (d:DensityLevel) -> [Double, Double]:
-  switch(d):
+  switch(d) :
     DensityLevelA: [0.70, 0.25],
     DensityLevelB: [0.70, 0.20],
     DensityLevelC: [0.60, 0.15],
 
 ; Helper function to compute the pad and hole size of through hoel components
-defn pth-pad-sizes (lead-diameter:Toleranced, density-level:DensityLevel):
+defn pth-pad-sizes (lead-diameter:Toleranced, density-level:DensityLevel) :
   val min-outer-layer-pad-size = MIN-OUTER-LAYER-PAD-SIZE
   val max-hole-size-tolerance  = MAX-HOLE-SIZE-TOLERANCE
   val min-hole-size-tolerance  = MIN-HOLE-SIZE-TOLERANCE
@@ -2055,7 +2069,7 @@ defn pth-pad-sizes (lead-diameter:Toleranced, density-level:DensityLevel):
   [pad-diameter, hole-diameter]
 
 ; Helper function for two-pin through-hole components, to place the polarity marker
-defn two-pin-th-polarity-marker (cmp-sz:Dims, pad-diameter:Double, lead-spacing:Double):
+defn two-pin-th-polarity-marker (cmp-sz:Dims, pad-diameter:Double, lead-spacing:Double) :
   inside pcb-landpattern:
     val min-silk-width = clearance(current-rules(), MinSilkscreenWidth)
     val min-silk-solder-mask-space = clearance(current-rules(), MinSilkSolderMaskSpace)
@@ -2077,7 +2091,7 @@ defn two-pin-th-polarity-marker (cmp-sz:Dims, pad-diameter:Double, lead-spacing:
     layer(Silkscreen("pol", Top)) = loc(pol-x-2, pol-y, -90.0) * line
 
 ; Helper function for two-pin through hole components, controlling where they get placed
-defn place-pth-pads (polarized?:True|False, lead-spacing:Double, pad-def:Pad):
+defn place-pth-pads (polarized?:True|False, lead-spacing:Double, pad-def:Pad) :
   inside pcb-landpattern:
     val y1 = 0.5 * lead-spacing
     val y2 = (- y1)
@@ -2134,7 +2148,7 @@ public defn make-two-pin-axial-landpattern (component-length:Toleranced,   ; The
     ;------------------------------------------------------------
     ; Compute the pad definition
     val [pad-diameter, hole-diameter] = pth-pad-sizes(lead-diameter, density-level)
-    val pad-def = pth-pad(Circle(0.5 * pad-diameter), Circle(0.5 * hole-diameter))
+    val pad-def = pth-pad(Circle(0.5 * hole-diameter), Circle(0.5 * pad-diameter))
     val lead-spacing = typ-value(component-length) + 2.0 * (weld + bend-length + bend-radius)
 
     ;------------------------------------------------------------
@@ -2171,7 +2185,7 @@ public defn make-two-pin-radial-landpattern (component-length:Toleranced,
                                              component-width:Toleranced, 
                                              lead-spacing:Double,
                                              lead-diameter:Toleranced,
-                                             polarized?:True|False):
+                                             polarized?:True|False) :
   make-two-pin-radial-landpattern(component-length, component-width,
                                   lead-spacing, lead-diameter,
                                   polarized?,
@@ -2254,13 +2268,13 @@ pcb-pad bga-pad (typical-ball-diameter:Double,      ; the typical/nominal size o
                  pad-type:BGAPadType,               ; the bga pad type, (collapsible, solder mask defined, or non-soldermask defined)
                  solder-mask-registration:Double,   ; the solder-mask registration of the design
                  density-level:DensityLevel,        ; the density level of the design
-                 ):
+                 ) :
   name = "BGA Pad"
   type = SMD
   val solder-mask-defined? = pad-type is SolderMaskDefined
   val collapsible? = pad-type is Collapsible
 
-  val adjustment = switch(density-level):
+  val adjustment = switch(density-level) :
     DensityLevelA: 0.75 when collapsible? else 1.15
     DensityLevelB: 0.80 when collapsible? else 1.10
     DensityLevelC: 0.85 when collapsible? else 1.05
@@ -2276,7 +2290,7 @@ pcb-pad bga-pad (typical-ball-diameter:Double,      ; the typical/nominal size o
     layer(SolderMask(Top)) = Circle(0.5 * definition-diameter)
 
 defn bga-pad (typical-ball-diameter:Double, ; the typical/nominal size of the bga balls
-              pad-type:BGAPadType):
+              pad-type:BGAPadType) :
   bga-pad(typical-ball-diameter, 
           pad-type,
           clearance(current-rules(), SolderMaskRegistration),
@@ -2286,7 +2300,7 @@ defn bga-pad (typical-ball-diameter:Double, ; the typical/nominal size of the bg
 ; control the way pads are depopulated and spaced on the land pattern. You can declare
 ; a custom BGA modifier using the new type syntax:
 ; 
-; defn MyBgaModifier ():
+; defn MyBgaModifier () :
 ;   new BGAModifier:
 ;     defmethod locs (this, num-rows:Int, num-cols:Int) -> Seqable<Pose>:
 ;       ...
@@ -2298,7 +2312,7 @@ public defmulti depopulated? (m:BGAModifier, r:Int, c:Int) -> True|False
 public defmulti locs (m:BGAModifier, nr:Int, nc:Int, pitch:Double) -> Seqable<Pose>
 defmethod depopulated? (m:BGAModifier, r:Int, c:Int) -> True|False:
   false
-defmethod locs (m:BGAModifier, nr:Int, nc:Int, pitch:Double):
+defmethod locs (m:BGAModifier, nr:Int, nc:Int, pitch:Double) :
   grid-locs(nr, nc, pitch, pitch)
 
 ; A "FullMatrix" BGA is one where no pads are depopulated and the pad
@@ -2330,25 +2344,25 @@ public defstruct ThermallyEnhancedMatrix <: BGAModifier:
   interior-rows:Range, ; the range of rows in the center to remain populated
   interior-cols:Range, ; the range of columns in the center to remain populated
 
-public defn CustomDepop (f:(Int, Int) -> True|False): 
+public defn CustomDepop (f:(Int, Int) -> True|False) : 
   new BGAModifier:
-    defmethod depopulated? (this, r:Int, c:Int):
+    defmethod depopulated? (this, r:Int, c:Int) :
       f(r, c)
 
-defmethod depopulated? (m:StaggeredMatrix, r:Int, c:Int): 
+defmethod depopulated? (m:StaggeredMatrix, r:Int, c:Int) : 
   ((r + 1) % 2) == (c % 2)
 
-defmethod depopulated? (m:EquilateralTriangleMatrix, r:Int, c:Int): 
+defmethod depopulated? (m:EquilateralTriangleMatrix, r:Int, c:Int) : 
   ((r + 1) % 2) == (c % 2)
 
-defmethod depopulated? (m:PerimeterMatrix, r:Int, c:Int):
+defmethod depopulated? (m:PerimeterMatrix, r:Int, c:Int) :
   contains?(rows(m), r) and contains?(cols(m), c)
 
-defmethod depopulated? (m:ThermallyEnhancedMatrix, r:Int, c:Int):
+defmethod depopulated? (m:ThermallyEnhancedMatrix, r:Int, c:Int) :
   (contains?(perimeter-rows(m), r) and contains?(perimeter-cols(m), c)) and not
   (contains?(interior-rows(m), r) and contains?(interior-cols(m), c))
 
-defmethod locs (m:EquilateralTriangleMatrix, nr:Int, nc:Int, pitch:Double):
+defmethod locs (m:EquilateralTriangleMatrix, nr:Int, nc:Int, pitch:Double) :
   val vertical   = sqrt(3.0) * 0.5 * pitch
   val horizontal = pitch * 0.5
   grid-locs(nr, nc, horizontal, vertical)
@@ -2363,7 +2377,7 @@ public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
                                   modifier:BGAModifier,      ; the modifier that controls which pads are depopulated
                                   row-characters-omitted?:String|False, ; which characters are omitted from the row names
                                   mirrored?:True|False, ; controls whether the pads are mirrored or not
-                                  density-level:DensityLevel): ; the density level of the design
+                                  density-level:DensityLevel) : ; the density level of the design
   fatal("make-bga-landpattern-failed(...), num-rows must be positive. Called with: %_." % [num-rows]) when num-rows <= 0
   fatal("make-bga-landpattern-failed(...), num-cols must be positive. Called with: %_." % [num-cols]) when num-cols <= 0
   fatal("make-bga-landpattern-failed(...), pitch must be positive. Called with: %_." % [pitch]) when pitch <= 0.0
@@ -2390,8 +2404,8 @@ public defn make-bga-landpattern (num-rows:Int, ; the number of rows of package
     
     ; Layout the pad given indices and locations
     for ([row, col] in pin-indices, loc in pad-locs) do:
-      if not depopulated?(modifier, row, col):
-        pad (pad-names[row, col]): pad-def at loc
+      if not depopulated?(modifier, row, col) :
+        pad (pad-names[row, col]) : pad-def at loc
 
     ;-------------------------------------------------------------
     ; Compute the courtyard
@@ -2424,7 +2438,7 @@ public defn make-bga-landpattern (num-rows:Int,
                                   package-width:Toleranced,
                                   modifier:BGAModifier,
                                   row-characters-omitted?:False|String,
-                                  mirrored?:True|False):
+                                  mirrored?:True|False) :
   make-bga-landpattern(num-rows, num-cols,
                        pitch, ball-diameter, Collapsible,
                        package-length, package-width,
@@ -2442,7 +2456,7 @@ public defn make-bga-landpattern (num-rows:Int,
                                   ball-diameter:Double,
                                   package-length:Toleranced,
                                   package-width:Toleranced,
-                                  modifier:BGAModifier):
+                                  modifier:BGAModifier) :
   make-bga-landpattern(num-rows, num-cols,
                        pitch, ball-diameter, Collapsible,
                        package-length, package-width,
@@ -2461,7 +2475,7 @@ public defn make-bga-landpattern (num-rows:Int,
                                   pad-type:BGAPadType,
                                   package-length:Toleranced,
                                   package-width:Toleranced,
-                                  modifier:BGAModifier):
+                                  modifier:BGAModifier) :
   make-bga-landpattern(num-rows, num-cols,
                        pitch, ball-diameter, pad-type,
                        package-length, package-width,
@@ -2478,7 +2492,7 @@ public defn make-bga-landpattern (num-rows:Int,
                                   pitch:Double,
                                   ball-diameter:Double,
                                   package-length:Toleranced,
-                                  package-width:Toleranced):
+                                  package-width:Toleranced) :
   make-bga-landpattern(num-rows, num-cols,
                        pitch, ball-diameter, Collapsible,
                        package-length, package-width,
@@ -2496,11 +2510,11 @@ public deftype BGAPadNames
 public defmulti get (b:BGAPadNames, r:Int, c:Int) -> Ref
 
 ; Precompute all of the pad names in a grid
-public defn BGAPadNames (num-rows:Int, num-cols:Int, row-chars-omitted?:False|String):
+public defn BGAPadNames (num-rows:Int, num-cols:Int, row-chars-omitted?:False|String) :
   ; pick the omitted characters if not supplied fallback to a default
-  val row-chars-omitted = match(row-chars-omitted?):
-    (s:String): s
-    (_:False): "IOQSXZ"
+  val row-chars-omitted = match(row-chars-omitted?) :
+    (s:String) : s
+    (_:False) : "IOQSXZ"
 
   ; Character table
   val table = to-tuple $
@@ -2516,7 +2530,7 @@ public defn BGAPadNames (num-rows:Int, num-cols:Int, row-chars-omitted?:False|St
 
   ; finally wrap the table in a helper to perform the lookup.
   new BGAPadNames:
-    defmethod get (this, r:Int, c:Int):
+    defmethod get (this, r:Int, c:Int) :
       pad-names[r * num-cols + c]
 
 ; Returns the name of a row given its index and a list of omitted
@@ -2533,7 +2547,7 @@ public defn BGAPadNames (num-rows:Int, num-cols:Int, row-chars-omitted?:False|St
 ; The modification is we abstract over the omitted characters to support non-
 ; standard naming conventions. 
 ;
-defn lookup-bga-row-name (idx:Int, table:Tuple<Char>):
+defn lookup-bga-row-name (idx:Int, table:Tuple<Char>) :
   val buffer = StringBuffer()
   let loop (i:Int = idx) :
     val rem = i / length(table)
