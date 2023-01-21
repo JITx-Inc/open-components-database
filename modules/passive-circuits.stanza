@@ -85,7 +85,7 @@ public defn make-voltage-divider (in: JITXObject, out: JITXObject, lo: JITXObjec
   ; Target current through divider is 10x input current (if known), otherwise set current to be 1 mA
   val current =
     if has-property?(out.i-input) : 10.0 * property(out.i-input) as Toleranced
-    else : typ(1.0e-3)
+    else : tol%(1.0e-3, 10.0) ; need some tolerance on the current like 10%
   make-voltage-divider(in, out, lo, v-target, current)
 
 public defn make-voltage-divider (in: JITXObject, 
@@ -104,16 +104,15 @@ public defn make-voltage-divider (in: JITXObject,
   println("Solving voltage divider [in=%_, out=%_, low=%_, v-target=%_V, current=%_A input-ref?=%_]" % 
                                             [ref(in), ref(out), ref(lo), v-target, current, input-ref?])
 
-
   val pin-known = 
     if input-ref? : out
     else : in
 
   val v-given = 
-    if has-property?(pin-known.net-voltage) :
-      property(pin-known.net-voltage)
+    if has-property?(pin-known.voltage) :
+      property(pin-known.voltage)
     else :
-      fatal("No property named net-voltage on the given pin (%_)" % [ref(pin-known)])
+      fatal("Need the voltage property on the given pin (%_) in order to build divider." % [ref(pin-known)])
 
   val solution = voltage-divider-solver(v-given, v-target, current, input-ref?)
 
@@ -157,10 +156,10 @@ public defn make-voltage-divider (in: JITXObject, out: JITXObject, lo: JITXObjec
     if input-ref? : out
     else : in
   val v-given = 
-    if has-property?(given-pin.net-voltage) :
-      property(given-pin.net-voltage)
+    if has-property?(given-pin.voltage) :
+      property(given-pin.voltage)
     else:
-      fatal("No net-voltage property on given pin (%_)" % [ref(given-pin)])
+      fatal("Need the voltage property on the given pin (%_) in order to build divider." % [ref(given-pin)])
 
   val solution = voltage-divider-solver(v-given, v-target, current, tolerance, input-ref?)
   match(solution: VoltageDividerSolution) :
@@ -190,11 +189,11 @@ defn make-voltage-divider-module (in: JITXObject, out: JITXObject, lo: JITXObjec
     val given-pin = 
       if input-ref? : in
       else : out
-    if not has-property?(given-pin.net-voltage) :
-      property(given-pin.net-voltage) = v-solved
+    if not has-property?(given-pin.voltage) :
+      property(given-pin.voltage) = v-solved
     else :
-      println("Warning net-voltage property conflict on net(%_): prior(%_), update(%_) not applied!" % 
-                                    [ref(given-pin), property(given-pin.net-voltage), v-solved])
+      println("Warning voltage property conflict on net(%_): prior(%_), update(%_) not applied!" % 
+                                    [ref(given-pin), property(given-pin.voltage), v-solved])
 
     ; Instantiate resistors, create netlist
     inst r-hi: r-hi-cmp
@@ -202,12 +201,14 @@ defn make-voltage-divider-module (in: JITXObject, out: JITXObject, lo: JITXObjec
     net (r-hi.p[1] in)
     net (r-lo.p[1] r-hi.p[2] out)
     net (r-lo.p[2] lo)
+    println("voltage property on net(%_): prior(%_), update(%_)" % 
+                                    [ref(given-pin), property(given-pin.voltage), v-solved])
 
     val v-other = 
       if input-ref? :
-        v-solved * property(r-lo.resistance) / (property(r-hi.resistance) + property(r-lo.resistance))
+        (property(r-lo.resistance) / (property(r-hi.resistance) + property(r-lo.resistance))) * v-solved
       else :
-        v-solved * (property(r-lo.resistance) + property(r-hi.resistance)) / property(r-lo.resistance)
+        ((property(r-lo.resistance) + property(r-hi.resistance)) / property(r-lo.resistance)) * v-solved
 
 
     val v1 = 

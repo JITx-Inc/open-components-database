@@ -45,12 +45,14 @@ public defn voltage-divider-solver (v-known: Toleranced,
     else : v-target
   val goal-r-hi = abs(typ-value(v-in) - typ-value(v-out)) / typ-value(current)
   val goal-r-lo = typ-value(v-out) /  typ-value(current)
+  println("    inside voltage-divider-solver(4): v-in=%_ v-out=%_ goal-r-hi=%_ goal-r-lo=%_ current-tol=%_" % [v-in v-out goal-r-hi goal-r-lo current])
   label<VoltageDividerSolution|False> return :
     ; Look for highest acceptable tolerance in EIA standard values: [20% 10% 5% 2% 1% 0.5% 0.25% 0.1%]
     for std-tol in std-tols do :
       val tolerance = std-tol / 100. ; std-tols are in % instead of being unitless
       val lo-tol = tol(1.0, tolerance) ; calc 1.0 - std-tol/100 -> 0.99 for std-tol of 1% but creates Toleranced(1.0, 0.99, 1.01)
       val hi-tol = tol(1.0, tolerance) ; calc 1.0 + std-tol/100 -> 1.01 for std-tol of 1% but creates Toleranced(1.0, 0.99, 1.01)
+      println("v-in=%_, v-out=%_, goal-r-lo=%_, goal-r-hi=%_, lo-tol=%_, hi-tol=%_" % [v-in, v-out, goal-r-lo, goal-r-hi, lo-tol, hi-tol])
       if check-voltage-range(v-in, v-out, goal-r-lo, goal-r-hi, lo-tol, hi-tol, tol(1.0), tol(1.0), input-ref?) :
         val solution = voltage-divider-solver(v-in, v-out, current, tolerance, input-ref?)
         if solution is VoltageDividerSolution :
@@ -81,6 +83,8 @@ public defn voltage-divider-solver (v-given: Toleranced,
   val current-tol = (tol+%(current) + tol-%(current) / 2.0) / 100.0
   val hi-res = get-resistance-values(goal-r-hi, tolerance, current-tol)
   val lo-res = get-resistance-values(goal-r-lo, tolerance, current-tol)
+
+  println("    inside voltage-divider-solver(5): v-in=%_ v-out=%_ goal-r-hi=%_ goal-r-lo=%_ current-tol=%_ hi-res=%_ lo-res=%_" % [v-in v-out goal-r-hi goal-r-lo current-tol hi-res lo-res])
 
   label<VoltageDividerSolution|False> return :
     for ratio in determine-and-sort-fitting-resistance-pairs(v-in, v-out, tolerance, hi-res, lo-res, input-ref?) do :
@@ -131,7 +135,7 @@ defn determine-and-sort-fitting-resistance-pairs (v-given: Toleranced,
   qsort{loss, _} $
     for rh in hi-res seq-cat :
       for rl in lo-res seq? :
-        val vx = compute-voltage-range( v-given, rl, rh, lo-tol, hi-tol, tol(1.0), tol(1.0) input-ref?)
+        val vx = compute-voltage-range(v-given, rl, rh, lo-tol, hi-tol, tol(1.0), tol(1.0) input-ref?)
         if in-range?(v-target, vx) :
           val loss = abs(typ-value(v-target) - typ-value(vx))
           One(Ratio(rh, rl, loss))
