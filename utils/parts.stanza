@@ -1,0 +1,866 @@
+#use-added-syntax(jitx)
+defpackage ocdb/utils/parts :
+  import core
+  import collections
+  import json
+  import lang-utils
+
+  import jitx
+  import jitx/commands
+  import jitx/value
+
+  import ocdb/utils/box-symbol
+  import ocdb/utils/bundles
+  import ocdb/utils/property-structs
+
+;======================================
+;============ Public API ==============
+;======================================
+
+public defstruct PartCode :
+  component: ComponentCode
+with :
+  printer => true
+
+public defn PartCode (json: JObject) -> PartCode :
+  val json-component = json["component"] as JObject
+  PartCode(ComponentCode(json-component))
+
+public defn to-jitx (part: PartCode) -> Instantiable :
+  to-jitx(component(part))
+
+public defstruct ComponentCode :
+  name: String
+  description: String
+  manufacturer: String
+  mpn: String
+  emodel: EModel|False
+  pin-properties: False|PinPropertiesCode
+  pcb-pads: Tuple<PCBPadCode>
+  landpattern: LandPatternCode
+  symbols: Tuple<SymbolCode>
+  datasheet: String
+  image: String
+  metadata: Tuple<MetadataCode>
+  bundles:Tuple<BundleCode>
+  supports:Tuple<SupportCode>
+with :
+  printer => true
+
+;======================================
+;============= Internals ==============
+;======================================
+
+;--------------------------------------
+;------------- Component --------------
+;--------------------------------------
+
+public-when(TESTING) defstruct BundleCode :
+  name: String
+with :
+  printer => true
+
+public-when(TESTING) defstruct SupportCode :
+  bundle-name: String
+  options: Tuple<SupportOptionCode>
+with :
+  printer => true
+
+public-when(TESTING) defstruct SupportOptionCode :
+  requires: Tuple<SupportRequireCode>
+  pin-mappings: Tuple<PinMappingCode>
+with :
+  printer => true
+
+public-when(TESTING) defstruct SupportRequireCode :
+  bundle-name: String
+with :
+  printer => true
+
+public-when(TESTING) defstruct PinMappingCode :
+  key: PinByTypeCode
+  value: PinByTypeCode
+with :
+  printer => true
+
+deftype PinByTypeCode
+
+public-when(TESTING) defstruct PinByNameCode <:PinByTypeCode :
+  pin-name: String
+with :
+  printer => true
+
+public-when(TESTING) defstruct PinByBundleCode <:PinByTypeCode :
+  bundle-name: String
+  pin-name: String
+with :
+  printer => true
+
+public-when(TESTING) defstruct PinByRequireCode <:PinByTypeCode :
+  bundle-name: String
+with :
+  printer => true
+
+public-when(TESTING) defstruct MetadataCode :
+  key: String
+  value: String
+with :
+  printer => true
+
+public-when(TESTING) defstruct NoConnectCode :
+  pin-name: String
+with :
+  printer => true
+
+public-when(TESTING) defstruct PinPropertiesCode :
+  pins: Tuple<PinPropertyCode>
+  power-pins: Tuple<PowerPinCode>
+  no-connects: Tuple<NoConnectCode>
+with :
+  printer => true
+
+public-when(TESTING) defstruct PinPropertyCode :
+  pin-name: String
+  pad-names: Tuple<String>
+  direction: Dir
+  electrical-type: String
+  bank: Int|False
+with :
+  printer => true
+
+public-when(TESTING) defstruct PowerPinCode :
+  pin-name: String
+  min-voltage: Double
+  max-voltage: Double
+with :
+  printer => true
+
+public-when(TESTING) defn ComponentCode (json: JObject) -> ComponentCode :
+  val name = json["name"] as String
+  val json-empty:Tuple<JObject> = []
+  val json-bundles = if key?(json, "bundles") :
+    json["bundles"] as Tuple<JObject>
+  else :
+    json-empty
+  val json-supports = if key?(json, "supports") :
+    json["supports"] as Tuple<JObject>
+  else :
+    json-empty
+
+  val emodel = match(json["emodel"]):
+    (_:JNull):
+      false
+    (e:JObject):
+      EModel(e)
+
+  ComponentCode(
+    name,
+    json["description"] as String,
+    json["manufacturer"] as String,
+    json["mpn"] as String,
+    emodel,
+    PinPropertiesCode(json["pin_properties"] as JObject),
+    map(PCBPadCode, json["pcb_pads"] as Tuple<JObject>),
+    LandPatternCode(json["landpattern"] as JObject),
+    map(SymbolCode, json["symbols"] as Tuple<JObject>),
+    json["datasheet"] as String,
+    json["image"] as String,
+    map(MetadataCode, json["metadata"] as Tuple<JObject>),
+    map(BundleCode, json-bundles),
+    map(SupportCode, json-supports),
+  )
+
+defn PinPropertiesCode (json: JObject) -> PinPropertiesCode :
+  PinPropertiesCode(
+    map(PinPropertyCode, json["pins"] as Tuple<JObject>),
+    map(PowerPinCode, json["power_pins"] as Tuple<JObject>),
+    map(NoConnectCode, json["no_connects"] as Tuple<JObject>)
+  )
+
+public-when(TESTING) defn PinPropertyCode (json: JObject) -> PinPropertyCode :
+  PinPropertyCode(json["pin_name"] as String,
+                  json["pad_names"] as Tuple<String>,
+                  Dir(json["direction"] as String),
+                  json["electrical_type"] as String,
+                  to-int(get(json, "bank") as Double))
+
+public-when(TESTING) defn MetadataCode (json: JObject) -> MetadataCode :
+  val key = json["key"] as String
+  val value = json["value"] as String
+  MetadataCode(key, value)
+
+public-when(TESTING) defn BundleCode (json: JObject) -> BundleCode :
+  BundleCode(json["name"] as String)
+
+public-when(TESTING) defn SupportCode (json: JObject) -> SupportCode :
+  val bundle-name = json["bundle_name"] as String
+  val options:Vector<SupportOptionCode> = Vector<SupportOptionCode>()
+  val json-options = json["options"] as Tuple<JObject>
+
+  for p in json-options do :
+
+    val json-requires = p["requires"] as Tuple<JObject>
+    val requires = map(SupportRequireCode, p["requires"] as Tuple<JObject>)
+
+    val pin-mappings = Vector<PinMappingCode>()
+    val json-pin-mappings = p["pin_mappings"] as Tuple<JObject>
+    for pm in json-pin-mappings do :
+      val key = PinByTypeCode(pm["key"] as JObject)
+      val value = PinByTypeCode(pm["value"] as JObject)
+      add(pin-mappings, PinMappingCode(key, value))
+
+    add(options, SupportOptionCode(requires, to-tuple(pin-mappings)))
+
+  SupportCode(bundle-name, to-tuple(options))
+
+public-when(TESTING) defn SupportRequireCode (json: JObject) -> SupportRequireCode :
+  SupportRequireCode(json["bundle_name"] as String)
+
+public-when(TESTING) defn PinByTypeCode (json: JObject) -> PinByTypeCode :
+  switch(json["type"] as String):
+    "pin_by_name":
+      PinByNameCode(json["value"] as JObject)
+    "pin_by_bundle":
+      PinByBundleCode(json["value"] as JObject)
+    "pin_by_require":
+      PinByRequireCode(json["value"] as JObject)
+
+public-when(TESTING) defn PinByNameCode (json: JObject) -> PinByNameCode :
+  PinByNameCode(json["pin_name"] as String)
+
+public-when(TESTING) defn PinByBundleCode (json: JObject) -> PinByBundleCode :
+  PinByBundleCode(json["bundle_name"] as String, json["pin_name"] as String)
+
+public-when(TESTING) defn PinByRequireCode (json: JObject) -> PinByRequireCode :
+  PinByRequireCode(json["bundle_name"] as String)
+
+defn EModel (json: JObject) -> EModel :
+  val emodel-json = json["value"] as JObject
+  switch(json["type"] as String) :
+    "resistor": Resistor(emodel-json)
+    "capacitor": Capacitor(emodel-json)
+    "inductor": Inductor(emodel-json)
+
+defn Resistor (json: JObject) -> Resistor :
+  Resistor(double-or-unknown(json["resistance"]),
+           double-or-unknown(json["tolerance"]),
+           double-or-unknown(json["max_power"]))
+
+defn Capacitor (json: JObject) -> Capacitor :
+  Capacitor(double-or-unknown(json["capacitance"]),
+            double-or-unknown(json["tolerance"]),
+            double-or-unknown(json["max_voltage"]),
+            bool-or-unknown(json["polarized"]),
+            bool-or-unknown(json["low_esr"]),
+            string-or-unknown(json["temperature_coefficient"]),
+            string-or-unknown(json["dielectric"]))
+
+defn Inductor (json: JObject) -> Inductor :
+  Inductor(double-or-unknown(json["inductance"]),
+           double-or-unknown(json["tolerance"]),
+           double-or-unknown(json["max_current"]))
+
+defn double-or-unknown (json: JSON) -> Double|UNKNOWN :
+  match(json):
+    (d: Double) :
+      d
+    (s: JNull) :
+      UNKNOWN
+
+defn bool-or-unknown (json: JSON) -> True|False|UNKNOWN :
+  match(json):
+    (d: True|False) :
+      d
+    (s: String) :
+      fatal("Expected string \"UNKNOWN\", got %~" % [s]) when s != "UNKNOWN"
+      UNKNOWN
+
+; Note that "UNKNOWN" will never be parsed as a string even if it was such before `to-json()`
+defn string-or-unknown (json: JSON) -> String|UNKNOWN :
+  val s = json as String
+  if s == "UNKNOWN" :
+    UNKNOWN
+  else :
+    s
+
+defn color-or-unknown (json: JSON) -> ColorSpec|UNKNOWN :
+  match(json):
+    (json: JObject) :
+      ColorSpec(json)
+    (s: String) :
+      fatal("Expected string \"UNKNOWN\", got %~" % [s]) when s != "UNKNOWN"
+      UNKNOWN
+
+defn ColorSpec (json: JObject) -> ColorSpec :
+  switch(json["__object_type__"] as String) :
+    ; NamedColor is the only subtype of ColorSpec at the time of this writing
+    "NamedColor": NamedColor(json["name"] as String)
+
+defn PowerPinCode (json: JObject) -> PowerPinCode :
+  PowerPinCode(
+    json["pin_name"] as String,
+    json["min_voltage"] as Double,
+    json["max_voltage"] as Double
+  )
+
+defn NoConnectCode (json: JObject) -> NoConnectCode :
+  NoConnectCode(json["pin_name"] as String)
+
+defn to-jitx (c: ComponentCode) -> Instantiable :
+  pcb-component my-component :
+    name = name(c)
+
+    val description = description(c)
+    match(description: String) :
+      description = description
+
+    val manufacturer = manufacturer(c)
+    match(manufacturer: String) :
+      manufacturer = manufacturer
+
+    val mpn = mpn(c)
+    match(mpn: String) :
+      mpn = mpn
+
+    val emodel = emodel(c)
+    match(emodel: EModel) :
+      emodel = emodel
+
+    val pin-props = pin-properties(c)
+    match(pin-props: PinPropertiesCode) :
+      to-jitx(pin-props)
+
+    val metadata-table = to-hashtable(key, value, metadata(c))
+
+    ; Override with these explicit values
+    metadata-table["datasheets"] = datasheet(c)
+    metadata-table["image"] = image(c)
+
+    property(self.metadata) = to-tuple(metadata-table)
+
+    val jitx-pads-by-pcb-pad-name = HashTable<String, Pad>()
+    for pp in pcb-pads(c) do :
+      val jitx-pad = to-jitx(pp)
+      val pad-name = name(pp)
+      jitx-pads-by-pcb-pad-name[pad-name] = jitx-pad
+
+    val landpattern-def = to-jitx(landpattern(c), jitx-pads-by-pcb-pad-name)
+    assign-landpattern(landpattern-def)
+
+    ; FIXME!: Can delete this paragraph and keep multi symbol case ?
+    if length(symbols(c)) == 1 :
+      val s = symbols(c)[0]
+      assign-symbol(to-jitx(s))
+    else :
+      assign-symbols(
+        for s in symbols(c) map :
+          val bank = bank(s)
+          val jitx-symbol = to-jitx(s)
+          Ref(bank) => jitx-symbol
+      )
+
+    ; Bundles
+    val local-bundles-by-name = HashTable<String, Bundle>()
+    for b in bundles(c) do :
+      pcb-bundle my-bundle :
+        name = name(b)
+        pin p
+      local-bundles-by-name[name(b)] = my-bundle
+
+    defn get-bundle (name:String) -> Bundle :
+      match(get?(local-bundles-by-name, name)) :
+        (b:Bundle) :
+          b
+        (f:False) :
+          get-bundle-by-name(name) as Bundle
+
+    ; Supports
+    for s in /supports(c) do :
+      val bundle = get-bundle(bundle-name(s))
+      supports bundle :
+        for o in options(s) do :
+          option :
+            val requires-by-name = HashTable<String, JITXObject>()
+            for r in requires(o) do :
+              require my-require : get-bundle(bundle-name(r))
+              requires-by-name[bundle-name(r)] = my-require
+
+            defn get-pin (pin-by-type:PinByTypeCode) -> JITXObject :
+              match(pin-by-type) :
+                (p:PinByNameCode) :
+                  dot(self, Ref(pin-name(p)))
+                (p:PinByBundleCode) :
+                  dot(get-bundle(bundle-name(p)), pin-name(p))
+                (p:PinByRequireCode) :
+                  dot(requires-by-name[bundle-name(p)], "p")
+
+            for pm in pin-mappings(o) do :
+              val key = get-pin(key(pm))
+              val value = get-pin(value(pm))
+              key => value
+
+  my-component
+
+defn to-jitx (pin-props: PinPropertiesCode) :
+  inside pcb-component :
+    pin-properties :
+      [pin:Ref | pads:Ref ... | side:Dir | electrical-type:String | bank:Int]
+      for pin-prop in pins(pin-props) do :
+        val pin-ref = Ref(pin-name(pin-prop))
+        val jitx-pads = map(Ref, pad-names(pin-prop))
+        [(pin-ref) | (jitx-pads)... | direction(pin-prop) as Dir | electrical-type(pin-prop) | bank(pin-prop) as Int]
+    do(to-jitx, power-pins(pin-props))
+    do(to-jitx, no-connects(pin-props))
+
+defn to-jitx (power-pin: PowerPinCode) :
+  inside pcb-component :
+    val p = self.(pin-name(power-pin))
+    val min = min-voltage(power-pin)
+    val max = max-voltage(power-pin)
+    val toleranced = ocdb/utils/property-structs/PowerPin(jitx/min-max(min, max))
+    set-property(p, `power-pin, toleranced)
+
+defn to-jitx (nc: NoConnectCode) :
+  inside pcb-component :
+    no-connect(self.(pin-name(nc)))
+
+;--------------------------------------
+;---------------- Pad -----------------
+;--------------------------------------
+
+public-when(TESTING) defstruct PCBPadCode :
+  name: String
+  description: String
+  type: PadType
+  shape: Shape
+  layers: Tuple<PCBLayerCode>
+
+public-when(TESTING) defn PCBPadCode (json: JObject) ->PCBPadCode :
+  PCBPadCode(
+    json["name"] as String,
+    json["description"] as String,
+    PadType(json["type"] as String),
+    Shape(json["shape"] as JObject),
+    map(PCBLayerCode, json["layers"] as Tuple<JObject>)
+  )
+
+public-when(TESTING) defstruct LandPatternPadCode :
+  pcb-pad-name: String
+  pin-name: String
+  pose: Pose
+  side: Side
+
+public-when(TESTING) defn LandPatternPadCode (json: JObject) -> LandPatternPadCode :
+  LandPatternPadCode(
+    json["pcb_pad_name"] as String,
+    json["pin_name"] as String,
+    Pose(json["pose"] as JObject),
+    Side(json["side"] as String)
+  )
+
+public-when(TESTING) defstruct PCBLayerCode :
+  layer: LayerSpecifier
+  shape: Shape
+
+defn PadType (s: String) -> PadType :
+  switch(s) :
+    "SMD": SMD
+    "TH": TH
+
+defn Shape (json: JObject) -> Shape :
+  val json-value = json["value"] as JObject
+  switch(json["type"] as String) :
+    "empty": EmptyShape()
+    "point": Point(json-value)
+    "polygon": Polygon(json-value)
+    "circle": Circle(json-value)
+    "segment": Segment(json-value)
+    "arc": Arc(json-value)
+    "rectangle": Rectangle(json-value)
+    "capsule": Capsule(json-value)
+    "rounded_rectangle": RoundedRectangle(json-value)
+    "chamfered_rectangle": ChamferedRectangle(json-value)
+    "d_shape": DShape(json-value)
+    "line": Line(json-value)
+    "polyline": Polyline(json-value)
+    "polygon_with_arcs": PolygonWithArcs(json-value)
+    "union": Union(json-value)
+    "text": Text(json-value)
+    "general_rounded_rectangle": GeneralRoundedRectangle(json-value)
+    "general_chamfered_rectangle": GeneralChamferedRectangle(json-value)
+    "difference": Difference(json-value)
+
+defn Point (json: JObject) -> Point :
+  Point(json["x"] as Double,
+        json["y"] as Double)
+
+defn Polygon (json: JObject) -> Polygon :
+  Polygon $ map(Point, json["points"] as Tuple<JObject>)
+
+defn Circle (json: JObject) -> Circle :
+  Circle(Point(json["center"] as JObject),
+         json["radius"] as Double)
+
+defn Segment (json: JObject) -> Segment :
+  Segment(Point(json["source"] as JObject),
+          Point(json["target"] as JObject))
+
+defn Arc (json: JObject) -> Arc :
+  Arc(Point(json["center"] as JObject),
+      json["radius"] as Double,
+      json["start_angle"] as Double,
+      json["angle"] as Double)
+
+defn Rectangle (json: JObject) -> Rectangle :
+  Rectangle(json["width"] as Double,
+            json["height"] as Double,
+            Pose(json["pose"] as JObject))
+
+defn Capsule (json: JObject) -> Capsule :
+  Capsule(json["width"] as Double,
+            json["height"] as Double,
+            Pose(json["pose"] as JObject))
+
+defn RoundedRectangle (json: JObject) -> RoundedRectangle :
+  RoundedRectangle(json["width"] as Double,
+                   json["height"] as Double,
+                   json["radius"] as Double,
+                   Pose(json["pose"] as JObject))
+
+defn ChamferedRectangle (json: JObject) -> ChamferedRectangle :
+  ChamferedRectangle(json["width"] as Double,
+                     json["height"] as Double,
+                     json["radius"] as Double,
+                     Pose(json["pose"] as JObject))
+
+defn DShape (json: JObject) -> DShape :
+  DShape(json["width"] as Double,
+         json["height"] as Double,
+         json["radius"] as Double,
+         Pose(json["pose"] as JObject))
+
+defn Line (json: JObject) -> Line :
+  Line(json["width"] as Double,
+       map(Point, json["points"] as Tuple<JObject>))
+
+defn Polyline (json: JObject) -> Polyline :
+  Polyline(json["width"] as Double,
+           map(Shape, json["elements"] as Tuple<JObject>))
+
+defn PolygonWithArcs (json: JObject) -> PolygonWithArcs :
+  PolygonWithArcs $ map(Shape, json["elements"] as Tuple<JObject>)
+
+defn Union (json: JObject) -> Union :
+  Union(map(Shape, json["shapes"] as Tuple<JObject>)) as Union
+
+defn Text (json: JObject) -> Text :
+  Text(json["string"] as String,
+       json["size"] as Double,
+       Anchor(json["anchor"] as String),
+       Pose(json["pose"] as JObject),
+       get?(json, "font", "") as String)
+
+defn Anchor (s: String) -> Anchor :
+  switch(s) :
+    "N": N
+    "S": S
+    "E": E
+    "W": W
+    "NE": NE
+    "SE": SE
+    "SW": SW
+    "NW": NW
+    "C": C
+
+defn GeneralRoundedRectangle (json: JObject) -> GeneralRoundedRectangle :
+  GeneralRoundedRectangle(json["width"] as Double,
+            json["height"] as Double,
+            json["radii"] as Tuple<Double>,
+            Pose(json["pose"] as JObject))
+
+defn GeneralChamferedRectangle (json: JObject) -> GeneralChamferedRectangle :
+  GeneralChamferedRectangle(json["width"] as Double,
+            json["height"] as Double,
+            json["radii"] as Tuple<Double>,
+            Pose(json["pose"] as JObject))
+
+defn Difference (json: JObject) -> Difference :
+  Difference(Shape(json["shape1"] as JObject),
+             Shape(json["shape2"] as JObject))
+
+public-when(TESTING) defn PCBLayerCode (json: JObject) -> PCBLayerCode :
+  PCBLayerCode(LayerSpecifier(json["layer_specifier"] as JObject),
+               Shape(json["shape"] as JObject))
+
+defn LayerSpecifier (json: JObject) -> LayerSpecifier :
+  val json-value = json["value"] as JObject
+  switch(json["type"] as String) :
+    "cutout": Cutout()
+    "courtyard": Courtyard(json-value)
+    "solder_mask": SolderMask(json-value)
+    "paste": Paste(json-value)
+    "glue": Glue(json-value)
+    "finish": Finish(json-value)
+    "silkscreen": Silkscreen(json-value)
+    "forbid_copper": ForbidCopper(json-value)
+    "forbid_via": ForbidVia()
+    "board_edge": BoardEdge()
+    "custom_layer": CustomLayer(json-value)
+
+defn Courtyard (json: JObject) -> Courtyard :
+  Courtyard(Side(json["side"] as String))
+
+defn SolderMask (json: JObject) -> SolderMask :
+  SolderMask(Side(json["side"] as String))
+
+defn Paste (json: JObject) -> Paste :
+  Paste(Side(json["side"] as String))
+
+defn Glue (json: JObject) -> Glue :
+  Glue(Side(json["side"] as String))
+
+defn Finish (json: JObject) -> Finish :
+  Finish(Side(json["side"] as String))
+
+defn Silkscreen (json: JObject) -> Silkscreen :
+  Silkscreen(json["name"] as String,
+             Side(json["side"] as String))
+
+defn ForbidCopper (json: JObject) -> ForbidCopper :
+  ForbidCopper(LayerIndex(json["start"] as JObject),
+               LayerIndex(json["end"] as JObject))
+
+defn LayerIndex (json: JObject) -> LayerIndex :
+  LayerIndex(to-int(json["index"] as Double),
+             Side(json["side"] as String))
+
+defn CustomLayer (json: JObject) -> CustomLayer :
+  CustomLayer(json["name"] as String)
+
+defn to-jitx (p: PCBPadCode) -> Pad :
+  pcb-pad my-pad :
+    name = name(p)
+    description = description(p)
+    type = type(p)
+    shape = shape(p)
+
+    do(to-jitx, layers(p))
+
+  my-pad
+
+defn to-jitx (p: LandPatternPadCode, jitx-pad: Pad) :
+  inside pcb-landpattern :
+    val ref = Ref(pin-name(p))
+    pad (ref) : jitx-pad at pose(p) on side(p)
+
+defn to-jitx (l: PCBLayerCode) :
+  inside pcb-pad :
+    layer(/layer(l)) = shape(l)
+
+;--------------------------------------
+;------------ Landpattern -------------
+;--------------------------------------
+
+public-when(TESTING) defstruct LandPatternCode :
+  name: String
+  pads: Tuple<LandPatternPadCode>
+  layers: Tuple<PCBLayerCode>
+  geometries: Tuple<GeomCode>
+  model3ds: Tuple<Model3D>
+
+public-when(TESTING) defn LandPatternCode (json: JObject) -> LandPatternCode :
+  LandPatternCode(
+    json["name"] as String,
+    map(LandPatternPadCode, json["pads"] as Tuple<JObject>),
+    map(PCBLayerCode, json["layers"] as Tuple<JObject>),
+    map(GeomCode, json["geometries"] as Tuple<JObject>),
+    map(Model3D, json["model3ds"] as Tuple<JObject>)
+  )
+
+;Represents a via, copper, or pour.
+public deftype GeomCode <: Comparable
+
+public-when(TESTING) defstruct CopperCode <: GeomCode :
+  layer:LayerIndex
+  shape:Shape
+
+defstruct PourCode <: GeomCode :
+  layer:LayerIndex
+  shape:Shape
+  isolate:Double
+  rank:Int
+  orphans:True|False
+
+defstruct ViaCode <: GeomCode :
+  type:ViaType
+  start:LayerIndex
+  end:LayerIndex
+  center-point:Point
+  radius:Double
+  hole-radius:Double
+
+defn GeomCode (json: JObject) -> GeomCode :
+  val json-value = json["value"] as JObject
+  switch(json["type"] as String) :
+    "copper": CopperCode(json-value)
+    "pour": PourCode(json-value)
+    "via": ViaCode(json-value)
+
+defn CopperCode (json: JObject) -> CopperCode :
+  CopperCode(LayerIndex(json["layer"] as JObject),
+             Shape(json["shape"] as JObject))
+
+defn PourCode (json: JObject) -> PourCode :
+  PourCode(LayerIndex(json["layer"] as JObject),
+           Shape(json["shape"] as JObject),
+           json["isolate"] as Double,
+           to-int(json["rank"] as Double),
+           json["orphans"] as True|False)
+
+defn ViaCode (json: JObject) -> ViaCode :
+  ViaCode(ViaType(json["type"] as String),
+          LayerIndex(json["start"] as JObject),
+          LayerIndex(json["end"] as JObject),
+          Point(json["center_point"] as JObject),
+          json["radius"] as Double,
+          json["hole_radius"] as Double)
+
+defn ViaType (s: String) -> ViaType :
+  switch(s) :
+    "THVia": THVia
+    "MicroVia": MicroVia
+    "BlindVia": BlindVia
+
+defn Model3D (json: JObject) -> Model3D :
+  Model3D(json["filename"] as String,
+          Vec3D(json["position"] as JObject),
+          Vec3D(json["scale"] as JObject),
+          Vec3D(json["rotation"] as JObject))
+
+defn Vec3D (json: JObject) -> Vec3D :
+  Vec3D(json["x"] as Double,
+        json["y"] as Double,
+        json["z"] as Double)
+
+defn Pose (json: JObject) -> Pose :
+  Pose(Point(json["center"] as JObject),
+       json["angle"] as Double,
+       json["flip_x"] as True|False)
+
+defn Side (s: String) -> Side :
+  switch(s) :
+    "Top": Top
+    "Bottom": Bottom
+
+defn to-jitx (lp: LandPatternCode, jitx-pads-by-pcb-pad-name: HashTable<String, Pad>) -> LandPattern :
+  pcb-landpattern my-landpattern :
+    name = name(lp)
+    for p in /pads(lp) do :
+      val jitx-pad = jitx-pads-by-pcb-pad-name[pcb-pad-name(p)]
+      to-jitx(p, jitx-pad)
+    do(to-jitx, layers(lp))
+    do(to-jitx, geometries(lp))
+    do(to-jitx, model3ds(lp))
+
+  my-landpattern
+
+defn to-jitx (g: GeomCode) :
+  inside pcb-landpattern :
+    match(g) :
+      (g:CopperCode) :
+        copper(layer(g)) = shape(g)
+      (g:PourCode) :
+        copper-pour(layer(g), isolate = isolate(g), rank = rank(g), orphans = orphans(g)) = shape(g)
+      (g:ViaCode) :
+        via(start(g), end(g), type = type(g), radius = radius(g), hole-radius = hole-radius(g)) at center-point(g)
+
+defn to-jitx (g: Model3D) :
+  inside pcb-landpattern :
+    model3d = g
+
+;--------------------------------------
+;--------------- Symbol ---------------
+;--------------------------------------
+
+public-when(TESTING) defstruct SymbolCode :
+  name: String
+  bank: Int
+  pins: Tuple<SymbolPinCode>
+  layers: Tuple<SymbolLayerCode>
+
+public-when(TESTING) defstruct SymbolPinCode :
+  name: Ref
+  point: Point
+  direction: Dir
+  length: Double
+  number-size: Double|False
+  name-size: Double|False
+
+public-when(TESTING) defstruct SymbolLayerCode :
+  name: String
+  shape: Shape
+
+public-when(TESTING) defn SymbolCode (json: JObject) -> SymbolCode :
+  SymbolCode(
+    json["name"] as String,
+    to-int(json["bank"] as Double),
+    map(SymbolPinCode, json["pins"] as Tuple<JObject>),
+    map(SymbolLayerCode, json["layers"] as Tuple<JObject>)
+  )
+
+defn SymbolPinCode (json: JObject) -> SymbolPinCode :
+  SymbolPinCode(Ref(json["pin_name"] as String),
+                Point(json["point"] as JObject),
+                Dir(json["direction"] as String),
+                json["length"] as Double,
+                json["number_size"] as Double|False,
+                json["name_size"] as Double|False)
+
+defn SymbolLayerCode (json: JObject) -> SymbolLayerCode :
+  SymbolLayerCode(json["name"] as String,
+                  Shape(json["shape"] as JObject))
+
+defn Dir (s: String) -> Dir :
+  switch(s) :
+    "Up": Up
+    "Down": Down
+    "Left": Left
+    "Right": Right
+
+defn to-jitx (s: SymbolCode) -> SchematicSymbol :
+  pcb-symbol my-symbol :
+    name = name(s)
+    do(to-jitx, pins(s))
+    do(to-jitx, layers(s))
+
+  my-symbol
+
+defn to-jitx (p: SymbolPinCode) :
+  inside pcb-symbol :
+    val number-size = number-size(p)
+    val name-size = name-size(p)
+    match(number-size, name-size) :
+      (number-size: Double, name-size: Double) :
+        pin (name(p)) at point(p) with :
+          direction = direction(p)
+          length = length(p)
+          number-size = number-size
+          name-size = name-size
+      (number-size: Double, name-size: False) :
+        pin (name(p)) at point(p) with :
+          direction = direction(p)
+          length = length(p)
+          number-size = number-size
+      (number-size: False, name-size: Double) :
+        pin (name(p)) at point(p) with :
+          direction = direction(p)
+          length = length(p)
+          name-size = name-size
+      (number-size: False, name-size: False) :
+        pin (name(p)) at point(p) with :
+          direction = direction(p)
+          length = length(p)
+
+defn to-jitx (l: SymbolLayerCode) :
+  inside pcb-symbol :
+    layer(name(l)) = shape(l)
