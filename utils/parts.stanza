@@ -127,7 +127,7 @@ with :
 
 public-when(TESTING) defstruct PinPropertyCode :
   pin-name: String
-  pads: Tuple<PinByIndexCode>
+  pads: Tuple<PinByTypeCode>
   direction: Dir
   electrical-type: String
   bank: Int|False
@@ -185,7 +185,7 @@ defn PinPropertiesCode (json: JObject) -> PinPropertiesCode :
 
 public-when(TESTING) defn PinPropertyCode (json: JObject) -> PinPropertyCode :
   PinPropertyCode(json["pin_name"] as String,
-                  map(PinByIndexCode, json["pads"] as Tuple<JObject>),
+                  map(PinByTypeCode, json["pads"] as Tuple<JObject>),
                   Dir(json["direction"] as String),
                   json["electrical_type"] as String,
                   to-int(get(json, "bank") as Double))
@@ -282,17 +282,16 @@ defn bool-or-unknown (json: JSON) -> True|False|UNKNOWN :
   match(json):
     (d: True|False) :
       d
-    (s: String) :
-      fatal("Expected string \"UNKNOWN\", got %~" % [s]) when s != "UNKNOWN"
+    (s: JNull) :
       UNKNOWN
 
 ; Note that "UNKNOWN" will never be parsed as a string even if it was such before `to-json()`
 defn string-or-unknown (json: JSON) -> String|UNKNOWN :
-  val s = json as String
-  if s == "UNKNOWN" :
-    UNKNOWN
-  else :
-    s
+  match(json):
+    (s: String) :
+      s
+    (s: JNull) :
+      UNKNOWN
 
 defn color-or-unknown (json: JSON) -> ColorSpec|UNKNOWN :
   match(json):
@@ -425,8 +424,12 @@ defn to-jitx (pin-props: PinPropertiesCode) :
     do(to-jitx, power-pins(pin-props))
     do(to-jitx, no-connects(pin-props))
 
-defn to-ref (p:PinByIndexCode) -> Ref :
-  IndexRef(Ref(name(p)), index(p))
+defn to-ref (pin-by-type:PinByTypeCode) -> Ref :
+  match(pin-by-type) :
+    (p:PinByNameCode) :
+      Ref(pin-name(p))
+    (p:PinByIndexCode) :
+      IndexRef(Ref(name(p)), index(p))
 
 defn to-jitx (power-pin: PowerPinCode) :
   inside pcb-component :
@@ -607,19 +610,22 @@ public-when(TESTING) defn PCBLayerCode (json: JObject) -> PCBLayerCode :
                Shape(json["shape"] as JObject))
 
 defn LayerSpecifier (json: JObject) -> LayerSpecifier :
-  val json-value = json["value"] as JObject
-  switch(json["type"] as String) :
-    "cutout": Cutout()
-    "courtyard": Courtyard(json-value)
-    "solder_mask": SolderMask(json-value)
-    "paste": Paste(json-value)
-    "glue": Glue(json-value)
-    "finish": Finish(json-value)
-    "silkscreen": Silkscreen(json-value)
-    "forbid_copper": ForbidCopper(json-value)
-    "forbid_via": ForbidVia()
-    "board_edge": BoardEdge()
-    "custom_layer": CustomLayer(json-value)
+  if not key?(json, "value"):
+    CustomLayer("default")
+  else:
+    val json-value = json["value"] as JObject
+    switch(json["type"] as String) :
+      "cutout": Cutout()
+      "courtyard": Courtyard(json-value)
+      "solder_mask": SolderMask(json-value)
+      "paste": Paste(json-value)
+      "glue": Glue(json-value)
+      "finish": Finish(json-value)
+      "silkscreen": Silkscreen(json-value)
+      "forbid_copper": ForbidCopper(json-value)
+      "forbid_via": ForbidVia()
+      "board_edge": BoardEdge()
+      "custom_layer": CustomLayer(json-value)
 
 defn Courtyard (json: JObject) -> Courtyard :
   Courtyard(Side(json["side"] as String))
@@ -663,8 +669,7 @@ defn to-jitx (p: PCBPadCode) -> Pad :
 
 defn to-jitx (p: LandPatternPadCode, jitx-pad: Pad) :
   inside pcb-landpattern :
-    val pin-by-index = /pin(p) as PinByIndexCode
-    val ref = IndexRef(Ref(name(pin-by-index)), index(pin-by-index))
+    val ref = to-ref(/pin(p))
     pad (ref) : jitx-pad at pose(p) on side(p)
 
 defn to-jitx (l: PCBLayerCode) :
