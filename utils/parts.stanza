@@ -96,6 +96,12 @@ public-when(TESTING) defstruct PinByBundleCode <:PinByTypeCode :
 with :
   printer => true
 
+public-when(TESTING) defstruct PinByIndexCode <:PinByTypeCode :
+  bundle-name: String
+  pin-index: Int
+with :
+  printer => true
+
 public-when(TESTING) defstruct PinByRequireCode <:PinByTypeCode :
   bundle-name: String
 with :
@@ -108,7 +114,7 @@ with :
   printer => true
 
 public-when(TESTING) defstruct NoConnectCode :
-  pin-name: String
+  pin: PinByIndexCode
 with :
   printer => true
 
@@ -120,8 +126,8 @@ with :
   printer => true
 
 public-when(TESTING) defstruct PinPropertyCode :
-  pin-name: String
-  pad-names: Tuple<String>
+  pin: PinByIndexCode
+  pads: Tuple<PinByIndexCode>
   direction: Dir
   electrical-type: String
   bank: Int|False
@@ -129,7 +135,7 @@ with :
   printer => true
 
 public-when(TESTING) defstruct PowerPinCode :
-  pin-name: String
+  pin: PinByIndexCode
   min-voltage: Double
   max-voltage: Double
 with :
@@ -178,8 +184,8 @@ defn PinPropertiesCode (json: JObject) -> PinPropertiesCode :
   )
 
 public-when(TESTING) defn PinPropertyCode (json: JObject) -> PinPropertyCode :
-  PinPropertyCode(json["pin_name"] as String,
-                  json["pad_names"] as Tuple<String>,
+  PinPropertyCode(PinByIndexCode(json["pin"] as JObject),
+                  map(PinByIndexCode, json["pads"] as Tuple<JObject>),
                   Dir(json["direction"] as String),
                   json["electrical_type"] as String,
                   to-int(get(json, "bank") as Double))
@@ -222,6 +228,8 @@ public-when(TESTING) defn PinByTypeCode (json: JObject) -> PinByTypeCode :
       PinByNameCode(json["value"] as JObject)
     "pin_by_bundle":
       PinByBundleCode(json["value"] as JObject)
+    "pin_by_index":
+      PinByIndexCode(json["value"] as JObject)
     "pin_by_require":
       PinByRequireCode(json["value"] as JObject)
 
@@ -230,6 +238,9 @@ public-when(TESTING) defn PinByNameCode (json: JObject) -> PinByNameCode :
 
 public-when(TESTING) defn PinByBundleCode (json: JObject) -> PinByBundleCode :
   PinByBundleCode(json["bundle_name"] as String, json["pin_name"] as String)
+
+public-when(TESTING) defn PinByIndexCode (json: JObject) -> PinByIndexCode :
+  PinByIndexCode(json["bundle_name"] as String, to-int(json["pin_index"] as Double))
 
 public-when(TESTING) defn PinByRequireCode (json: JObject) -> PinByRequireCode :
   PinByRequireCode(json["bundle_name"] as String)
@@ -298,13 +309,13 @@ defn ColorSpec (json: JObject) -> ColorSpec :
 
 defn PowerPinCode (json: JObject) -> PowerPinCode :
   PowerPinCode(
-    json["pin_name"] as String,
+    PinByIndexCode(json["pin"] as JObject),
     json["min_voltage"] as Double,
     json["max_voltage"] as Double
   )
 
 defn NoConnectCode (json: JObject) -> NoConnectCode :
-  NoConnectCode(json["pin_name"] as String)
+  NoConnectCode(PinByIndexCode(json["pin"] as JObject))
 
 defn to-jitx (c: ComponentCode) -> Instantiable :
   pcb-component my-component :
@@ -325,10 +336,6 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
     val emodel = emodel(c)
     match(emodel: EModel) :
       emodel = emodel
-
-    val pin-props = pin-properties(c)
-    match(pin-props: PinPropertiesCode) :
-      to-jitx(pin-props)
 
     val metadata-table = to-hashtable(key, value, metadata(c))
 
@@ -374,6 +381,10 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
         (f:False) :
           get-bundle-by-name(name) as Bundle
 
+    val pin-props = pin-properties(c)
+    match(pin-props: PinPropertiesCode) :
+      to-jitx(pin-props)
+
     ; Supports
     for s in /supports(c) do :
       val bundle = get-bundle(bundle-name(s))
@@ -388,9 +399,11 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
             defn get-pin (pin-by-type:PinByTypeCode) -> JITXObject :
               match(pin-by-type) :
                 (p:PinByNameCode) :
-                  dot(self, Ref(pin-name(p)))
+                  dot(self, pin-name(p))
                 (p:PinByBundleCode) :
                   dot(get-bundle(bundle-name(p)), pin-name(p))
+                (p:PinByIndexCode) :
+                  dot(get-bundle(bundle-name(p)), Ref(pin-index(p)))
                 (p:PinByRequireCode) :
                   dot(requires-by-name[bundle-name(p)], "p")
 
@@ -401,20 +414,23 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
 
   my-component
 
+defn to-ref (p: PinByIndexCode) -> Ref :
+  IndexRef(Ref(bundle-name(p)), pin-index(p))
+
 defn to-jitx (pin-props: PinPropertiesCode) :
   inside pcb-component :
     pin-properties :
       [pin:Ref | pads:Ref ... | side:Dir | electrical-type:String | bank:Int]
       for pin-prop in pins(pin-props) do :
-        val pin-ref = Ref(pin-name(pin-prop))
-        val jitx-pads = map(Ref, pad-names(pin-prop))
+        val pin-ref = to-ref(/pin(pin-prop))
+        val jitx-pads = map(Ref, pads(pin-prop))
         [(pin-ref) | (jitx-pads)... | direction(pin-prop) as Dir | electrical-type(pin-prop) | bank(pin-prop) as Int]
     do(to-jitx, power-pins(pin-props))
     do(to-jitx, no-connects(pin-props))
 
 defn to-jitx (power-pin: PowerPinCode) :
   inside pcb-component :
-    val p = self.(pin-name(power-pin))
+    val p = dot(self, pin-name(/pin(power-pin)))
     val min = min-voltage(power-pin)
     val max = max-voltage(power-pin)
     val toleranced = ocdb/utils/property-structs/PowerPin(jitx/min-max(min, max))
@@ -422,7 +438,7 @@ defn to-jitx (power-pin: PowerPinCode) :
 
 defn to-jitx (nc: NoConnectCode) :
   inside pcb-component :
-    no-connect(self.(pin-name(nc)))
+    no-connect(to-jitx(/pin(nc)))
 
 ;--------------------------------------
 ;---------------- Pad -----------------
@@ -444,14 +460,14 @@ public-when(TESTING) defn PCBPadCode (json: JObject) ->PCBPadCode :
 
 public-when(TESTING) defstruct LandPatternPadCode :
   pcb-pad-name: String
-  pin-name: String
+  pin: PinByIndexCode
   pose: Pose
   side: Side
 
 public-when(TESTING) defn LandPatternPadCode (json: JObject) -> LandPatternPadCode :
   LandPatternPadCode(
     json["pcb_pad_name"] as String,
-    json["pin_name"] as String,
+    PinByIndexCode(json["pin"] as JObject),
     Pose(json["pose"] as JObject),
     Side(json["side"] as String)
   )
@@ -647,7 +663,7 @@ defn to-jitx (p: PCBPadCode) -> Pad :
 
 defn to-jitx (p: LandPatternPadCode, jitx-pad: Pad) :
   inside pcb-landpattern :
-    val ref = Ref(pin-name(p))
+    val ref = to-ref(pin(p))
     pad (ref) : jitx-pad at pose(p) on side(p)
 
 defn to-jitx (l: PCBLayerCode) :
@@ -786,7 +802,7 @@ public-when(TESTING) defstruct SymbolCode :
   layers: Tuple<SymbolLayerCode>
 
 public-when(TESTING) defstruct SymbolPinCode :
-  name: Ref
+  pin: PinByIndexCode
   point: Point
   direction: Dir
   length: Double
@@ -806,7 +822,7 @@ public-when(TESTING) defn SymbolCode (json: JObject) -> SymbolCode :
   )
 
 defn SymbolPinCode (json: JObject) -> SymbolPinCode :
-  SymbolPinCode(Ref(json["pin_name"] as String),
+  SymbolPinCode(PinByIndexCode(json["pin"] as JObject),
                 Point(json["point"] as JObject),
                 Dir(json["direction"] as String),
                 json["length"] as Double,
@@ -836,25 +852,26 @@ defn to-jitx (p: SymbolPinCode) :
   inside pcb-symbol :
     val number-size = number-size(p)
     val name-size = name-size(p)
+    val pin-ref = to-ref(/pin(p))
     match(number-size, name-size) :
       (number-size: Double, name-size: Double) :
-        pin (name(p)) at point(p) with :
+        pin (pin-ref) at point(p) with :
           direction = direction(p)
           length = length(p)
           number-size = number-size
           name-size = name-size
       (number-size: Double, name-size: False) :
-        pin (name(p)) at point(p) with :
+        pin (pin-ref) at point(p) with :
           direction = direction(p)
           length = length(p)
           number-size = number-size
       (number-size: False, name-size: Double) :
-        pin (name(p)) at point(p) with :
+        pin (pin-ref) at point(p) with :
           direction = direction(p)
           length = length(p)
           name-size = name-size
       (number-size: False, name-size: False) :
-        pin (name(p)) at point(p) with :
+        pin (pin-ref) at point(p) with :
           direction = direction(p)
           length = length(p)
 
