@@ -17,6 +17,8 @@ defpackage ocdb/utils/parts :
 ;============ Public API ==============
 ;======================================
 
+; We'll need an ESIR "Part <: Component" in order to support parametric queries.
+; Short-term, we're going directly into Instantiables.
 public defstruct PartCode :
   component: ComponentCode
 with :
@@ -41,7 +43,13 @@ public defstruct ComponentCode :
   symbols: Tuple<SymbolCode>
   datasheet: String
   image: String
+  trust: String
+  mounting: String
+  case: String|UNKNOWN
+  dimensions: DimensionsCode
+  sourcing: SourcingCode
   metadata: Tuple<MetadataCode>
+  properties: Tuple<ComponentPropertyCode>
   bundles:Tuple<BundleCode>
   supports:Tuple<SupportCode>
 with :
@@ -107,9 +115,36 @@ public-when(TESTING) defstruct PinByRequireCode <:PinByTypeCode :
 with :
   printer => true
 
+public-when(TESTING) defstruct DimensionsCode :
+  x: Double
+  y: Double
+  z: Double|UNKNOWN
+with :
+  printer => true
+
+public-when(TESTING) defstruct SourcingCode :
+  price: Double|UNKNOWN
+  minimum-quantity: Int
+  stock: Int
+with :
+  printer => true
+
+public-when(TESTING) defstruct TolerancedCode :
+  typical: Double
+  plus: Double
+  minus: Double
+with :
+  printer => true
+
 public-when(TESTING) defstruct MetadataCode :
   key: String
   value: String
+with :
+  printer => true
+
+public-when(TESTING) defstruct ComponentPropertyCode :
+  name: Symbol
+  value: JITXValue|None
 with :
   printer => true
 
@@ -171,7 +206,13 @@ public-when(TESTING) defn ComponentCode (json: JObject) -> ComponentCode :
     map(SymbolCode, json["symbols"] as Tuple<JObject>),
     json["datasheet"] as String,
     json["image"] as String,
+    json["trust"] as String,
+    json["mounting"] as String,
+    string-or-unknown(json["case"]),
+    DimensionsCode(json["dimensions"] as JObject),
+    SourcingCode(json["sourcing"] as JObject),
     map(MetadataCode, json["metadata"] as Tuple<JObject>),
+    map(ComponentPropertyCode, json["properties"] as Tuple<JObject>),
     map(BundleCode, json-bundles),
     map(SupportCode, json-supports),
   )
@@ -190,10 +231,65 @@ public-when(TESTING) defn PinPropertyCode (json: JObject) -> PinPropertyCode :
                   json["electrical_type"] as String,
                   to-int(get(json, "bank") as Double))
 
+public-when(TESTING) defn DimensionsCode (json: JObject) -> DimensionsCode :
+  val x = json["x"] as Double
+  val y = json["y"] as Double
+  val z = double-or-unknown(json["z"])
+  DimensionsCode(x, y, z)
+
+public-when(TESTING) defn SourcingCode (json: JObject) -> SourcingCode :
+  val price = double-or-unknown(json["price"])
+  val minium_quantity = to-int(json["minimum_quantity"] as Double)
+  val stock = to-int(json["stock"] as Double)
+  SourcingCode(price, minium_quantity, stock)
+
+public-when(TESTING) defn TolerancedCode (json: JObject) -> Toleranced :
+  val typical = json["tolerance"] as Double
+  val plus = json["plus"] as Double
+  val minus = json["minus"] as Double
+  Toleranced(typical, plus, minus)
+
 public-when(TESTING) defn MetadataCode (json: JObject) -> MetadataCode :
   val key = json["key"] as String
   val value = json["value"] as String
   MetadataCode(key, value)
+
+public-when(TESTING) defn ComponentPropertyCode (json: JObject) -> ComponentPropertyCode :
+  val name = to-symbol(json["name"] as String)
+  val value = component-property-value-by-type(json["value"] as JObject)
+  ComponentPropertyCode(name, value)
+
+public-when(TESTING) defn component-property-value-by-type (json: JObject) -> JITXValue|None :
+  val value-type = json["type"] as String
+  switch(value-type):
+    "TypeBoolean":
+      json["value"] as True|False
+    "TypeInt":
+      to-int(json["value"] as Double)
+    "TypeDouble":
+      json["value"] as Double
+    "TypeString":
+      json["value"] as String
+    "TypeSymbol":
+      to-symbol(json["value"] as String)
+    "TypeToleranced":
+      TolerancedCode(json["value"] as JObject)
+    "TypeMetadata":
+      val metadata-codes = map(MetadataCode, json["value"] as Tuple<JObject>)
+      val metadata-kvs = for mc in metadata-codes seq :
+        KeyValue(key(mc), value(mc))
+      val metadata-table = to-hashtable(key, value, metadata-kvs)
+      if not key?(metadata-table, "image"):
+        ; We need a value here to render at all in the design explorer.
+        ; Empty string here renders black, as opposed to a missing image icon.
+        metadata-table["image"] = ""
+      to-tuple(metadata-table)
+    "TypeTupleValueByType":
+      val results = map(component-property-value-by-type, json["value"] as Tuple<JObject>)
+      to-tuple(filter({_ is JITXValue}, results))
+    else:
+      println $ "Skipping unsupported component property: %_" % [value-type]
+      None()
 
 public-when(TESTING) defn BundleCode (json: JObject) -> BundleCode :
   BundleCode(json["name"] as String)
@@ -340,13 +436,7 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
     match(pin-props: PinPropertiesCode) :
       to-jitx(pin-props)
 
-    val metadata-table = to-hashtable(key, value, metadata(c))
-
-    ; Override with these explicit values
-    metadata-table["datasheets"] = datasheet(c)
-    metadata-table["image"] = image(c)
-
-    property(self.metadata) = to-tuple(metadata-table)
+    map(to-jitx, properties(c))
 
     val jitx-pads-by-pcb-pad-name = HashTable<String, Pad>()
     for pp in pcb-pads(c) do :
@@ -424,6 +514,10 @@ defn to-jitx (pin-props: PinPropertiesCode) :
     do(to-jitx, power-pins(pin-props))
     do(to-jitx, no-connects(pin-props))
 
+    for pin-prop in pins(pin-props) do :
+      val jitx-pin = self.(pin-name(pin-prop))
+      set-property(jitx-pin, `direction, direction(pin-prop) as Dir)
+
 defn to-ref (pin-by-type:PinByTypeCode) -> Ref :
   match(pin-by-type) :
     (p:PinByNameCode) :
@@ -442,6 +536,17 @@ defn to-jitx (power-pin: PowerPinCode) :
 defn to-jitx (nc: NoConnectCode) :
   inside pcb-component :
     no-connect(self.(pin-name(nc)))
+
+defn to-jitx (prop: ComponentPropertyCode) :
+  inside pcb-component :
+    val prop-name = name(prop)
+    val prop-value = value(prop)
+    match(prop-value:JITXValue):
+      val prop-value-jitx-value = prop-value
+      if prop-name == `metadata:
+        property(self.metadata) = prop-value
+      else:
+        set-property(self, prop-name, prop-value)
 
 ;--------------------------------------
 ;---------------- Pad -----------------
