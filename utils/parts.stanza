@@ -36,6 +36,7 @@ public defstruct ComponentCode :
   description: String
   manufacturer: String
   mpn: String
+  vendor-part-numbers: VendorPartNumbersCode
   category: Category|UNKNOWN
   emodel: EModel|False
   pin-properties: False|PinPropertiesCode
@@ -154,6 +155,11 @@ public-when(TESTING) defstruct NoConnectCode :
 with :
   printer => true
 
+public-when(TESTING) defstruct VendorPartNumbersCode :
+  lcsc: String|UNKNOWN
+with :
+  printer => true
+
 public-when(TESTING) defstruct PinPropertiesCode :
   pins: Tuple<PinPropertyCode>
   power-pins: Tuple<PowerPinCode>
@@ -200,6 +206,7 @@ public-when(TESTING) defn ComponentCode (json: JObject) -> ComponentCode :
     json["description"] as String,
     json["manufacturer"] as String,
     json["mpn"] as String,
+    VendorPartNumbersCode(json["vendor_part_numbers"] as JObject),
     category-or-unknown(json["category"] as String),
     emodel,
     PinPropertiesCode(json["pin_properties"] as JObject),
@@ -217,6 +224,11 @@ public-when(TESTING) defn ComponentCode (json: JObject) -> ComponentCode :
     map(ComponentPropertyCode, json["properties"] as Tuple<JObject>),
     map(BundleCode, json-bundles),
     map(SupportCode, json-supports),
+  )
+
+defn VendorPartNumbersCode (json: JObject) -> VendorPartNumbersCode :
+  VendorPartNumbersCode(
+    string-or-unknown(json["lcsc"])
   )
 
 defn PinPropertiesCode (json: JObject) -> PinPropertiesCode :
@@ -276,6 +288,9 @@ public-when(TESTING) defn component-property-value-by-type (json: JObject) -> JI
       to-symbol(json["value"] as String)
     "TypeToleranced":
       TolerancedCode(json["value"] as JObject)
+    "TypeKeyValue":
+      val value = json["value"] as JObject
+      KeyValue(value["key"] as String, value["value"] as String)
     "TypeMetadata":
       val metadata-codes = map(MetadataCode, json["value"] as Tuple<JObject>)
       val metadata-kvs = for mc in metadata-codes seq :
