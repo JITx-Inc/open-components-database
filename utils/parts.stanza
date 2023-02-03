@@ -36,15 +36,16 @@ public defstruct ComponentCode :
   description: String
   manufacturer: String
   mpn: String
+  category: Category|UNKNOWN
   emodel: EModel|False
   pin-properties: False|PinPropertiesCode
   pcb-pads: Tuple<PCBPadCode>
   landpattern: LandPatternCode
   symbols: Tuple<SymbolCode>
   datasheet: String
-  image: String
+  image: String|UNKNOWN
   trust: String
-  mounting: String
+  mounting: String|UNKNOWN
   case: String|UNKNOWN
   dimensions: DimensionsCode
   sourcing: SourcingCode
@@ -199,15 +200,16 @@ public-when(TESTING) defn ComponentCode (json: JObject) -> ComponentCode :
     json["description"] as String,
     json["manufacturer"] as String,
     json["mpn"] as String,
+    category-or-unknown(json["category"] as String),
     emodel,
     PinPropertiesCode(json["pin_properties"] as JObject),
     map(PCBPadCode, json["pcb_pads"] as Tuple<JObject>),
     LandPatternCode(json["landpattern"] as JObject),
     map(SymbolCode, json["symbols"] as Tuple<JObject>),
     json["datasheet"] as String,
-    json["image"] as String,
+    string-or-unknown(json["image"]),
     json["trust"] as String,
-    json["mounting"] as String,
+    string-or-unknown(json["mounting"]),
     string-or-unknown(json["case"]),
     DimensionsCode(json["dimensions"] as JObject),
     SourcingCode(json["sourcing"] as JObject),
@@ -388,6 +390,32 @@ defn string-or-unknown (json: JSON) -> String|UNKNOWN :
       s
     (s: JNull) :
       UNKNOWN
+
+defenum Category :
+  capacitor
+  connector
+  diode
+  fuse
+  inductor
+  microcontroller
+  oscillator
+  power-supply-chip
+  resistor
+  transistor
+
+defn category-or-unknown (category-str: String) -> Category|UNKNOWN :
+  switch(category-str):
+    "capacitor": capacitor
+    "connector": connector
+    "diode": diode
+    "fuse": fuse
+    "inductor": inductor
+    "microcontroller": microcontroller
+    "oscillator": oscillator
+    "power_supply_chip": power-supply-chip
+    "resistor": resistor
+    "transistor": transistor
+    else: UNKNOWN
 
 defn color-or-unknown (json: JSON) -> ColorSpec|UNKNOWN :
   match(json):
@@ -802,7 +830,7 @@ public-when(TESTING) defn LandPatternCode (json: JObject) -> LandPatternCode :
   )
 
 ;Represents a via, copper, or pour.
-public deftype GeomCode <: Comparable
+deftype GeomCode <: Comparable
 
 public-when(TESTING) defstruct CopperCode <: GeomCode :
   layer:LayerIndex
