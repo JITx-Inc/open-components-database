@@ -207,7 +207,7 @@ public-when(TESTING) defn ComponentCode (json: JObject) -> ComponentCode :
     json["manufacturer"] as String,
     json["mpn"] as String,
     VendorPartNumbersCode(json["vendor_part_numbers"] as JObject),
-    category-or-unknown(json["category"] as String),
+    category-or-unknown(json["category"]),
     emodel,
     PinPropertiesCode(json["pin_properties"] as JObject),
     map(PCBPadCode, json["pcb_pads"] as Tuple<JObject>),
@@ -418,19 +418,23 @@ defenum Category :
   resistor
   transistor
 
-defn category-or-unknown (category-str: String) -> Category|UNKNOWN :
-  switch(category-str):
-    "capacitor": capacitor
-    "connector": connector
-    "diode": diode
-    "fuse": fuse
-    "inductor": inductor
-    "microcontroller": microcontroller
-    "oscillator": oscillator
-    "power_supply_chip": power-supply-chip
-    "resistor": resistor
-    "transistor": transistor
-    else: UNKNOWN
+defn category-or-unknown (json: JSON) -> Category|UNKNOWN :
+  match(json):
+    (s: String) :
+      switch(s):
+        "capacitor": capacitor
+        "connector": connector
+        "diode": diode
+        "fuse": fuse
+        "inductor": inductor
+        "microcontroller": microcontroller
+        "oscillator": oscillator
+        "power_supply_chip": power-supply-chip
+        "resistor": resistor
+        "transistor": transistor
+        else: UNKNOWN
+    (s: JNull) :
+      UNKNOWN
 
 defn color-or-unknown (json: JSON) -> ColorSpec|UNKNOWN :
   match(json):
