@@ -17,20 +17,6 @@ defpackage ocdb/utils/parts :
 ;============ Public API ==============
 ;======================================
 
-; We'll need an ESIR "Part <: Component" in order to support parametric queries.
-; Short-term, we're going directly into Instantiables.
-public defstruct PartCode :
-  component: ComponentCode
-with :
-  printer => true
-
-public defn PartCode (json: JObject) -> PartCode :
-  val json-component = json["component"] as JObject
-  PartCode(ComponentCode(json-component))
-
-public defn to-jitx (part: PartCode) -> Instantiable :
-  to-jitx(component(part))
-
 public defstruct ComponentCode :
   name: String
   description: String
@@ -183,7 +169,7 @@ public-when(TESTING) defstruct PowerPinCode :
 with :
   printer => true
 
-public-when(TESTING) defn ComponentCode (json: JObject) -> ComponentCode :
+public defn ComponentCode (json: JObject) -> ComponentCode :
   val name = json["name"] as String
   val json-empty:Tuple<JObject> = []
   val json-bundles = if key?(json, "bundles") :
@@ -459,7 +445,7 @@ defn PowerPinCode (json: JObject) -> PowerPinCode :
 defn NoConnectCode (json: JObject) -> NoConnectCode :
   NoConnectCode(json["pin_name"] as String)
 
-defn to-jitx (c: ComponentCode) -> Instantiable :
+public defn to-jitx (c: ComponentCode) -> Instantiable :
   pcb-component my-component :
     name = name(c)
 
