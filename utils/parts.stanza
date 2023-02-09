@@ -15,11 +15,20 @@ defpackage ocdb/utils/parts :
   import ocdb/utils/box-symbol
   import ocdb/utils/bundles
   import ocdb/utils/db-parts
+  import ocdb/utils/generic-components
   import ocdb/utils/property-structs
 
 ;======================================
 ;============ Public API ==============
 ;======================================
+
+public defn ComponentCode (user-properties:Tuple<KeyValue>) -> ComponentCode :
+  val results = parts-db-query(user-properties, 1)
+  val first-result = results[0]
+  ComponentCode(first-result as JObject)
+
+public defn ComponentCodes (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<ComponentCode> :
+  map{ComponentCode, _} $ parts-db-query(user-properties, limit) as Tuple<JObject>
 
 public defstruct ComponentCode :
   name: String
@@ -50,6 +59,13 @@ with :
 ;======================================
 ;============= Internals ==============
 ;======================================
+
+defn parts-db-query (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<JSON> :
+  val query-properties = remove-duplicate-keys $ [
+    ["_type" => "parts-db"],
+    user-properties
+  ]
+  dbquery(query-properties, limit) as Tuple<JObject>
 
 ;--------------------------------------
 ;------------- Component --------------
