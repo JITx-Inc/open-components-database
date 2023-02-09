@@ -17,6 +17,7 @@ defpackage ocdb/utils/generic-components:
   import ocdb/utils/property-structs
   import ocdb/utils/symbol-utils
   import ocdb/utils/checks
+  import ocdb/utils/parts
 
 ; ========================================================
 ; ====== Standard packages for the passive solver ========
@@ -129,6 +130,24 @@ public defn closest-std-val (v:Double, tol:Double) :
 
   match-val * pow(10.0, expon)
 
+
+; ========================================================
+; ==================== PartsDB ===========================
+; ========================================================
+
+public defn database-part (mpn: String) -> Instantiable :
+  to-jitx $ ComponentCode(["mpn" => mpn])
+
+public defn database-part (mpn: String, manufacturer: String) -> Instantiable :
+  to-jitx $ ComponentCode(["mpn" => mpn, "manufacturer" => manufacturer])
+
+public defn database-parts (user-params:Tuple<KeyValue>) -> Tuple<Instantiable> :
+  map(to-jitx, ComponentCodes(user-params, 10))
+
+public defn database-parts (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
+  map(to-jitx, ComponentCodes(user-params, limit))
+
+
 ; ========================================================
 ; ========== Generic passive components ==================
 ; ========================================================
@@ -139,7 +158,7 @@ defn smd-query-properties () -> Tuple<KeyValue<String, ?>> :
    "minimum_quantity" => 1
    "min-stock" => 5 * DESIGN-QUANTITY]
 
-defn remove-duplicate-keys (hs:Seqable<Seqable<KeyValue<String, ?>>>) -> Tuple<KeyValue<String, ?>> :
+public defn remove-duplicate-keys (hs:Seqable<Seqable<KeyValue<String, ?>>>) -> Tuple<KeyValue<String, ?>> :
   to-tuple $ to-hashtable<String, ?>(cat-all(hs))
 
 

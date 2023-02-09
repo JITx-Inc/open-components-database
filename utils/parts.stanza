@@ -5,12 +5,16 @@ defpackage ocdb/utils/parts :
   import json
   import lang-utils
 
-  import jitx
+  import jitx with :
+    prefix(Resistor) => EModel-
+    prefix(Capacitor) => EModel-
+    prefix(Inductor) => EModel-
   import jitx/commands
   import jitx/value
 
   import ocdb/utils/box-symbol
   import ocdb/utils/bundles
+  import ocdb/utils/db-parts
   import ocdb/utils/property-structs
 
 ;======================================
@@ -347,28 +351,34 @@ public-when(TESTING) defn PinByRequireCode (json: JObject) -> PinByRequireCode :
 defn EModel (json: JObject) -> EModel :
   val emodel-json = json["value"] as JObject
   switch(json["type"] as String) :
-    "resistor": Resistor(emodel-json)
-    "capacitor": Capacitor(emodel-json)
-    "inductor": Inductor(emodel-json)
+    "resistor": EModel-Resistor(emodel-json)
+    "capacitor": EModel-Capacitor(emodel-json)
+    "inductor": EModel-Inductor(emodel-json)
 
-defn Resistor (json: JObject) -> Resistor :
-  Resistor(double-or-unknown(json["resistance"]),
-           double-or-unknown(json["tolerance"]),
-           double-or-unknown(json["max_power"]))
+defn EModel-Resistor (json: JObject) -> EModel-Resistor :
+  EModel-Resistor(
+    double-or-unknown(json["resistance"]),
+    double-or-unknown(json["tolerance"]),
+    double-or-unknown(json["max_power"])
+  )
 
-defn Capacitor (json: JObject) -> Capacitor :
-  Capacitor(double-or-unknown(json["capacitance"]),
-            double-or-unknown(json["tolerance"]),
-            double-or-unknown(json["max_voltage"]),
-            bool-or-unknown(json["polarized"]),
-            bool-or-unknown(json["low_esr"]),
-            string-or-unknown(json["temperature_coefficient"]),
-            string-or-unknown(json["dielectric"]))
+defn EModel-Capacitor (json: JObject) -> EModel-Capacitor :
+  EModel-Capacitor(
+    double-or-unknown(json["capacitance"]),
+    double-or-unknown(json["tolerance"]),
+    double-or-unknown(json["max_voltage"]),
+    bool-or-unknown(json["polarized"]),
+    bool-or-unknown(json["low_esr"]),
+    string-or-unknown(json["temperature_coefficient"]),
+    string-or-unknown(json["dielectric"])
+  )
 
-defn Inductor (json: JObject) -> Inductor :
-  Inductor(double-or-unknown(json["inductance"]),
-           double-or-unknown(json["tolerance"]),
-           double-or-unknown(json["max_current"]))
+defn EModel-Inductor (json: JObject) -> EModel-Inductor :
+  EModel-Inductor(
+    double-or-unknown(json["inductance"]),
+    double-or-unknown(json["tolerance"]),
+    double-or-unknown(json["max_current"])
+  )
 
 defn double-or-unknown (json: JSON) -> Double|UNKNOWN :
   match(json):
