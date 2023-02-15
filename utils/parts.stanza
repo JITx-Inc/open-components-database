@@ -22,7 +22,7 @@ public defstruct ComponentCode :
   description: String
   manufacturer: String
   mpn: String
-  vendor-part-numbers: VendorPartNumbersCode
+  vendor-part-numbers: HashTable<String, VendorPartNumberCode>
   category: Category|UNKNOWN
   emodel: EModel|False
   pin-properties: False|PinPropertiesCode
@@ -141,8 +141,9 @@ public-when(TESTING) defstruct NoConnectCode :
 with :
   printer => true
 
-public-when(TESTING) defstruct VendorPartNumbersCode :
-  lcsc: String|UNKNOWN
+public-when(TESTING) defstruct VendorPartNumberCode :
+  exists: True
+  value: String
 with :
   printer => true
 
@@ -192,7 +193,7 @@ public defn ComponentCode (json: JObject) -> ComponentCode :
     json["description"] as String,
     json["manufacturer"] as String,
     json["mpn"] as String,
-    VendorPartNumbersCode(json["vendor_part_numbers"] as JObject),
+    VendorPartNumbers(json["vendor_part_numbers"] as JObject),
     category-or-unknown(json["category"]),
     emodel,
     PinPropertiesCode(json["pin_properties"] as JObject),
@@ -212,10 +213,14 @@ public defn ComponentCode (json: JObject) -> ComponentCode :
     map(SupportCode, json-supports),
   )
 
-defn VendorPartNumbersCode (json: JObject) -> VendorPartNumbersCode :
-  VendorPartNumbersCode(
-    string-or-unknown(json["lcsc"])
-  )
+defn VendorPartNumbers (json: JObject) -> HashTable<String, VendorPartNumberCode> :
+  val vendor_part_numbers = HashTable<String, VendorPartNumberCode>()
+  for key-value in entries(json) do:
+    val vendor = key(key-value)
+    val vendor-part-object = value(key-value) as JObject
+    val vendor-part-number = vendor-part-object["value"] as String
+    vendor_part_numbers[vendor] = VendorPartNumberCode(true, vendor-part-number)
+  vendor_part_numbers
 
 defn PinPropertiesCode (json: JObject) -> PinPropertiesCode :
   PinPropertiesCode(
