@@ -242,3 +242,86 @@ public defn i2s () :
 public pcb-bundle mipi-d-phy :
   port clk : diff-pair
   port data : diff-pair
+
+; Dynamic lookup for simplicity
+; Could pre-populate for performance at some point, if needed
+public defn get-bundle-by-name (name:String, options:Tuple<String>) -> Bundle | [Bundle, Bundle] :
+  switch(name) :
+    ;============= Single Pin Bundles ===============
+    "gpio"  : gpio
+    "adc"   : adc
+    "dac"   : dac
+    "timer" : timer
+
+    ;=============== Two Pin Bundles ================
+    "low-freq-oscillator"  : low-freq-oscillator
+    "high-freq-oscillator" : high-freq-oscillator
+    "can-interface"        : can-interface
+    "i2c"                  : i2c
+
+    ;=============== 3+ Pin Bundles =================
+    "quad-spi" : quad-spi
+
+    ;========== Optionally Pinned Bundles ===========
+    ;Collect the optional pins and pass them as Bundle arguments.
+    "swd" : swd $
+      for option in options map :
+        switch(option) :
+          "SWD-SWO" : SWD-SWO
+          "SWD-TRACESWO" : SWD-TRACESWO
+    "jtag" : jtag $
+      for option in options map :
+        switch(option) :
+          "JTAG-TRSTN" : JTAG-TRSTN
+    "i2s" : i2s $
+      for option in options map :
+        switch(option) :
+          "I2S-MCK" : I2S-MCK
+          "I2S-SDMI" : I2S-SDMI
+    "uart" :
+      val options =
+        for option in options map :
+          switch(option) :
+            "UART-DTR" : UART-DTR
+            "UART-CTS" : UART-CTS
+            "UART-DCD" : UART-DCD
+            "UART-RI" : UART-RI
+            "UART-DST" : UART-DST
+            "UART-RTS" : UART-RTS
+            "UART-CK" : UART-CK
+            "UART-DE" : UART-DE
+            "UART-CS" : UART-CS
+            "UART-RX" : UART-RX
+            "UART-TX" : UART-TX
+      [uart(options) usart(options)]
+    "usart" :
+      usart $
+        for option in options map :
+          switch(option) :
+            "UART-DTR" : UART-DTR
+            "UART-CTS" : UART-CTS
+            "UART-DCD" : UART-DCD
+            "UART-RI" : UART-RI
+            "UART-DST" : UART-DST
+            "UART-RTS" : UART-RTS
+            "UART-CK" : UART-CK
+            "UART-DE" : UART-DE
+            "UART-CS" : UART-CS
+            "UART-RX" : UART-RX
+            "UART-TX" : UART-TX
+    "spi" : spi $
+      for option in options map :
+        switch(option) :
+          "SPI-SDO" : SPI-SDO
+          "SPI-SDI" : SPI-SDI
+          "SPI-CS" : SPI-CS
+          "SPI-CIPO" : SPI-CIPO
+          "SPI-COPI" : SPI-COPI
+          "SPI-SDIO" : SPI-SDIO
+    "spi-controller" :
+      spi-controller()
+    else :
+      fatal("Bundle '%_' is not supported." % [name])
+
+public defn get-bundle-by-name (name:String) -> Bundle | [Bundle, Bundle] :
+  get-bundle-by-name(name, [])
