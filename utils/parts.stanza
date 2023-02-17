@@ -5,43 +5,57 @@ defpackage ocdb/utils/parts :
   import json
   import lang-utils
 
-  import jitx
+  import jitx with :
+    prefix(Resistor) => EModel-
+    prefix(Capacitor) => EModel-
+    prefix(Inductor) => EModel-
   import jitx/commands
   import jitx/value
 
   import ocdb/utils/box-symbol
   import ocdb/utils/bundles
+  import ocdb/utils/db-parts
+  import ocdb/utils/generic-components
   import ocdb/utils/property-structs
 
 ;======================================
 ;============ Public API ==============
 ;======================================
 
-public defstruct PartCode :
-  component: ComponentCode
-with :
-  printer => true
+; TODO: JITX-4034 - Remove these warnings
 
-public defn PartCode (json: JObject) -> PartCode :
-  val json-component = json["component"] as JObject
-  PartCode(ComponentCode(json-component))
+; WARNING: This is an alpha feature at the moment.
+public defn ComponentCode (user-properties:Tuple<KeyValue>) -> ComponentCode :
+  val results = parts-db-query(user-properties, 1)
+  val first-result = results[0]
+  ComponentCode(first-result as JObject)
 
-public defn to-jitx (part: PartCode) -> Instantiable :
-  to-jitx(component(part))
+; WARNING: This is an alpha feature at the moment.
+public defn ComponentCodes (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<ComponentCode> :
+  map{ComponentCode, _} $ parts-db-query(user-properties, limit) as Tuple<JObject>
 
+; WARNING: This is an alpha feature at the moment.
 public defstruct ComponentCode :
   name: String
   description: String
   manufacturer: String
   mpn: String
+  vendor-part-numbers: HashTable<String, VendorPartNumberCode>
+  category: Category|UNKNOWN
   emodel: EModel|False
   pin-properties: False|PinPropertiesCode
   pcb-pads: Tuple<PCBPadCode>
   landpattern: LandPatternCode
   symbols: Tuple<SymbolCode>
   datasheet: String
-  image: String
+  image: String|UNKNOWN
+  trust: String
+  mounting: String|UNKNOWN
+  case: String|UNKNOWN
+  dimensions: DimensionsCode
+  sourcing: SourcingCode
   metadata: Tuple<MetadataCode>
+  properties: Tuple<ComponentPropertyCode>
   bundles:Tuple<BundleCode>
   supports:Tuple<SupportCode>
 with :
@@ -50,6 +64,13 @@ with :
 ;======================================
 ;============= Internals ==============
 ;======================================
+
+defn parts-db-query (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<JSON> :
+  val query-properties = remove-duplicate-keys $ [
+    ["_type" => "parts-db"],
+    user-properties
+  ]
+  dbquery(query-properties, limit) as Tuple<JObject>
 
 ;--------------------------------------
 ;------------- Component --------------
@@ -107,14 +128,47 @@ public-when(TESTING) defstruct PinByRequireCode <:PinByTypeCode :
 with :
   printer => true
 
+public-when(TESTING) defstruct DimensionsCode :
+  x: Double
+  y: Double
+  z: Double|UNKNOWN
+with :
+  printer => true
+
+public-when(TESTING) defstruct SourcingCode :
+  price: Double|UNKNOWN
+  minimum-quantity: Int
+  stock: Int
+with :
+  printer => true
+
+public-when(TESTING) defstruct TolerancedCode :
+  typical: Double
+  plus: Double
+  minus: Double
+with :
+  printer => true
+
 public-when(TESTING) defstruct MetadataCode :
   key: String
   value: String
 with :
   printer => true
 
+public-when(TESTING) defstruct ComponentPropertyCode :
+  name: Symbol
+  value: JITXValue|None
+with :
+  printer => true
+
 public-when(TESTING) defstruct NoConnectCode :
   pin-name: String
+with :
+  printer => true
+
+public-when(TESTING) defstruct VendorPartNumberCode :
+  exists: True|False
+  value: String
 with :
   printer => true
 
@@ -141,7 +195,7 @@ public-when(TESTING) defstruct PowerPinCode :
 with :
   printer => true
 
-public-when(TESTING) defn ComponentCode (json: JObject) -> ComponentCode :
+public defn ComponentCode (json: JObject) -> ComponentCode :
   val name = json["name"] as String
   val json-empty:Tuple<JObject> = []
   val json-bundles = if key?(json, "bundles") :
@@ -164,17 +218,34 @@ public-when(TESTING) defn ComponentCode (json: JObject) -> ComponentCode :
     json["description"] as String,
     json["manufacturer"] as String,
     json["mpn"] as String,
+    VendorPartNumbers(json["vendor_part_numbers"] as JObject),
+    category-or-unknown(json["category"]),
     emodel,
     PinPropertiesCode(json["pin_properties"] as JObject),
     map(PCBPadCode, json["pcb_pads"] as Tuple<JObject>),
     LandPatternCode(json["landpattern"] as JObject),
     map(SymbolCode, json["symbols"] as Tuple<JObject>),
     json["datasheet"] as String,
-    json["image"] as String,
+    string-or-unknown(json["image"]),
+    json["trust"] as String,
+    string-or-unknown(json["mounting"]),
+    string-or-unknown(json["case"]),
+    DimensionsCode(json["dimensions"] as JObject),
+    SourcingCode(json["sourcing"] as JObject),
     map(MetadataCode, json["metadata"] as Tuple<JObject>),
+    map(ComponentPropertyCode, json["properties"] as Tuple<JObject>),
     map(BundleCode, json-bundles),
     map(SupportCode, json-supports),
   )
+
+defn VendorPartNumbers (json: JObject) -> HashTable<String, VendorPartNumberCode> :
+  val vendor_part_numbers = HashTable<String, VendorPartNumberCode>()
+  for key-value in entries(json) do:
+    val vendor = key(key-value)
+    val vendor-part-object = value(key-value) as JObject
+    val vendor-part-number = vendor-part-object["value"] as String
+    vendor_part_numbers[vendor] = VendorPartNumberCode(true, vendor-part-number)
+  vendor_part_numbers
 
 defn PinPropertiesCode (json: JObject) -> PinPropertiesCode :
   PinPropertiesCode(
@@ -190,10 +261,68 @@ public-when(TESTING) defn PinPropertyCode (json: JObject) -> PinPropertyCode :
                   json["electrical_type"] as String,
                   to-int(get(json, "bank") as Double))
 
+public-when(TESTING) defn DimensionsCode (json: JObject) -> DimensionsCode :
+  val x = json["x"] as Double
+  val y = json["y"] as Double
+  val z = double-or-unknown(json["z"])
+  DimensionsCode(x, y, z)
+
+public-when(TESTING) defn SourcingCode (json: JObject) -> SourcingCode :
+  val price = double-or-unknown(json["price"])
+  val minium_quantity = to-int(json["minimum_quantity"] as Double)
+  val stock = to-int(json["stock"] as Double)
+  SourcingCode(price, minium_quantity, stock)
+
+public-when(TESTING) defn TolerancedCode (json: JObject) -> Toleranced :
+  val typical = json["tolerance"] as Double
+  val plus = json["plus"] as Double
+  val minus = json["minus"] as Double
+  Toleranced(typical, plus, minus)
+
 public-when(TESTING) defn MetadataCode (json: JObject) -> MetadataCode :
   val key = json["key"] as String
   val value = json["value"] as String
   MetadataCode(key, value)
+
+public-when(TESTING) defn ComponentPropertyCode (json: JObject) -> ComponentPropertyCode :
+  val name = to-symbol(json["name"] as String)
+  val value = component-property-value-by-type(json["value"] as JObject)
+  ComponentPropertyCode(name, value)
+
+public-when(TESTING) defn component-property-value-by-type (json: JObject) -> JITXValue|None :
+  val value-type = json["type"] as String
+  switch(value-type):
+    "TypeBoolean":
+      json["value"] as True|False
+    "TypeInt":
+      to-int(json["value"] as Double)
+    "TypeDouble":
+      json["value"] as Double
+    "TypeString":
+      json["value"] as String
+    "TypeSymbol":
+      to-symbol(json["value"] as String)
+    "TypeToleranced":
+      TolerancedCode(json["value"] as JObject)
+    "TypeKeyValue":
+      val value = json["value"] as JObject
+      KeyValue(value["key"] as String, value["value"] as String)
+    "TypeMetadata":
+      val metadata-codes = map(MetadataCode, json["value"] as Tuple<JObject>)
+      val metadata-kvs = for mc in metadata-codes seq :
+        KeyValue(key(mc), value(mc))
+      val metadata-table = to-hashtable(key, value, metadata-kvs)
+      if not key?(metadata-table, "image"):
+        ; We need a value here to render at all in the design explorer.
+        ; Empty string here renders black, as opposed to a missing image icon.
+        metadata-table["image"] = ""
+      to-tuple(metadata-table)
+    "TypeTupleValueByType":
+      val results = map(component-property-value-by-type, json["value"] as Tuple<JObject>)
+      to-tuple(filter({_ is JITXValue}, results))
+    else:
+      println $ "Skipping unsupported component property: %_" % [value-type]
+      None()
 
 public-when(TESTING) defn BundleCode (json: JObject) -> BundleCode :
   BundleCode(json["name"] as String)
@@ -248,28 +377,34 @@ public-when(TESTING) defn PinByRequireCode (json: JObject) -> PinByRequireCode :
 defn EModel (json: JObject) -> EModel :
   val emodel-json = json["value"] as JObject
   switch(json["type"] as String) :
-    "resistor": Resistor(emodel-json)
-    "capacitor": Capacitor(emodel-json)
-    "inductor": Inductor(emodel-json)
+    "resistor": EModel-Resistor(emodel-json)
+    "capacitor": EModel-Capacitor(emodel-json)
+    "inductor": EModel-Inductor(emodel-json)
 
-defn Resistor (json: JObject) -> Resistor :
-  Resistor(double-or-unknown(json["resistance"]),
-           double-or-unknown(json["tolerance"]),
-           double-or-unknown(json["max_power"]))
+defn EModel-Resistor (json: JObject) -> EModel-Resistor :
+  EModel-Resistor(
+    double-or-unknown(json["resistance"]),
+    double-or-unknown(json["tolerance"]),
+    double-or-unknown(json["max_power"])
+  )
 
-defn Capacitor (json: JObject) -> Capacitor :
-  Capacitor(double-or-unknown(json["capacitance"]),
-            double-or-unknown(json["tolerance"]),
-            double-or-unknown(json["max_voltage"]),
-            bool-or-unknown(json["polarized"]),
-            bool-or-unknown(json["low_esr"]),
-            string-or-unknown(json["temperature_coefficient"]),
-            string-or-unknown(json["dielectric"]))
+defn EModel-Capacitor (json: JObject) -> EModel-Capacitor :
+  EModel-Capacitor(
+    double-or-unknown(json["capacitance"]),
+    double-or-unknown(json["tolerance"]),
+    double-or-unknown(json["max_voltage"]),
+    bool-or-unknown(json["polarized"]),
+    bool-or-unknown(json["low_esr"]),
+    string-or-unknown(json["temperature_coefficient"]),
+    string-or-unknown(json["dielectric"])
+  )
 
-defn Inductor (json: JObject) -> Inductor :
-  Inductor(double-or-unknown(json["inductance"]),
-           double-or-unknown(json["tolerance"]),
-           double-or-unknown(json["max_current"]))
+defn EModel-Inductor (json: JObject) -> EModel-Inductor :
+  EModel-Inductor(
+    double-or-unknown(json["inductance"]),
+    double-or-unknown(json["tolerance"]),
+    double-or-unknown(json["max_current"])
+  )
 
 defn double-or-unknown (json: JSON) -> Double|UNKNOWN :
   match(json):
@@ -290,6 +425,36 @@ defn string-or-unknown (json: JSON) -> String|UNKNOWN :
   match(json):
     (s: String) :
       s
+    (s: JNull) :
+      UNKNOWN
+
+defenum Category :
+  capacitor
+  connector
+  diode
+  fuse
+  inductor
+  microcontroller
+  oscillator
+  power-supply-chip
+  resistor
+  transistor
+
+defn category-or-unknown (json: JSON) -> Category|UNKNOWN :
+  match(json):
+    (s: String) :
+      switch(s):
+        "capacitor": capacitor
+        "connector": connector
+        "diode": diode
+        "fuse": fuse
+        "inductor": inductor
+        "microcontroller": microcontroller
+        "oscillator": oscillator
+        "power_supply_chip": power-supply-chip
+        "resistor": resistor
+        "transistor": transistor
+        else: UNKNOWN
     (s: JNull) :
       UNKNOWN
 
@@ -316,7 +481,7 @@ defn PowerPinCode (json: JObject) -> PowerPinCode :
 defn NoConnectCode (json: JObject) -> NoConnectCode :
   NoConnectCode(json["pin_name"] as String)
 
-defn to-jitx (c: ComponentCode) -> Instantiable :
+public defn to-jitx (c: ComponentCode) -> Instantiable :
   pcb-component my-component :
     name = name(c)
 
@@ -340,13 +505,7 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
     match(pin-props: PinPropertiesCode) :
       to-jitx(pin-props)
 
-    val metadata-table = to-hashtable(key, value, metadata(c))
-
-    ; Override with these explicit values
-    metadata-table["datasheets"] = datasheet(c)
-    metadata-table["image"] = image(c)
-
-    property(self.metadata) = to-tuple(metadata-table)
+    map(to-jitx, properties(c))
 
     val jitx-pads-by-pcb-pad-name = HashTable<String, Pad>()
     for pp in pcb-pads(c) do :
@@ -357,17 +516,10 @@ defn to-jitx (c: ComponentCode) -> Instantiable :
     val landpattern-def = to-jitx(landpattern(c), jitx-pads-by-pcb-pad-name)
     assign-landpattern(landpattern-def)
 
-    ; FIXME!: Can delete this paragraph and keep multi symbol case ?
-    if length(symbols(c)) == 1 :
-      val s = symbols(c)[0]
-      assign-symbol(to-jitx(s))
-    else :
-      assign-symbols(
-        for s in symbols(c) map :
-          val bank = bank(s)
-          val jitx-symbol = to-jitx(s)
-          Ref(bank) => jitx-symbol
-      )
+    assign-symbols(
+      for s in symbols(c) map :
+        bank(s) => to-jitx(s)
+    )
 
     ; Bundles
     val local-bundles-by-name = HashTable<String, Bundle>()
@@ -424,6 +576,10 @@ defn to-jitx (pin-props: PinPropertiesCode) :
     do(to-jitx, power-pins(pin-props))
     do(to-jitx, no-connects(pin-props))
 
+    for pin-prop in pins(pin-props) do :
+      val jitx-pin = self.(pin-name(pin-prop))
+      set-property(jitx-pin, `direction, direction(pin-prop) as Dir)
+
 defn to-ref (pin-by-type:PinByTypeCode) -> Ref :
   match(pin-by-type) :
     (p:PinByNameCode) :
@@ -442,6 +598,17 @@ defn to-jitx (power-pin: PowerPinCode) :
 defn to-jitx (nc: NoConnectCode) :
   inside pcb-component :
     no-connect(self.(pin-name(nc)))
+
+defn to-jitx (prop: ComponentPropertyCode) :
+  inside pcb-component :
+    val prop-name = name(prop)
+    val prop-value = value(prop)
+    match(prop-value:JITXValue):
+      val prop-value-jitx-value = prop-value
+      if prop-name == `metadata:
+        property(self.metadata) = prop-value
+      else:
+        set-property(self, prop-name, prop-value)
 
 ;--------------------------------------
 ;---------------- Pad -----------------
@@ -697,7 +864,7 @@ public-when(TESTING) defn LandPatternCode (json: JObject) -> LandPatternCode :
   )
 
 ;Represents a via, copper, or pour.
-public deftype GeomCode <: Comparable
+deftype GeomCode <: Comparable
 
 public-when(TESTING) defstruct CopperCode <: GeomCode :
   layer:LayerIndex
