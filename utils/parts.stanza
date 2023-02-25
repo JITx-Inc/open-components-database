@@ -52,7 +52,7 @@ public defstruct Part <: Component :
   mounting: String|UNKNOWN
   case: String|UNKNOWN
   dimensions: DimensionsCode
-  sourcing: SourcingCode
+  sourcing: Sourcing
   rated-temperature: Toleranced|False
   ; Power dissipation limit as rated by manufacturer. One value, or PWL function (W | [degC, W])
   rated-power: Double|False
@@ -91,7 +91,7 @@ defn Part (json: JObject) -> Part :
     string-or-unknown(json["mounting"]),
     string-or-unknown(json["case"]),
     DimensionsCode(json["dimensions"] as JObject),
-    SourcingCode(json["sourcing"] as JObject),
+    parse-sourcing(json),
     parse-rated-temperature(json),
     optional-double(json, "rated-power"),
     parse-sellers(json),
@@ -212,13 +212,6 @@ public-when(TESTING) defstruct DimensionsCode :
 with :
   printer => true
 
-public-when(TESTING) defstruct SourcingCode :
-  price: Double|UNKNOWN
-  minimum-quantity: Int
-  stock: Int
-with :
-  printer => true
-
 public-when(TESTING) defstruct TolerancedCode :
   typical: Double
   plus: Double
@@ -288,12 +281,6 @@ public-when(TESTING) defn DimensionsCode (json: JObject) -> DimensionsCode :
   val y = json["y"] as Double
   val z = double-or-unknown(json["z"])
   DimensionsCode(x, y, z)
-
-public-when(TESTING) defn SourcingCode (json: JObject) -> SourcingCode :
-  val price = double-or-unknown(json["price"])
-  val minium_quantity = to-int(json["minimum_quantity"] as Double)
-  val stock = to-int(json["stock"] as Double)
-  SourcingCode(price, minium_quantity, stock)
 
 public-when(TESTING) defn TolerancedCode (json: JObject) -> Toleranced :
   val typical = json["typical"] as Double
