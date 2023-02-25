@@ -52,6 +52,10 @@ public defstruct Part <: Component :
   mounting: String|UNKNOWN
   case: String|UNKNOWN
   dimensions: DimensionsCode
+  sourcing: SourcingCode
+  rated-temperature: Toleranced|False
+  ; Power dissipation limit as rated by manufacturer. One value, or PWL function (W | [degC, W])
+  rated-power: Double|False
 
   ; Optionally appended by jit-backend (does not come from parts-db)
   sellers: Tuple<Seller>|False with: (as-method => true)
@@ -62,18 +66,20 @@ with :
 ; Parse parts conditionally, based on their category.
 ; This allows us to switch existing API calls over to the parts-db, with backwards-compatibility.
 public defn parse-component (json: JObject) -> Component :
-  ; switch(json["category"] as String):
-  ;   Category.capacitor: parse-capacitor(json)
-  ;   Category.inductor: parse-inductor(json)
-  ;   Category.resistor: parse-resistor(json)
-  ;   else: parse-part(json)
-  parse-part(json)
+  println $ ""
+  println $ "+++ category: %_" % [json["category"] as String]
+  switch(json["category"] as String):
+    ; Category.capacitor: parse-capacitor(json)
+    ; Category.inductor: parse-inductor(json)
+    "resistor": Resistor(json)
+    else: Part(json)
 
 ;======================================
 ;============= Internals ==============
 ;======================================
 
-defn parse-part (json: JObject) -> Part :
+defn Part (json: JObject) -> Part :
+  println $ "+++ Part"
   Part(
     ComponentCode(json["component"] as JObject),
     json["description"] as String,
@@ -85,6 +91,9 @@ defn parse-part (json: JObject) -> Part :
     string-or-unknown(json["mounting"]),
     string-or-unknown(json["case"]),
     DimensionsCode(json["dimensions"] as JObject),
+    SourcingCode(json["sourcing"] as JObject),
+    parse-rated-temperature(json),
+    optional-double(json, "rated-power"),
     parse-sellers(json),
     optional-double(json, "resolved_price"),
   )
@@ -103,7 +112,6 @@ defstruct ComponentCode :
   pcb-pads: Tuple<PCBPadCode>
   landpattern: LandPatternCode
   symbols: Tuple<SymbolCode>
-  sourcing: SourcingCode
   metadata: Tuple<MetadataCode>
   properties: Tuple<ComponentPropertyCode>
   bundles:Tuple<BundleCode>
@@ -139,7 +147,6 @@ defn ComponentCode (json: JObject) -> ComponentCode :
     map(PCBPadCode, json["pcb_pads"] as Tuple<JObject>),
     LandPatternCode(json["landpattern"] as JObject),
     map(SymbolCode, json["symbols"] as Tuple<JObject>),
-    SourcingCode(json["sourcing"] as JObject),
     map(MetadataCode, json["metadata"] as Tuple<JObject>),
     map(ComponentPropertyCode, json["properties"] as Tuple<JObject>),
     map(BundleCode, json-bundles),
