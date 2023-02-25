@@ -42,7 +42,8 @@ public defn gain (s:BiQuadSolution) -> Double :
   Rb(s) / Rg(s)
 
 public defmethod print (o:OutputStream, s:BiQuadSolution) :
-  print(o, "BiQuad solution: Rf=%_ Rg=%_ Rb=%_ Cb=%_uF" % [Rf(s), Rg(s), Rb(s), Cb(s) * 1.0e6])
+  print(o, "BiQuad solution: Rf=%_ Rg=%_ Rb=%_ Cb=%_uF\n" % [Rf(s), Rg(s), Rb(s), Cb(s) * 1.0e6])
+  print(o, "BiQuad frequencies: Fc=%_Hz BW=%_Hz Gain=%_\n" % [center-freq(s), bandwidth(s), gain(s)])
 
 public defn biquad-lowpass-circuit (sol:BiQuadSolution, part:Instantiable) :
   pcb-module biquad-circuit :
@@ -135,22 +136,35 @@ public defn biquad-bandpass-circuit (sol:BiQuadSolution, part:Instantiable ) :
 
 
 pcb-module biquad:  
-  port power : power
-
-  val solution = BiQuadSolution(1000.0, 2000.0, 3000.0, 10.0e-9)
+  ; need to calculate biquad solution given the fc,bw, and gain desired
+  ; also need to use bw of opamp to limit max operating frequency, etc.
   val my-amp = ocdb/components/analog-devices/ADA4004/component
 
-  inst filter : biquad-bandpass-circuit(solution, my-amp)
-  schematic-group([filter]) = filter
+  val numFilters = 4
+  val solution = BiQuadSolution(1000.0, 2000.0, 3000.0, 10.0e-9)
 
-  net gnd (filter.VEE)
-  net P3V3 (filter.VCC)
-  net (gnd filter.VREF)
-  net in (filter.VIN)
-  net out (filter.VOUT)
+  println("Biquad details:")
+  println(solution)
 
-  symbol(P3V3) = ocdb/utils/symbols/altium-power-bar-sym
-  symbol(gnd) = ocdb/utils/symbols/ground-sym  
+  inst filter : biquad-bandpass-circuit(solution, my-amp)[numFilters]
+
+    net P2V5 ()
+    net gnd ()
+    net P5V0 ()
+    net in ()
+    net out ()
+
+  for index in 0 to numFilters do :
+    schematic-group([filter[index]]) = filter
+    net (P2V5 filter[index].VREF)
+    net (gnd filter[index].VEE )
+    net (P5V0 filter[index].VCC)
+    net (in filter[index].VIN)
+    net (out filter[index].VOUT)
+
+  symbol(P5V0) = ocdb/utils/symbols/altium-power-bar-sym
+  symbol(P2V5) = ocdb/utils/symbols/altium-power-wave-sym
+  symbol(gnd) = ocdb/utils/symbols/ground-sym
 
 make-default-board(biquad, 4, BOARD-SHAPE)
 view-board()
