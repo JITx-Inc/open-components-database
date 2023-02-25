@@ -25,34 +25,84 @@ defpackage ocdb/utils/parts :
 ; TODO: JITX-4034 - Remove these warnings
 
 ; WARNING: This is an alpha feature at the moment.
-public defn ComponentCode (user-properties:Tuple<KeyValue>) -> ComponentCode :
-  val results = parts-db-query(user-properties, 1)
-  val first-result = results[0]
-  ComponentCode(first-result as JObject)
+public defn PartsDBComponent (user-properties:Tuple<KeyValue>) -> Component :
+  val query-properties = remove-duplicate-keys $ [
+    ["_type" => "parts-db"],
+    user-properties
+  ]
+  parse-component $ dbquery-first(query-properties) as JObject
 
 ; WARNING: This is an alpha feature at the moment.
-public defn ComponentCodes (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<ComponentCode> :
-  map{ComponentCode, _} $ parts-db-query(user-properties, limit) as Tuple<JObject>
+public defn PartsDBComponents (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Component> :
+  val query-properties = remove-duplicate-keys $ [
+    ["_type" => "parts-db"],
+    user-properties
+  ]
+  map{parse-component, _} $ dbquery(query-properties, limit) as Tuple<JObject>
 
 ; WARNING: This is an alpha feature at the moment.
-public defstruct ComponentCode :
-  name: String
+public defstruct Part <: Component :
+  component: ComponentCode
   description: String
   manufacturer: String
   mpn: String
   vendor-part-numbers: Tuple<KeyValue<String, String>>
   category: Category|UNKNOWN
+  trust: String
+  mounting: String|UNKNOWN
+  case: String|UNKNOWN
+  dimensions: DimensionsCode
+
+  ; Optionally appended by jit-backend (does not come from parts-db)
+  sellers: Tuple<Seller>|False with: (as-method => true)
+  resolved-price: Double|False with: (as-method => true)
+with :
+  printer => true
+
+; Parse parts conditionally, based on their category.
+; This allows us to switch existing API calls over to the parts-db, with backwards-compatibility.
+public defn parse-component (json: JObject) -> Component :
+  ; switch(json["category"] as String):
+  ;   Category.capacitor: parse-capacitor(json)
+  ;   Category.inductor: parse-inductor(json)
+  ;   Category.resistor: parse-resistor(json)
+  ;   else: parse-part(json)
+  parse-part(json)
+
+;======================================
+;============= Internals ==============
+;======================================
+
+defn parse-part (json: JObject) -> Part :
+  Part(
+    ComponentCode(json["component"] as JObject),
+    json["description"] as String,
+    json["manufacturer"] as String,
+    json["mpn"] as String,
+    VendorPartNumbers(json["vendor_part_numbers"] as JObject),
+    category-or-unknown(json["category"]),
+    json["trust"] as String,
+    string-or-unknown(json["mounting"]),
+    string-or-unknown(json["case"]),
+    DimensionsCode(json["dimensions"] as JObject),
+    parse-sellers(json),
+    optional-double(json, "resolved_price"),
+  )
+
+;--------------------------------------
+;----------- Component Code -----------
+;--------------------------------------
+
+defstruct ComponentCode :
+  name: String
+  description: String
+  manufacturer: String
+  mpn: String
   emodel: EModel|False
   pin-properties: False|PinPropertiesCode
   pcb-pads: Tuple<PCBPadCode>
   landpattern: LandPatternCode
   symbols: Tuple<SymbolCode>
-  datasheet: String
-  image: String|UNKNOWN
-  trust: String
-  mounting: String|UNKNOWN
-  case: String|UNKNOWN
-  dimensions: DimensionsCode
   sourcing: SourcingCode
   metadata: Tuple<MetadataCode>
   properties: Tuple<ComponentPropertyCode>
@@ -61,20 +111,40 @@ public defstruct ComponentCode :
 with :
   printer => true
 
-;======================================
-;============= Internals ==============
-;======================================
+defn ComponentCode (json: JObject) -> ComponentCode :
+  val name = json["name"] as String
+  val json-empty:Tuple<JObject> = []
+  val json-bundles = if key?(json, "bundles") :
+    json["bundles"] as Tuple<JObject>
+  else :
+    json-empty
+  val json-supports = if key?(json, "supports") :
+    json["supports"] as Tuple<JObject>
+  else :
+    json-empty
 
-defn parts-db-query (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<JSON> :
-  val query-properties = remove-duplicate-keys $ [
-    ["_type" => "parts-db"],
-    user-properties
-  ]
-  dbquery(query-properties, limit) as Tuple<JObject>
+  val emodel = match(json["emodel"]):
+    (_:JNull):
+      false
+    (e:JObject):
+      EModel(e)
 
-;--------------------------------------
-;------------- Component --------------
-;--------------------------------------
+  ComponentCode(
+    name,
+    json["description"] as String,
+    json["manufacturer"] as String,
+    json["mpn"] as String,
+    emodel,
+    PinPropertiesCode(json["pin_properties"] as JObject),
+    map(PCBPadCode, json["pcb_pads"] as Tuple<JObject>),
+    LandPatternCode(json["landpattern"] as JObject),
+    map(SymbolCode, json["symbols"] as Tuple<JObject>),
+    SourcingCode(json["sourcing"] as JObject),
+    map(MetadataCode, json["metadata"] as Tuple<JObject>),
+    map(ComponentPropertyCode, json["properties"] as Tuple<JObject>),
+    map(BundleCode, json-bundles),
+    map(SupportCode, json-supports),
+  )
 
 public-when(TESTING) defstruct BundleCode :
   name: String
@@ -188,49 +258,6 @@ public-when(TESTING) defstruct PowerPinCode :
   max-voltage: Double
 with :
   printer => true
-
-public defn ComponentCode (json: JObject) -> ComponentCode :
-  val name = json["name"] as String
-  val json-empty:Tuple<JObject> = []
-  val json-bundles = if key?(json, "bundles") :
-    json["bundles"] as Tuple<JObject>
-  else :
-    json-empty
-  val json-supports = if key?(json, "supports") :
-    json["supports"] as Tuple<JObject>
-  else :
-    json-empty
-
-  val emodel = match(json["emodel"]):
-    (_:JNull):
-      false
-    (e:JObject):
-      EModel(e)
-
-  ComponentCode(
-    name,
-    json["description"] as String,
-    json["manufacturer"] as String,
-    json["mpn"] as String,
-    VendorPartNumbers(json["vendor_part_numbers"] as JObject),
-    category-or-unknown(json["category"]),
-    emodel,
-    PinPropertiesCode(json["pin_properties"] as JObject),
-    map(PCBPadCode, json["pcb_pads"] as Tuple<JObject>),
-    LandPatternCode(json["landpattern"] as JObject),
-    map(SymbolCode, json["symbols"] as Tuple<JObject>),
-    json["datasheet"] as String,
-    string-or-unknown(json["image"]),
-    json["trust"] as String,
-    string-or-unknown(json["mounting"]),
-    string-or-unknown(json["case"]),
-    DimensionsCode(json["dimensions"] as JObject),
-    SourcingCode(json["sourcing"] as JObject),
-    map(MetadataCode, json["metadata"] as Tuple<JObject>),
-    map(ComponentPropertyCode, json["properties"] as Tuple<JObject>),
-    map(BundleCode, json-bundles),
-    map(SupportCode, json-supports),
-  )
 
 defn VendorPartNumbers (json: JObject) -> Tuple<KeyValue<String, String>> :
   entries(json) as Tuple<KeyValue<String, String>>
@@ -469,7 +496,8 @@ defn PowerPinCode (json: JObject) -> PowerPinCode :
 defn NoConnectCode (json: JObject) -> NoConnectCode :
   NoConnectCode(json["pin_name"] as String)
 
-public defn to-jitx (c: ComponentCode) -> Instantiable :
+defmethod to-jitx (part: Part) -> Instantiable :
+  val c = component(part)
   pcb-component my-component :
     name = name(c)
 
