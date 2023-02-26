@@ -102,11 +102,12 @@ defn Part (json: JObject) -> Part :
 ;----------- Component Code -----------
 ;--------------------------------------
 
-defstruct ComponentCode :
+public defstruct ComponentCode :
   name: String
   description: String
   manufacturer: String
   mpn: String
+  reference_prefix: String
   emodel: EModel|False
   pin-properties: False|PinPropertiesCode
   pcb-pads: Tuple<PCBPadCode>
@@ -119,7 +120,7 @@ defstruct ComponentCode :
 with :
   printer => true
 
-defn ComponentCode (json: JObject) -> ComponentCode :
+public defn ComponentCode (json: JObject) -> ComponentCode :
   val name = json["name"] as String
   val json-empty:Tuple<JObject> = []
   val json-bundles = if key?(json, "bundles") :
@@ -142,6 +143,7 @@ defn ComponentCode (json: JObject) -> ComponentCode :
     json["description"] as String,
     json["manufacturer"] as String,
     json["mpn"] as String,
+    json["reference_prefix"] as String,
     emodel,
     PinPropertiesCode(json["pin_properties"] as JObject),
     map(PCBPadCode, json["pcb_pads"] as Tuple<JObject>),
@@ -232,7 +234,7 @@ with :
   printer => true
 
 public-when(TESTING) defstruct NoConnectCode :
-  pin-name: String
+  pin: PinByTypeCode
 with :
   printer => true
 
@@ -244,7 +246,7 @@ with :
   printer => true
 
 public-when(TESTING) defstruct PinPropertyCode :
-  pin-name: String
+  pin: PinByTypeCode
   pads: Tuple<PinByTypeCode>
   direction: Dir
   electrical-type: String
@@ -253,7 +255,7 @@ with :
   printer => true
 
 public-when(TESTING) defstruct PowerPinCode :
-  pin-name: String
+  pin: PinByTypeCode
   min-voltage: Double
   max-voltage: Double
 with :
@@ -270,7 +272,7 @@ defn PinPropertiesCode (json: JObject) -> PinPropertiesCode :
   )
 
 public-when(TESTING) defn PinPropertyCode (json: JObject) -> PinPropertyCode :
-  PinPropertyCode(json["pin_name"] as String,
+  PinPropertyCode(PinByTypeCode(json["pin"] as JObject),
                   map(PinByTypeCode, json["pads"] as Tuple<JObject>),
                   Dir(json["direction"] as String),
                   json["electrical_type"] as String,
@@ -482,16 +484,18 @@ defn ColorSpec (json: JObject) -> ColorSpec :
 
 defn PowerPinCode (json: JObject) -> PowerPinCode :
   PowerPinCode(
-    json["pin_name"] as String,
+    PinByTypeCode(json["pin"] as JObject),
     json["min_voltage"] as Double,
     json["max_voltage"] as Double
   )
 
 defn NoConnectCode (json: JObject) -> NoConnectCode :
-  NoConnectCode(json["pin_name"] as String)
+  NoConnectCode(PinByTypeCode(json["pin"] as JObject))
 
-defmethod to-jitx (part: Part) -> Instantiable :
-  val c = component(part)
+public defmethod to-jitx (part: Part) -> Instantiable :
+  to-jitx $ component(part)
+
+public defn to-jitx (c: ComponentCode) -> Instantiable :
   pcb-component my-component :
     name = name(c)
 
@@ -516,6 +520,8 @@ defmethod to-jitx (part: Part) -> Instantiable :
       to-jitx(pin-props)
 
     map(to-jitx, properties(c))
+
+    reference-prefix = reference_prefix(c)
 
     val jitx-pads-by-pcb-pad-name = HashTable<String, Pad>()
     for pp in pcb-pads(c) do :
@@ -580,14 +586,14 @@ defn to-jitx (pin-props: PinPropertiesCode) :
     pin-properties :
       [pin:Ref | pads:Ref ... | side:Dir | electrical-type:String | bank:Int]
       for pin-prop in pins(pin-props) do :
-        val pin-ref = Ref(pin-name(pin-prop))
+        val pin-ref = to-ref(/pin(pin-prop))
         val jitx-pads = map(to-ref, pads(pin-prop))
         [(pin-ref) | (jitx-pads)... | direction(pin-prop) as Dir | electrical-type(pin-prop) | bank(pin-prop) as Int]
     do(to-jitx, power-pins(pin-props))
     do(to-jitx, no-connects(pin-props))
 
     for pin-prop in pins(pin-props) do :
-      val jitx-pin = self.(pin-name(pin-prop))
+      val jitx-pin = self.(to-ref(/pin(pin-prop)))
       set-property(jitx-pin, `direction, direction(pin-prop) as Dir)
 
 defn to-ref (pin-by-type:PinByTypeCode) -> Ref :
@@ -599,15 +605,16 @@ defn to-ref (pin-by-type:PinByTypeCode) -> Ref :
 
 defn to-jitx (power-pin: PowerPinCode) :
   inside pcb-component :
-    val p = dot(self, (Ref(pin-name(power-pin))))
+    val jitx-pin = self.(to-ref(/pin(power-pin)))
     val min = min-voltage(power-pin)
     val max = max-voltage(power-pin)
     val toleranced = ocdb/utils/property-structs/PowerPin(jitx/min-max(min, max))
-    set-property(p, `power-pin, toleranced)
+    set-property(jitx-pin, `power-pin, toleranced)
 
 defn to-jitx (nc: NoConnectCode) :
   inside pcb-component :
-    no-connect(self.(pin-name(nc)))
+    val jitx-pin = self.(to-ref(/pin(nc)))
+    no-connect(jitx-pin)
 
 defn to-jitx (prop: ComponentPropertyCode) :
   inside pcb-component :
@@ -985,7 +992,7 @@ public-when(TESTING) defstruct SymbolCode :
   layers: Tuple<SymbolLayerCode>
 
 public-when(TESTING) defstruct SymbolPinCode :
-  pin-name: String
+  pin: PinByTypeCode
   point: Point
   direction: Dir
   length: Double
@@ -1005,7 +1012,7 @@ public-when(TESTING) defn SymbolCode (json: JObject) -> SymbolCode :
   )
 
 defn SymbolPinCode (json: JObject) -> SymbolPinCode :
-  SymbolPinCode(json["pin_name"] as String,
+  SymbolPinCode(PinByTypeCode(json["pin"] as JObject),
                 Point(json["point"] as JObject),
                 Dir(json["direction"] as String),
                 json["length"] as Double,
@@ -1035,7 +1042,7 @@ defn to-jitx (p: SymbolPinCode) :
   inside pcb-symbol :
     val number-size = number-size(p)
     val name-size = name-size(p)
-    val pin-ref = Ref(pin-name(p))
+    val pin-ref = to-ref(/pin(p))
     match(number-size, name-size) :
       (number-size: Double, name-size: Double) :
         pin (pin-ref) at point(p) with :

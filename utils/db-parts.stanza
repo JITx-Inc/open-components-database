@@ -17,6 +17,7 @@ defpackage ocdb/utils/db-parts :
   import ocdb/utils/defaults
   import ocdb/utils/landpatterns
   import ocdb/utils/generator-utils
+  import ocdb/utils/parts
   import ocdb/utils/property-structs
   import ocdb/utils/symbols
   import ocdb/utils/design-vars
@@ -83,6 +84,7 @@ public defstruct Resistor <: Component :
   TCR: TCR|False ; Temperature coefficient of resistance (ohms/ohm*degC)
   sellers: Tuple<Seller>|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
+  component: ComponentCode|False
 
 public defn delta-resistance (resistor: Resistor, temperature: Double) -> Double :
   val tcr = TCR(resistor) as TCR
@@ -99,6 +101,11 @@ public defn Resistor (raw-json: JObject) -> Resistor :
   println $ "+++ Resistor"
   val json = filter-json(raw-json)
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
+
+  val component = if get?(json, "component") is JObject:
+    ComponentCode(json["component"] as JObject)
+  else:
+    false
 
   Resistor(json["manufacturer"] as String,
            json["mpn"] as String,
@@ -119,7 +126,8 @@ public defn Resistor (raw-json: JObject) -> Resistor :
            optional-double(json, "rated-power"),
            resistance-tcr(json),
            parse-sellers(json),
-           optional-double(json, "resolved_price"))
+           optional-double(json, "resolved_price"),
+           component)
 
 defn resistance-tcr (json: JObject) -> TCR|False :
   val tcr-json = get?(json, "tcr")
@@ -137,63 +145,67 @@ public defstruct TCR :
 ; ========================================================
 
 defmethod to-jitx (resistor: Resistor) -> Instantiable :
-  pcb-component my-resistor :
-    val manufacturer-string = manufacturer(resistor)
-    match(manufacturer-string: String) :
-      manufacturer = manufacturer-string
+  match(component(resistor)):
+    (c:ComponentCode):
+      to-jitx(c)
+    (c):
+      pcb-component my-resistor :
+        val manufacturer-string = manufacturer(resistor)
+        match(manufacturer-string: String) :
+          manufacturer = manufacturer-string
 
-    mpn = mpn(resistor)
-    val height = z(resistor)
+        mpn = mpn(resistor)
+        val height = z(resistor)
 
-    val description-string = lookup?(metadata(resistor), "description")
-    match(description-string: String) :
-      description = description-string
+        val description-string = lookup?(metadata(resistor), "description")
+        match(description-string: String) :
+          description = description-string
 
-    port p : pin[1 through 2]
-    val sym = resistor-sym()
-    symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
-    val case = case(resistor)
-    match(case: String) :
-      if check-valid-rectangle-pkg-list(case) :
-        val pkg = ipc-two-pin-landpattern(case, height)
-        landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
-      else :  ; example: case = "Axial"
-        val pkg = dummy-landpattern(2, [x(resistor) y(resistor)])
-        landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
-    else :
-      val pkg = dummy-landpattern(2, [x(resistor) y(resistor)])
-      landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+        port p : pin[1 through 2]
+        val sym = resistor-sym()
+        symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+        val case = case(resistor)
+        match(case: String) :
+          if check-valid-rectangle-pkg-list(case) :
+            val pkg = ipc-two-pin-landpattern(case, height)
+            landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+          else :  ; example: case = "Axial"
+            val pkg = dummy-landpattern(2, [x(resistor) y(resistor)])
+            landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+        else :
+          val pkg = dummy-landpattern(2, [x(resistor) y(resistor)])
+          landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
 
-    emodel = EModel-Resistor(resistance(resistor),
-                             emodel-pourcentage-tolerance(tolerance(resistor)),
-                             double-or-unknown(rated-power(resistor)))
-    reference-prefix = "R"
-    val TCR = TCR(resistor)
-    val rated-temperature = rated-temperature(resistor)
-    val tolerance = tolerance(resistor)
-    val resistance = resistance(resistor)
-    property(self.resistor) = true
-    property(self.trust) = trust(resistor)
-    property(self.x) = x(resistor)
-    property(self.y) = y(resistor)
-    property(self.z) = z(resistor)
-    property(self.mounting) = mounting(resistor)
-    match(rated-temperature: Toleranced): property(self.rated-temperature) = rated-temperature
-    property(self.case) = /case(resistor)
-    property(self.metadata) = metadata(resistor)
-    property(self.type) = type(resistor)
-    match(tolerance: MinMaxRange):
-      ;[TODO] Current exporter IR crashes unless tolerance is a Double.
-      ;So this feature is commented out until that is fixed.
-      ;property(self.tolerance) = [min(tolerance), max(tolerance)]
-      property(self.tolerance) = max(tolerance)
-    property(self.resistance) = resistance
-    property(self.composition) = composition(resistor)  ; this is the type => "thick-film" in gen-res-cmp
-    property(self.rated-power) = /rated-power(resistor)
-    match(TCR: TCR): property(self.TCR) = [positive(TCR), negative(TCR)]
-    spice :
-      "[R] <p[1]> <p[2]> <resistance>"
-  my-resistor
+        emodel = EModel-Resistor(resistance(resistor),
+                                emodel-pourcentage-tolerance(tolerance(resistor)),
+                                double-or-unknown(rated-power(resistor)))
+        reference-prefix = "R"
+        val TCR = TCR(resistor)
+        val rated-temperature = rated-temperature(resistor)
+        val tolerance = tolerance(resistor)
+        val resistance = resistance(resistor)
+        property(self.resistor) = true
+        property(self.trust) = trust(resistor)
+        property(self.x) = x(resistor)
+        property(self.y) = y(resistor)
+        property(self.z) = z(resistor)
+        property(self.mounting) = mounting(resistor)
+        match(rated-temperature: Toleranced): property(self.rated-temperature) = rated-temperature
+        property(self.case) = /case(resistor)
+        property(self.metadata) = metadata(resistor)
+        property(self.type) = type(resistor)
+        match(tolerance: MinMaxRange):
+          ;[TODO] Current exporter IR crashes unless tolerance is a Double.
+          ;So this feature is commented out until that is fixed.
+          ;property(self.tolerance) = [min(tolerance), max(tolerance)]
+          property(self.tolerance) = max(tolerance)
+        property(self.resistance) = resistance
+        property(self.composition) = composition(resistor)  ; this is the type => "thick-film" in gen-res-cmp
+        property(self.rated-power) = /rated-power(resistor)
+        match(TCR: TCR): property(self.TCR) = [positive(TCR), negative(TCR)]
+        spice :
+          "[R] <p[1]> <p[2]> <resistance>"
+      my-resistor
 
 ; ========================================================
 ; ================== Resistor Accessors ==================
