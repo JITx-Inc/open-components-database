@@ -16,7 +16,9 @@ defpackage ocdb/utils/parts :
   import ocdb/utils/bundles
   import ocdb/utils/db-parts
   import ocdb/utils/generic-components
+  import ocdb/utils/landpatterns
   import ocdb/utils/property-structs
+  import ocdb/utils/symbols
 
 ;======================================
 ;============ Public API ==============
@@ -111,8 +113,8 @@ public defstruct ComponentCode :
   emodel: EModel|False
   pin-properties: False|PinPropertiesCode
   pcb-pads: Tuple<PCBPadCode>
-  landpattern: LandPatternCode
-  symbols: Tuple<SymbolCode>
+  landpattern: LandPatternCode|UNKNOWN
+  symbols: Tuple<SymbolCode>|UNKNOWN
   metadata: Tuple<MetadataCode>
   properties: Tuple<ComponentPropertyCode>
   bundles:Tuple<BundleCode>
@@ -493,9 +495,9 @@ defn NoConnectCode (json: JObject) -> NoConnectCode :
   NoConnectCode(PinByTypeCode(json["pin"] as JObject))
 
 public defmethod to-jitx (part: Part) -> Instantiable :
-  to-jitx $ component(part)
+  to-jitx $ component(part, category(part), case(part), dimensions(part))
 
-public defn to-jitx (c: ComponentCode) -> Instantiable :
+public defn to-jitx (c: ComponentCode, category: Category, case: String, dimensions: DimensionsCode) -> Instantiable :
   pcb-component my-component :
     name = name(c)
 
@@ -529,13 +531,42 @@ public defn to-jitx (c: ComponentCode) -> Instantiable :
       val pad-name = name(pp)
       jitx-pads-by-pcb-pad-name[pad-name] = jitx-pad
 
-    val landpattern-def = to-jitx(landpattern(c), jitx-pads-by-pcb-pad-name)
-    assign-landpattern(landpattern-def)
+    match(landpattern(c)):
+      (lp:LandPatternCode):
+        val landpattern-def = to-jitx(lp, jitx-pads-by-pcb-pad-name)
+        assign-landpattern(landpattern-def)
+      (lp):
+        ; If unset, generate programmatically.
+        ; We'd like to move this logic to the parts-db population script, when we have time.
+        if contains?([capacitor, inductor, resistor], category):
+          val case = case(c)
+          val height = z(dimensions)
+          match(case: String) :
+            if check-valid-rectangle-pkg-list(case) :
+              val pkg = ipc-two-pin-landpattern(case, height)
+              landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+            else :  ; example: case = "Axial"
+              val pkg = dummy-landpattern(2, [x(dimensions) y(dimensions)])
+              landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+          else :
+            val pkg = dummy-landpattern(2, [x(dimensions) y(dimensions)])
+            landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
 
-    assign-symbols(
-      for s in symbols(c) map :
-        bank(s) => to-jitx(s)
-    )
+    match(symbols(c)):
+      (component-symbols:Tuple<SymbolCode>):
+        assign-symbols(
+          for s in component-symbols map :
+            bank(s) => to-jitx(s)
+        )
+      (s):
+        ; If unset, generate programmatically.
+        ; We'd like to move this logic to the parts-db population script, when we have time.
+        switch(category):
+          ; capacitor:
+          ; inductor:
+          resistor:
+            val sym = resistor-sym()
+            symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
 
     ; Bundles
     val local-bundles-by-name = HashTable<String, Bundle>()
