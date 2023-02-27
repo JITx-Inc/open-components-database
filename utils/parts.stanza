@@ -64,20 +64,21 @@ with :
   printer => true
 
 ; Parse parts conditionally, based on their category.
-; This allows us to switch existing API calls over to the parts-db, with backwards-compatibility.
 public defn parse-component (json: JObject) -> Component :
-  ; match(json["category"]):
-  ;   (c:String):
-  ;     switch(c):
-  ;       "capacitor": Capacitor(json)
-  ;       "inductor": Inductor(json)
-  ;       "resistor": Resistor(json)
-  ;       else: Part(json)
-  ;   (c):
-  ;     Part(json)
-
-  ; TODO: Use above to redirect parts without a landpattern.
-  Part(json)
+  val component-code = json["component"] as JObject
+  match(component-code["landpattern"]):
+    (lp:JObject):
+      ; If the landpattern is included, this part should have everything it needs.
+      Part(json)
+    (c):
+      ; Otherwise, fall back on the V1 deserializers, which inject everything for 2-pin passives.
+      ; We still haven't migrated all the OCDB generative logic to the parts-db population script.
+      match(json["category"]):
+        (c:String):
+          switch(c):
+            "capacitor": Capacitor(json)
+            "inductor": Inductor(json)
+            "resistor": Resistor(json)
 
 ;======================================
 ;============= Internals ==============
@@ -115,7 +116,7 @@ public defstruct ComponentCode :
   emodel: EModel|False
   pin-properties: False|PinPropertiesCode
   pcb-pads: Tuple<PCBPadCode>
-  landpattern: LandPatternCode
+  landpattern: LandPatternCode|False
   symbols: Tuple<SymbolCode>
   metadata: Tuple<MetadataCode>
   properties: Tuple<ComponentPropertyCode>
@@ -142,6 +143,12 @@ public defn ComponentCode (json: JObject) -> ComponentCode :
     (e:JObject):
       EModel(e)
 
+  val landpattern = match(json["landpattern"]):
+    (_:JNull):
+      false
+    (e:JObject):
+      LandPatternCode(json["landpattern"] as JObject)
+
   ComponentCode(
     name,
     json["description"] as String,
@@ -151,7 +158,7 @@ public defn ComponentCode (json: JObject) -> ComponentCode :
     emodel,
     PinPropertiesCode(json["pin_properties"] as JObject),
     map(PCBPadCode, json["pcb_pads"] as Tuple<JObject>),
-    LandPatternCode(json["landpattern"] as JObject),
+    landpattern,
     map(SymbolCode, json["symbols"] as Tuple<JObject>),
     map(MetadataCode, json["metadata"] as Tuple<JObject>),
     map(ComponentPropertyCode, json["properties"] as Tuple<JObject>),
@@ -533,7 +540,7 @@ public defn to-jitx (c: ComponentCode) -> Instantiable :
       val pad-name = name(pp)
       jitx-pads-by-pcb-pad-name[pad-name] = jitx-pad
 
-    val landpattern-def = to-jitx(landpattern(c), jitx-pads-by-pcb-pad-name)
+    val landpattern-def = to-jitx(landpattern(c) as LandPatternCode, jitx-pads-by-pcb-pad-name)
     assign-landpattern(landpattern-def)
 
     assign-symbols(
