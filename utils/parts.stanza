@@ -66,26 +66,30 @@ with :
 ; Parse parts conditionally, based on their category.
 ; This allows us to switch existing API calls over to the parts-db, with backwards-compatibility.
 public defn parse-component (json: JObject) -> Component :
-  println $ ""
-  println $ "+++ category: %_" % [json["category"] as String]
-  switch(json["category"] as String):
-    ; Category.capacitor: parse-capacitor(json)
-    ; Category.inductor: parse-inductor(json)
-    "resistor": Resistor(json)
-    else: Part(json)
+  ; match(json["category"]):
+  ;   (c:String):
+  ;     switch(c):
+  ;       "capacitor": Capacitor(json)
+  ;       "inductor": Inductor(json)
+  ;       "resistor": Resistor(json)
+  ;       else: Part(json)
+  ;   (c):
+  ;     Part(json)
+
+  ; TODO: Use above to redirect parts without a landpattern.
+  Part(json)
 
 ;======================================
 ;============= Internals ==============
 ;======================================
 
 defn Part (json: JObject) -> Part :
-  println $ "+++ Part"
   Part(
     ComponentCode(json["component"] as JObject),
     json["description"] as String,
     json["manufacturer"] as String,
     json["mpn"] as String,
-    VendorPartNumbers(json["vendor_part_numbers"] as JObject),
+    VendorPartNumbers(json["vendor-part-numbers"] as JObject),
     category-or-unknown(json["category"]),
     json["trust"] as String,
     string-or-unknown(json["mounting"]),
@@ -261,7 +265,7 @@ public-when(TESTING) defstruct PowerPinCode :
 with :
   printer => true
 
-defn VendorPartNumbers (json: JObject) -> Tuple<KeyValue<String, String>> :
+public defn VendorPartNumbers (json: JObject) -> Tuple<KeyValue<String, String>> :
   entries(json) as Tuple<KeyValue<String, String>>
 
 defn PinPropertiesCode (json: JObject) -> PinPropertiesCode :
