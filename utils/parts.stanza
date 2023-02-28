@@ -25,56 +25,105 @@ defpackage ocdb/utils/parts :
 ; TODO: JITX-4034 - Remove these warnings
 
 ; WARNING: This is an alpha feature at the moment.
-public defn ComponentCode (user-properties:Tuple<KeyValue>) -> ComponentCode :
-  val results = parts-db-query(user-properties, 1)
-  val first-result = results[0]
-  ComponentCode(first-result as JObject)
+public defn PartsDBComponent (user-properties:Tuple<KeyValue>) -> Component :
+  val query-properties = remove-duplicate-keys $ [
+    ["_type" => "parts-db"],
+    user-properties
+  ]
+  parse-component $ dbquery-first(query-properties) as JObject
 
 ; WARNING: This is an alpha feature at the moment.
-public defn ComponentCodes (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<ComponentCode> :
-  map{ComponentCode, _} $ parts-db-query(user-properties, limit) as Tuple<JObject>
+public defn PartsDBComponents (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Component> :
+  val query-properties = remove-duplicate-keys $ [
+    ["_type" => "parts-db"],
+    user-properties
+  ]
+  map{parse-component, _} $ dbquery(query-properties, limit) as Tuple<JObject>
 
 ; WARNING: This is an alpha feature at the moment.
-public defstruct ComponentCode :
-  name: String
+public defstruct Part <: Component :
+  component: ComponentCode
   description: String
   manufacturer: String
   mpn: String
   vendor-part-numbers: Tuple<KeyValue<String, String>>
   category: Category|UNKNOWN
-  emodel: EModel|False
-  pin-properties: False|PinPropertiesCode
-  pcb-pads: Tuple<PCBPadCode>
-  landpattern: LandPatternCode
-  symbols: Tuple<SymbolCode>
-  datasheet: String
-  image: String|UNKNOWN
   trust: String
   mounting: String|UNKNOWN
   case: String|UNKNOWN
   dimensions: DimensionsCode
-  sourcing: SourcingCode
+  sourcing: Sourcing
+  rated-temperature: Toleranced|False
+  ; Power dissipation limit as rated by manufacturer. One value, or PWL function (W | [degC, W])
+  rated-power: Double|False
+
+  ; Optionally appended by jit-backend (does not come from parts-db)
+  sellers: Tuple<Seller>|False with: (as-method => true)
+  resolved-price: Double|False with: (as-method => true)
+with :
+  printer => true
+
+; Parse parts conditionally, based on their category.
+public defn parse-component (json: JObject) -> Component :
+  val component-code = json["component"] as JObject
+  match(component-code["landpattern"]):
+    (lp:JObject):
+      ; If the landpattern is included, this part should have everything it needs.
+      Part(json)
+    (c):
+      ; Otherwise, fall back on the V1 deserializers, which inject everything for 2-pin passives.
+      ; We still haven't migrated all the OCDB generative logic to the parts-db population script.
+      match(json["category"]):
+        (c:String):
+          switch(c):
+            "capacitor": Capacitor(json)
+            "inductor": Inductor(json)
+            "resistor": Resistor(json)
+
+;======================================
+;============= Internals ==============
+;======================================
+
+defn Part (json: JObject) -> Part :
+  Part(
+    ComponentCode(json["component"] as JObject),
+    json["description"] as String,
+    json["manufacturer"] as String,
+    json["mpn"] as String,
+    VendorPartNumbers(json["vendor_part_numbers"] as JObject),
+    category-or-unknown(json["category"]),
+    json["trust"] as String,
+    string-or-unknown(json["mounting"]),
+    string-or-unknown(json["case"]),
+    DimensionsCode(json["dimensions"] as JObject),
+    parse-sourcing(json),
+    parse-rated-temperature(json),
+    optional-double(json, "rated-power"),
+    parse-sellers(json),
+    optional-double(json, "resolved_price"),
+  )
+
+;--------------------------------------
+;----------- Component Code -----------
+;--------------------------------------
+
+public defstruct ComponentCode :
+  name: String
+  description: String
+  manufacturer: String
+  mpn: String
+  reference_prefix: String
+  emodel: EModel|False
+  pin-properties: False|PinPropertiesCode
+  pcb-pads: Tuple<PCBPadCode>
+  landpattern: LandPatternCode|False
+  symbols: Tuple<SymbolCode>
   metadata: Tuple<MetadataCode>
   properties: Tuple<ComponentPropertyCode>
   bundles:Tuple<BundleCode>
   supports:Tuple<SupportCode>
 with :
   printer => true
-
-;======================================
-;============= Internals ==============
-;======================================
-
-defn parts-db-query (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<JSON> :
-  val query-properties = remove-duplicate-keys $ [
-    ["_type" => "parts-db"],
-    user-properties
-  ]
-  dbquery(query-properties, limit) as Tuple<JObject>
-
-;--------------------------------------
-;------------- Component --------------
-;--------------------------------------
 
 public-when(TESTING) defstruct BundleCode :
   name: String
@@ -135,13 +184,6 @@ public-when(TESTING) defstruct DimensionsCode :
 with :
   printer => true
 
-public-when(TESTING) defstruct SourcingCode :
-  price: Double|UNKNOWN
-  minimum-quantity: Int
-  stock: Int
-with :
-  printer => true
-
 public-when(TESTING) defstruct TolerancedCode :
   typical: Double
   plus: Double
@@ -162,7 +204,7 @@ with :
   printer => true
 
 public-when(TESTING) defstruct NoConnectCode :
-  pin-name: String
+  pin: PinByTypeCode
 with :
   printer => true
 
@@ -174,7 +216,7 @@ with :
   printer => true
 
 public-when(TESTING) defstruct PinPropertyCode :
-  pin-name: String
+  pin: PinByTypeCode
   pads: Tuple<PinByTypeCode>
   direction: Dir
   electrical-type: String
@@ -183,7 +225,7 @@ with :
   printer => true
 
 public-when(TESTING) defstruct PowerPinCode :
-  pin-name: String
+  pin: PinByTypeCode
   min-voltage: Double
   max-voltage: Double
 with :
@@ -207,32 +249,30 @@ public defn ComponentCode (json: JObject) -> ComponentCode :
     (e:JObject):
       EModel(e)
 
+  val landpattern = match(json["landpattern"]):
+    (_:JNull):
+      false
+    (e:JObject):
+      LandPatternCode(json["landpattern"] as JObject)
+
   ComponentCode(
     name,
     json["description"] as String,
     json["manufacturer"] as String,
     json["mpn"] as String,
-    VendorPartNumbers(json["vendor_part_numbers"] as JObject),
-    category-or-unknown(json["category"]),
+    json["reference_prefix"] as String,
     emodel,
     PinPropertiesCode(json["pin_properties"] as JObject),
     map(PCBPadCode, json["pcb_pads"] as Tuple<JObject>),
-    LandPatternCode(json["landpattern"] as JObject),
+    landpattern,
     map(SymbolCode, json["symbols"] as Tuple<JObject>),
-    json["datasheet"] as String,
-    string-or-unknown(json["image"]),
-    json["trust"] as String,
-    string-or-unknown(json["mounting"]),
-    string-or-unknown(json["case"]),
-    DimensionsCode(json["dimensions"] as JObject),
-    SourcingCode(json["sourcing"] as JObject),
     map(MetadataCode, json["metadata"] as Tuple<JObject>),
     map(ComponentPropertyCode, json["properties"] as Tuple<JObject>),
     map(BundleCode, json-bundles),
     map(SupportCode, json-supports),
   )
 
-defn VendorPartNumbers (json: JObject) -> Tuple<KeyValue<String, String>> :
+public defn VendorPartNumbers (json: JObject) -> Tuple<KeyValue<String, String>> :
   entries(json) as Tuple<KeyValue<String, String>>
 
 defn PinPropertiesCode (json: JObject) -> PinPropertiesCode :
@@ -243,7 +283,7 @@ defn PinPropertiesCode (json: JObject) -> PinPropertiesCode :
   )
 
 public-when(TESTING) defn PinPropertyCode (json: JObject) -> PinPropertyCode :
-  PinPropertyCode(json["pin_name"] as String,
+  PinPropertyCode(PinByTypeCode(json["pin"] as JObject),
                   map(PinByTypeCode, json["pads"] as Tuple<JObject>),
                   Dir(json["direction"] as String),
                   json["electrical_type"] as String,
@@ -254,12 +294,6 @@ public-when(TESTING) defn DimensionsCode (json: JObject) -> DimensionsCode :
   val y = json["y"] as Double
   val z = double-or-unknown(json["z"])
   DimensionsCode(x, y, z)
-
-public-when(TESTING) defn SourcingCode (json: JObject) -> SourcingCode :
-  val price = double-or-unknown(json["price"])
-  val minium_quantity = to-int(json["minimum_quantity"] as Double)
-  val stock = to-int(json["stock"] as Double)
-  SourcingCode(price, minium_quantity, stock)
 
 public-when(TESTING) defn TolerancedCode (json: JObject) -> Toleranced :
   val typical = json["typical"] as Double
@@ -461,13 +495,16 @@ defn ColorSpec (json: JObject) -> ColorSpec :
 
 defn PowerPinCode (json: JObject) -> PowerPinCode :
   PowerPinCode(
-    json["pin_name"] as String,
+    PinByTypeCode(json["pin"] as JObject),
     json["min_voltage"] as Double,
     json["max_voltage"] as Double
   )
 
 defn NoConnectCode (json: JObject) -> NoConnectCode :
-  NoConnectCode(json["pin_name"] as String)
+  NoConnectCode(PinByTypeCode(json["pin"] as JObject))
+
+public defmethod to-jitx (part: Part) -> Instantiable :
+  to-jitx $ component(part)
 
 public defn to-jitx (c: ComponentCode) -> Instantiable :
   pcb-component my-component :
@@ -495,13 +532,15 @@ public defn to-jitx (c: ComponentCode) -> Instantiable :
 
     map(to-jitx, properties(c))
 
+    reference-prefix = reference_prefix(c)
+
     val jitx-pads-by-pcb-pad-name = HashTable<String, Pad>()
     for pp in pcb-pads(c) do :
       val jitx-pad = to-jitx(pp)
       val pad-name = name(pp)
       jitx-pads-by-pcb-pad-name[pad-name] = jitx-pad
 
-    val landpattern-def = to-jitx(landpattern(c), jitx-pads-by-pcb-pad-name)
+    val landpattern-def = to-jitx(landpattern(c) as LandPatternCode, jitx-pads-by-pcb-pad-name)
     assign-landpattern(landpattern-def)
 
     assign-symbols(
@@ -558,14 +597,14 @@ defn to-jitx (pin-props: PinPropertiesCode) :
     pin-properties :
       [pin:Ref | pads:Ref ... | side:Dir | electrical-type:String | bank:Int]
       for pin-prop in pins(pin-props) do :
-        val pin-ref = Ref(pin-name(pin-prop))
+        val pin-ref = to-ref(/pin(pin-prop))
         val jitx-pads = map(to-ref, pads(pin-prop))
         [(pin-ref) | (jitx-pads)... | direction(pin-prop) as Dir | electrical-type(pin-prop) | bank(pin-prop) as Int]
     do(to-jitx, power-pins(pin-props))
     do(to-jitx, no-connects(pin-props))
 
     for pin-prop in pins(pin-props) do :
-      val jitx-pin = self.(pin-name(pin-prop))
+      val jitx-pin = self.(to-ref(/pin(pin-prop)))
       set-property(jitx-pin, `direction, direction(pin-prop) as Dir)
 
 defn to-ref (pin-by-type:PinByTypeCode) -> Ref :
@@ -577,15 +616,16 @@ defn to-ref (pin-by-type:PinByTypeCode) -> Ref :
 
 defn to-jitx (power-pin: PowerPinCode) :
   inside pcb-component :
-    val p = dot(self, (Ref(pin-name(power-pin))))
+    val jitx-pin = self.(to-ref(/pin(power-pin)))
     val min = min-voltage(power-pin)
     val max = max-voltage(power-pin)
     val toleranced = ocdb/utils/property-structs/PowerPin(jitx/min-max(min, max))
-    set-property(p, `power-pin, toleranced)
+    set-property(jitx-pin, `power-pin, toleranced)
 
 defn to-jitx (nc: NoConnectCode) :
   inside pcb-component :
-    no-connect(self.(pin-name(nc)))
+    val jitx-pin = self.(to-ref(/pin(nc)))
+    no-connect(jitx-pin)
 
 defn to-jitx (prop: ComponentPropertyCode) :
   inside pcb-component :
@@ -963,7 +1003,7 @@ public-when(TESTING) defstruct SymbolCode :
   layers: Tuple<SymbolLayerCode>
 
 public-when(TESTING) defstruct SymbolPinCode :
-  pin-name: String
+  pin: PinByTypeCode
   point: Point
   direction: Dir
   length: Double
@@ -983,7 +1023,7 @@ public-when(TESTING) defn SymbolCode (json: JObject) -> SymbolCode :
   )
 
 defn SymbolPinCode (json: JObject) -> SymbolPinCode :
-  SymbolPinCode(json["pin_name"] as String,
+  SymbolPinCode(PinByTypeCode(json["pin"] as JObject),
                 Point(json["point"] as JObject),
                 Dir(json["direction"] as String),
                 json["length"] as Double,
@@ -1013,7 +1053,7 @@ defn to-jitx (p: SymbolPinCode) :
   inside pcb-symbol :
     val number-size = number-size(p)
     val name-size = name-size(p)
-    val pin-ref = Ref(pin-name(p))
+    val pin-ref = to-ref(/pin(p))
     match(number-size, name-size) :
       (number-size: Double, name-size: Double) :
         pin (pin-ref) at point(p) with :
