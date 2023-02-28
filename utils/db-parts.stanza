@@ -102,28 +102,13 @@ public defn Resistor (raw-json: JObject) -> Resistor :
   val json = filter-json(raw-json)
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
 
-  val component = if get?(json, "component") is JObject:
-    ComponentCode(json["component"] as JObject)
-  else:
-    false
-
-  val mounting = if get?(json, "mounting") is String:
-    json["mounting"] as String
-  else:
-    ""
-
-  val vendor-part-numbers = if get?(json, "vendor_part_numbers") is JObject:
-    VendorPartNumbers(json["vendor_part_numbers"] as JObject)
-  else:
-    []
-
   Resistor(json["manufacturer"] as String,
            json["mpn"] as String,
            json["trust"] as String,
            x,
            y,
            z,
-           mounting,
+           optional-mounting(json),
            parse-rated-temperature(json),
            optional-string(json, "case"),
            parse-sourcing(json),
@@ -137,8 +122,8 @@ public defn Resistor (raw-json: JObject) -> Resistor :
            resistance-tcr(json),
            parse-sellers(json),
            optional-double(json, "resolved_price"),
-           component,
-           vendor-part-numbers)
+           optional-component(json),
+           parse-vendor-part-numbers(json))
 
 defn resistance-tcr (json: JObject) -> TCR|False :
   val tcr-json = get?(json, "tcr")
@@ -319,28 +304,13 @@ public defn Capacitor (raw-json: JObject) -> Capacitor :
   val json = filter-json(raw-json)
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
 
-  val component = if get?(json, "component") is JObject:
-    ComponentCode(json["component"] as JObject)
-  else:
-    false
-
-  val mounting = if get?(json, "mounting") is String:
-    json["mounting"] as String
-  else:
-    ""
-
-  val vendor-part-numbers = if get?(json, "vendor_part_numbers") is JObject:
-    VendorPartNumbers(json["vendor_part_numbers"] as JObject)
-  else:
-    []
-
   Capacitor(json["manufacturer"] as String,
             json["mpn"] as String,
             json["trust"] as String,
             x,
             y,
             z,
-            mounting,
+            optional-mounting(json),
             parse-rated-temperature(json),
             optional-string(json, "case"),
             parse-sourcing(json),
@@ -359,8 +329,8 @@ public defn Capacitor (raw-json: JObject) -> Capacitor :
             optional-double(json, "rated-current-rms"),
             parse-sellers(json),
             optional-double(json, "resolved_price"),
-            component,
-            vendor-part-numbers)
+            optional-component(json),
+            parse-vendor-part-numbers(json))
 
 defn parse-esr (json: JObject) -> ESR|False :
   val esr-json = get?(json, "esr")
@@ -580,28 +550,13 @@ public defn Inductor (raw-json: JObject) -> Inductor :
   val json = filter-json(raw-json)
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
 
-  val component = if get?(json, "component") is JObject:
-    ComponentCode(json["component"] as JObject)
-  else:
-    false
-
-  val mounting = if get?(json, "mounting") is String:
-    json["mounting"] as String
-  else:
-    ""
-
-  val vendor-part-numbers = if get?(json, "vendor_part_numbers") is JObject:
-    VendorPartNumbers(json["vendor_part_numbers"] as JObject)
-  else:
-    []
-
   Inductor(json["manufacturer"] as String,
            json["mpn"] as String,
            json["trust"] as String,
            x,
            y,
            z,
-           mounting,
+           optional-mounting(json),
            parse-rated-temperature(json),
            optional-string(json, "case"),
            parse-sourcing(json),
@@ -619,8 +574,8 @@ public defn Inductor (raw-json: JObject) -> Inductor :
            optional-double(json, "self-resonant-frequency"),
            parse-sellers(json),
            optional-double(json, "resolved_price"),
-           component,
-           vendor-part-numbers)
+           optional-component(json),
+           parse-vendor-part-numbers(json))
 
 ; ========================================================
 ; ======================== to-jitx =======================
@@ -941,6 +896,22 @@ public defn parse-sellers (json: JObject) -> Tuple<Seller>|False:
           SellerOffer{int(json-offer["inventory_level"]), _} $
             for json-price in json-offer["prices"] as Tuple<JObject> map :
               SellerOfferPrice(int(json-price["quantity"]), json-price["converted_price"] as Double)
+
+defn optional-component (json: JObject) -> ComponentCode|False :
+  match(get?(json, "component")) :
+    (j:JObject) :
+      ComponentCode(j)
+    (_) : false
+
+defn optional-mounting (json: JObject) -> String :
+  match(get?(json, "mounting")) :
+    (s:String) : s
+    (_) : ""
+
+defn parse-vendor-part-numbers (json: JObject) -> Tuple<KeyValue<String, String>> :
+  match(get?(json, "vendor_part_numbers")) :
+    (j:JObject) : VendorPartNumbers(j)
+    (_) : []
 
 ;============================================================
 ;===================== Other utils ==========================
