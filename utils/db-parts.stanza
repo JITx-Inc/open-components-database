@@ -17,6 +17,7 @@ defpackage ocdb/utils/db-parts :
   import ocdb/utils/defaults
   import ocdb/utils/landpatterns
   import ocdb/utils/generator-utils
+  import ocdb/utils/parts
   import ocdb/utils/property-structs
   import ocdb/utils/symbols
   import ocdb/utils/design-vars
@@ -83,6 +84,8 @@ public defstruct Resistor <: Component :
   TCR: TCR|False ; Temperature coefficient of resistance (ohms/ohm*degC)
   sellers: Tuple<Seller>|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
+  component: ComponentCode|False
+  vendor-part-numbers: Tuple<KeyValue<String, String>>
 
 public defn delta-resistance (resistor: Resistor, temperature: Double) -> Double :
   val tcr = TCR(resistor) as TCR
@@ -105,7 +108,7 @@ public defn Resistor (raw-json: JObject) -> Resistor :
            x,
            y,
            z,
-           json["mounting"] as String,
+           optional-mounting(json),
            parse-rated-temperature(json),
            optional-string(json, "case"),
            parse-sourcing(json),
@@ -118,7 +121,9 @@ public defn Resistor (raw-json: JObject) -> Resistor :
            optional-double(json, "rated-power"),
            resistance-tcr(json),
            parse-sellers(json),
-           optional-double(json, "resolved_price"))
+           optional-double(json, "resolved_price"),
+           optional-component(json),
+           parse-vendor-part-numbers(json))
 
 defn resistance-tcr (json: JObject) -> TCR|False :
   val tcr-json = get?(json, "tcr")
@@ -164,8 +169,8 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
       landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
 
     emodel = EModel-Resistor(resistance(resistor),
-                             emodel-pourcentage-tolerance(tolerance(resistor)),
-                             double-or-unknown(rated-power(resistor)))
+                            emodel-pourcentage-tolerance(tolerance(resistor)),
+                            double-or-unknown(rated-power(resistor)))
     reference-prefix = "R"
     val TCR = TCR(resistor)
     val rated-temperature = rated-temperature(resistor)
@@ -192,6 +197,7 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
     match(TCR: TCR): property(self.TCR) = [positive(TCR), negative(TCR)]
     spice :
       "[R] <p[1]> <p[2]> <resistance>"
+    property(self.vendor-part-numbers) = vendor-part-numbers(resistor)
   my-resistor
 
 ; ========================================================
@@ -287,6 +293,8 @@ defstruct Capacitor <: Component :
   rated-current-rms: Double|False ; Maximum rms current rating from manufacturer (Amperes)
   sellers: Tuple<Seller>|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
+  component: ComponentCode|False
+  vendor-part-numbers: Tuple<KeyValue<String, String>>
 
 defstruct ESR :
   value: Double
@@ -302,12 +310,12 @@ public defn Capacitor (raw-json: JObject) -> Capacitor :
             x,
             y,
             z,
-            json["mounting"] as String,
+            optional-mounting(json),
             parse-rated-temperature(json),
             optional-string(json, "case"),
             parse-sourcing(json),
             entries(json["metadata"] as JObject),
-            ; Resistor specific properties
+            ; Capacitor specific properties
             json["type"] as String,
             parse-tolerance(json),
             json["capacitance"] as Double,
@@ -320,7 +328,9 @@ public defn Capacitor (raw-json: JObject) -> Capacitor :
             optional-double(json, "rated-current-pk"),
             optional-double(json, "rated-current-rms"),
             parse-sellers(json),
-            optional-double(json, "resolved_price"))
+            optional-double(json, "resolved_price"),
+            optional-component(json),
+            parse-vendor-part-numbers(json))
 
 defn parse-esr (json: JObject) -> ESR|False :
   val esr-json = get?(json, "esr")
@@ -406,6 +416,8 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
       else :
         spice :
           "[C] <p[1]> <p[2]> <capacitance(capacitor)>"
+
+    property(self.vendor-part-numbers) = vendor-part-numbers(capacitor)
 
     emodel = EModel-Capacitor(capacitance(capacitor),
                              emodel-pourcentage-tolerance(tolerance(capacitor)),
@@ -531,6 +543,8 @@ defstruct Inductor <: Component :
   self-resonant-frequency: Double|False ; Frequency at which inductor impedance becomes very high / open circuit (freq in Hz)
   sellers: Tuple<Seller>|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
+  component: ComponentCode|False
+  vendor-part-numbers: Tuple<KeyValue<String, String>>
 
 public defn Inductor (raw-json: JObject) -> Inductor :
   val json = filter-json(raw-json)
@@ -542,7 +556,7 @@ public defn Inductor (raw-json: JObject) -> Inductor :
            x,
            y,
            z,
-           json["mounting"] as String,
+           optional-mounting(json),
            parse-rated-temperature(json),
            optional-string(json, "case"),
            parse-sourcing(json),
@@ -559,7 +573,9 @@ public defn Inductor (raw-json: JObject) -> Inductor :
            optional-double(json, "quality-factor"),
            optional-double(json, "self-resonant-frequency"),
            parse-sellers(json),
-           optional-double(json, "resolved_price"))
+           optional-double(json, "resolved_price"),
+           optional-component(json),
+           parse-vendor-part-numbers(json))
 
 ; ========================================================
 ; ======================== to-jitx =======================
@@ -620,6 +636,7 @@ defmethod to-jitx (inductor: Inductor) -> Instantiable :
     property(self.self-resonant-frequency) = self-resonant-frequency(inductor)
     spice :
       "[L] <p[1]> <p[2]> <inductance>"
+    property(self.vendor-part-numbers) = vendor-part-numbers(inductor)
   my-inductor
 
 ; ========================================================
@@ -844,7 +861,7 @@ defn parse-tolerance (json: JObject) -> MinMaxRange|False :
   match(tolerance-json: JObject) :
       MinMaxRange(tolerance-json["min"] as Double, tolerance-json["max"] as Double)
 
-defn parse-sourcing (json: JObject) -> Sourcing :
+public defn parse-sourcing (json: JObject) -> Sourcing :
   ; minimum-quantity and stock are float in MongoDB even though the python scraper do gives python ints to pymongo.
   Sourcing(optional-double(json, "price"), to-int(json["minimum_quantity"] as Double), to-int(json["stock"] as Double))
 
@@ -879,6 +896,22 @@ public defn parse-sellers (json: JObject) -> Tuple<Seller>|False:
           SellerOffer{int(json-offer["inventory_level"]), _} $
             for json-price in json-offer["prices"] as Tuple<JObject> map :
               SellerOfferPrice(int(json-price["quantity"]), json-price["converted_price"] as Double)
+
+defn optional-component (json: JObject) -> ComponentCode|False :
+  match(get?(json, "component")) :
+    (j:JObject) :
+      ComponentCode(j)
+    (_) : false
+
+defn optional-mounting (json: JObject) -> String :
+  match(get?(json, "mounting")) :
+    (s:String) : s
+    (_) : ""
+
+defn parse-vendor-part-numbers (json: JObject) -> Tuple<KeyValue<String, String>> :
+  match(get?(json, "vendor_part_numbers")) :
+    (j:JObject) : VendorPartNumbers(j)
+    (_) : []
 
 ;============================================================
 ;===================== Other utils ==========================
