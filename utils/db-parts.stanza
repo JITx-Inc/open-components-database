@@ -28,6 +28,7 @@ public defmulti y (component: Component) -> Double
 public defmulti area (component: Component) -> Double
 public defmulti sellers (component: Component) -> Tuple<Seller>|False
 public defmulti resolved-price (component: Component) -> Double|False
+public defmulti vendor-part-numbers (component: Component) -> Tuple<KeyValue<String, String>>
 public defmulti to-jitx (component: Component) -> Instantiable
 
 defmethod area (component: Component) -> Double :
@@ -85,7 +86,7 @@ public defstruct Resistor <: Component :
   sellers: Tuple<Seller>|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
   component: ComponentCode|False
-  vendor-part-numbers: Tuple<KeyValue<String, String>>
+  vendor-part-numbers: Tuple<KeyValue<String, String>> with: (as-method => true)
 
 public defn delta-resistance (resistor: Resistor, temperature: Double) -> Double :
   val tcr = TCR(resistor) as TCR
@@ -200,7 +201,7 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
     match(TCR: TCR): property(self.TCR) = [positive(TCR), negative(TCR)]
     spice :
       "[R] <p[1]> <p[2]> <resistance>"
-    property(self.vendor-part-numbers) = vendor-part-numbers(resistor)
+    set-properties-for-vendor-part-numbers(resistor)
   my-resistor
 
 ; ========================================================
@@ -297,7 +298,7 @@ defstruct Capacitor <: Component :
   sellers: Tuple<Seller>|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
   component: ComponentCode|False
-  vendor-part-numbers: Tuple<KeyValue<String, String>>
+  vendor-part-numbers: Tuple<KeyValue<String, String>> with: (as-method => true)
 
 defstruct ESR :
   value: Double
@@ -420,7 +421,7 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
         spice :
           "[C] <p[1]> <p[2]> <capacitance(capacitor)>"
 
-    property(self.vendor-part-numbers) = vendor-part-numbers(capacitor)
+    set-properties-for-vendor-part-numbers(capacitor)
 
     emodel = EModel-Capacitor(capacitance(capacitor),
                              emodel-pourcentage-tolerance(tolerance(capacitor)),
@@ -550,7 +551,7 @@ defstruct Inductor <: Component :
   sellers: Tuple<Seller>|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
   component: ComponentCode|False
-  vendor-part-numbers: Tuple<KeyValue<String, String>>
+  vendor-part-numbers: Tuple<KeyValue<String, String>> with: (as-method => true)
 
 public defn Inductor (raw-json: JObject) -> Inductor :
   val json = filter-json(raw-json)
@@ -645,7 +646,7 @@ defmethod to-jitx (inductor: Inductor) -> Instantiable :
     property(self.self-resonant-frequency) = self-resonant-frequency(inductor)
     spice :
       "[L] <p[1]> <p[2]> <inductance>"
-    property(self.vendor-part-numbers) = vendor-part-numbers(inductor)
+    set-properties-for-vendor-part-numbers(inductor)
   my-inductor
 
 ; ========================================================
@@ -921,6 +922,13 @@ defn parse-vendor-part-numbers (json: JObject) -> Tuple<KeyValue<String, String>
   match(get?(json, "vendor_part_numbers")) :
     (j:JObject) : VendorPartNumbers(j)
     (_) : []
+
+defn set-properties-for-vendor-part-numbers (component: Component) :
+  for vpn-kv in vendor-part-numbers(component) do :
+    val vendor = key(vpn-kv)
+    val prop-key = to-symbol $ append("vendor_part_numbers.", vendor)
+    val vendor-part-number = value(vpn-kv)
+    set-property(self, prop-key, vendor-part-number)
 
 ;============================================================
 ;===================== Other utils ==========================
