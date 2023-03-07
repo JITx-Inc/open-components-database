@@ -35,3 +35,30 @@ public pcb-component xkb-TS-1187A-C-C-B :
   manufacturer = "XKB Enterprise"
   mpn = "TS-1187A-C-C-B"
   description = "SPST Vertical Round Button 260gf SMD,5.1x5.1x1.7mm Tactile Switches"
+
+
+public pcb-module xkb-TS-1187A-C-C-B-debounced-module :
+  pin vdd
+  pin gnd
+  pin signal
+
+  ;create the button
+  public inst button : xkb-TS-1187A-C-C-B
+
+  ;set values for the debounce RC
+  val r1-val = 10.0e3
+  val r2-val = 10.0e3
+  val c1-val = 1.0e-6
+
+  inst r1 : database-part(["category" => "resistor", "resistance" => r1-val, "case" => ["0402"], "_exist" => ["vendor_part_numbers.lcsc"]])
+  inst r2 : database-part(["category" => "resistor", "resistance" => r2-val, "case" => ["0402"], "_exist" => ["vendor_part_numbers.lcsc"]])
+  inst c1 : database-part(["category" => "capacitor", "capacitance" => 1.0e-6, "_exist" => ["vendor_part_numbers.lcsc"]]) 
+
+  val rc-time-constant = ((r1-val + r2-val) * c1-val)
+  println("rc-time-constant is %_" % [rc-time-constant])
+
+  net (vdd r1.p[1])
+  net (button.t r1.p[2] r2.p[1])
+  net (r2.p[2] c1.p[1] signal)
+  net (c1.p[2] gnd)
+  net (button.p gnd)
