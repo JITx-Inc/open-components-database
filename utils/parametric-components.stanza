@@ -1,0 +1,365 @@
+#use-added-syntax(jitx)
+defpackage ocdb/utils/parametric-components:
+  import core
+  import collections
+  import math
+
+  import jitx
+  import jitx/commands
+  import esir/ir
+
+
+  import ocdb/utils/bundles
+  import ocdb/utils/landpatterns
+  import ocdb/utils/generator-utils
+  import ocdb/utils/db-parts
+  import ocdb/utils/design-vars
+  import ocdb/utils/symbols
+  import ocdb/utils/box-symbol
+  import ocdb/utils/property-structs
+  import ocdb/utils/symbol-utils
+  import ocdb/utils/checks
+  import ocdb/utils/parts
+  import ocdb/utils/generic-components
+
+; ; ========================================================
+; ; ====== Standard packages for the passive solver ========
+; ; ========================================================
+; val PKGS = ["009005", "0301m", "01005", "0402m", "0201", "0603m", "0202", "0606m", "0204", "0510m", "Wide 0402", "0306",
+;            "0816m", "Wide 0603", "0402", "1005m", "0505", "1414m", "0508", "1220m", "Wide 0805", "0603", "1608m", "0612",
+;            "1632m", "Wide 1206", "0805", "2012m", "1111", "2828m", "1206", "3216m", "1210", "3225m", "1218", "3246m",
+;            "Wide 1812", "1225", "3263m", "Wide 2512", "1530", "3876m", "Wide 3015", "1808", "4520m", "1812", "4532m", "1825",
+;            "4564m", "1835", "4589", "Wide 3518", "5020m", "2010", "5025m", "2043", "Wide 4320", "2220", "5750m", "2225",
+;            "5763m", "2312", "6032m", "2512", "6331m", "2725", "7142m", "2728", "7142m", "Wide 2827", "2816", "2817", 
+;            "7142m", "2953", "Wide 5929", "3920", "1052m"]
+
+; public defn get-valid-pkg-list () :
+;   get-valid-pkg-list(MIN-PKG)
+
+; public defn get-valid-pkg-list (min-pkg: String) :
+;   val min-pkg-idx = find({PKGS[_] == min-pkg}, 0 to length(PKGS))
+;   match(min-pkg-idx: Int) :
+;     PKGS[min-pkg-idx to false]
+;   else :
+;     throw(Exception("Invalid min-pkg."))
+; ========================================================
+; ==== EIA Standard Tolerances and Logarithmic Values ====
+; ========================================================
+; public val std-tols = to-list([20.0, 10.0, 5.0, 2.0, 1.0, 0.5, 0.25, 0.1])
+; public val std-vals = HashTable<Double, List<Double>>()
+
+; std-vals[20.0] = to-list([
+;   1.00, 1.50, 2.20, 3.30, 4.70, 6.80
+; ])
+
+; std-vals[10.0] = to-list([
+;   1.20, 1.80, 2.70, 3.90, 5.60, 8.20
+; ])
+
+; std-vals[5.0] = to-list([
+;   1.10, 1.30, 1.60, 2.00, 2.40, 3.00,
+;   3.60, 4.30, 5.10, 6.20, 7.50, 9.10
+; ])
+
+; std-vals[2.0] = to-list([
+;   1.05, 1.15, 1.21, 1.27, 1.33, 1.40, 1.47, 1.54, 1.62,
+;   1.69, 1.78, 1.87, 1.96, 2.05, 2.15, 2.26, 2.37, 2.49,
+;   2.61, 2.74, 2.87, 3.01, 3.16, 3.32, 3.48, 3.65, 3.83,
+;   4.02, 4.22, 4.42, 4.64, 4.87, 5.11, 5.36, 5.62, 5.90,
+;   6.19, 6.49, 6.81, 7.15, 7.87, 8.25, 8.66, 9.09, 9.53
+; ])
+
+; std-vals[1.0] = to-list([
+;   1.02, 1.07, 1.13, 1.18, 1.24, 1.37, 1.43, 1.58, 1.65,
+;   1.74, 1.82, 1.91, 2.10, 2.21, 2.32, 2.43, 2.55, 2.67,
+;   2.80, 2.94, 3.09, 3.24, 3.40, 3.57, 3.74, 3.92, 4.12,
+;   4.32, 4.53, 4.75, 4.99, 5.23, 5.49, 5.76, 6.04, 6.34,
+;   6.65, 6.98, 7.32, 7.68, 8.06, 8.45, 8.87, 9.31, 9.76
+; ])
+
+; ;E192 tolerance series of resistors contains 0.5, 0.25, 0.1
+; val e192-list = to-list([
+;   1.00 1.01 1.02 1.04 1.05 1.06 1.07 1.09 1.10 1.11 1.13 1.14
+;   1.15 1.17 1.18 1.20 1.21 1.23 1.24 1.26 1.27 1.29 1.30 1.32
+;   1.33 1.35 1.37 1.38 1.40 1.42 1.43 1.45 1.47 1.49 1.50 1.52
+;   1.54 1.56 1.58 1.60 1.62 1.64 1.65 1.67 1.69 1.72 1.74 1.76
+;   1.78 1.80 1.82 1.84 1.87 1.89 1.91 1.93 1.96 1.98 2.00 2.03
+;   2.05 2.08 2.10 2.13 2.15 2.18 2.21 2.23 2.26 2.29 2.32 2.34
+;   2.37 2.40 2.43 2.46 2.49 2.52 2.55 2.58 2.61 2.64 2.67 2.71
+;   2.74 2.77 2.80 2.84 2.87 2.91 2.94 2.98 3.01 3.05 3.09 3.12
+;   3.16 3.20 3.24 3.28 3.32 3.36 3.40 3.44 3.48 3.52 3.57 3.61
+;   3.65 3.70 3.74 3.79 3.83 3.88 3.92 3.97 4.02 4.07 4.12 4.17
+;   4.22 4.27 4.32 4.37 4.42 4.48 4.53 4.59 4.64 4.70 4.75 4.81
+;   4.87 4.93 4.99 5.05 5.11 5.17 5.23 5.30 5.36 5.42 5.49 5.56
+;   5.62 5.69 5.76 5.83 5.90 5.97 6.04 6.12 6.19 6.26 6.34 6.42
+;   6.49 6.57 6.65 6.73 6.81 6.90 6.98 7.06 7.15 7.23 7.32 7.41
+;   7.50 7.59 7.68 7.77 7.87 7.96 8.06 8.16 8.25 8.35 8.45 8.56
+;   8.66 8.76 8.87 8.98 9.09 9.20 9.31 9.42 9.53 9.65 9.76 9.88
+; ])
+; std-vals[0.5]  = e192-list
+; std-vals[0.25] = e192-list
+; std-vals[0.1]  = e192-list
+
+; ; Read more http://www.resistorguide.com/resistor-values/
+; public defn union-std-vals (tol:Double) :
+;   val union = Vector<Double>()
+;   for std-tol in std-tols do :
+;     if std-tol >= tol :
+;       add-all(union, std-vals[std-tol])
+;   to-list(qsort(union))
+
+; val cumulative-std-vals = HashTable<Double, List<Double>>()
+
+; for tol in std-tols do :
+;   cumulative-std-vals[tol] = union-std-vals(tol)
+
+
+; ; Returns the closest value to v in the tolerance range specified by tol
+; public defn closest-std-val (v:Double, tol:Double) :
+;   val expon = floor(log10(v))
+;   val signif = v / (pow(10.0, expon))
+  
+;   var match-diff = 100.0
+;   var match-val = -1.0
+
+;   if key?(cumulative-std-vals, tol) :
+;     for std-val in cumulative-std-vals[tol] do :
+;       val diff = abs(signif - std-val)
+;       if diff < match-diff :
+;         match-diff = diff
+;         match-val = std-val
+;   else :
+;     fatal("Tolerance %_ not found in standard tolerances." % [tol])
+
+;   match-val * pow(10.0, expon)
+
+
+
+
+; ; ========================================================
+; ; ========== Generic passive components ==================
+; ; ========================================================
+
+defn smd-query-properties () -> Tuple<KeyValue<String, ?>> :
+  ["mounting" => "smd"
+   "case" => get-valid-pkg-list()
+   "minimum_quantity" => 1
+   "min-stock" => 5 * DESIGN-QUANTITY]
+
+; public defn remove-duplicate-keys (hs:Seqable<Seqable<KeyValue<String, ?>>>) -> Tuple<KeyValue<String, ?>> :
+;   to-tuple $ to-hashtable<String, ?>(cat-all(hs))
+
+; ========================================================
+; ==================== parametric-resistor =====================
+; ========================================================
+defn kvs<?K,?V> (xs:Seqable<KeyValue<?K,?V>>) :
+  for x in xs seq : [key(x), value(x)]
+
+public pcb-enum /ocdb/utils/parametric-components/ResistorApplication :
+  ResistorPull
+  ResistorPrecision
+  ResistorTerm
+  ResistorSense
+  ResistorPower
+ ; application:ResistorApplication
+
+public pcb-component dummy-resistor :
+  port p : pin[[1 2]]
+  val sym = resistor-sym(ResistorStd)
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+  val pkg = ipc-two-pin-landpattern("0402")
+  landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+  reference-prefix = "R"
+
+; public pcb-component parametric-resistor (user-params:Tuple<KeyValue>) :
+public pcb-module parametric-resistor (user-params:Tuple<KeyValue>) :
+  port p : pin[[1 2]]
+
+  net (p[1])
+  net (p[2])
+  ; val sym = resistor-sym(ResistorStd)
+  ; symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+  ; val pkg = ipc-two-pin-landpattern("0402")
+  ; landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+  ; inst r : dummy-resistor ; chip-resistor(user-params)
+  ; inst r : chip-resistor(user-params)
+  ; net (p[1] r.p[1])
+  ; net (p[2] r.p[2])
+
+  property(self.parametric) = true ; property to set so that we know this is a parametric comp.
+  property(self.resistor) = true
+  property(self.reference-prefix) = "R"
+  ; reference-prefix = "R"
+
+  val params = remove-duplicate-keys([smd-query-properties() user-params])
+
+  for [myk, myv] in kvs(params) do :
+    set-property(self, to-symbol(myk), myv)
+
+  ; should we check for `min-` and `max-` properties? Probably as they might be problematic
+
+  ; possible properties to extract from params:
+  ; resistance
+  ; tolerance (min, max)
+  ; manufacturer
+  ; mounting
+  ; case
+  ; type
+  ; composition
+  ; rated-power
+  ; tcr (neg, pos)
+  ; rated-temperature (min, max)
+  ; mpn
+  ; dimensions (x, y, z, area)
+  ; stock
+  ; price
+  ; minimum_quantity
+  ; metadata.datasheets
+  ; metadata.image
+  ; metadata.digi-key-part-number
+  ; metadata.description
+  ; metadata.series
+  ; metadata.packaging
+  ; metadata.features
+  ; metadata.supplier-device-package
+  ; metadata.number-of-terminations
+
+  spice:
+    "[R] <p[1]> <p[2]> <property(self.resistance)>"
+
+public defn parametric-resistor (res:Double|Toleranced) :
+  parametric-resistor(["resistance" => res])
+
+public defn parametric-resistor (res:Double|Toleranced, tol:Double, pkg:String) :
+  parametric-resistor(["resistance" => res "tolerance" => tol "rated-power" => 0.0625 "case" => pkg])
+
+public defn parametric-resistor (res:Double|Toleranced, tol:Double, pwr:Double) :
+  parametric-resistor(["resistance" => res "tolerance" => tol "rated-power" => pwr "case" => "0402"])
+
+public defn parametric-resistor (res:Double|Toleranced, pkg:String) :
+  parametric-resistor(["resistance" => res "tolerance" => 2.0 "rated-power" => 0.0625 "case" => pkg])
+
+public defn parametric-resistor (res:Double|Toleranced, tol:Double) -> Instantiable :
+  parametric-resistor(["resistance" => res "tolerance" => tol])
+
+
+public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
+
+  defn add-resistors (my-hash:HashTable<Double|Toleranced, Vector<JITXObject>>) ->  Vector<Instantiable> :
+    inside pcb-module :
+      val new-rs = Vector<Instantiable>()
+      for rs in my-hash do :
+        ; val r-val-req = key(rs)
+        val r-val = key(rs)
+          ; match(r-val-req) :
+          ;   (Double) : r-val-req as Double
+          ;   (Toleranced) : r-val-req as Toleranced
+        for my-inst in value(rs) do :
+          val new-r = chip-resistor(["resistance" => r-val])
+          inst my-new-r : new-r
+          net (my-new-r.p[1] my-inst.p[1])
+          net (my-new-r.p[2] my-inst.p[2])
+          add(new-rs, new-r)
+    new-rs
+
+  within transform-module(m) :
+    inside pcb-module :
+      ; var fixedR = HashTable<Double, List<JITXObject>>()
+      ; var variableR = HashTable<Toleranced, List<JITXObject>>()
+      val knownR = HashTable<Double|Toleranced, Vector<JITXObject>>()
+      val fixedR = HashTable<Double, Vector<JITXObject>>()
+      val variableR = HashTable<Toleranced, Vector<JITXObject>>()
+
+      val allR = HashTable<Double|Toleranced, Vector<JITXObject>>()
+
+      ; Need to recursively retrieve all instances (including instances of modules.)
+      ; Loop runs twice: 1 find, 1 add part.
+      ; for i in instances(m) do :n ; only single level of hierarchy
+      for i in list-all-instances() do :
+        ; println("Inspecting %_" % [ref(i)])
+        if has-property?(i.parametric) :
+          ; Collect some information
+          println("Sorting part %_ with desired value %_" % [ref(i) property(i.resistance)])
+          match(property(i.resistance)) :
+            (r:Double) : 
+              match(get?(fixedR, r)) : 
+                (v:Vector<JITXObject>) : add(v,i)
+                (_) : 
+                  val t = Vector<JITXObject>()
+                  add(t,i)
+                  set(fixedR, r, t)
+                  set(allR, r, t)
+            (r:Toleranced) :
+              match(get?(variableR, r)) : 
+                (v:Vector<JITXObject>) : add(v,i)
+                (_) : 
+                  val t = Vector<JITXObject>()
+                  add(t,i)
+                  set(variableR, r, t)
+                  set(allR, r, t)
+
+          ;Suppose we know the part we want to replace it with: Yageo13
+          ; inst replacement:
+          ; net (replacement.p, i.p)
+        else if has-property?(i.resistance) :
+          val r = property(i.resistance)
+          println("Found standard resistor (%_) of value (%_)" % [ref(i), r])
+          match(get?(knownR, r)) : 
+            (v:Vector<JITXObject>) : add(v,i)
+            (_) : 
+              val t = Vector<JITXObject>()
+              add(t,i)
+              set(knownR, r, t)
+              set(allR, r, t)
+
+      ; println $ allR
+    
+      ; we have several Hashtables here 
+      ; (could be collapsed to one -- allR, but for now...)
+      add-resistors(fixedR)
+      add-resistors(variableR)
+      ; val new-fixedR = Vector<Instantiable>()
+      ; for r in fixedR do :
+      ;   val r-req = key(r) as Double
+      ;   for i in value(r) do :
+      ;     ; println(i)
+      ;     ; println $ instance-definition(i)
+      ;     ; println $ map(ref, ports(i))
+      ;     println $ length(ports(i))
+      ;     val new-r = chip-resistor(["resistance" => r-req])
+      ;     inst my-new-r : new-r
+      ;     net (my-new-r.p[1] i.p[1])
+      ;     net (my-new-r.p[2] i.p[2])
+      ;     add(new-fixedR, new-r)
+
+      ; println $ new-fixedR
+
+; public defn list-all-modules (m:JITXObject) -> Seqable<JITXObject>|False :
+public defn list-all-instances () -> Vector<JITXObject> :
+  inside pcb-module :
+    val all-instances = Vector<JITXObject>()
+
+    defn look-inside (m:JITXObject) :
+      for i in single-instances(m) do :
+        ; println("found (%_)" % [i])
+        add(all-instances, i)
+        look-inside(i)
+
+    look-inside(self)
+    all-instances
+
+  ; inside pcb-module :
+  ;   val names = Vector<JITXObject>()
+  ;   let loop (mods:Instantiable = instances(self)) :
+  ;     for m in mods do :
+  ;       println $ m
+  ;       match(m) :
+  ;         ; (m:SingleModule) : println("Found module (%_)" % [m])
+  ;         (r:JITXObject) : add(names, r)
+  ;         (rs:Seqable) : loop(rs)
+  ;         (r) : println("Not a JITXObject (%_)" % [r])
+  ;   to-tuple(names)
+    
+    ;   (c:ESIRComponent) : println("Found component (%_)" % [ref(c)])
+      ; we have a module
+

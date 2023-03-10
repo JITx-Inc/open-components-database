@@ -246,21 +246,39 @@ public defn look-up-tantalum-caps (attribute: String, filter-properties:Tuple<Ke
 ; ========================================================
 ; ==================== chip-resistor =====================
 ; ========================================================
+defn kvs<?K,?V> (xs:Seqable<KeyValue<?K,?V>>) :
+  for x in xs seq : [key(x), value(x)]
+
+defn replace-params (params:Tuple<KeyValue>) -> Tuple<KeyValue> :
+  ; need to check if resistance is passed a Toleranced() value and if
+  ; so, transform it to min-resistance, max-resistance
+  val replaced-params = to-tuple $
+    generate<KeyValue<String, ?>> :
+      for [myk, myv] in kvs(params) do :
+        if myk == "resistance" :
+          match(myv) :
+            (myv:Double) : yield(myk => myv)
+            (myv:Toleranced) :
+              yield("min-resistance" => min-value(myv))
+              yield("max-resistance" => max-value(myv))
+        else :
+          yield(myk => myv)
+  replaced-params  
 
 ; Generic chip resistor from database (of 600k options)
 public defn chip-resistor (user-params:Tuple<KeyValue>) -> Instantiable :
   val params = remove-duplicate-keys([smd-query-properties() user-params])
-  to-jitx $ Resistor(params)
+  to-jitx $ Resistor(replace-params(params))
 
-public defn chip-resistor (resistance:Double) -> Instantiable :
+public defn chip-resistor (resistance:Double|Toleranced) -> Instantiable :
   chip-resistor(["resistance" => resistance])
 
-public defn chip-resistor (resistance:Double, tolerance:Double) -> Instantiable :
+public defn chip-resistor (resistance:Double|Toleranced, tolerance:Double) -> Instantiable :
   chip-resistor(["resistance" => resistance "tolerance" => tolerance])
 
 public defn chip-resistors (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
   val params = remove-duplicate-keys([smd-query-properties() user-params])
-  map(to-jitx, Resistors(params, limit))
+  map(to-jitx, Resistors(replace-params(params), limit))
 
 ; ========================================================
 ; ================ look-up-chip-resistors ================
