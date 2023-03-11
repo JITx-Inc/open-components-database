@@ -174,29 +174,14 @@ public pcb-component dummy-resistor :
 ; public pcb-component parametric-resistor (user-params:Tuple<KeyValue>) :
 public pcb-module parametric-resistor (user-params:Tuple<KeyValue>) :
   port p : pin[[1 2]]
-
-  net (p[1])
-  net (p[2])
-  ; val sym = resistor-sym(ResistorStd)
-  ; symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
-  ; val pkg = ipc-two-pin-landpattern("0402")
-  ; landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
-  ; inst r : dummy-resistor ; chip-resistor(user-params)
-  ; inst r : chip-resistor(user-params)
-  ; net (p[1] r.p[1])
-  ; net (p[2] r.p[2])
-
   property(self.parametric) = true ; property to set so that we know this is a parametric comp.
   property(self.resistor) = true
   property(self.reference-prefix) = "R"
-  ; reference-prefix = "R"
 
   val params = remove-duplicate-keys([smd-query-properties() user-params])
 
   for [myk, myv] in kvs(params) do :
     set-property(self, to-symbol(myk), myv)
-
-  ; should we check for `min-` and `max-` properties? Probably as they might be problematic
 
   ; possible properties to extract from params:
   ; resistance
@@ -249,12 +234,14 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
     inside pcb-module :
       val new-rs = Vector<Instantiable>()
       for rs in my-hash do :
-        ; val r-val-req = key(rs)
         val r-val = key(rs)
           ; match(r-val-req) :
           ;   (Double) : r-val-req as Double
           ;   (Toleranced) : r-val-req as Toleranced
         for my-inst in value(rs) do :
+          ; need to grab all of the tuples/properties of the inst so that we can 
+          ; call chip-resistor with the same set...
+          ; TODO
           val new-r = chip-resistor(["resistance" => r-val])
           inst my-new-r : new-r
           net (my-new-r.p[1] my-inst.p[1])
@@ -264,8 +251,6 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
 
   within transform-module(m) :
     inside pcb-module :
-      ; var fixedR = HashTable<Double, List<JITXObject>>()
-      ; var variableR = HashTable<Toleranced, List<JITXObject>>()
       val knownR = HashTable<Double|Toleranced, Vector<JITXObject>>()
       val fixedR = HashTable<Double, Vector<JITXObject>>()
       val variableR = HashTable<Toleranced, Vector<JITXObject>>()
@@ -274,11 +259,8 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
 
       ; Need to recursively retrieve all instances (including instances of modules.)
       ; Loop runs twice: 1 find, 1 add part.
-      ; for i in instances(m) do :n ; only single level of hierarchy
       for i in list-all-instances() do :
-        ; println("Inspecting %_" % [ref(i)])
         if has-property?(i.parametric) :
-          ; Collect some information
           println("Sorting part %_ with desired value %_" % [ref(i) property(i.resistance)])
           match(property(i.resistance)) :
             (r:Double) : 
@@ -297,10 +279,6 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
                   add(t,i)
                   set(variableR, r, t)
                   set(allR, r, t)
-
-          ;Suppose we know the part we want to replace it with: Yageo13
-          ; inst replacement:
-          ; net (replacement.p, i.p)
         else if has-property?(i.resistance) :
           val r = property(i.resistance)
           println("Found standard resistor (%_) of value (%_)" % [ref(i), r])
@@ -311,28 +289,11 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
               add(t,i)
               set(knownR, r, t)
               set(allR, r, t)
-
-      ; println $ allR
     
       ; we have several Hashtables here 
       ; (could be collapsed to one -- allR, but for now...)
       add-resistors(fixedR)
       add-resistors(variableR)
-      ; val new-fixedR = Vector<Instantiable>()
-      ; for r in fixedR do :
-      ;   val r-req = key(r) as Double
-      ;   for i in value(r) do :
-      ;     ; println(i)
-      ;     ; println $ instance-definition(i)
-      ;     ; println $ map(ref, ports(i))
-      ;     println $ length(ports(i))
-      ;     val new-r = chip-resistor(["resistance" => r-req])
-      ;     inst my-new-r : new-r
-      ;     net (my-new-r.p[1] i.p[1])
-      ;     net (my-new-r.p[2] i.p[2])
-      ;     add(new-fixedR, new-r)
-
-      ; println $ new-fixedR
 
 ; public defn list-all-modules (m:JITXObject) -> Seqable<JITXObject>|False :
 public defn list-all-instances () -> Vector<JITXObject> :
