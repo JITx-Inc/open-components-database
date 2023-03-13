@@ -227,7 +227,7 @@ defn resistor-query-properties (user-properties:Tuple<KeyValue>,
                                 sort:Tuple<String>,
                                 operating-temperature:Toleranced|False) -> Tuple<KeyValue> :
   query-properties(user-properties,
-                   exist,
+                   maybe-insert-default-vendor-part-number(exist),
                    sort,
                    operating-temperature,
                    "resistor",
@@ -479,7 +479,7 @@ defn capacitor-query-properties (user-properties:Tuple<KeyValue>,
                                 sort:Tuple<String>,
                                 operating-temperature:Toleranced|False) -> Tuple<KeyValue> :
   query-properties(user-properties,
-                   exist,
+                   maybe-insert-default-vendor-part-number(exist),
                    sort,
                    operating-temperature,
                    "capacitor",
@@ -671,7 +671,7 @@ defn inductor-query-properties (user-properties:Tuple<KeyValue>,
                                 sort:Tuple<String>,
                                 operating-temperature:Toleranced|False) -> Tuple<KeyValue> :
   query-properties(user-properties,
-                   exist,
+                   maybe-insert-default-vendor-part-number(exist),
                    sort,
                    operating-temperature,
                    "inductor",
@@ -956,6 +956,8 @@ public defn query-properties (user-properties:Tuple<KeyValue>,
         yield("max-rated-temperature.min" => min-value(operating-temperature))
         yield("min-rated-temperature.max" => max-value(operating-temperature))
 
+      yield("vendor_part_numbers.digi-key" => exist)
+
   ; `user-properties` override default properties
   to-tuple $ hashtable-union<String, ?> $ [["category" => category],
                                            optional-properties,
@@ -987,4 +989,12 @@ public defn dbquery-first-allow-non-stock (args: Tuple<KeyValue<String, Tuple<St
     else :
       throw(e)
 
-
+; Default to a subset of parts while we're vetting an expanded set.
+; TODO: JITX-4302 - Remove this, once we've built more confidnce in the expanded set.
+defn maybe-insert-default-vendor-part-number (exist:Tuple<String>) -> Tuple<String> :
+  val exist-vector = to-vector<String> $ exist
+  if find({prefix?(_, "vendor_part_numbers.")}, exist-vector) is String:
+    exist
+  else :
+    add(exist-vector, "vendor_part_numbers.digi-key")
+    to-tuple $ exist-vector
