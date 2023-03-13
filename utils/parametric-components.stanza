@@ -177,9 +177,12 @@ public pcb-module parametric-resistor (user-params:Tuple<KeyValue>) :
   property(self.parametric) = true ; property to set so that we know this is a parametric comp.
   property(self.resistor) = true
   property(self.reference-prefix) = "R"
-
   val params = remove-duplicate-keys([smd-query-properties() user-params])
 
+  ; store the deduped argument list in a property to retrieve it later
+  property(self.user-params) = user-params
+  ; we can also create properties for each individual kv but retrieval of those
+  ; will be a bit messy as we need to loop over all or try explicit names
   for [myk, myv] in kvs(params) do :
     set-property(self, to-symbol(myk), myv)
 
@@ -230,20 +233,67 @@ public defn parametric-resistor (res:Double|Toleranced, tol:Double) -> Instantia
 
 public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
 
-  defn add-resistors (my-hash:HashTable<Double|Toleranced, Vector<JITXObject>>) ->  Vector<Instantiable> :
+  defn c-r (v:Double e:Int) :
+    v * pow(10.0, to-double(e))
+
+  ; Returns a value within the range of v in the tolerance range specified by tol
+  defn between-std-val (v:Toleranced, tol:Double) -> Double :
+    val expon-min = floor(log10(min-value(v)))
+    val expon-max = floor(log10(max-value(v)))    
+    var match-exp = 0.0
+    var match-val = -1.0
+    var match-diff = 1.0e6
+    println("Need to find exp range (%_ %_) for range (%_)" % [expon-min, expon-max, v])
+    for exp in to-int(expon-min) to to-int(expon-max + 1.0) do :
+      for std-val in union-std-vals(tol) as List<Double> do :
+        println("in-range?(%_, %_)" % [v, c-r(std-val, exp)])
+        if in-range?(v, c-r(std-val, exp)) :
+          val diff = abs(c-r(std-val, exp) - center-value(v))
+          if diff < match-diff :
+            ; std-val resistor (at the appropriate exp range) is between our min and max
+            match-diff = diff
+            match-val = std-val
+            match-exp = to-double(exp)
+    match-val * pow(10.0, match-exp)
+
+  defn find-std-val (v:Toleranced) -> Double:
+    var done = 0
+    var ans = 0.0
+    val my-val = 
+      label<Double> return :
+        for tol in std-tols do :
+          ans = between-std-val(v, tol)
+          return(ans) when ans != 1.0
+        fatal("Could not find appropriate resistor")
+    println("Found (%_) for range (%_)" % [my-val, v])
+    my-val
+
+  defn replace-r-param (params:Tuple<KeyValue>) -> Tuple<KeyValue> :
+    ; need to check if resistance is passed a Toleranced() value
+    val replaced-r-param = to-tuple $
+      generate<KeyValue<String, ?>> :
+        for [myk, myv] in kvs(params) do :
+          ; not checking for min-resistance / max-resistance
+          if myk == "resistance" :
+            match(myv) :
+              (myv:Double) : yield(myk => myv)
+              (myv:Toleranced) : yield("resistance" => find-std-val(myv))
+          else :
+            yield(myk => myv)
+    replaced-r-param
+      
+  defn resolve-resistors (my-hash:HashTable<Double|Toleranced, Vector<JITXObject>>) ->  Vector<Instantiable> :
     inside pcb-module :
       val new-rs = Vector<Instantiable>()
       for rs in my-hash do :
         val r-val = key(rs)
-          ; match(r-val-req) :
-          ;   (Double) : r-val-req as Double
-          ;   (Toleranced) : r-val-req as Toleranced
         for my-inst in value(rs) do :
-          ; need to grab all of the tuples/properties of the inst so that we can 
-          ; call chip-resistor with the same set...
-          ; TODO
-          val new-r = chip-resistor(["resistance" => r-val])
+          if not has-property?(my-inst.user-params) :
+            fatal("Instance %_ does not have expected property (user-params)" % [ref(my-inst)])
+          val user-params = replace-r-param(property(my-inst.user-params))
+          val new-r = chip-resistor(user-params)
           inst my-new-r : new-r
+          property(my-new-r.name) = to-symbol(ref(my-inst))
           net (my-new-r.p[1] my-inst.p[1])
           net (my-new-r.p[2] my-inst.p[2])
           add(new-rs, new-r)
@@ -292,8 +342,8 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
     
       ; we have several Hashtables here 
       ; (could be collapsed to one -- allR, but for now...)
-      add-resistors(fixedR)
-      add-resistors(variableR)
+      resolve-resistors(fixedR)
+      resolve-resistors(variableR)
 
 ; public defn list-all-modules (m:JITXObject) -> Seqable<JITXObject>|False :
 public defn list-all-instances () -> Vector<JITXObject> :
@@ -302,7 +352,6 @@ public defn list-all-instances () -> Vector<JITXObject> :
 
     defn look-inside (m:JITXObject) :
       for i in single-instances(m) do :
-        ; println("found (%_)" % [i])
         add(all-instances, i)
         look-inside(i)
 
