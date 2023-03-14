@@ -243,10 +243,10 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
     var match-exp = 0.0
     var match-val = -1.0
     var match-diff = 1.0e6
-    println("Need to find exp range (%_ %_) for range (%_)" % [expon-min, expon-max, v])
+    ; println("Need to find exp range (%_ %_) for range (%_)" % [expon-min, expon-max, v])
     for exp in to-int(expon-min) to to-int(expon-max + 1.0) do :
       for std-val in union-std-vals(tol) as List<Double> do :
-        println("in-range?(%_, %_)" % [v, c-r(std-val, exp)])
+        ; println("in-range?(%_, %_)" % [v, c-r(std-val, exp)])
         if in-range?(v, c-r(std-val, exp)) :
           val diff = abs(c-r(std-val, exp) - center-value(v))
           if diff < match-diff :
@@ -263,9 +263,10 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
       label<Double> return :
         for tol in std-tols do :
           ans = between-std-val(v, tol)
-          return(ans) when ans != 1.0
+          ; println("Debug tol(%_) ans(%_)" % [tol, ans])
+          return(ans) when ans > 0.0
         fatal("Could not find appropriate resistor")
-    println("Found (%_) for range (%_)" % [my-val, v])
+    ; println("Found (%_) for range (%_)" % [my-val, v])
     my-val
 
   defn replace-r-param (params:Tuple<KeyValue>) -> Tuple<KeyValue> :
@@ -311,7 +312,7 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
       ; Loop runs twice: 1 find, 1 add part.
       for i in list-all-instances() do :
         if has-property?(i.parametric) :
-          println("Sorting part %_ with desired value %_" % [ref(i) property(i.resistance)])
+          ; println("Sorting part %_ with desired value %_" % [ref(i) property(i.resistance)])
           match(property(i.resistance)) :
             (r:Double) : 
               match(get?(fixedR, r)) : 
@@ -331,7 +332,7 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
                   set(allR, r, t)
         else if has-property?(i.resistance) :
           val r = property(i.resistance)
-          println("Found standard resistor (%_) of value (%_)" % [ref(i), r])
+          ; println("Found standard resistor (%_) of value (%_)" % [ref(i), r])
           match(get?(knownR, r)) : 
             (v:Vector<JITXObject>) : add(v,i)
             (_) : 
