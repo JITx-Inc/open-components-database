@@ -180,7 +180,7 @@ public defn ceramic-cap (user-params:Tuple<KeyValue>) -> Instantiable :
   val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         user-params]
-  to-jitx $ Capacitor(params)
+  to-jitx $ Capacitor(replace-params(params))
 
 public defn ceramic-cap (cap:Double) -> Instantiable :
   ceramic-cap(["capacitance" => cap])
@@ -192,7 +192,7 @@ public defn ceramic-caps (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Inst
   val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         user-params]
-  map(to-jitx, Capacitors(params, limit))
+  map(to-jitx, Capacitors(replace-params(params), limit))
 
 ; ========================================================
 ; =============== look-up-ceramic-caps ===================
@@ -254,14 +254,17 @@ defn replace-params (params:Tuple<KeyValue>) -> Tuple<KeyValue> :
   val replaced-params = to-tuple $
     generate<KeyValue<String, ?>> :
       for [myk, myv] in kvs(params) do :
-        if myk == "resistance" :
-          match(myv) :
-            (myv:Double) : yield(myk => myv)
-            (myv:Toleranced) :
-              yield("min-resistance" => min-value(myv))
-              yield("max-resistance" => max-value(myv))
-        else :
-          yield(myk => myv)
+        match(myv) :
+          (t:Toleranced) :
+            switch(myk) :
+              "resistance" :
+                yield("min-resistance" => min-value(myv))
+                yield("max-resistance" => max-value(myv))
+              "capacitance" :
+                yield("min-capacitance" => min-value(myv))
+                yield("max-capacitance" => max-value(myv))
+          (_) :
+            yield(myk => myv)          
   replaced-params  
 
 ; Generic chip resistor from database (of 600k options)
