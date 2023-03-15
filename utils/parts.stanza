@@ -30,7 +30,7 @@ public defn PartsDBComponent (user-properties:Tuple<KeyValue>) -> Component :
     ["_type" => "parts-db"],
     user-properties
   ]
-  parse-component $ dbquery-first(query-properties) as JObject
+  parse-component $ dbquery-first-allow-non-stock(query-properties) as JObject
 
 ; WARNING: This is an alpha feature at the moment.
 public defn PartsDBComponents (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Component> :
@@ -65,20 +65,15 @@ with :
 
 ; Parse parts conditionally, based on their category.
 public defn parse-component (json: JObject) -> Component :
-  val component-code = json["component"] as JObject
-  match(component-code["landpattern"]):
-    (lp:JObject):
-      ; If the landpattern is included, this part should have everything it needs.
+  match(json["category"]):
+    (c:String):
+      switch(c):
+        "capacitor": Capacitor(json)
+        "inductor": Inductor(json)
+        "resistor": Resistor(json)
+        else: Part(json)
+    (c:JNull):
       Part(json)
-    (c):
-      ; Otherwise, fall back on the V1 deserializers, which inject everything for 2-pin passives.
-      ; We still haven't migrated all the OCDB generative logic to the parts-db population script.
-      match(json["category"]):
-        (c:String):
-          switch(c):
-            "capacitor": Capacitor(json)
-            "inductor": Inductor(json)
-            "resistor": Resistor(json)
 
 ;======================================
 ;============= Internals ==============
@@ -895,7 +890,7 @@ public-when(TESTING) defn PCBLayerValue (json: JObject) -> PCBLayerValue :
     Text(json["text"] as JObject),
   )
 
-public-when(TESTING) defstruct LandPatternCode :
+public defstruct LandPatternCode :
   name: String
   pads: Tuple<LandPatternPadCode>
   pcb-layer-reference: PCBLayerReference
