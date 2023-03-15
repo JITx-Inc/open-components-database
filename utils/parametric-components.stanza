@@ -32,13 +32,70 @@ defn smd-query-properties () -> Tuple<KeyValue<String, ?>> :
    "minimum_quantity" => 1
    "min-stock" => 5 * DESIGN-QUANTITY]
 
-; ========================================================
-; ==================== parametric-resistor =====================
-; ========================================================
 defn kvs<?K,?V> (xs:Seqable<KeyValue<?K,?V>>) :
   for x in xs seq : [key(x), value(x)]
 
-; public pcb-component parametric-resistor (user-params:Tuple<KeyValue>) :
+
+; ========================================================
+; ==================== parametric-capacitor ==============
+; ========================================================
+public pcb-module parametric-inductor (user-params:Tuple<KeyValue>) :
+  port p : pin[[1 2]]
+  property(self.parametric) = true ; property to set so that we know this is a parametric comp.
+  property(self.inductor) = true
+  property(self.reference-prefix) = "L"
+  val params = remove-duplicate-keys([smd-query-properties() user-params])
+
+  ; store the de-duped argument list in a property to retrieve it later
+  property(self.user-params) = user-params
+  ; we can also create properties for each individual kv but retrieval of those
+  ; will be a bit messy as we need to loop over all or try explicit names
+  for [myk, myv] in kvs(params) do :
+    set-property(self, to-symbol(myk), myv)
+
+  ; possible properties to extract from params:
+    ; "inductance"
+    ; "material-core"
+    ; "shielding"
+    ; "current-rating"
+    ; "saturation-current"
+    ; "dc-resistance"
+    ; "quality-factor"
+    ; "self-resonant-frequency"
+    ; "manufacturer"
+    ; "mpn"
+    ; "trust"
+    ; "dimensions"
+    ; "mounting"
+    ; "case"
+    ; "stock"
+    ; "price"
+    ; "minimum_quantity"
+    ; "type"
+    ; "rated-temperature"
+    ; "metadata.datasheets"
+    ; "metadata.image"
+    ; "metadata.digi-key-part-number"
+    ; "metadata.description"
+    ; "metadata.packaging"
+    ; "metadata.lifetime-temp"
+    ; "metadata.applications"
+    ; "metadata.ripple-current-low-frequency"
+    ; "metadata.ripple-current-high-frequency"
+    ; "metadata.lead-spacing"
+  ; re-enable when spice is available in jitx-client
+  ; spice:
+  ;   "[CL <p[1]> <p[2]> <property(self.inductance)>"
+
+public defn parametric-inductor (ind:Double|Toleranced) :
+  parametric-inductor(["inductance" => ind])
+
+public defn parametric-inductor (ind:Double|Toleranced, tol:Double) :
+  parametric-inductor(["inductance" => ind "tolerance" => tol])
+
+; ========================================================
+; ==================== parametric-capacitor ==============
+; ========================================================
 public pcb-module parametric-capacitor (user-params:Tuple<KeyValue>) :
   port p : pin[[1 2]]
   property(self.parametric) = true ; property to set so that we know this is a parametric comp.
@@ -46,7 +103,7 @@ public pcb-module parametric-capacitor (user-params:Tuple<KeyValue>) :
   property(self.reference-prefix) = "C"
   val params = remove-duplicate-keys([smd-query-properties() user-params])
 
-  ; store the deduped argument list in a property to retrieve it later
+  ; store the de-duped argument list in a property to retrieve it later
   property(self.user-params) = user-params
   ; we can also create properties for each individual kv but retrieval of those
   ; will be a bit messy as we need to loop over all or try explicit names
@@ -106,7 +163,6 @@ public defn parametric-capacitor (cap:Double|Toleranced, pkg:String) :
 public defn parametric-capacitor (cap:Double|Toleranced, tol:Double) -> Instantiable :
   parametric-capacitor(["capacitance" => cap "tolerance" => tol "type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE])
 
-
 ; public pcb-enum /ocdb/utils/parametric-components/ResistorApplication :
 ;   ResistorPull
 ;   ResistorPrecision
@@ -125,7 +181,10 @@ public pcb-component dummy-resistor :
   ; spice :
   ;   "[R] {p[1]} {p[2]} {res}"
 
-; public pcb-component parametric-resistor (user-params:Tuple<KeyValue>) :
+; ========================================================
+; ==================== parametric-resistor ===============
+; ========================================================
+
 public pcb-module parametric-resistor (user-params:Tuple<KeyValue>) :
   port p : pin[[1 2]]
   property(self.parametric) = true ; property to set so that we know this is a parametric comp.
@@ -184,6 +243,9 @@ public defn parametric-resistor (res:Double|Toleranced, pkg:String) :
 public defn parametric-resistor (res:Double|Toleranced, tol:Double) -> Instantiable :
   parametric-resistor(["resistance" => res "tolerance" => tol])
 
+; ========================================================
+; ==================== solve parametric parts ============
+; ========================================================
 
 public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
 
@@ -239,6 +301,8 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
                   yield("resistance" => find-std-val(t))
                 "capacitance" : 
                   yield("capacitance" => find-std-val(t))
+                "inductance" : 
+                  yield("inductance" => find-std-val(t))
             (_) :
               yield(myk => myv)
     ; println("param transformed %_ into %_" % [params replaced-params])
@@ -257,9 +321,10 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
           val new-comp =
             if has-property?(my-inst.resistor) :
               chip-resistor(user-params)
-            ; else if has-property?(my-inst.capacitor) :
             else if has-property?(my-inst.capacitor) :
               ceramic-cap(user-params)
+            else if has-property?(my-inst.inductor) :
+              smd-inductor(user-params)
             else :
               fatal("unknown component found")
           inst my-new-comp : new-comp
@@ -274,8 +339,10 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
     inside pcb-module :
       val knownR = HashTable<Double|Toleranced, Vector<JITXObject>>()
       val knownC = HashTable<Double|Toleranced, Vector<JITXObject>>()
+      val knownL = HashTable<Double|Toleranced, Vector<JITXObject>>()
       val paraR = HashTable<Double|Toleranced, Vector<JITXObject>>()
       val paraC = HashTable<Double|Toleranced, Vector<JITXObject>>()
+      val paraL = HashTable<Double|Toleranced, Vector<JITXObject>>()
 
       ; Need to recursively retrieve all instances (including instances of modules.)
       ; Loop runs twice: 1 find, 1 add part.
@@ -296,6 +363,13 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
                 val t = Vector<JITXObject>()
                 add(t,i)
                 set(paraC, property(i.capacitance), t)
+          else if has-property?(i.inductor) :
+            match(get?(paraL, property(i.inductance))) : 
+              (v:Vector<JITXObject>) : add(v,i)
+              (_) : 
+                val t = Vector<JITXObject>()
+                add(t,i)
+                set(paraL, property(i.inductance), t)
           else :
             fatal("Parametric component is not a resistor or capacitor")
         else if has-property?(i.resistance) :
@@ -316,12 +390,22 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
               val t = Vector<JITXObject>()
               add(t,i)
               set(knownC, c, t)
+        else if has-property?(i.inductance) :
+          val c = property(i.inductance)
+          ; println("Found standard inductor (%_) of value (%_)" % [ref(i), r])
+          match(get?(knownL, c)) : 
+            (v:Vector<JITXObject>) : add(v,i)
+            (_) : 
+              val t = Vector<JITXObject>()
+              add(t,i)
+              set(knownL, c, t)
     
-      ; we have four Hashtables here 
-      ; paraR,paraC are the parametric tables
-      ; knownR,knownC are the known fixed resistors (non-parametric)
+      ; we have 2n Hashtables here 
+      ; paraR,paraC,.. are the parametric components
+      ; knownR,knownC,... are the known fixed components (non-parametric)
       resolve-components(paraR)
       resolve-components(paraC)
+      resolve-components(paraL)
 
 ; public defn list-all-modules (m:JITXObject) -> Seqable<JITXObject>|False :
 public defn list-all-instances () -> Vector<JITXObject> :
