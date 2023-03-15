@@ -27,7 +27,7 @@ cd ..
 #==============================================
 
 echo "Searching for pcb objects and generating tests..."
-python3 scripts/evaluate_pcb_objects.py
+python3.10 scripts/evaluate_pcb_objects.py
 cd test-evaluate/
 echo "Launching pcb object tests..."
 $JITX_RUN_TEST test/evaluate/api
