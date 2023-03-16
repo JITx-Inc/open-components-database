@@ -26,6 +26,46 @@ defpackage ocdb/utils/parametric-components:
 ; ; ========== Generic passive components ==================
 ; ; ========================================================
 
+public pcb-component dummy-resistor (res:Double orig:Double|Toleranced):
+  port p : pin[[1 2]]
+  val sym = resistor-sym(ResistorStd)
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+  val pkg = ipc-two-pin-landpattern("0402")
+  landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+  reference-prefix = "R"
+  property(self.resistance) = res
+  property(self.resistor) = true
+  property(self.orig-resistance) = orig
+  spice :
+    "[R] {p[1]} {p[2]} {res}"
+
+public pcb-component dummy-capacitor (cap:Double orig:Double|Toleranced):
+  port p : pin[[1 2]]
+  val sym = capacitor-sym(CapacitorNonPolarized)
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+  val pkg = ipc-two-pin-landpattern("0402")
+  landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+  reference-prefix = "C"
+  property(self.capacitor) = true
+  property(self.type) = "ceramic"
+  property(self.capacitance) = cap
+  property(self.orig-capacitance) = orig
+  spice :
+    "[C] {p[1]} {p[2]} {cap}"
+
+public pcb-component dummy-inductor (ind:Double orig:Double|Toleranced):
+  port p : pin[[1 2]]
+  val sym = inductor-sym(InductorStd)
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+  val pkg = ipc-two-pin-landpattern("0402")
+  landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+  reference-prefix = "L"
+  property(self.inductor) = true
+  property(self.inductance) = ind
+  property(self.orig-inductance) = orig
+  spice :
+    "[L] {p[1]} {p[2]} {ind}"
+
 defn smd-query-properties () -> Tuple<KeyValue<String, ?>> :
   ["mounting" => "smd"
    "case" => get-valid-pkg-list()
@@ -54,35 +94,46 @@ public pcb-module parametric-inductor (user-params:Tuple<KeyValue>) :
     set-property(self, to-symbol(myk), myv)
 
   ; possible properties to extract from params:
-    ; "inductance"
-    ; "material-core"
-    ; "shielding"
-    ; "current-rating"
-    ; "saturation-current"
-    ; "dc-resistance"
-    ; "quality-factor"
-    ; "self-resonant-frequency"
-    ; "manufacturer"
-    ; "mpn"
-    ; "trust"
-    ; "dimensions"
-    ; "mounting"
-    ; "case"
-    ; "stock"
-    ; "price"
-    ; "minimum_quantity"
-    ; "type"
-    ; "rated-temperature"
-    ; "metadata.datasheets"
-    ; "metadata.image"
-    ; "metadata.digi-key-part-number"
-    ; "metadata.description"
-    ; "metadata.packaging"
-    ; "metadata.lifetime-temp"
-    ; "metadata.applications"
-    ; "metadata.ripple-current-low-frequency"
-    ; "metadata.ripple-current-high-frequency"
-    ; "metadata.lead-spacing"
+  ; area
+  ; case
+  ; category
+  ; current-rating
+  ; dc-resistance
+  ; dimensions.area
+  ; dimensions.x
+  ; dimensions.y
+  ; dimensions.z
+  ; inductance
+  ; manufacturer
+  ; material-core
+  ; metadata.datasheets
+  ; metadata.description
+  ; metadata.digi-key-part-number
+  ; metadata.image
+  ; metadata.packaging
+  ; minimum_quantity
+  ; mounting
+  ; mpn
+  ; price
+  ; quality-factor
+  ; quality-factor-frequency
+  ; rated-temperature.max
+  ; rated-temperature.min
+  ; saturation-current
+  ; self-resonant-frequency
+  ; shielding
+  ; stock
+  ; tolerance
+  ; tolerance.max
+  ; tolerance.min
+  ; trust
+  ; type
+  ; update_date
+  ; vendor_part_numbers.<VENDOR_STRING>
+  ; x
+  ; y
+  ; z  
+  
   ; re-enable when spice is available in jitx-client
   ; spice:
   ;   "[CL <p[1]> <p[2]> <property(self.inductance)>"
@@ -111,42 +162,58 @@ public pcb-module parametric-capacitor (user-params:Tuple<KeyValue>) :
     set-property(self, to-symbol(myk), myv)
 
   ; possible properties to extract from params:
-    ; "manufacturer"
-    ; "mpn"
-    ; "capacitance"
-    ; "trust"
-    ; "dimensions"
-    ; "mounting"
-    ; "case"
-    ; "stock"
-    ; "price"
-    ; "minimum_quantity"
-    ; "type"
-    ; "anode"
-    ; "electrolyte"
-    ; "esr"
-    ; "esr_frequency"
-    ; "rated-voltage"
-    ; "rated-voltage-ac"
-    ; "rated-current-pk"
-    ; "rated-current-rms"
-    ; "rated-temperature"
-    ; "temperature-coefficient.code"
-    ; "temperature-coefficient.lower-temperature"
-    ; "temperature-coefficient.raw_data"
-    ; "temperature-coefficient.tolerance"
-    ; "temperature-coefficient.upper-temperature"
-    ; "temperature-coefficient.value"
-    ; "metadata.datasheets"
-    ; "metadata.image"
-    ; "metadata.digi-key-part-number"
-    ; "metadata.description"
-    ; "metadata.packaging"
-    ; "metadata.lifetime-temp"
-    ; "metadata.applications"
-    ; "metadata.ripple-current-low-frequency"
-    ; "metadata.ripple-current-high-frequency"
-    ; "metadata.lead-spacing"
+  ; anode
+  ; area
+  ; capacitance
+  ; case
+  ; category
+  ; dimensions.area
+  ; dimensions.x
+  ; dimensions.y
+  ; dimensions.z
+  ; electrolyte
+  ; esr
+  ; esr_frequency
+  ; manufacturer
+  ; metadata.applications
+  ; metadata.datasheets
+  ; metadata.description
+  ; metadata.digi-key-part-number
+  ; metadata.image
+  ; metadata.lead-spacing
+  ; metadata.lifetime-temp
+  ; metadata.packaging
+  ; metadata.ripple-current-high-frequency
+  ; metadata.ripple-current-low-frequency
+  ; minimum_quantity
+  ; mounting
+  ; mpn
+  ; price
+  ; rated-current-pk
+  ; rated-current-rms
+  ; rated-temperature.max
+  ; rated-temperature.min
+  ; rated-voltage
+  ; rated-voltage-ac
+  ; stock
+  ; temperature-coefficient.change
+  ; temperature-coefficient.code
+  ; temperature-coefficient.lower-temperature
+  ; temperature-coefficient.raw_data
+  ; temperature-coefficient.tolerance
+  ; temperature-coefficient.upper-temperature
+  ; temperature-coefficient.value
+  ; tolerance
+  ; tolerance.max
+  ; tolerance.min
+  ; trust
+  ; type
+  ; update_date
+  ; vendor_part_numbers.<VENDOR_STRING>
+  ; x
+  ; y
+  ; z
+
   ; re-enable when spice is available in jitx-client
   ; spice:
   ;   "[C] <p[1]> <p[2]> <property(self.capacitance)>"
@@ -171,16 +238,6 @@ public defn parametric-capacitor (cap:Double|Toleranced, tol:Double) -> Instanti
 ;   ResistorPower
 ;  ; application:ResistorApplication
 
-public pcb-component dummy-resistor :
-  port p : pin[[1 2]]
-  val sym = resistor-sym(ResistorStd)
-  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
-  val pkg = ipc-two-pin-landpattern("0402")
-  landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
-  reference-prefix = "R"
-  ; spice :
-  ;   "[R] {p[1]} {p[2]} {res}"
-
 ; ========================================================
 ; ==================== parametric-resistor ===============
 ; ========================================================
@@ -200,30 +257,46 @@ public pcb-module parametric-resistor (user-params:Tuple<KeyValue>) :
     set-property(self, to-symbol(myk), myv)
 
   ; possible properties to extract from params:
-  ; resistance
-  ; tolerance (min, max)
-  ; manufacturer
-  ; mounting
+  ; area
   ; case
-  ; type
+  ; category
   ; composition
-  ; rated-power
-  ; tcr (neg, pos)
-  ; rated-temperature (min, max)
-  ; mpn
-  ; dimensions (x, y, z, area)
-  ; stock
-  ; price
-  ; minimum_quantity
+  ; dimensions.area
+  ; dimensions.x
+  ; dimensions.y
+  ; dimensions.z
+  ; manufacturer
   ; metadata.datasheets
-  ; metadata.image
-  ; metadata.digi-key-part-number
   ; metadata.description
-  ; metadata.series
-  ; metadata.packaging
+  ; metadata.digi-key-part-number
   ; metadata.features
-  ; metadata.supplier-device-package
+  ; metadata.image
   ; metadata.number-of-terminations
+  ; metadata.packaging
+  ; metadata.series
+  ; metadata.supplier-device-package
+  ; minimum_quantity
+  ; mounting
+  ; mpn
+  ; price
+  ; rated-power
+  ; rated-temperature.max
+  ; rated-temperature.min
+  ; resistance
+  ; stock
+  ; tcr.neg
+  ; tcr.pos
+  ; tolerance
+  ; tolerance.max
+  ; tolerance.min
+  ; trust
+  ; type
+  ; update_date
+  ; vendor_part_numbers.<VENDOR_STRING>
+  ; x
+  ; y
+  ; z
+
   ; re-enable when spice is available in jitx-client
   ; spice:
   ;   "[R] <p[1]> <p[2]> <property(self.resistance)>"
@@ -266,7 +339,7 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
         if in-range?(v, c-r(std-val, exp)) :
           val diff = abs(c-r(std-val, exp) - center-value(v))
           if diff < match-diff :
-            ; std-val resistor (at the appropriate exp range) is between our min and max
+            ; std-val component (at the appropriate exp range) is closest to center()
             match-diff = diff
             match-val = std-val
             match-exp = to-double(exp)
@@ -320,11 +393,29 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
           ; println("Searching with user-params => %_" % [user-params])
           val new-comp =
             if has-property?(my-inst.resistor) :
-              chip-resistor(user-params)
+              try :
+                chip-resistor(user-params)
+              catch (e):
+                println("Warning: generic resistor substitution for %_" % [ref(my-inst)])
+                match(property(my-inst.resistance)) :
+                  (r:Double) : dummy-resistor(r, r)
+                  (t:Toleranced) : dummy-resistor(find-std-val(t), t)
             else if has-property?(my-inst.capacitor) :
-              ceramic-cap(user-params)
+              try :
+                ceramic-cap(user-params)
+              catch (e):
+                println("Warning: generic capacitor substitution for %_" % [ref(my-inst)])
+                match(property(my-inst.capacitance)) :
+                  (c:Double) : dummy-capacitor(c, c)
+                  (t:Toleranced) : dummy-capacitor(find-std-val(t), t)
             else if has-property?(my-inst.inductor) :
-              smd-inductor(user-params)
+              try :
+                smd-inductor(user-params)
+              catch (e):
+                println("Warning: generic inductor substitution for %_" % [ref(my-inst)])
+                match(property(my-inst.inductance)) :
+                  (l:Double) : dummy-inductor(l, l)
+                  (t:Toleranced) : dummy-inductor(find-std-val(t), t)
             else :
               fatal("unknown component found")
           inst my-new-comp : new-comp
@@ -407,7 +498,6 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
       resolve-components(paraC)
       resolve-components(paraL)
 
-; public defn list-all-modules (m:JITXObject) -> Seqable<JITXObject>|False :
 public defn list-all-instances () -> Vector<JITXObject> :
   inside pcb-module :
     val all-instances = Vector<JITXObject>()
@@ -419,19 +509,3 @@ public defn list-all-instances () -> Vector<JITXObject> :
 
     look-inside(self)
     all-instances
-
-  ; inside pcb-module :
-  ;   val names = Vector<JITXObject>()
-  ;   let loop (mods:Instantiable = instances(self)) :
-  ;     for m in mods do :
-  ;       println $ m
-  ;       match(m) :
-  ;         ; (m:SingleModule) : println("Found module (%_)" % [m])
-  ;         (r:JITXObject) : add(names, r)
-  ;         (rs:Seqable) : loop(rs)
-  ;         (r) : println("Not a JITXObject (%_)" % [r])
-  ;   to-tuple(names)
-    
-    ;   (c:ESIRComponent) : println("Found component (%_)" % [ref(c)])
-      ; we have a module
-
