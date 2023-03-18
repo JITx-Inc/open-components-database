@@ -1,0 +1,209 @@
+#use-added-syntax(tests, jitx)
+defpackage ocdb/tests/parametric-components :
+  import core
+  import collections
+  import math
+
+  import jitx
+  import jitx/commands
+
+  import ocdb/utils/defaults
+  import ocdb/utils/checks
+  import ocdb/utils/generator-utils
+  import ocdb/utils/parametric-components
+  import ocdb/utils/generic-components
+  import ocdb/manufacturers/stackups
+  import ocdb/manufacturers/rules
+  import ocdb/utils/symbols
+  import ocdb/utils/design-vars
+
+DESIGN-QUANTITY = 0
+DEFAULT-ALLOW-ALL-VENDOR-PART-NUMBERS = true
+MIN-CAP-VOLTAGE = 1.0
+
+pcb-module para-res-0b (num-r:Int) :
+  port io : pin[[1 2]]
+  ; total of 3 + num-r resistors in this block
+  inst r1d0 : parametric-resistor(1.0e3)[num-r]
+  inst r1t0 : parametric-resistor(min-max(560.0, 880.0))
+  inst r1d1 : parametric-resistor(1.5e3)
+  inst r1t1 : parametric-resistor(min-max(880.0, 980.0))
+
+  net conn (io[1] r1t0.p[1])
+  net (r1d1.p[1] r1t1.p[1])
+  net gnd (r1t0.p[2])
+  net (io[2] r1d1.p[2] r1t1.p[2])
+
+  for index in 0 to num-r do :
+    net (conn r1d0[index].p[1])
+    net (gnd  r1d0[index].p[2])
+
+  symbol(gnd) = ocdb/utils/symbols/ground-sym
+
+pcb-module para-cap-0b (num-c:Int) :
+  port io : pin[[1 2]]
+  ; total of 3 + num-r resistors in this block
+  inst c1d0 : parametric-capacitor(1.0e-6)[num-c]
+  inst c1t0 : parametric-capacitor(min-max(2.2e-6, 6.8e-6))
+  inst c1d1 : parametric-capacitor(100.0e-9)
+  inst c1t1 : parametric-capacitor(min-max(11.0e-9, 30.5e-9))
+
+  net conn (io[1] c1t0.p[1])
+  net (c1d1.p[1] c1t1.p[1])
+  net gnd (c1t0.p[2])
+  net (io[2] c1d1.p[2] c1t1.p[2])
+
+  for index in 0 to num-c do :
+    net (conn c1d0[index].p[1])
+    net (gnd  c1d0[index].p[2])
+
+  symbol(gnd) = ocdb/utils/symbols/ground-sym
+
+pcb-module para-ind-0b (num-l:Int) :
+  port io : pin[[1 2]]
+  ; total of 3 + num-r resistors in this block
+  inst l1d0 : parametric-inductor(1.0e-6)[num-l]
+  inst l1t0 : parametric-inductor(min-max(2.2e-6, 6.8e-6))
+  inst l1d1 : parametric-inductor(100.0e-9)
+  inst l1t1 : parametric-inductor(min-max(11.0e-9, 30.5e-9))
+
+  net conn (io[1] l1t0.p[1])
+  net (l1d1.p[1] l1t1.p[1])
+  net gnd (l1t0.p[2])
+  net (io[2] l1d1.p[2] l1t1.p[2])
+
+  for index in 0 to num-l do :
+    net (conn l1d0[index].p[1])
+    net (gnd  l1d0[index].p[2])
+
+  symbol(gnd) = ocdb/utils/symbols/ground-sym
+
+
+pcb-module para-components-0 :
+  ; Design goes here
+  val num-r = 2
+  val num-c = 8
+  val num-l = 3
+  ; total of 3 + num-r resistors in this block
+  inst r1d0 : parametric-resistor(["resistance" => 1.0e6, "tolerance" => 0.02])
+  inst r1t0 : parametric-resistor(min-max(560.0e3, 880.0e3))
+  inst r1d1 : parametric-resistor(1.5e3)[num-r]
+  inst r1t1 : parametric-resistor(min-max(520.0, 880.0))
+  inst c1d0 : parametric-capacitor(["capacitance" => 1.0e-6, "tolerance" => 0.05])
+  inst c1t0 : parametric-capacitor(["capacitance" => min-max(560.0e-15, 880.0e-15) "minimum_quantity" => 0])
+  inst c1d1 : parametric-capacitor(1.5e-9)[num-c]
+  inst c1t1 : parametric-capacitor(min-max(520.0e-9, 880.0e-9))
+  inst l1d0 : parametric-inductor(["inductance" => 1.0e-6, "tolerance" => 0.05])
+  inst l1t0 : parametric-inductor(min-max(560.0e-9, 880.0e-9))
+  inst l1d1 : parametric-inductor(1.5e-9)[num-c]
+  inst l1t1 : parametric-inductor(min-max(520.0e-6, 880.0e-6))
+
+  inst hierA : para-res-0b(num-r) ; 3 + num-r
+  inst hierB : para-res-0b(num-r)[2] ; num-r * (3 + num-r)
+  inst hierC : para-cap-0b(num-c) ; 3 + num-c
+  inst hierD : para-cap-0b(num-c)[2] ; num-c * (3 + num-c)
+  inst hierE : para-ind-0b(num-l) ; 3 + num-c
+  inst hierF : para-ind-0b(num-l)[2] ; num-c * (3 + num-c)
+
+  inst r2 : chip-resistor(["resistance" => min-max(150.0, 750.0)])
+  inst c2 : ceramic-cap(["capacitance" => min-max(15.0e-9, 80.0e-9)])
+  inst l2 : smd-inductor(["inductance" => min-max(15.0e-9, 80.0e-9)])
+
+  ; not findable so the dummy-* component should be instantiated
+  inst r3 : parametric-resistor(["resistance" => 1.0e20, "tolerance" => 0.02])
+  inst c3 : parametric-capacitor(["capacitance" => min-max(15.0e-18, 80.0e-18)])
+  inst l3 : parametric-inductor(["inductance" => min-max(15.0, 80.0)])
+
+
+  ; not findable so the dummy-* component should be instantiated
+  inst r4 : chip-resistor(["resistance" => 1.0e20, "tolerance" => 0.02])
+  inst c4 : ceramic-cap(["capacitance" => min-max(15.0e-18, 80.0e-18)])
+  inst l4 : smd-inductor(["inductance" => min-max(15.0, 80.0)])
+
+  ; total resistor count = 3 + num-r + 3 + num-r + num-r * (3 + num-r)
+  ; = 6 + 5 * num-r + num-r * num-r
+
+  net connA (r1d0.p[1] r1t0.p[1] c1d0.p[1] c1t0.p[1] l1d0.p[1] l1t0.p[1] hierA.io[1] hierC.io[1] hierE.io[1])
+  net connB (r1t1.p[1] c1t1.p[1] l1t1.p[1])
+  net gnd (r1d0.p[2] r1t0.p[2] c1d0.p[2] c1t0.p[2] l1d0.p[2] l1t0.p[2])
+  net connC (r1t1.p[2] hierA.io[2] c1t1.p[2] hierC.io[2] l1t1.p[2] hierE.io[2])
+
+  for index in 0 to 2 do :
+    net (connA hierB[index].io[1])
+    net (connB r1d1[index].p[1])
+    net (gnd hierB[index].io[2])
+    net (connC r1d1[index].p[2])
+
+  for index in 0 to 2 do :
+    net (connA hierD[index].io[1])
+    net (connB c1d1[index].p[1])
+    net (gnd hierD[index].io[2])
+    net (connC c1d1[index].p[2])
+
+  for index in 0 to 2 do :
+    net (connA hierF[index].io[1])
+    net (connB l1d1[index].p[1])
+    net (gnd hierF[index].io[2])
+    net (connC l1d1[index].p[2])
+
+  symbol(gnd) = ocdb/utils/symbols/ground-sym
+  ; println $ list-all-instances()
+
+
+pcb-module para-resistor-1-mod (lo:Double, hi:Double):
+  port p : pin[[1 2]]
+
+  inst rs : parametric-resistor(["resistance" => min-max(lo, hi)])
+  net (p[1] rs.p[1])
+  net (p[2] rs.p[2])
+
+
+pcb-module para-resistors-1 :
+  val res-val = [[ 33.0,200.0], 
+                 [ 33.0,230.0], 
+                 [ 47.0,260.0], 
+                 [ 65.0,290.0], 
+                 [120.0,290.0], 
+                 [133.0,330.0], 
+                 [167.0,400.0], 
+                 [190.0,500.0], 
+                 [210.0,500.0], 
+                 [230.0,999.0]]
+
+  net gnd ()
+  net vdd ()
+
+  val resistors = Vector<JITXObject>()
+  for (value in res-val, index in 0 to false) do :
+    val res-mod = parametric-resistor(["resistance" => min-max(value[0], value[1])])
+    inst res : res-mod
+    net (res.p[1] gnd)
+    net (res.p[2] vdd)
+    add(resistors, res)
+
+  symbol(gnd) = ocdb/utils/symbols/ground-sym
+  symbol(vdd) = ocdb/utils/symbols/altium-power-bar-sym
+
+val brd-outline = Rectangle(50.0, 50.0)
+
+pcb-board B :
+  stackup = sierra-circuits-6-layer-62-mil
+  boundary = brd-outline
+  signal-boundary = brd-outline
+
+val output-dir = "CAD"
+println("Deleting project output directory: %_ ..." % [output-dir])
+try : delete-recursive(output-dir)
+catch (e) : false
+println("Output folder: %_" % [output-dir])
+
+set-design-directory(output-dir)
+set-board(B)
+set-rules(sierra-adv-rules)
+var top-level = para-components-0
+; list-all-modules(top-level)
+top-level = solve-parametric-parts(top-level)
+set-main-module(top-level)
+
+view-design-explorer()
+view-schematic()

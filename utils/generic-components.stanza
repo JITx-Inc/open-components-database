@@ -18,6 +18,7 @@ defpackage ocdb/utils/generic-components:
   import ocdb/utils/symbol-utils
   import ocdb/utils/checks
   import ocdb/utils/parts
+  import ocdb/utils/parametric-components
 
 ; ========================================================
 ; ====== Standard packages for the passive solver ========
@@ -130,7 +131,6 @@ public defn closest-std-val (v:Double, tol:Double) :
 
   match-val * pow(10.0, expon)
 
-
 ; ========================================================
 ; ==================== PartsDB ===========================
 ; ========================================================
@@ -171,6 +171,43 @@ defn smd-query-properties () -> Tuple<KeyValue<String, ?>> :
 public defn remove-duplicate-keys (hs:Seqable<Seqable<KeyValue<String, ?>>>) -> Tuple<KeyValue<String, ?>> :
   to-tuple $ to-hashtable<String, ?>(cat-all(hs))
 
+; ========================================================
+; ========== Handle min/max value searching ==============
+; ========================================================
+
+defn kvs<?K,?V> (xs:Seqable<KeyValue<?K,?V>>) :
+  for x in xs seq : [key(x), value(x)]
+
+defn replace-params (params:Tuple<KeyValue>) -> Tuple<KeyValue> :
+  ; need to check if resistance is passed a Toleranced() value and if
+  ; so, transform it to min-resistance, max-resistance
+  val replaced-params = to-tuple $
+    generate<KeyValue<String, ?>> :
+      for [myk, myv] in kvs(params) do :
+        match(myv) :
+          (t:Toleranced) :
+            switch(myk) :
+              "resistance" :
+                yield("min-resistance" => min-value(myv))
+                yield("max-resistance" => max-value(myv))
+              "capacitance" :
+                yield("min-capacitance" => min-value(myv))
+                yield("max-capacitance" => max-value(myv))
+              "inductance" :
+                yield("min-inductance" => min-value(myv))
+                yield("max-inductance" => max-value(myv))
+          (_) :
+            yield(myk => myv)          
+  replaced-params  
+
+defn lookup-val (params:Tuple<KeyValue>, key:String) -> Double|Toleranced|False :
+  val my-val = 
+    label<Double|Toleranced> return :
+      for [myk, myv] in kvs(params) do :
+        if myk == key :
+          return(myv)
+      fatal("Key (%_) not found in (%_)" % [key params])
+  my-val
 
 ; ========================================================
 ; ==================== ceramic-cap =======================
@@ -181,19 +218,28 @@ public defn ceramic-cap (user-params:Tuple<KeyValue>) -> Instantiable :
   val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         user-params]
-  to-jitx $ Capacitor(params)
+  val my-params = replace-params(params)
+  try :
+    to-jitx $ Capacitor(my-params)
+  catch (e) :
+    val my-cap = lookup-val(params, "capacitance")
+    println("Warning: generic capacitor substitution for value (%_)" % [my-cap])
+    match(my-cap) :
+      (d:Double) : dummy-capacitor(d, d)
+      (t:Toleranced) : dummy-capacitor(typ-value(t), t)
+      (_) : fatal("Did not find acceptable type of capacitance value (%_)" % [my-cap])
 
-public defn ceramic-cap (cap:Double) -> Instantiable :
+public defn ceramic-cap (cap:Double|Toleranced) -> Instantiable :
   ceramic-cap(["capacitance" => cap])
 
-public defn ceramic-cap (cap:Double, tolerance:Double) -> Instantiable :
+public defn ceramic-cap (cap:Double|Toleranced, tolerance:Double) -> Instantiable :
   ceramic-cap(["capacitance" => cap "tolerance" => tolerance])
 
 public defn ceramic-caps (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
   val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         user-params]
-  map(to-jitx, Capacitors(params, limit))
+  map(to-jitx, Capacitors(replace-params(params), limit))
 
 ; ========================================================
 ; =============== look-up-ceramic-caps ===================
@@ -206,7 +252,7 @@ public defn look-up-ceramic-caps (attribute: String, filter-properties:Tuple<Key
   val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         filter-properties]
-  look-up-capacitors(attribute, params)
+  look-up-capacitors(attribute, replace-params(params))
 
 ; ========================================================
 ; ==================== tantalum-cap =======================
@@ -216,19 +262,28 @@ public defn tantalum-cap (user-params:Tuple<KeyValue>) -> Instantiable :
   val params = remove-duplicate-keys $ [["anode" => "tantalum" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         user-params]
-  to-jitx $ Capacitor(params)
+  val my-params = replace-params(params)
+  try :
+    to-jitx $ Capacitor(my-params)
+  catch (e) :
+    val my-cap = lookup-val(params, "capacitance")
+    println("Warning: generic capacitor substitution for value (%_)" % [my-cap])
+    match(my-cap) :
+      (d:Double) : dummy-capacitor(d, d)
+      (t:Toleranced) : dummy-capacitor(typ-value(t), t)
+      (_) : fatal("Did not find acceptable type of capacitance value (%_)" % [my-cap])
 
-public defn tantalum-cap (cap:Double) -> Instantiable :
+public defn tantalum-cap (cap:Double|Toleranced) -> Instantiable :
   tantalum-cap(["capacitance" => cap])
 
-public defn tantalum-cap (cap:Double, tolerance:Double) -> Instantiable :
+public defn tantalum-cap (cap:Double|Toleranced, tolerance:Double) -> Instantiable :
   tantalum-cap(["capacitance" => cap "tolerance" => tolerance])
 
 public defn tantalum-caps (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
   val params = remove-duplicate-keys $ [["anode" => "tantalum" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         user-params]
-  map(to-jitx, Capacitors(params, limit))
+  map(to-jitx, Capacitors(replace-params(params), limit))
 
 ; ========================================================
 ; =============== look-up-tantalum-caps ===================
@@ -241,7 +296,7 @@ public defn look-up-tantalum-caps (attribute: String, filter-properties:Tuple<Ke
   val params = remove-duplicate-keys $ [["anode" => "tantalum" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         filter-properties]
-  look-up-capacitors(attribute, params)
+  look-up-capacitors(attribute, replace-params(params))
 
 ; ========================================================
 ; ==================== chip-resistor =====================
@@ -250,17 +305,26 @@ public defn look-up-tantalum-caps (attribute: String, filter-properties:Tuple<Ke
 ; Generic chip resistor from database (of 600k options)
 public defn chip-resistor (user-params:Tuple<KeyValue>) -> Instantiable :
   val params = remove-duplicate-keys([smd-query-properties() user-params])
-  to-jitx $ Resistor(params)
+  val my-params = replace-params(params)
+  try :
+    to-jitx $ Resistor(my-params)
+  catch (e) :
+    val my-res = lookup-val(params, "resistance")
+    println("Warning: generic resistor substitution for value (%_)" % [my-res])
+    match(my-res) :
+      (d:Double) : dummy-resistor(d, d)
+      (t:Toleranced) : dummy-resistor(typ-value(t), t)
+      (_) : fatal("Did not find acceptable type of resistance value (%_)" % [my-res])
 
-public defn chip-resistor (resistance:Double) -> Instantiable :
+public defn chip-resistor (resistance:Double|Toleranced) -> Instantiable :
   chip-resistor(["resistance" => resistance])
 
-public defn chip-resistor (resistance:Double, tolerance:Double) -> Instantiable :
+public defn chip-resistor (resistance:Double|Toleranced, tolerance:Double) -> Instantiable :
   chip-resistor(["resistance" => resistance "tolerance" => tolerance])
 
 public defn chip-resistors (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
   val params = remove-duplicate-keys([smd-query-properties() user-params])
-  map(to-jitx, Resistors(params, limit))
+  map(to-jitx, Resistors(replace-params(params), limit))
 
 ; ========================================================
 ; ================ look-up-chip-resistors ================
@@ -271,7 +335,7 @@ public defn look-up-chip-resistors (attribute: String) -> Tuple :
 
 public defn look-up-chip-resistors (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
   val params = remove-duplicate-keys([smd-query-properties() filter-properties])
-  look-up-resistors(attribute, params)
+  look-up-resistors(attribute, replace-params(params))
 
 ;============================================================
 ;==================== smd-inductor ==========================
@@ -280,17 +344,26 @@ public defn look-up-chip-resistors (attribute: String, filter-properties:Tuple<K
 ; Generic inductors from database of standard packages (0402, 0603... 10k options)
 public defn smd-inductor (user-params:Tuple<KeyValue>) -> Instantiable :
   val params = remove-duplicate-keys([smd-query-properties() user-params])
-  to-jitx $ Inductor(params)
+  val my-params = replace-params(params)
+  try :
+    to-jitx $ Inductor(my-params)
+  catch (e) :
+    val my-ind = lookup-val(params, "inductance")
+    println("Warning: generic inductor substitution for value (%_)" % [my-ind])
+    match(my-ind) :
+      (d:Double) : dummy-inductor(d, d)
+      (t:Toleranced) : dummy-inductor(typ-value(t), t)
+      (_) : fatal("Did not find acceptable type of inductance value (%_)" % [my-ind])
 
-public defn smd-inductor (ind:Double) -> Instantiable :
+public defn smd-inductor (ind:Double|Toleranced) -> Instantiable :
   smd-inductor(["inductance" => ind])
 
-public defn smd-inductor (ind:Double, tolerance:Double) -> Instantiable :
+public defn smd-inductor (ind:Double|Toleranced, tolerance:Double) -> Instantiable :
   smd-inductor(["inductance" => ind "tolerance" => tolerance])
 
 public defn smd-inductors (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
   val params = remove-duplicate-keys([smd-query-properties() user-params])
-  map(to-jitx, Inductors(params, limit))
+  map(to-jitx, Inductors(replace-params(params), limit))
 
 ; ========================================================
 ; ================ look-up-smd-inductors =================
@@ -301,7 +374,7 @@ public defn look-up-smd-inductors (attribute: String) -> Tuple :
 
 public defn look-up-smd-inductors (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
   val params = remove-duplicate-keys([smd-query-properties() filter-properties])
-  look-up-inductors(attribute, params)
+  look-up-inductors(attribute, replace-params(params))
 
 ; ========================================================
 ; ===================== gen-cap-cmp ======================
@@ -509,13 +582,13 @@ public defn gen-led-cmp (pkg-name:String) :
 ; ========================================================
 ; These functions attach a passive component between two pins. e.g. strap a pull up resistor between an IO and VDD
 
-public defn bypass-cap-strap (power-pin:JITXObject, gnd-pin:JITXObject, capacitance:Double):
+public defn bypass-cap-strap (power-pin:JITXObject, gnd-pin:JITXObject, capacitance:Double|Toleranced):
   inside pcb-module:
     val cap = cap-strap(gnd-pin, power-pin, capacitance)
     short-trace(cap.p[2], power-pin)
     cap
 
-public defn bypass-caps (power-pin:JITXObject|Symbol, gnd-pin:JITXObject|Symbol, voltage:Double, caps:Tuple<Double>, name:Symbol) :
+public defn bypass-caps (power-pin:JITXObject|Symbol, gnd-pin:JITXObject|Symbol, voltage:Double, caps:Tuple<Double|Toleranced>, name:Symbol) :
   inside pcb-module:
     val n-caps = length(caps)
     for i in 0 to n-caps do :
@@ -541,10 +614,10 @@ public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple
     net (second-pin, rid.p[2])
     rid
 
-public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, resistance:Double, tol:Double) :
+public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, resistance:Double|Toleranced, tol:Double) :
   res-strap(first-pin, second-pin, ["resistance" => resistance "tolerance" => tol])
 
-public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, resistance:Double) :
+public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, resistance:Double|Toleranced) :
   res-strap(first-pin, second-pin, ["resistance" => resistance])
 
 ; ========================================================
@@ -557,10 +630,10 @@ public defn cap-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple
     net (second-pin, cap.p[2])
     cap
 
-public defn cap-strap (first-pin:JITXObject, second-pin:JITXObject, capacitance:Double, tol:Double) :
+public defn cap-strap (first-pin:JITXObject, second-pin:JITXObject, capacitance:Double|Toleranced, tol:Double) :
   cap-strap(first-pin, second-pin, ["capacitance" => capacitance "tolerance" => tol])
 
-public defn cap-strap (first-pin:JITXObject, second-pin:JITXObject, capacitance:Double) :
+public defn cap-strap (first-pin:JITXObject, second-pin:JITXObject, capacitance:Double|Toleranced) :
   cap-strap(first-pin, second-pin, ["capacitance" => capacitance])
 
 ; ========================================================
@@ -573,23 +646,23 @@ public defn ind-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple
     net (second-pin, ind.p[2])
     ind
 
-public defn ind-strap (first-pin:JITXObject, second-pin:JITXObject, inductance:Double, tol:Double) :
+public defn ind-strap (first-pin:JITXObject, second-pin:JITXObject, inductance:Double|Toleranced, tol:Double) :
   ind-strap(first-pin, second-pin, ["inductance" => inductance "tolerance" => tol])
 
-public defn ind-strap (first-pin:JITXObject, second-pin:JITXObject, inductance:Double) :
+public defn ind-strap (first-pin:JITXObject, second-pin:JITXObject, inductance:Double|Toleranced) :
   ind-strap(first-pin, second-pin, ["inductance" => inductance])
 
 public defn default-bypass (cmp:JITXObject) :
   inside pcb-module:
     for p in ports(cmp) do :
-      if has-property?(p.power-pin) :
-        inst cap : ceramic-cap(0.1)
+      if has-property?(p.power-pin) or has-property?(p.power-supply-pin):
+        inst cap : ceramic-cap(0.1e-6)
         property(cap.bypass) = true
         net (cap.p[1], p)
         short-trace(cap.p[1], p)
         net (cap.p[2], cmp.gnd)
 
-public defn block-cap (in:JITXObject, out:JITXObject, cap:Double) -> JITXObject :
+public defn block-cap (in:JITXObject, out:JITXObject, cap:Double|Toleranced) -> JITXObject :
   inside pcb-module :
     inst block : ceramic-cap(cap)
     net (in, block.p[1])
