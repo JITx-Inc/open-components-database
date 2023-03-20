@@ -51,8 +51,8 @@ public pcb-component dummy-resistor (res:Double orig:Double|Toleranced):
   property(self.resistance) = res
   property(self.resistor) = true
   property(self.orig-resistance) = orig
-  spice :
-    "[R] {p[1]} {p[2]} {res}"
+  ; spice :
+  ;   "[R] <p[1]> <p[2]> <res>"
 
 public pcb-component dummy-capacitor (cap:Double orig:Double|Toleranced):
   port p : pin[[1 2]]
@@ -65,8 +65,8 @@ public pcb-component dummy-capacitor (cap:Double orig:Double|Toleranced):
   property(self.type) = "ceramic"
   property(self.capacitance) = cap
   property(self.orig-capacitance) = orig
-  spice :
-    "[C] {p[1]} {p[2]} {cap}"
+  ; spice :
+  ;   "[C] <p[1]> <p[2]> <cap>"
 
 public pcb-component dummy-inductor (ind:Double orig:Double|Toleranced):
   port p : pin[[1 2]]
@@ -78,8 +78,8 @@ public pcb-component dummy-inductor (ind:Double orig:Double|Toleranced):
   property(self.inductor) = true
   property(self.inductance) = ind
   property(self.orig-inductance) = orig
-  spice :
-    "[L] {p[1]} {p[2]} {ind}"
+  ; spice :
+  ;   "[L] <p[1]> <p[2]> <ind>"
 
 defn smd-query-properties () -> Tuple<KeyValue<String, ?>> :
   ["mounting" => "smd"
@@ -152,9 +152,9 @@ public pcb-module parametric-inductor (user-params:Tuple<KeyValue>) :
   ; y
   ; z  
   
-  ; re-enable when spice is available in jitx-client
-  spice:
-    "[L <p[1]> <p[2]> <property(self.inductance)>"
+  ; re-enable when spice is available in jitx-client in the Docker image for CI
+  ; spice:
+  ;   "[L <p[1]> <p[2]> <property(self.inductance)>"
 
 public defn parametric-inductor (ind:Double|Toleranced) :
   parametric-inductor(["inductance" => ind])
@@ -232,9 +232,9 @@ public pcb-module parametric-capacitor (user-params:Tuple<KeyValue>) :
   ; y
   ; z
 
-  ; re-enable when spice is available in jitx-client
-  spice:
-    "[C] <p[1]> <p[2]> <property(self.capacitance)>"
+  ; re-enable when spice is available in jitx-client (CI Docker image)
+  ; spice:
+  ;   "[C] <p[1]> <p[2]> <property(self.capacitance)>"
 
 public defn parametric-capacitor (cap:Double|Toleranced) :
   parametric-capacitor(["capacitance" => cap "type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE])
@@ -308,9 +308,9 @@ public pcb-module parametric-resistor (user-params:Tuple<KeyValue>) :
   ; y
   ; z
 
-  ; re-enable when spice is available in jitx-client
-  spice:
-    "[R] <p[1]> <p[2]> <property(self.resistance)>"
+  ; re-enable when spice is available in jitx-client Docker image for CI
+  ; spice:
+  ;   "[R] <p[1]> <p[2]> <property(self.resistance)>"
 
 public defn parametric-resistor (res:Double|Toleranced) :
   parametric-resistor(["resistance" => res])
@@ -392,10 +392,12 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
     ; println("param transformed %_ into %_" % [params replaced-params])
     replaced-params
       
-  defn resolve-components (my-hash:HashTable<Double|Toleranced, Vector<JITXObject>>) ->  Vector<Instantiable> :
+  
+  defn resolve-components (my-para:HashTable<Double|Toleranced, Vector<JITXObject>>,
+                           my-fix:HashTable<Double|Toleranced, Vector<JITXObject>>) ->  Vector<Instantiable> :
     inside pcb-module :
       val new-comps = Vector<Instantiable>()
-      for rs in my-hash do :
+      for rs in my-para do :
         val r-val = key(rs)
         for my-inst in value(rs) do :
           if not has-property?(my-inst.user-params) :
@@ -473,7 +475,7 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
                 add(t,i)
                 set(paraL, property(i.inductance), t)
           else :
-            fatal("Parametric component is not a resistor or capacitor")
+            fatal("Parametric component is not a resistor, capacitor, or inductor.")
         else if has-property?(i.resistance) :
           val r = property(i.resistance)
           ; println("Found standard resistor (%_) of value (%_)" % [ref(i), r])
@@ -505,9 +507,9 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
       ; we have 2n Hashtables here 
       ; paraR,paraC,.. are the parametric components
       ; knownR,knownC,... are the known fixed components (non-parametric)
-      resolve-components(paraR)
-      resolve-components(paraC)
-      resolve-components(paraL)
+      resolve-components(paraR, knownR)
+      resolve-components(paraC, knownC)
+      resolve-components(paraL, knownL)
 
 public defn list-all-instances () -> Vector<JITXObject> :
   inside pcb-module :
