@@ -16,9 +16,10 @@ defpackage ocdb/designs/ble-mote :
 
 
 OPERATING-TEMPERATURE = min-max(-20.0 50.0)
-OPTIMIZE-FOR = ["cost"]
+OPTIMIZE-FOR = ["area"]
 MIN-PKG = "0402"
 MIN-CAP-VOLTAGE = 12.0
+APPROVED-DISTRIBUTOR-LIST = ["JLCPCB"]
 
 
 ; PMS7003 particle counter interface via header pins
@@ -32,7 +33,8 @@ pcb-bundle pms7003-interface :
 pcb-module pms7003 :
   port interface : pms7003-interface
   
-  inst header : ocdb/components/amphenol/minitek127/component(10)
+  ; inst header : ocdb/components/amphenol/minitek127/component(10)
+  inst header : database-part(["mpn" => "B-2201S10P-B121", "manufacturer" => "Ckmtw(Shenzhen Cankemeng)"])
   place(header) at loc(0.0, 0.0) on Top
   net (interface.vin.gnd interface.vin-mcu.gnd header.p[3] header.p[4])
   net (interface.vin.vdd header.p[1] header.p[2])
@@ -102,29 +104,29 @@ pcb-module sensors :
   ; Connect power to sensors
   net (ldo.vout, hum.power, particle-counter-interface.vin-mcu, power-3v3)
 
-  ; Add probe loops
-  val debug-tps = add-testpoint([ debug.tx
-                                  debug.rx
-                                  debug.dtr
-                                  debug.rts], ocdb/components/keystone/5017/component)
+  ; ; Add probe loops
+  ; val debug-tps = add-testpoint([ debug.tx
+  ;                                 debug.rx
+  ;                                 debug.dtr
+  ;                                 debug.rts], ocdb/components/keystone/5017/component)
 
-  val power-tps = add-testpoint([ P5V0
-                                  P3V3
-                                  gnd ], ocdb/components/keystone/5017/component)
+  ; val power-tps = add-testpoint([ P5V0
+  ;                                 P3V3
+  ;                                 gnd ], ocdb/components/keystone/5017/component)
 
-  val hum-tps = add-testpoint([   hum.i2c.sda
-                                  hum.i2c.scl], ocdb/components/keystone/5017/component)
+  ; val hum-tps = add-testpoint([   hum.i2c.sda
+  ;                                 hum.i2c.scl], ocdb/components/keystone/5017/component)
 
-  val pms-tps = add-testpoint([   particle-counter-interface.uart.tx
-                                  particle-counter-interface.uart.rx
-                                  gnd ], ocdb/components/keystone/5017/component)
+  ; val pms-tps = add-testpoint([   particle-counter-interface.uart.tx
+  ;                                 particle-counter-interface.uart.rx
+  ;                                 gnd ], ocdb/components/keystone/5017/component)
 
-  schematic-group([usb, ldo, cp2105, power-tps containing-instance(protected-usb) as JITXObject]) = power
-  schematic-group([hum hum-tps]) = humidity-sensor
-  schematic-group([particle-counter pms-tps]) = particle-counter
+  schematic-group([usb, ldo, cp2105, containing-instance(protected-usb) as JITXObject]) = power
+  schematic-group([hum]) = humidity-sensor
+  schematic-group([particle-counter]) = particle-counter
 
   layout-group([usb, ldo, cp2105 containing-instance(protected-usb) as JITXObject]) = power
-  layout-group([hum hum-tps]) = hum
+  layout-group([hum]) = hum
   layout-group(particle-counter) = particle-counter
 
   ; Set up netclasses
@@ -145,8 +147,8 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
   
   val x = width(board-outline) / 2.0
   val y = height(board-outline) / 2.0
-  place(sensors.usb) at loc(4.0 - x, 7.0 - y) on Top
-  place(sensors.particle-counter) at loc(5.0 - x, y - 5.0, 180.0) on Bottom
+  ; place(sensors.usb) at loc(4.0 - x, 7.0 - y) on Top
+  ; place(sensors.particle-counter) at loc(5.0 - x, y - 5.0, 180.0) on Bottom
 
   inst proc : processor
   net gnd (proc.gnd)
@@ -157,8 +159,8 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
     net (proc.ant, ant.rf-in)
     net (gnd ant.gnd)
     place(ant) at loc(x - 6.0, 14.0 - y, -90.0) on Top
-  else :
-    place(proc) at loc(x - 6.0, y - 12.0, -90.0) on Top
+  ; else :
+  ;   place(proc) at loc(x - 6.0, y - 12.0, -90.0) on Top
 
   require i2c:i2c from proc
   require pc-uart:uart() from proc
@@ -178,7 +180,7 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
     copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = board-outline
 
   inst logo : ocdb/artwork/jitx-logo/small(Silkscreen("artwork", Top), true)
-  place(logo) at loc(x + 1.0, 0.0 - y, 0.0) on Bottom
+  ; place(logo) at loc(x + 1.0, 0.0 - y, 0.0) on Bottom
 
   check-design(self)
 
@@ -186,10 +188,11 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
 ; Configure the design, then run or check it
 ; ==========================================
 defn run-design (run-checks?:True|False) :
-  val outline = Rectangle(45.0, 30.0)
+  val outline = Rectangle(35.0, 25.0)
   val circuit = sensor-system(ocdb/components/espressif/esp32-wroom-32/module(ocdb/components/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), outline)
   set-design-directory("ble-mote")
   set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-jlc2313, outline))
+  set-use-layout-groups()
   set-rules(ocdb/manufacturers/rules/jlcpcb-rules)
 
   var main-module = circuit
