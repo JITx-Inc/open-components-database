@@ -157,23 +157,41 @@ pcb-module biquad-circuit-test:
   ; also need to use bw of opamp to limit max operating frequency, etc.
   val my-amp = ocdb/components/analog-devices/ADA4004/component
 
-  val numFilters = 4
-  val filter-request = BiQuadFilter(10.0e3, 1.0e3, 1.0)
-  val solution = find-biquad-soln(filter-request)
+  val numFilters = 3
+  val filter-request0 = BiQuadFilter(10.0e3, 1.000e3, 1.0)
+  val filter-request1 = BiQuadFilter(7.50e3, 0.750e3, 1.0)
+  val solution0 = find-biquad-soln(filter-request0)
+  val solution1 = find-biquad-soln(filter-request1)
 
   ; val solution = BiQuadSolution(1000.0, 2000.0, 3000.0, 10.0e-9)
 
   println("Biquad details:")
-  println(solution)
-  printDiff(filter-request, solution)
+  println(solution0)
+  println(solution1)
+  printDiff(filter-request0, solution0)
+  printDiff(filter-request1, solution1)
 
-  inst filter : biquad-bandpass-circuit(solution, my-amp)[numFilters]
+  inst filter : biquad-bandpass-circuit(solution0, my-amp)[numFilters]
+
+  inst filterA : biquad-bandpass-circuit(solution1, my-amp)
+  inst filterB : biquad-bandpass-circuit(solution1, my-amp)
 
   net P2V5 ()
   net gnd ()
   net P5V0 ()
   net in ()
   net out ()
+
+  net (P2V5 filterA.VREF)
+  net (gnd filterA.VEE )
+  net (P5V0 filterA.VCC)
+  net (in filterA.VIN)
+  net (out filterA.VOUT)
+  net (P2V5 filterB.VREF)
+  net (gnd filterB.VEE )
+  net (P5V0 filterB.VCC)
+  net (in filterB.VIN)
+  net (out filterB.VOUT)
 
   for index in 0 to numFilters do :
     val ref = Ref("filter")[index]
@@ -192,4 +210,4 @@ set-paper(ANSI-B)
 make-default-board(biquad-circuit-test, 4, BOARD-SHAPE)
 view-board()
 view-schematic()
-view-design-explorer()
+; view-design-explorer()
