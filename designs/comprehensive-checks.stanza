@@ -1,6 +1,6 @@
 ; This design contains a set of components with explicitly created properties,
 ; intended to drive the pcb-checks run by ocdb/utils/checks/check-design function.
-; 
+;
 ; It is not intended as a meaningful schematic, rather a dummy project that shows
 ; all the properties required to set for passives and actives when running your code.
 ;
@@ -35,7 +35,7 @@ pcb-component resistor :
     [ pin : Ref | pads : Int ... ]
     [ p[1]      | 1              ]
     [ p[2]      | 2              ]
-  
+
   assign-landpattern(ipc-two-pin-landpattern("0603"))
   val sym = resistor-sym()
   symbol =
@@ -57,7 +57,7 @@ pcb-component inductor :
     [ pin : Ref | pads : Int ... ]
     [ p[1]      | 1              ]
     [ p[2]      | 2              ]
-  
+
   assign-landpattern(ipc-two-pin-landpattern("0603"))
   val sym = inductor-sym()
   symbol =
@@ -79,7 +79,7 @@ pcb-component ceramic-capacitor :
     [ pin : Ref | pads : Int ... ]
     [ p[1]      | 1              ]
     [ p[2]      | 2              ]
-  
+
   assign-landpattern(ipc-two-pin-landpattern("0603"))
   val sym = resistor-sym()
   symbol =
@@ -98,7 +98,7 @@ pcb-component electrolytic-cap :
     [ pin : Ref | pads : Int ... ]
     [ p[1]      | 1              ]
     [ p[2]      | 2              ]
-  
+
   assign-landpattern(ipc-two-pin-landpattern("0603"))
   val sym = capacitor-sym()
   symbol =
@@ -120,7 +120,7 @@ pcb-component mica-cap :
     [ pin : Ref | pads : Int ... ]
     [ p[1]      | 1              ]
     [ p[2]      | 2              ]
-  
+
   assign-landpattern(ipc-two-pin-landpattern("0603"))
   val sym = capacitor-sym()
   symbol =
@@ -139,7 +139,7 @@ pcb-component mylar-cap :
     [ pin : Ref | pads : Int ... ]
     [ p[1]      | 1              ]
     [ p[2]      | 2              ]
-  
+
   assign-landpattern(ipc-two-pin-landpattern("0603"))
   val sym = capacitor-sym()
   symbol =
@@ -162,18 +162,18 @@ pcb-component crystal-resonator :
     [ pin : Ref | pads : Int ... ]
     [ p[1]      | 1              ]
     [ p[2]      | 2              ]
-  
+
   assign-landpattern(ipc-two-pin-landpattern("0603"))
   val sym = crystal-sym()
   symbol =
     sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
-  
+
   property(self.rated-temperature) = min-max(-55.0, 100.0)
 
   ; Set the crystal resonator properties
-  property(self.crystal-resonator) = 
+  property(self.crystal-resonator) =
     CrystalResonator(
-      load-capacitance, shunt-capacitance, motional-capacitance, 
+      load-capacitance, shunt-capacitance, motional-capacitance,
       ESR, frequency, frequency-tolerance, max-drive-level
     ) where :
       val load-capacitance = 9.0e-12
@@ -189,7 +189,7 @@ pcb-module resonator-module :
   public inst C1 : ceramic-capacitor
   property(C1.tolerance) = [0.99, 1.01]
   val intf = CrystalOscillator(
-    max-critical-gain, drive-level, 
+    max-critical-gain, drive-level,
     c-pin, frequency-tolerance, frequency
   ) where :
     val max-critical-gain = 2.0e-3
@@ -216,7 +216,7 @@ pcb-component component :
     [ p[6]      | 6              | Right ]
     [ p[7]      | 7              | Right ]
     [ p[8]      | 8              | Right ]
-  
+
   assign-landpattern(ocdb/components/st-microelectronics/landpatterns/LQFP32)
   make-box-symbol()
 
@@ -243,7 +243,7 @@ pcb-module passives :
   property(C4.operating-point) = OperatingPoint(typ(5.0), typ(0.5e-6))
   property(R1.operating-point) = OperatingPoint(typ(5.0), typ(0.5e-6))
   property(L1.operating-point) = OperatingPoint(typ(5.0), typ(0.5e-6))
-  
+
   no-connect(C1.p[1])
   no-connect(C1.p[2])
 
@@ -254,12 +254,12 @@ pcb-module passives :
   ; Resonators
   inst res : resonator-module
   property(res.C1.operating-point) = OperatingPoint(typ(5.0), typ(0.5e-6))
- 
+
 ;==============================================================================
 ;============================= I/O Propertiese ================================
 ;==============================================================================
-; For digital I/O the following properties must be set: 
-; 
+; For digital I/O the following properties must be set:
+;
 ; - digital-output: DigitalOutput. The pin is a digital output (only) pin.
 ; - digital-input: DigitalInput. The pin is a digital input (only) pin.
 ; - digital-io: DigitalIO. The pin functions as either a digital input or
@@ -276,31 +276,31 @@ pcb-component digital-source (io?:True|False,
     [ vdd  | 1 | Up    ]
     [ out  | 2 | Right ]
     [ gnd  | 3 | Down  ]
-  
+
   make-box-symbol()
   assign-landpattern(SOT23())
   val vol = min-max(0.1, 0.5)
   val voh = min-max(3.0, 3.3)
 
-  val driver = 
+  val driver =
     switch(case) :
-      "open-collector": 
+      "open-collector":
         OpenCollector(vol 6.0)
-      "cmos": 
+      "cmos":
         CMOSOutput(vol, voh)
-      "ttl" : 
+      "ttl" :
         TTLOutput(vol, voh)
-  
-  if io? : 
-    property(self.out.digital-io) = 
-      DigitalIO(driver, typ(0.8), typ(2.0), 
-                self.vdd, self.gnd, 10.0e-6) 
+
+  if io? :
+    property(self.out.digital-io) =
+      DigitalIO(driver, typ(0.8), typ(2.0),
+                self.vdd, self.gnd, 10.0e-6)
   else :
-    property(self.out.digital-output) = 
+    property(self.out.digital-output) =
       DigitalOutput(driver, tristateable?, self.vdd, self.gnd)
 
   property(self.rated-temperature) = min-max(-55.0, 100.0)
-  
+
 pcb-component digital-sink (io?:True|False,
                             case:String):
   pin-properties :
@@ -312,21 +312,21 @@ pcb-component digital-sink (io?:True|False,
   make-box-symbol()
   assign-landpattern(SOT23())
 
-  val driver = 
+  val driver =
     switch(case) :
-      "open-collector": 
+      "open-collector":
         OpenCollector(min-max(3.3, 5.0), 6.0)
-      "cmos": 
+      "cmos":
         CMOSOutput(min-max(0.1, 0.5), min-max(4.0, 5.0))
-      "ttl" : 
+      "ttl" :
         TTLOutput(min-max(0.1, 0.5), min-max(4.0, 5.0))
-  
+
   if io? :
-    property(self.in.digital-io) = 
-      DigitalIO(driver, typ(0.8), typ(2.0), 
-                self.vdd, self.gnd, 10.0e-6) 
+    property(self.in.digital-io) =
+      DigitalIO(driver, typ(0.8), typ(2.0),
+                self.vdd, self.gnd, 10.0e-6)
   else :
-    property(self.in.digital-input) = 
+    property(self.in.digital-input) =
       DigitalInput(typ(0.8), typ(2.0), self.vdd, self.gnd, 10.0e-6)
 
   property(self.rated-temperature) = min-max(-55.0, 100.0)
@@ -334,13 +334,13 @@ pcb-component digital-sink (io?:True|False,
 pcb-module digital-io :
   val cases = ["open-collector", "cmos", "ttl"]
 
-  val sink = to-tuple $  
+  val sink = to-tuple $
     for io? in [false, true] seq-cat :
       for case in cases seq :
         inst sink : digital-sink(io?, case)
         sink
 
-  val source = to-tuple $ 
+  val source = to-tuple $
     for io? in [false, true] seq-cat :
       for case in cases seq :
         val name = to-symbol $ string-join([`source, case, io?], "-")
@@ -358,7 +358,7 @@ pcb-module digital-io :
     net (source[n].vdd, sink[n].vdd, VDD, Rpullup.p[1])
     net dat (source[n].out, sink[n].in, Rpullup.p[2])
     property(Rpullup.p[1].voltage) = property(VDD.voltage)
-    property(Rpullup.operating-point) = OperatingPoint(typ(5.2), typ(5.0e-3))  
+    property(Rpullup.operating-point) = OperatingPoint(typ(5.2), typ(5.0e-3))
 
 pcb-component relative-io :
   property(self.rated-temperature) = min-max(-55.0, 100.0)
@@ -372,7 +372,7 @@ pcb-component relative-io :
   assign-landpattern(SOT23())
 
   val gp = GenericPin(FractionalVoltage(0.75, self.vdd), 200.0)
-  val io = 
+  val io =
     DigitalIO(driver, vil, vih, vdd-pin, gnd-pin, leakage-current)
     where :
       val driver = CMOSOutput(min-max(0.1, 0.5), OffsetVoltage(-0.3, self.vdd))
@@ -396,10 +396,10 @@ pcb-module relative-io-module :
 
   property(VDD.voltage) = min-max(0.0, 5.0)
   property(GND.voltage) = typ(0.0)
-  
+
   symbol(VDD) = supply-sym
   symbol(GND) = ground-sym
-  
+
 
 pcb-module realistic-design :
   port source : power
@@ -444,12 +444,12 @@ pcb-module realistic-design :
 
   net (stm[0].mcu.PA[2] stm[2].mcu.PA[4])
   net (stm[0].mcu.PA[3] stm[1].mcu.PA[4])
-  
+
 
 ;==============================================================================
 ;==============================================================================
 ;==============================================================================
-pcb-module main-module : 
+pcb-module main-module :
   inst passives    : passives
   inst digital-io  : digital-io
   inst relative-io : relative-io-module
@@ -463,7 +463,7 @@ pcb-module main-module :
   check-design(self)
 
 defn main () :
-  set-design-directory("comprehensive-checks") 
+  set-current-design("comprehensive-checks")
   set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-jlc2313, Rectangle(100.0 100.0)))
   set-rules(ocdb/manufacturers/rules/jlcpcb-rules)
   set-main-module(ocdb/utils/generator-utils/run-final-passes(main-module))
