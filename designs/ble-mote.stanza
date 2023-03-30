@@ -109,18 +109,18 @@ pcb-module sensors :
                                   debug.tx
                                   debug.rx
                                   debug.dtr
-                                  debug.rts], ocdb/components/keystone/5017/component)
+                                  debug.rts], ocdb/utils/generic-components/smd-testpoint-cmp(2.0))
 
-  ; val power-tps = add-testpoint([ P5V0
-  ;                                 P3V3
-  ;                                 gnd ], ocdb/components/keystone/5017/component)
+  val power-tps = add-testpoint([ P5V0
+                                  P3V3
+                                  gnd ], ocdb/utils/generic-components/smd-testpoint-cmp(2.0))
 
-  ; val hum-tps = add-testpoint([   hum.i2c.sda
-  ;                                 hum.i2c.scl], ocdb/components/keystone/5017/component)
+  val hum-tps = add-testpoint([   hum.i2c.sda
+                                  hum.i2c.scl], ocdb/utils/generic-components/smd-testpoint-cmp(2.0))
 
-  ; val pms-tps = add-testpoint([   particle-counter-interface.uart.tx
-  ;                                 particle-counter-interface.uart.rx
-  ;                                 gnd ], ocdb/components/keystone/5017/component)
+  val pms-tps = add-testpoint([   particle-counter-interface.uart.tx
+                                  particle-counter-interface.uart.rx
+                                  gnd ], ocdb/utils/generic-components/smd-testpoint-cmp(2.0))
 
   schematic-group([usb, ldo, cp2105, containing-instance(protected-usb) as JITXObject]) = power
   schematic-group([hum]) = humidity-sensor
@@ -147,13 +147,8 @@ pcb-module sensors :
     property(n.net-class) = usb-net-class
 
 
-pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
+pcb-module sensor-system (processor:Instantiable, board-outline:Shape):
   inst sensors : sensors
-  
-  val x = width(board-outline) / 2.0
-  val y = height(board-outline) / 2.0
-  ; place(sensors.usb) at loc(4.0 - x, 7.0 - y) on Top
-  ; place(sensors.particle-counter) at loc(5.0 - x, y - 5.0, 180.0) on Bottom
 
   inst proc : processor
   net gnd (proc.gnd)
@@ -163,9 +158,7 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
     inst ant : inverted-f-antenna
     net (proc.ant, ant.rf-in)
     net (gnd ant.gnd)
-    place(ant) at loc(x - 6.0, 14.0 - y, -90.0) on Top
-  ; else :
-  ;   place(proc) at loc(x - 6.0, y - 12.0, -90.0) on Top
+    ; place(ant) at loc(x - 6.0, 14.0 - y, -90.0) on Top
 
   require i2c:i2c from proc
   require pc-uart:uart() from proc
@@ -188,7 +181,6 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
     copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = board-outline
 
   inst logo : ocdb/artwork/jitx-logo/small(Silkscreen("artwork", Top), true)
-  ; place(logo) at loc(x + 1.0, 0.0 - y, 0.0) on Bottom
 
   check-design(self)
 
@@ -196,7 +188,7 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
 ; Configure the design, then run or check it
 ; ==========================================
 defn run-design (run-checks?:True|False) :
-  val outline = Rectangle(32.0, 22.0)
+  val outline = Polygon([Point(-16.0, 11.0) Point(-16.0, -6.0) Point(-7.34, -11.0) Point(16.0, -11.0) Point(16.0, 11.0) Point(-16.0, 11.0)])
   val circuit = sensor-system(ocdb/components/espressif/esp32-wroom-32/module(ocdb/components/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), outline)
   set-current-design("ble-mote")
   set-paper(ANSI-A)
