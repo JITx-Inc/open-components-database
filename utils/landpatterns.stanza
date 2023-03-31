@@ -1206,6 +1206,57 @@ defmethod print (o:OutputStream, i:IpcResults) :
 public defn pad-size (i:IpcResults) -> Dims:
   Dims(0.5 * (Zmax(i) - Gmin(i)), Xmin(i))
 
+; Helper to make a polygon that is symmetric about both the x and y axes
+
+; Example usage:
+;   quad-symmetric-polygon(Point(1.0,1.5), Point(1.5,1.0))
+; Output:
+;   [Point(1.0,1.5), Point(1.5,1.0), Point(1.5,-1.0), Point(1.0,-1.5),
+;    Point(-1.0,-1.5), Point(-1.5,-1.0), Point(-1.5,1.0), Point(-1.0,1.5)]
+
+; Input points must have non-negative coordinates and be given in clockwise
+; order (along boundary of overall shape).  The input points may start with a
+; point on y-axis or end with a point on x-axis, or neither, or both.  If both,
+; the start and end points must have the same distance from origin to avoid
+; creating a degenerate polygon.
+
+public defn quad-symmetric-polygon (points:Tuple<Point>) -> Polygon :
+  if empty?(points) :
+    fatal("quad-symmetric-polygon: received empty tuple")
+  for p in points do :
+    if x(p) < 0.0 or y(p) < 0.0 :
+      fatal("quad-symmetric-polygon: expected points with positive coordinates")
+    if p == Point(0.0, 0.0) :
+      fatal("quad-symmetric-polygon: unexpected Point(0.0, 0.0) in points")
+
+  defn reflect-about-x-axis (p:Point) : Point(x(p), (- y(p)))
+  defn reflect-about-y-axis (p:Point) : Point((- x(p)), y(p))
+  defn reflect-about-origin (p:Point) : Point((- x(p)), (- y(p)))
+
+  val points-ne = points
+  val points-se = in-reverse(map(reflect-about-x-axis, points))
+  val points-sw = map(reflect-about-origin, points)
+  val points-nw = in-reverse(map(reflect-about-y-axis, points))
+
+  val poly-points = to-tuple(cat-all([points-ne, points-se, points-sw, points-nw]))
+  val L = length(poly-points)
+
+  ;; remove duplicates and/or exactly colinear points that may have been created on the axes
+  val deduplicated = to-tuple $ for i in 0 to (L - 1) seq? :
+    val p = poly-points[i - 1] when i != 0 else poly-points[L - 1]
+    val q = poly-points[i]
+    val r = poly-points[(i + 1) % L]
+    if q == r :
+      None()
+    else if x(q) == x(r) and x(q) == x(p) :
+      None()
+    else if y(q) == y(r) and y(q) == y(p) :
+      None()
+    else :
+      One(q)
+
+  Polygon(deduplicated)
+
 ; Helper function to apply a thermal pad shape, if it is provided. Assumes that the
 ; land pattern is centered at (0.0, 0.0).
 defn make-thermal-pad (shape?:False|Shape, num-pins:Int) :
