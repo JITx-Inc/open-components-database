@@ -17,6 +17,7 @@ defpackage ocdb/utils/db-parts :
   import ocdb/utils/defaults
   import ocdb/utils/landpatterns
   import ocdb/utils/generator-utils
+  import ocdb/utils/parts
   import ocdb/utils/property-structs
   import ocdb/utils/symbols
   import ocdb/utils/design-vars
@@ -27,6 +28,7 @@ public defmulti y (component: Component) -> Double
 public defmulti area (component: Component) -> Double
 public defmulti sellers (component: Component) -> Tuple<Seller>|False
 public defmulti resolved-price (component: Component) -> Double|False
+public defmulti vendor-part-numbers (component: Component) -> Tuple<KeyValue<String, String>>
 public defmulti to-jitx (component: Component) -> Instantiable
 
 defmethod area (component: Component) -> Double :
@@ -83,6 +85,8 @@ public defstruct Resistor <: Component :
   TCR: TCR|False ; Temperature coefficient of resistance (ohms/ohm*degC)
   sellers: Tuple<Seller>|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
+  component: ComponentCode
+  vendor-part-numbers: Tuple<KeyValue<String, String>> with: (as-method => true)
 
 public defn delta-resistance (resistor: Resistor, temperature: Double) -> Double :
   val tcr = TCR(resistor) as TCR
@@ -105,7 +109,7 @@ public defn Resistor (raw-json: JObject) -> Resistor :
            x,
            y,
            z,
-           json["mounting"] as String,
+           optional-mounting(json),
            parse-rated-temperature(json),
            optional-string(json, "case"),
            parse-sourcing(json),
@@ -118,7 +122,9 @@ public defn Resistor (raw-json: JObject) -> Resistor :
            optional-double(json, "rated-power"),
            resistance-tcr(json),
            parse-sellers(json),
-           optional-double(json, "resolved_price"))
+           optional-double(json, "resolved_price"),
+           ComponentCode(json["component"] as JObject),
+           parse-vendor-part-numbers(json))
 
 defn resistance-tcr (json: JObject) -> TCR|False :
   val tcr-json = get?(json, "tcr")
@@ -136,63 +142,76 @@ public defstruct TCR :
 ; ========================================================
 
 defmethod to-jitx (resistor: Resistor) -> Instantiable :
-  pcb-component my-resistor :
-    val manufacturer-string = manufacturer(resistor)
-    match(manufacturer-string: String) :
-      manufacturer = manufacturer-string
+  val component = component(resistor)
+  match(landpattern(component)) :
+    (lp:LandPatternCode):
+      ; If the landpattern is included, this part should have everything it needs.
+      to-jitx $ component
+    (c):
+      ; Otherwise, fall back on the V1 deserializers, which inject everything for 2-pin passives.
+      ; We still haven't migrated all the OCDB generative logic to the parts-db population script.
+      pcb-component my-resistor :
+        val manufacturer-string = manufacturer(resistor)
+        match(manufacturer-string: String) :
+          manufacturer = manufacturer-string
 
-    mpn = mpn(resistor)
-    val height = z(resistor)
+        mpn = mpn(resistor)
+        datasheet = datasheet(component)
+        val height = z(resistor)
 
-    val description-string = lookup?(metadata(resistor), "description")
-    match(description-string: String) :
-      description = description-string
+        val description-string = lookup?(metadata(resistor), "description")
+        match(description-string: String) :
+          description = description-string
 
-    port p : pin[1 through 2]
-    val sym = resistor-sym()
-    symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
-    val case = case(resistor)
-    match(case: String) :
-      if check-valid-rectangle-pkg-list(case) :
-        val pkg = ipc-two-pin-landpattern(case, height)
-        landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
-      else :  ; example: case = "Axial"
-        val pkg = dummy-landpattern(2, [x(resistor) y(resistor)])
-        landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
-    else :
-      val pkg = dummy-landpattern(2, [x(resistor) y(resistor)])
-      landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+        port p : pin[1 through 2]
+        val sym = resistor-sym()
+        symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+        val case = case(resistor)
+        match(case: String) :
+          if check-valid-rectangle-pkg-list(case) :
+            val pkg = ipc-two-pin-landpattern(case, height)
+            landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+          else :  ; example: case = "Axial"
+            val pkg = dummy-landpattern(2, [x(resistor) y(resistor)])
+            landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+        else :
+          val pkg = dummy-landpattern(2, [x(resistor) y(resistor)])
+          landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
 
-    emodel = EModel-Resistor(resistance(resistor),
-                             emodel-pourcentage-tolerance(tolerance(resistor)),
-                             double-or-unknown(rated-power(resistor)))
-    reference-prefix = "R"
-    val TCR = TCR(resistor)
-    val rated-temperature = rated-temperature(resistor)
-    val tolerance = tolerance(resistor)
-    val resistance = resistance(resistor)
-    property(self.resistor) = true
-    property(self.trust) = trust(resistor)
-    property(self.x) = x(resistor)
-    property(self.y) = y(resistor)
-    property(self.z) = z(resistor)
-    property(self.mounting) = mounting(resistor)
-    match(rated-temperature: Toleranced): property(self.rated-temperature) = rated-temperature
-    property(self.case) = /case(resistor)
-    property(self.metadata) = metadata(resistor)
-    property(self.type) = type(resistor)
-    match(tolerance: MinMaxRange):
-      ;[TODO] Current exporter IR crashes unless tolerance is a Double.
-      ;So this feature is commented out until that is fixed.
-      ;property(self.tolerance) = [min(tolerance), max(tolerance)]
-      property(self.tolerance) = max(tolerance)
-    property(self.resistance) = resistance
-    property(self.composition) = composition(resistor)  ; this is the type => "thick-film" in gen-res-cmp
-    property(self.rated-power) = /rated-power(resistor)
-    match(TCR: TCR): property(self.TCR) = [positive(TCR), negative(TCR)]
-    spice :
-      "[R] <p[1]> <p[2]> <resistance>"
-  my-resistor
+        emodel = EModel-Resistor(resistance(resistor),
+                                emodel-pourcentage-tolerance(tolerance(resistor)),
+                                double-or-unknown(rated-power(resistor)))
+        reference-prefix = "R"
+        val TCR = TCR(resistor)
+        val rated-temperature = rated-temperature(resistor)
+        val tolerance = tolerance(resistor)
+        val resistance = resistance(resistor)
+        ; Backwards compatibility
+        property(self.resistor) = true
+        ; This is how parts-db does it
+        property(self.category) = "resistor"
+        property(self.trust) = trust(resistor)
+        property(self.x) = x(resistor)
+        property(self.y) = y(resistor)
+        property(self.z) = z(resistor)
+        property(self.mounting) = mounting(resistor)
+        match(rated-temperature: Toleranced): property(self.rated-temperature) = rated-temperature
+        property(self.case) = /case(resistor)
+        property(self.metadata) = metadata(resistor)
+        property(self.type) = type(resistor)
+        match(tolerance: MinMaxRange):
+          ;[TODO] Current exporter IR crashes unless tolerance is a Double.
+          ;So this feature is commented out until that is fixed.
+          ;property(self.tolerance) = [min(tolerance), max(tolerance)]
+          property(self.tolerance) = max(tolerance)
+        property(self.resistance) = resistance
+        property(self.composition) = composition(resistor)  ; this is the type => "thick-film" in gen-res-cmp
+        property(self.rated-power) = /rated-power(resistor)
+        match(TCR: TCR): property(self.TCR) = [positive(TCR), negative(TCR)]
+        spice :
+          "[R] <p[1]> <p[2]> <resistance>"
+        set-properties-for-vendor-part-numbers(resistor)
+      my-resistor
 
 ; ========================================================
 ; ================== Resistor Accessors ==================
@@ -206,21 +225,18 @@ public defn Resistor (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> R
 
 public defn Resistor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:Toleranced|False) -> Resistor :
   val query-properties = resistor-query-properties(user-properties, exist, sort, operating-temperature)
-  ;Query the database with the given properties
-  Resistor $ dbquery-first-allow-non-stock(query-properties) as JObject
-  ; Resistor("manufacturer", "mpn", "trust", 0.0, 0.0, 0.0, "mounting", false, false, Sourcing(false, 0, 0), [], "type", false, 0.0, false, false, false)
+  PartsDBComponent(query-properties) as Resistor
 
 public defn Resistors (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Resistor> :
   val query-properties = resistor-query-properties(user-properties, [], OPTIMIZE-FOR, OPERATING-TEMPERATURE)
-  ;Query the database with the given properties
-  map{Resistor, _} $ dbquery(query-properties, limit) as Tuple<JObject>
+  PartsDBComponents(query-properties, limit) as Tuple<Resistor>
 
 defn resistor-query-properties (user-properties:Tuple<KeyValue>,
                                 exist:Tuple<String>,
                                 sort:Tuple<String>,
                                 operating-temperature:Toleranced|False) -> Tuple<KeyValue> :
   query-properties(user-properties,
-                   exist,
+                   maybe-insert-default-vendor-part-number(exist),
                    sort,
                    operating-temperature,
                    "resistor",
@@ -287,6 +303,8 @@ defstruct Capacitor <: Component :
   rated-current-rms: Double|False ; Maximum rms current rating from manufacturer (Amperes)
   sellers: Tuple<Seller>|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
+  component: ComponentCode
+  vendor-part-numbers: Tuple<KeyValue<String, String>> with: (as-method => true)
 
 defstruct ESR :
   value: Double
@@ -302,12 +320,12 @@ public defn Capacitor (raw-json: JObject) -> Capacitor :
             x,
             y,
             z,
-            json["mounting"] as String,
+            optional-mounting(json),
             parse-rated-temperature(json),
             optional-string(json, "case"),
             parse-sourcing(json),
             entries(json["metadata"] as JObject),
-            ; Resistor specific properties
+            ; Capacitor specific properties
             json["type"] as String,
             parse-tolerance(json),
             json["capacitance"] as Double,
@@ -320,7 +338,9 @@ public defn Capacitor (raw-json: JObject) -> Capacitor :
             optional-double(json, "rated-current-pk"),
             optional-double(json, "rated-current-rms"),
             parse-sellers(json),
-            optional-double(json, "resolved_price"))
+            optional-double(json, "resolved_price"),
+           ComponentCode(json["component"] as JObject),
+            parse-vendor-part-numbers(json))
 
 defn parse-esr (json: JObject) -> ESR|False :
   val esr-json = get?(json, "esr")
@@ -337,108 +357,122 @@ defn capacitor-temperature-coefficient (json: JObject) -> String|False :
 ; ========================================================
 
 defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
-  pcb-component my-capacitor :
-    val manufacturer-string = manufacturer(capacitor)
-    match(manufacturer-string: String) :
-      manufacturer = manufacturer-string
+  val component = component(capacitor)
+  match(landpattern(component)):
+    (lp:LandPatternCode):
+      ; If the landpattern is included, this part should have everything it needs.
+      to-jitx $ component
+    (c):
+      ; Otherwise, fall back on the V1 deserializers, which inject everything for 2-pin passives.
+      ; We still haven't migrated all the OCDB generative logic to the parts-db population script.
+      pcb-component my-capacitor :
+        val manufacturer-string = manufacturer(capacitor)
+        match(manufacturer-string: String) :
+          manufacturer = manufacturer-string
 
-    mpn = mpn(capacitor)
+        mpn = mpn(capacitor)
+        datasheet = datasheet(component)
 
-    val description-string = lookup?(metadata(capacitor), "description")
-    match(description-string: String) :
-      description = description-string
+        val description-string = lookup?(metadata(capacitor), "description")
+        match(description-string: String) :
+          description = description-string
 
-    val type-string = type(capacitor)
-    val pol? = not (type-string == "ceramic" or type-string == "film")
-    val esr = esr(capacitor)
-    val case = case(capacitor)
-    val height = match(z(capacitor)):
-      (d:Double) : d
-      (f:False) : 0.4
-    if pol? :
-      pin a
-      pin c
-      val sym = capacitor-sym(CapacitorPolarized)
-      symbol = sym(a => sym.p[1], c => sym.p[2])
+        val type-string = type(capacitor)
+        val pol? = not (type-string == "ceramic" or type-string == "film")
+        val esr = esr(capacitor)
+        val case = case(capacitor)
+        val height = match(z(capacitor)):
+          (d:Double) : d
+          (f:False) : 0.4
+        if pol? :
+          pin a
+          pin c
+          val sym = capacitor-sym(CapacitorPolarized)
+          symbol = sym(a => sym.p[1], c => sym.p[2])
 
-      match(case: String) :
-        if check-valid-rectangle-pkg-list(case) :
-          val pkg = ipc-two-pin-landpattern(case, height, pol?)
-          landpattern = pkg(a => pkg.a, c => pkg.c)
+          match(case: String) :
+            if check-valid-rectangle-pkg-list(case) :
+              val pkg = ipc-two-pin-landpattern(case, height, pol?)
+              landpattern = pkg(a => pkg.a, c => pkg.c)
+            else :
+              val pkg = dummy-landpattern(2, [x(capacitor) y(capacitor)])
+              landpattern = pkg(a => pkg.p[1], c => pkg.p[2])
+          else :
+            val pkg = dummy-landpattern(2, [x(capacitor) y(capacitor)])
+            landpattern = pkg(a => pkg.p[1], c => pkg.p[2])
+
+          match(esr: ESR) :
+            val esr-value = value(esr)
+            spice :
+              "[C] <a> [tmp] <capacitance(capacitor)>"
+              "[R] [tmp] <c> <esr-value>"
+          else :
+            spice :
+              "[C] <a> <c> <capacitance(capacitor)>"
+
         else :
-          val pkg = dummy-landpattern(2, [x(capacitor) y(capacitor)])
-          landpattern = pkg(a => pkg.p[1], c => pkg.p[2])
-      else :
-        val pkg = dummy-landpattern(2, [x(capacitor) y(capacitor)])
-        landpattern = pkg(a => pkg.p[1], c => pkg.p[2])
+          port p : pin[1 through 2]
 
-      match(esr: ESR) :
-        val esr-value = value(esr)
-        spice :
-          "[C] <a> [tmp] <capacitance(capacitor)>"
-          "[R] [tmp] <c> <esr-value>"
-      else :
-        spice :
-          "[C] <a> <c> <capacitance(capacitor)>"
+          val sym = capacitor-sym()
+          symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
 
-    else :
-      port p : pin[1 through 2]
+          match(case: String) :
+            if check-valid-rectangle-pkg-list(case) :
+              val pkg = ipc-two-pin-landpattern(case, height)
+              landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+            else :
+              val pkg = dummy-landpattern(2, [x(capacitor) y(capacitor)])
+              landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+          else :
+            val pkg = dummy-landpattern(2, [x(capacitor) y(capacitor)])
+            landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
 
-      val sym = capacitor-sym()
-      symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+          match(esr: ESR) :
+            val esr-value = value(esr)
+            spice :
+              "[C] <p[1]> [tmp] <capacitance(capacitor)>"
+              "[R] tmp <p[2]> <esr-value>"
+          else :
+            spice :
+              "[C] <p[1]> <p[2]> <capacitance(capacitor)>"
 
-      match(case: String) :
-        if check-valid-rectangle-pkg-list(case) :
-          val pkg = ipc-two-pin-landpattern(case, height)
-          landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
-        else :
-          val pkg = dummy-landpattern(2, [x(capacitor) y(capacitor)])
-          landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
-      else :
-        val pkg = dummy-landpattern(2, [x(capacitor) y(capacitor)])
-        landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+        set-properties-for-vendor-part-numbers(capacitor)
 
-      match(esr: ESR) :
-        val esr-value = value(esr)
-        spice :
-          "[C] <p[1]> [tmp] <capacitance(capacitor)>"
-          "[R] tmp <p[2]> <esr-value>"
-      else :
-        spice :
-          "[C] <p[1]> <p[2]> <capacitance(capacitor)>"
+        emodel = EModel-Capacitor(capacitance(capacitor),
+                                emodel-pourcentage-tolerance(tolerance(capacitor)),
+                                double-or-unknown(rated-voltage(capacitor)),
+                                pol?,
+                                UNKNOWN, ; FIXME: define low-esr? as below a certain threshold on the esr ?
+                                string-or-unknown(temperature-coefficient(capacitor)),
+                                UNKNOWN) ; FIXME: find out the dielectric information (look at type and anode?)
+        reference-prefix = "C"
+        val rated-temperature = rated-temperature(capacitor)
+        val capacitance = capacitance(capacitor)
+        val tolerance = tolerance(capacitor)
+        ; Backwards compatibility
+        property(self.capacitor) = true
+        ; This is how parts-db does it
+        property(self.category) = "capacitor"
+        property(self.trust) = trust(capacitor)
+        property(self.x) = x(capacitor)
+        property(self.y) = y(capacitor)
+        property(self.z) = z(capacitor)
+        property(self.mounting) = mounting(capacitor)
+        match(rated-temperature: Toleranced): property(self.rated-temperature) = rated-temperature
+        property(self.metadata) = metadata(capacitor)
+        property(self.type) = type(capacitor)
+        match(tolerance: MinMaxRange): property(self.tolerance) = [min(tolerance), max(tolerance)]
+        property(self.capacitance) = capacitance
+        property(self.anode) = anode(capacitor)
+        property(self.electrolyte) = electrolyte(capacitor)
+        property(self.temperature-coefficient) = temperature-coefficient(capacitor)
+        match(esr: ESR): property(self.esr) = value(esr)
+        match(esr: ESR): property(self.esr-frequency) = frequency(esr)
+        property(self.rated-voltage) = /rated-voltage(capacitor)
+        property(self.rated-current-pk) = rated-current-pk(capacitor)
+        property(self.rated-current-rms) = rated-current-rms(capacitor)
 
-    emodel = EModel-Capacitor(capacitance(capacitor),
-                             emodel-pourcentage-tolerance(tolerance(capacitor)),
-                             double-or-unknown(rated-voltage(capacitor)),
-                             pol?,
-                             UNKNOWN, ; FIXME: define low-esr? as below a certain threshold on the esr ?
-                             string-or-unknown(temperature-coefficient(capacitor)),
-                             UNKNOWN) ; FIXME: find out the dielectric information (look at type and anode?)
-    reference-prefix = "C"
-    val rated-temperature = rated-temperature(capacitor)
-    val capacitance = capacitance(capacitor)
-    val tolerance = tolerance(capacitor)
-    property(self.capacitor) = true
-    property(self.trust) = trust(capacitor)
-    property(self.x) = x(capacitor)
-    property(self.y) = y(capacitor)
-    property(self.z) = z(capacitor)
-    property(self.mounting) = mounting(capacitor)
-    match(rated-temperature: Toleranced): property(self.rated-temperature) = rated-temperature
-    property(self.metadata) = metadata(capacitor)
-    property(self.type) = type(capacitor)
-    match(tolerance: MinMaxRange): property(self.tolerance) = [min(tolerance), max(tolerance)]
-    property(self.capacitance) = capacitance
-    property(self.anode) = anode(capacitor)
-    property(self.electrolyte) = electrolyte(capacitor)
-    property(self.temperature-coefficient) = temperature-coefficient(capacitor)
-    match(esr: ESR): property(self.esr) = value(esr)
-    match(esr: ESR): property(self.esr-frequency) = frequency(esr)
-    property(self.rated-voltage) = /rated-voltage(capacitor)
-    property(self.rated-current-pk) = rated-current-pk(capacitor)
-    property(self.rated-current-rms) = rated-current-rms(capacitor)
-
-  my-capacitor
+      my-capacitor
 
 ; ========================================================
 ; ================ Capacitor Accessors ===================
@@ -452,20 +486,18 @@ public defn Capacitor (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> 
 
 public defn Capacitor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:Toleranced|False) -> Capacitor :
   val query-properties = capacitor-query-properties(user-properties, exist, sort, operating-temperature)
-  ;Query the database with the given properties
-  Capacitor $ dbquery-first-allow-non-stock(query-properties) as JObject
+  PartsDBComponent(query-properties) as Capacitor
 
 public defn Capacitors (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Capacitor> :
   val query-properties = capacitor-query-properties(user-properties, [], OPTIMIZE-FOR, OPERATING-TEMPERATURE)
-  ;Query the database with the given properties
-  map{Capacitor, _} $ dbquery(query-properties, limit) as Tuple<JObject>
+  PartsDBComponents(query-properties, limit) as Tuple<Capacitor>
 
 defn capacitor-query-properties (user-properties:Tuple<KeyValue>,
                                 exist:Tuple<String>,
                                 sort:Tuple<String>,
                                 operating-temperature:Toleranced|False) -> Tuple<KeyValue> :
   query-properties(user-properties,
-                   exist,
+                   maybe-insert-default-vendor-part-number(exist),
                    sort,
                    operating-temperature,
                    "capacitor",
@@ -531,6 +563,8 @@ defstruct Inductor <: Component :
   self-resonant-frequency: Double|False ; Frequency at which inductor impedance becomes very high / open circuit (freq in Hz)
   sellers: Tuple<Seller>|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
+  component: ComponentCode
+  vendor-part-numbers: Tuple<KeyValue<String, String>> with: (as-method => true)
 
 public defn Inductor (raw-json: JObject) -> Inductor :
   val json = filter-json(raw-json)
@@ -542,7 +576,7 @@ public defn Inductor (raw-json: JObject) -> Inductor :
            x,
            y,
            z,
-           json["mounting"] as String,
+           optional-mounting(json),
            parse-rated-temperature(json),
            optional-string(json, "case"),
            parse-sourcing(json),
@@ -559,68 +593,83 @@ public defn Inductor (raw-json: JObject) -> Inductor :
            optional-double(json, "quality-factor"),
            optional-double(json, "self-resonant-frequency"),
            parse-sellers(json),
-           optional-double(json, "resolved_price"))
+           optional-double(json, "resolved_price"),
+           ComponentCode(json["component"] as JObject),
+           parse-vendor-part-numbers(json))
 
 ; ========================================================
 ; ======================== to-jitx =======================
 ; ========================================================
 
 defmethod to-jitx (inductor: Inductor) -> Instantiable :
-  pcb-component my-inductor :
-    val manufacturer-string = manufacturer(inductor)
-    match(manufacturer-string: String) :
-      manufacturer = manufacturer-string
+  val component = component(inductor)
+  match(landpattern(component)):
+    (lp:LandPatternCode):
+      ; If the landpattern is included, this part should have everything it needs.
+      to-jitx $ component
+    (c):
+      ; Otherwise, fall back on the V1 deserializers, which inject everything for 2-pin passives.
+      ; We still haven't migrated all the OCDB generative logic to the parts-db population script.
+      pcb-component my-inductor :
+        val manufacturer-string = manufacturer(inductor)
+        match(manufacturer-string: String) :
+          manufacturer = manufacturer-string
 
-    mpn = mpn(inductor)
+        mpn = mpn(inductor)
+        datasheet = datasheet(component)
 
-    val description-string = lookup?(metadata(inductor), "description")
-    match(description-string: String) :
-      description = description-string
+        val description-string = lookup?(metadata(inductor), "description")
+        match(description-string: String) :
+          description = description-string
 
-    port p : pin[1 through 2]
-    val sym = inductor-sym()
-    symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
-    val case = case(inductor)
-    match(case: String) :
-      if all?(digit?, to-seq(case)) :
-        val pkg = ipc-two-pin-landpattern(case)
-        landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
-      else :  ; example: case = "Axial"
-        val pkg = dummy-landpattern(2, [x(inductor) y(inductor)])
-        landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
-    else :
-      val pkg = dummy-landpattern(2, [x(inductor) y(inductor)])
-      landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+        port p : pin[1 through 2]
+        val sym = inductor-sym()
+        symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+        val case = case(inductor)
+        match(case: String) :
+          if all?(digit?, to-seq(case)) :
+            val pkg = ipc-two-pin-landpattern(case)
+            landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+          else :  ; example: case = "Axial"
+            val pkg = dummy-landpattern(2, [x(inductor) y(inductor)])
+            landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+        else :
+          val pkg = dummy-landpattern(2, [x(inductor) y(inductor)])
+          landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
 
-    val inductance = inductance(inductor)
-    emodel = EModel-Inductor(inductance,
-                             emodel-pourcentage-tolerance(tolerance(inductor)),
-                             double-or-unknown(current-rating(inductor)))
-    reference-prefix = "L"
-    val rated-temperature = rated-temperature(inductor)
-    val tolerance = tolerance(inductor)
-    property(self.inductor) = true
-    property(self.trust) = trust(inductor)
-    property(self.x) = x(inductor)
-    property(self.y) = y(inductor)
-    property(self.z) = z(inductor)
-    property(self.mounting) = mounting(inductor)
-    match(rated-temperature: Toleranced): property(self.rated-temperature) = rated-temperature
-    property(self.case) = /case(inductor)
-    property(self.metadata) = metadata(inductor)
-    property(self.type) = type(inductor)
-    match(tolerance: MinMaxRange): property(self.tolerance) = [min(tolerance), max(tolerance)]
-    property(self.inductance) = inductance
-    property(self.material-core) = material-core(inductor)
-    property(self.shielding) = shielding(inductor)
-    property(self.current-rating) = current-rating(inductor)
-    property(self.saturation-current) = saturation-current(inductor)
-    property(self.dc-resistance) = dc-resistance(inductor)
-    property(self.quality-factor) = quality-factor(inductor)
-    property(self.self-resonant-frequency) = self-resonant-frequency(inductor)
-    spice :
-      "[L] <p[1]> <p[2]> <inductance>"
-  my-inductor
+        val inductance = inductance(inductor)
+        emodel = EModel-Inductor(inductance,
+                                emodel-pourcentage-tolerance(tolerance(inductor)),
+                                double-or-unknown(current-rating(inductor)))
+        reference-prefix = "L"
+        val rated-temperature = rated-temperature(inductor)
+        val tolerance = tolerance(inductor)
+        ; Backwards compatibility
+        property(self.inductor) = true
+        ; This is how parts-db does it
+        property(self.category) = "inductor"
+        property(self.trust) = trust(inductor)
+        property(self.x) = x(inductor)
+        property(self.y) = y(inductor)
+        property(self.z) = z(inductor)
+        property(self.mounting) = mounting(inductor)
+        match(rated-temperature: Toleranced): property(self.rated-temperature) = rated-temperature
+        property(self.case) = /case(inductor)
+        property(self.metadata) = metadata(inductor)
+        property(self.type) = type(inductor)
+        match(tolerance: MinMaxRange): property(self.tolerance) = [min(tolerance), max(tolerance)]
+        property(self.inductance) = inductance
+        property(self.material-core) = material-core(inductor)
+        property(self.shielding) = shielding(inductor)
+        property(self.current-rating) = current-rating(inductor)
+        property(self.saturation-current) = saturation-current(inductor)
+        property(self.dc-resistance) = dc-resistance(inductor)
+        property(self.quality-factor) = quality-factor(inductor)
+        property(self.self-resonant-frequency) = self-resonant-frequency(inductor)
+        spice :
+          "[L] <p[1]> <p[2]> <inductance>"
+        set-properties-for-vendor-part-numbers(inductor)
+      my-inductor
 
 ; ========================================================
 ; ================= Inductor Accessors ===================
@@ -634,13 +683,11 @@ public defn Inductor (user-properties:Tuple<KeyValue>, exist:Tuple<String>) -> I
 
 public defn Inductor (user-properties:Tuple<KeyValue>, exist:Tuple<String>, sort:Tuple<String>, operating-temperature:Toleranced|False) -> Inductor :
   val query-properties = inductor-query-properties(user-properties, exist, sort, operating-temperature)
-  ;Query the database with the given properties
-  Inductor $ dbquery-first-allow-non-stock(query-properties) as JObject
+  PartsDBComponent(query-properties) as Inductor
 
 public defn Inductors (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Inductor> :
   val query-properties = inductor-query-properties(user-properties, [], OPTIMIZE-FOR, OPERATING-TEMPERATURE)
-  ;Query the database with the given properties
-  map{Inductor, _} $ dbquery(query-properties, limit) as Tuple<JObject>
+  PartsDBComponents(query-properties, limit) as Tuple<Inductor>
 
 ; ========================================================
 ; =============== inductor-query-properties ==============
@@ -651,7 +698,7 @@ defn inductor-query-properties (user-properties:Tuple<KeyValue>,
                                 sort:Tuple<String>,
                                 operating-temperature:Toleranced|False) -> Tuple<KeyValue> :
   query-properties(user-properties,
-                   exist,
+                   maybe-insert-default-vendor-part-number(exist),
                    sort,
                    operating-temperature,
                    "inductor",
@@ -844,7 +891,7 @@ defn parse-tolerance (json: JObject) -> MinMaxRange|False :
   match(tolerance-json: JObject) :
       MinMaxRange(tolerance-json["min"] as Double, tolerance-json["max"] as Double)
 
-defn parse-sourcing (json: JObject) -> Sourcing :
+public defn parse-sourcing (json: JObject) -> Sourcing :
   ; minimum-quantity and stock are float in MongoDB even though the python scraper do gives python ints to pymongo.
   Sourcing(optional-double(json, "price"), to-int(json["minimum_quantity"] as Double), to-int(json["stock"] as Double))
 
@@ -879,6 +926,23 @@ public defn parse-sellers (json: JObject) -> Tuple<Seller>|False:
           SellerOffer{int(json-offer["inventory_level"]), _} $
             for json-price in json-offer["prices"] as Tuple<JObject> map :
               SellerOfferPrice(int(json-price["quantity"]), json-price["converted_price"] as Double)
+
+defn optional-mounting (json: JObject) -> String :
+  match(get?(json, "mounting")) :
+    (s:String) : s
+    (_) : ""
+
+defn parse-vendor-part-numbers (json: JObject) -> Tuple<KeyValue<String, String>> :
+  match(get?(json, "vendor_part_numbers")) :
+    (j:JObject) : VendorPartNumbers(j)
+    (_) : []
+
+defn set-properties-for-vendor-part-numbers (component: Component) :
+  for vpn-kv in vendor-part-numbers(component) do :
+    val vendor = key(vpn-kv)
+    val prop-key = to-symbol $ append("vendor_part_numbers.", vendor)
+    val vendor-part-number = value(vpn-kv)
+    set-property(self, prop-key, vendor-part-number)
 
 ;============================================================
 ;===================== Other utils ==========================
@@ -944,4 +1008,10 @@ public defn dbquery-first-allow-non-stock (args: Tuple<KeyValue<String, Tuple<St
     else :
       throw(e)
 
-
+; Default to a subset of parts while we're vetting an expanded set.
+; TODO: JITX-4302 - Remove this, once we've built more confidnce in the expanded set.
+defn maybe-insert-default-vendor-part-number (exist:Tuple<String>) -> Tuple<String> :
+  if DEFAULT-ALLOW-ALL-VENDOR-PART-NUMBERS :
+    exist
+  else :
+    to-tuple $ cat(exist, ["vendor_part_numbers.digi-key"])

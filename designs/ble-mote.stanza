@@ -31,7 +31,7 @@ pcb-bundle pms7003-interface :
 
 pcb-module pms7003 :
   port interface : pms7003-interface
-  
+
   inst header : ocdb/components/amphenol/minitek127/component(10)
   place(header) at loc(0.0, 0.0) on Top
   net (interface.vin.gnd interface.vin-mcu.gnd header.p[3] header.p[4])
@@ -46,11 +46,11 @@ pcb-module pms7003 :
   property(header.p[10].digital-output) = DigitalOutput(CMOSOutput(min-max(0.3, 0.5), min-max(2.6, 3.3)), false, header.p[1], header.p[3])
   val vil = typ(0.8)
   val vih = typ(2.0)
-  property(header.p[8].digital-input) = 
+  property(header.p[8].digital-input) =
     DigitalInput(vil, vih, header.p[1], header.p[3], 1.0e-6)
-  property(header.p[6].digital-input) = 
+  property(header.p[6].digital-input) =
     DigitalInput(vil, vih, header.p[1], header.p[3], 1.0e-6)
-  property(header.p[9].digital-input) = 
+  property(header.p[9].digital-input) =
     DigitalInput(vil, vih, header.p[1], header.p[3], 1.0e-6)
 
 pcb-module sensors :
@@ -96,7 +96,7 @@ pcb-module sensors :
   ; Add the particle counter interface and place on bottom, and connect
   public inst particle-counter : pms7003
 
-  net (particle-counter.interface particle-counter-interface) 
+  net (particle-counter.interface particle-counter-interface)
   net (protected-usb.vbus particle-counter.interface.vin)
 
   ; Connect power to sensors
@@ -142,7 +142,7 @@ pcb-module sensors :
 
 pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
   inst sensors : sensors
-  
+
   val x = width(board-outline) / 2.0
   val y = height(board-outline) / 2.0
   place(sensors.usb) at loc(4.0 - x, 7.0 - y) on Top
@@ -188,19 +188,19 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
 defn run-design (run-checks?:True|False) :
   val outline = Rectangle(45.0, 30.0)
   val circuit = sensor-system(ocdb/components/espressif/esp32-wroom-32/module(ocdb/components/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), outline)
-  set-design-directory("ble-mote")
+  set-current-design("ble-mote")
   set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-jlc2313, outline))
   set-rules(ocdb/manufacturers/rules/jlcpcb-rules)
 
   var main-module = circuit
   if run-checks? :
     main-module = ocdb/utils/generator-utils/run-final-passes(circuit) ; Analyze design with a pass
-  
+
   set-main-module(main-module) ; Treat the provided module as a design, and compile it.
-  
+
   if run-checks? :
     run-checks("checks.txt")
-  else:  
+  else:
     view-board()
     view-schematic()
     view-design-explorer()
@@ -220,10 +220,10 @@ defn check-design () :
 ; ======================
 ; Export a design to CAD
 ; ======================
-defn export-design (module:Instantiable, shape:Rectangle, directory:String) :
-  set-export-backend(`altium)
+defn export-design (module:Instantiable, shape:Rectangle, name:String) :
+  set-export-backend(`kicad)
 
-  set-design-directory(directory)
+  set-current-design(name)
   set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-jlc2313, shape))
   set-rules(ocdb/manufacturers/rules/jlcpcb-rules)
   set-main-module(module)
@@ -246,12 +246,12 @@ defn export-bill-of-materials () :
 
 ; val pico-shape = Rectangle(35.0, 20.0)
 ; export-design(sensor-system(ocdb/components/espressif/ESP32-PICO-D4/module, pico-shape)
-;               pico-shape, 
+;               pico-shape,
 ;               "air-quality-sensor-pico")
 
 ; val wroom-shape = Rectangle(45.0, 30.0)
 ; export-design(sensor-system(ocdb/components/espressif/esp32-wroom-32/module(ocdb/components/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16), wroom-shape)
-;               wroom-shape, 
+;               wroom-shape,
 ;               "air-quality-sensor-wroom")
 
 run-design(false)
