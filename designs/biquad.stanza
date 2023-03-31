@@ -42,12 +42,10 @@ public defn bandwidth (s:BiQuadSolution) -> Double :
 public defn gain (s:BiQuadSolution) -> Double :
   Rb(s) / Rg(s)
 
-public defmethod print (o:OutputStream, s:BiQuadSolution) :
-  print(o, "BiQuad solution: Rf=%_ Rg=%_ Rb=%_ Cb=%_uF\n" % [Rf(s), Rg(s), Rb(s), Cb(s) * 1.0e6])
-  print(o, "BiQuad frequencies: Fc=%_Hz BW=%_Hz Gain=%_\n" % [center-freq(s), bandwidth(s), gain(s)])
-
-public defn printDiff (a:BiQuadFilter, b:BiQuadSolution) :
-   println("BiQuad solution deltas: Fc=%_Hz BW=%_Hz Gain=%_\n" % [center(a) - center-freq(b), bandwidth(a) - bandwidth(b), gain(a) / gain(b)])
+public defn print-soln (s:BiQuadSolution, f:BiQuadFilter) :
+  println("BiQuad solution: Rf=%_ Rg=%_ Rb=%_ Cb=%_uF" % [Rf(s), Rg(s), Rb(s), Cb(s) * 1.0e6])
+  println("BiQuad frequencies: Fc=%_Hz BW=%_Hz Gain=%_" % [center-freq(s), bandwidth(s), gain(s)])
+  println("BiQuad solution deltas: Fc=%_Hz BW=%_Hz Gain=%_" % [center(f) - center-freq(s), bandwidth(f) - bandwidth(s), gain(f) / gain(s)])
 
 ; public defn biquad-lowpass-circuit (sol:BiQuadSolution, part:Instantiable) :
 ;   pcb-module biquad-circuit :
@@ -80,10 +78,10 @@ public defn biquad-bandpass-circuit (sol:BiQuadSolution, part:Instantiable ) :
     pin VIN
 
     ; Source our resistors and capacitors for the design
-    val pRf = chip-resistor(["resistance"  => Rf(sol), "tolerance" =>  1.0]); , "minimum_quantity" => 10])
-    val pRb = chip-resistor(["resistance"  => Rb(sol), "tolerance" =>  1.0]); , "minimum_quantity" => 10])
-    val pRg = chip-resistor(["resistance"  => Rg(sol), "tolerance" =>  1.0]); , "minimum_quantity" => 10])
-    val pCb =   ceramic-cap(["capacitance" => Cb(sol), "tolerance" => 10.0]); , "minimum_quantity" => 10])
+    val pRf = chip-resistor(["resistance"  => Rf(sol), "tolerance" =>  1.0, "minimum_quantity" => 1000])
+    val pRb = chip-resistor(["resistance"  => Rb(sol), "tolerance" =>  1.0, "minimum_quantity" => 1000])
+    val pRg = chip-resistor(["resistance"  => Rg(sol), "tolerance" =>  1.0, "minimum_quantity" => 1000])
+    val pCb =   ceramic-cap(["capacitance" => Cb(sol), "tolerance" => 10.0, "minimum_quantity" => 1000])
 
     ; For the inverter feedback resistors, we want to select
     ; one of the resistors that we have already spec'd. Any will
@@ -164,12 +162,13 @@ pcb-module biquad-circuit-test:
   val solution1 = find-biquad-soln(filter-request1)
 
   ; val solution = BiQuadSolution(1000.0, 2000.0, 3000.0, 10.0e-9)
-
-  println("Biquad details:")
-  println(solution0)
-  println(solution1)
-  printDiff(filter-request0, solution0)
-  printDiff(filter-request1, solution1)
+  println("-------------------------------------------------------------")
+  println("Biquad details (solution0):")
+  print-soln(solution0, filter-request0)
+  println("-------------------------------------------------------------")
+  println("Biquad details (solution1):")
+  print-soln(solution1, filter-request1)
+  println("-------------------------------------------------------------")
 
   inst filter : biquad-bandpass-circuit(solution0, my-amp)[numFilters]
 
