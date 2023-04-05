@@ -226,7 +226,7 @@ public defn ceramic-cap (user-params:Tuple<KeyValue>) -> Instantiable :
     println("Warning: generic capacitor substitution for value (%_)" % [my-cap])
     match(my-cap) :
       (d:Double) : dummy-capacitor(d, d)
-      (t:Toleranced) : dummy-capacitor(typ-value(t), t)
+      (t:Toleranced) : dummy-capacitor(find-std-val(t), t)
       (_) : fatal("Did not find acceptable type of capacitance value (%_)" % [my-cap])
 
 public defn ceramic-cap (cap:Double|Toleranced) -> Instantiable :
@@ -270,7 +270,7 @@ public defn tantalum-cap (user-params:Tuple<KeyValue>) -> Instantiable :
     println("Warning: generic capacitor substitution for value (%_)" % [my-cap])
     match(my-cap) :
       (d:Double) : dummy-capacitor(d, d)
-      (t:Toleranced) : dummy-capacitor(typ-value(t), t)
+      (t:Toleranced) : dummy-capacitor(find-std-val(t), t)
       (_) : fatal("Did not find acceptable type of capacitance value (%_)" % [my-cap])
 
 public defn tantalum-cap (cap:Double|Toleranced) -> Instantiable :
@@ -313,7 +313,7 @@ public defn chip-resistor (user-params:Tuple<KeyValue>) -> Instantiable :
     println("Warning: generic resistor substitution for value (%_)" % [my-res])
     match(my-res) :
       (d:Double) : dummy-resistor(d, d)
-      (t:Toleranced) : dummy-resistor(typ-value(t), t)
+      (t:Toleranced) : dummy-resistor(find-std-val(t), t)
       (_) : fatal("Did not find acceptable type of resistance value (%_)" % [my-res])
 
 public defn chip-resistor (resistance:Double|Toleranced) -> Instantiable :
@@ -352,7 +352,7 @@ public defn smd-inductor (user-params:Tuple<KeyValue>) -> Instantiable :
     println("Warning: generic inductor substitution for value (%_)" % [my-ind])
     match(my-ind) :
       (d:Double) : dummy-inductor(d, d)
-      (t:Toleranced) : dummy-inductor(typ-value(t), t)
+      (t:Toleranced) : dummy-inductor(find-std-val(t), t)
       (_) : fatal("Did not find acceptable type of inductance value (%_)" % [my-ind])
 
 public defn smd-inductor (ind:Double|Toleranced) -> Instantiable :
@@ -387,9 +387,9 @@ public pcb-component gen-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg-name
   landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
   emodel = Capacitor(cap, tol, max-v)
   reference-prefix = "C"
-  spice :
-    "[C] {p[1]} tmp {cap}"
-    "[R] tmp {p[2]} 0.01"
+  ; spice :
+  ;   "[C] {p[1]} tmp {cap}"
+  ;   "[R] tmp {p[2]} 0.01"
   property(self.capacitor) = true
   property(self.type) = "ceramic"
   property(self.capacitance) = cap
@@ -426,9 +426,9 @@ public pcb-component gen-tant-cap-cmp (cap:Double, tol:Double, max-v:Double, pkg
     "1206" : landpattern = CAPT3216X160(a => CAPT3216X160.p[1] c => CAPT3216X160.p[2])
     else : fatal("Incorrect capacitor package %_." % [pkg])
   reference-prefix = "C"
-  spice :
-    "[C] {a} tmp {cap}"
-    "[R] tmp {c} 2.0"
+  ; spice :
+  ;   "[C] {a} tmp {cap}"
+  ;   "[R] tmp {c} 2.0"
   property(self.capacitor) = true
   property(self.type) = "electrolytic"
   property(self.anode) = "tantalum"
@@ -475,8 +475,8 @@ public pcb-component gen-res-cmp (r-type:ResistorSymbolType, res:Double, tol:Dou
   property(self.tolerance) = (tol * 0.01)
   property(self.resistance) = res
   property(self.resistor) = true
-  spice :
-    "[R] {p[1]} {p[2]} {res}"
+  ; spice :
+  ;   "[R] {p[1]} {p[2]} {res}"
 
 public defn gen-res-cmp (res:Double, tol:Double, pkg:String) :
   gen-res-cmp(ResistorStd, res, tol, 0.0625, pkg)

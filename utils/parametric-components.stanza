@@ -41,7 +41,7 @@ public pcb-enum /ocdb/utils/parametric-components/CapacitorApplication :
 ; ; ========== Generic passive components ==================
 ; ; ========================================================
 
-public pcb-component dummy-resistor (res:Double orig:Double|Toleranced):
+public pcb-component dummy-resistor (res:Double, orig:Double|Toleranced):
   port p : pin[[1 2]]
   val sym = resistor-sym(ResistorStd)
   symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
@@ -54,7 +54,7 @@ public pcb-component dummy-resistor (res:Double orig:Double|Toleranced):
   ; spice :
   ;   "[R] <p[1]> <p[2]> <res>"
 
-public pcb-component dummy-capacitor (cap:Double orig:Double|Toleranced):
+public pcb-component dummy-capacitor (cap:Double, orig:Double|Toleranced):
   port p : pin[[1 2]]
   val sym = capacitor-sym(CapacitorNonPolarized)
   symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
@@ -68,7 +68,7 @@ public pcb-component dummy-capacitor (cap:Double orig:Double|Toleranced):
   ; spice :
   ;   "[C] <p[1]> <p[2]> <cap>"
 
-public pcb-component dummy-inductor (ind:Double orig:Double|Toleranced):
+public pcb-component dummy-inductor (ind:Double, orig:Double|Toleranced):
   port p : pin[[1 2]]
   val sym = inductor-sym(InductorStd)
   symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
@@ -327,48 +327,52 @@ public defn parametric-resistor (res:Double|Toleranced, pkg:String) :
 public defn parametric-resistor (res:Double|Toleranced, tol:Double) -> Instantiable :
   parametric-resistor(["resistance" => res "tolerance" => tol])
 
+
+; ========================================================
+; ========== parametric part helper functions ============
+; ========================================================
+defn c-r (v:Double e:Int) :
+  v * pow(10.0, to-double(e))
+
+
+  ; Returns a value within the range of v in the tolerance range specified by tol
+public defn between-std-val (v:Toleranced, tol:Double) -> Double :
+  val expon-min = floor(log10(min-value(v)))
+  val expon-max = floor(log10(max-value(v)))    
+  var match-exp = 0.0
+  var match-val = -1.0
+  var match-diff = 1.0e6
+  ; println("Need to find exp range (%_ %_) for range (%_)" % [expon-min, expon-max, v])
+  for exp in to-int(expon-min) to to-int(expon-max + 1.0) do :
+    for std-val in union-std-vals(tol) as List<Double> do :
+      ; println("in-range?(%_, %_)" % [v, c-r(std-val, exp)])
+      if in-range?(v, c-r(std-val, exp)) :
+        val diff = abs(c-r(std-val, exp) - center-value(v))
+        if diff < match-diff :
+          ; std-val component (at the appropriate exp range) is closest to center()
+          match-diff = diff
+          match-val = std-val
+          match-exp = to-double(exp)
+  match-val * pow(10.0, match-exp)
+
+public defn find-std-val (v:Toleranced) -> Double:
+  var done = 0
+  var ans = 0.0
+  val my-val = 
+    label<Double> return :
+      for tol in std-tols do :
+        ans = between-std-val(v, tol)
+        ; println("Debug tol(%_) ans(%_)" % [tol, ans])
+        return(ans) when ans > 0.0
+      fatal("Could not find appropriate component value (%_)" % [v])
+  ; println("Found (%_) for range (%_)" % [my-val, v])
+  my-val
+
 ; ========================================================
 ; ==================== solve parametric parts ============
 ; ========================================================
 
 public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
-
-  defn c-r (v:Double e:Int) :
-    v * pow(10.0, to-double(e))
-
-  ; Returns a value within the range of v in the tolerance range specified by tol
-  defn between-std-val (v:Toleranced, tol:Double) -> Double :
-    val expon-min = floor(log10(min-value(v)))
-    val expon-max = floor(log10(max-value(v)))    
-    var match-exp = 0.0
-    var match-val = -1.0
-    var match-diff = 1.0e6
-    ; println("Need to find exp range (%_ %_) for range (%_)" % [expon-min, expon-max, v])
-    for exp in to-int(expon-min) to to-int(expon-max + 1.0) do :
-      for std-val in union-std-vals(tol) as List<Double> do :
-        ; println("in-range?(%_, %_)" % [v, c-r(std-val, exp)])
-        if in-range?(v, c-r(std-val, exp)) :
-          val diff = abs(c-r(std-val, exp) - center-value(v))
-          if diff < match-diff :
-            ; std-val component (at the appropriate exp range) is closest to center()
-            match-diff = diff
-            match-val = std-val
-            match-exp = to-double(exp)
-    match-val * pow(10.0, match-exp)
-
-  defn find-std-val (v:Toleranced) -> Double:
-    var done = 0
-    var ans = 0.0
-    val my-val = 
-      label<Double> return :
-        for tol in std-tols do :
-          ans = between-std-val(v, tol)
-          ; println("Debug tol(%_) ans(%_)" % [tol, ans])
-          return(ans) when ans > 0.0
-        fatal("Could not find appropriate component value (%_)" % [v])
-    ; println("Found (%_) for range (%_)" % [my-val, v])
-    my-val
-
   defn replace-param (params:Tuple<KeyValue>) -> Tuple<KeyValue> :
     ; need to check if resistance is passed a Toleranced() value
     val replaced-params = to-tuple $
