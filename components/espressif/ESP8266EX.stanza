@@ -1,0 +1,135 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/espressif/ESP8266EX :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/box-symbol
+  import ocdb/utils/landpatterns
+  import ocdb/utils/bundles
+  import ocdb/utils/property-structs
+
+public pcb-landpattern ESP8266-QFN-32:
+  ; make qfn package
+  make-qfn-landpattern(num-pins, pitch, package-size, terminal-length, terminal-width, 
+    corner-pads, exposed-metal-heat-feature) where :
+    val num-pins = 32
+    val pitch = 0.5
+    val package-size = typ(4.875)
+    val terminal-length = typ(0.4)
+    val terminal-width = typ(0.25)
+    val corner-pads = false
+    val exposed-metal-heat-feature = Rectangle(3.7, 3.7)
+
+  ; add some lines for placement:
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.12, [Point(-2.61, -2.61), Point(-2.61, -2.135)])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.12, [Point(-2.135, 2.61), Point(-2.61, 2.61)])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.12, [Point(-2.135, -2.61), Point(-2.61, -2.61)])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.12, [Point(2.135, 2.61), Point(2.61, 2.61)])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.12, [Point(2.135, -2.61), Point(2.61, -2.61)])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.12, [Point(2.61, 2.61), Point(2.61, 2.135)])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.12, [Point(2.61, -2.61), Point(2.61, -2.135)])
+  
+; Generic digital pin
+public pcb-component component :
+  manufacturer = "Espressif" 
+  reference-prefix = "U"
+  mpn = "ESP8266EX"
+  datasheet = "http://espressif.com/sites/default/files/documentation/0a-esp8266ex_datasheet_en.pdf"
+
+  pin-properties :
+    [pin:Ref | pads:Ref ... | side:Dir | electrical-type:String]
+    [GND | p[33] | Down | "PowerIn"]
+    [VDDD | p[29] | Up | "PowerIn"]
+    [VDD3P3 | p[3] p[4] | Up | "PowerIn"]
+    [VDDA | p[1] p[30] | Up | "PowerIn"]
+    [XTAL_OUT | p[27] | Left | "Bidirectional"]
+    [XTAL_IN | p[28] | Left | "Bidirectional"]
+    [VDDPST | p[11] p[17] | Up | "PowerIn"]
+    [VDD_RTC | p[5] | Up | "PowerIn"]
+    [CHIP_PU | p[7] | Left | "Input"]
+    [LNA | p[2] | Left | "Bidirectional"]
+    [EXT_RSTB | p[32] | Left | "Input"]
+    [TOUT | p[6] | Left | "Input"] ; ADC
+    [XPD_DCDC | p[8] | Left | "Bidirectional"]
+    [RES12K | p[31] | Left | "Input"]
+    [IO[0]  | p[15] | Right | "Bidirectional"]
+    [IO[1]  | p[26] | Right | "Bidirectional"] ; U0TXD UART
+    [IO[2]  | p[14] | Right | "Bidirectional"]
+    [IO[3]  | p[25] | Right | "Bidirectional"] ; U0RXD UART
+    [IO[4]  | p[16] | Right | "Bidirectional"]
+    [IO[5]  | p[24] | Right | "Bidirectional"]
+    [IO[6]  | p[21] | Right | "Bidirectional"] ; SDIO_CLK
+    [IO[7]  | p[22] | Right | "Bidirectional"] ; SDIO_DATA_0
+    [IO[8]  | p[23] | Right | "Bidirectional"] ; SDIO_DATA_1
+    [IO[9]  | p[18] | Right | "Bidirectional"] ; SDIO_DATA_2
+    [IO[10] | p[19] | Right | "Bidirectional"] ; SDIO_DATA_3
+    [IO[11] | p[20] | Right | "Bidirectional"] ; SDIO_CMD 
+    [IO[12] | p[10] | Right | "Bidirectional"] ; MTDI
+    [IO[13] | p[12] | Right | "Bidirectional"] ; MTCK 
+    [IO[14] | p[9] | Right | "Bidirectional"] ; MTMS 
+    [IO[15] | p[13] | Right | "Bidirectional"] ; MTDO
+
+  assign-landpattern(ESP8266-QFN-32)
+  make-box-symbol()
+
+  property(self.VDD3P3.power-pin) = PowerPin(min-max(2.5, 3.6))
+  property(self.VDDA.power-pin) = PowerPin(min-max(2.5, 3.6))
+
+
+  supports power:
+    power.vdd => self.VDD3P3
+    power.gnd => self.GND
+
+  supports reset:
+    reset.reset => self.EXT_RSTB
+
+  supports enable:
+    enable.enable => self.CHIP_PU
+
+  supports adc :
+    adc.adc => self.TOUT
+
+  ; Digital logic levels
+  val vol = min-max(0.0, 0.1 * 3.3)
+  val voh = min-max(0.8 * 3.3, 3.3)
+  val vih = min-max(0.75, 3.6)
+  val vil = min-max(-0.3, 0.25)
+
+  let :
+    val cmos = CMOSOutput(vol, voh)
+    val dio  = DigitalIO(cmos, vil, vih, 
+                         self.VDD3P3, self.GND, 50.0e-9)
+    val dout  = DigitalOutput(cmos, true, self.VDD3P3, self.GND)
+    val di  = DigitalInput(vil, vih, self.VDD3P3, self.GND, 50.0e-9)
+    
+    ; GPIO
+    ;; ESP8266 supports crossbarred IO, so use generic supports
+    val reserved-io = [self.IO[6] self.IO[7] self.IO[8] self.IO[9] self.IO[10] self.IO[11]]
+    for IO-pin in pins(self.IO) do :
+      if not contains?(reserved-io, IO-pin) :
+        supports gpio:
+          gpio.gpio => IO-pin
+          property(IO-pin.digital-io) = dio
+
+    ; UART
+    supports uart():
+      uart().tx => self.IO[1]
+      uart().rx => self.IO[3]
+      property(self.IO[1].digital-output) = dout
+      property(self.IO[3].digital-input) = di
+    supports uart():
+      uart().tx => self.IO[2]
+      uart().rx => self.IO[8]
+      property(self.IO[2].digital-output) = dout
+      property(self.IO[8].digital-input) = di
+
+  ; I2C
+  let :
+    val oc  = OpenCollector(vol, 28.0e-3)
+    val dio = DigitalIO(oc, vil, vih, self.VDD3P3, self.GND, 50.0e-9)
+    supports i2c: ; 9 and 14, supports only 1 I2C
+      i2c.sda => self.IO[9]
+      i2c.scl => self.IO[14]
+      property(self.IO[9].digital-io) = dio
+      property(self.IO[14].digital-io) = dio

@@ -1,0 +1,50 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/nxp/PCF85363ATL_AX :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/box-symbol
+  import ocdb/utils/landpatterns
+  import ocdb/utils/bundles
+  import ocdb/utils/property-structs
+
+public pcb-landpattern DFN2626-10 :
+  make-dfn-land-pattern(num-pins, pitch, package-length, 
+    package-width, terminal-length, terminal-width, ep) where :
+                 val num-pins = 10, ; number of pins of the component
+                 val pitch = 0.5, ; pitch of the pins of the component
+                 val package-length = typ(2.675), ; the length of the package 
+                 val package-width = typ(2.675), ; the width of the package
+                 val terminal-length = typ(0.4), ; the length of the terminals
+                 val terminal-width = typ(0.3), ; the width of the terminals
+                 val ep = Rectangle(1.36, 2.25); an optional shape of a thermal pad
+
+public pcb-component component :
+  datasheet = "http://www.nxp.com/docs/en/data-sheet/PCF85363A.pdf"
+  mpn = "PCF85363ATL/AX"
+  manufacturer = "NXP"
+
+  pin-properties :
+    [pin:Ref | pads:Ref ... | side:Dir | electrical-type:String]
+    [OSCI | p[1] | Left | "Passive"]
+    [VDD | p[10] | Right | "Passive"]
+    [EP | p[11] | Down | "Passive"]
+    [OSCO | p[2] | Left | "Passive"]
+    [VBAT | p[3] | Left | "Passive"]
+    [nTS_CLKINTB | p[4] | Left | "Passive"]
+    [VSS | p[5] | Left | "Passive"]
+    [SDA | p[6] | Right | "Passive"]
+    [SCL | p[7] | Right | "Passive"]
+    [CLK | p[8] | Right | "Passive"]
+    [nINTA_CLK | p[9] | Right | "Passive"]
+
+  assign-landpattern(DFN2626-10)
+  make-box-symbol()
+
+  property(self.VDD.power-pin) = PowerPin(min-max(0.9, 5.5))
+  property(self.VBAT.power-pin) = PowerPin(min-max(0.9, 5.5))
+
+  supports power:
+    power.vdd => self.VDD
+    power.gnd => self.VSS

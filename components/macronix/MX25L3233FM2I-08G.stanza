@@ -1,0 +1,47 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/macronix/MX25L3233FM2I-08G :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/box-symbol
+  import ocdb/utils/landpatterns
+  import ocdb/utils/bundles
+  import ocdb/utils/property-structs
+
+public pcb-landpattern SOP-8L :
+  make-dual-row-smd-landpattern(
+      4,    ; the number of pins along one side of the land pattern
+      4,    ; the number of pins along the other side of the land pattern
+      1.27, ; the pitch of pins on the primary side of the land pattern
+      1.27, ; the pitch of pins on the secondary side of the land pattern
+      typ(6.0), ; the overall lead span, across both sides of the land pattern
+      typ(4.9), ; the length of the package
+      tol(3.9), ; the width of the package
+      tol(1.05, 0.15), ; the length of the terminals of the package
+      tol(0.41, 0.05), ; the width of the terminals of the package 
+      true ; optional parameter to include or remove the polarity marker
+    )
+
+public pcb-component component :
+  manufacturer = "Macronix"
+  mpn = "MX25L3233FM2I-08G"
+  pin-properties :
+    [pin:Ref | pads:Ref ... | side:Dir | electrical-type:String | graphical-style:String]
+    [nCS | p[1] | Left | "Input" | -]
+    [SOSIO1 | p[2] | Left | "Bidirectional" | -]
+    [nWPSIO2 | p[3] | Left | "Bidirectional" | -]
+    [GND | p[4] | Right | "PowerIn" | -]
+    [SISIO0 | p[5] | Left | "Bidirectional" | -]
+    [SCLK | p[6] | Left | "Input" | "Clock"]
+    [nHOLDSIO3 | p[7] | Left | "Bidirectional" | -]
+    [VCC | p[8] | Right | "PowerIn" | -]
+
+  assign-landpattern(SOP-8L)
+  make-box-symbol()
+
+  property(self.VCC.power-pin) = PowerPin(min-max(2.65, 3.6))
+
+  supports power:
+    power.vdd => self.VCC
+    power.gnd => self.GND

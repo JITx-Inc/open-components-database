@@ -1,0 +1,73 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/q-n-j/CR1220-2 :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/box-symbol
+  import ocdb/utils/bundles
+  import ocdb/utils/property-structs
+
+pcb-pad rect-smd-pad-1 :
+  type = SMD
+  shape = Rectangle(2.3, 4.0)
+  layer(Paste(Top)) = Rectangle(2.3, 4.0)
+  layer(SolderMask(Top)) = Rectangle(2.3, 4.0)
+
+pcb-pad rect-smd-pad-2 :
+  type = SMD
+  shape = Rectangle(2.3, 4.4)
+  layer(Paste(Top)) = Rectangle(2.3, 4.4)
+  layer(SolderMask(Top)) = Rectangle(2.3, 4.4)
+
+public pcb-landpattern CR12202-1 :
+  pad p[1] : rect-smd-pad-1 at loc(-8.0, 0.0, 90.0) on Top
+  pad p[2] : rect-smd-pad-2 at loc(8.0, 0.0, 90.0) on Top
+
+  layer(Courtyard(Top)) = Polygon([
+    Point(-11.0, 7.45), 
+    Point(11.2, 7.45), 
+    Point(11.2, -7.45), 
+    Point(-11.0, -7.45)])
+  layer(Silkscreen("F-SilkS", Top)) = Text(">REF", 1.27, C, loc(0.0, 7.0), "", TrueTypeFont, false, false)
+  layer(Finish(Top)) = Text(">REF", 1.27, C, loc(0.1, 0.0), "", TrueTypeFont, false, false)
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.1, [Point(3.5, -6.0), Point(8.0, -6.0)])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.1, [Point(3.9, 6.0), Point(8.0, 6.0)])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.1, [Point(8.0, 6.0), Point(8.0, 2.0)])
+  layer(Silkscreen("F-SilkS", Top)) = Line(0.1, [Point(8.0, -6.0), Point(8.0, -2.0)])
+  layer(Finish(Top)) = Line(0.2, [Point(0.0, 6.45), Point(0.0, 6.45)])
+  layer(Finish(Top)) = Line(0.2, [Point(0.0, -6.45), Point(0.0, -6.45)])
+  layer(Finish(Top)) = Line(0.2, [Point(2.5, -6.0), Point(8.0, -6.0)])
+  layer(Finish(Top)) = Line(0.2, [Point(8.0, 6.0), Point(2.5, 6.0)])
+  layer(Finish(Top)) = Line(0.2, [Point(8.0, -6.0), Point(8.0, 6.0)])
+  layer(Finish(Top)) = Polyline(0.2, [Arc(-0.0, 0.0, 6.45, 90.0, -180.0)])
+  layer(Finish(Top)) = Polyline(0.2, [Arc(-0.0, 0.0, 6.45, 270.0, -180.0)])
+  layer(Cutout()) = Circle(-3.6, 0.0, 0.6)
+  layer(SolderMask(Top)) = Circle(-3.6, 0.0, 0.6)
+  layer(SolderMask(Bottom)) = Circle(-3.6, 0.0, 0.6)
+  layer(Cutout()) = Circle(3.9, 0.0, 0.6)
+  layer(SolderMask(Top)) = Circle(3.9, 0.0, 0.6)
+  layer(SolderMask(Bottom)) = Circle(3.9, 0.0, 0.6)
+
+  model3d = Model3D("../../3d-models/CR1220-2.stp",
+    Vec3D(0.0, 0.0, 0.999999985),
+    Vec3D(1.0, 1.0, 1.0),
+    Vec3D(-90.0, 0.0, 0.0))
+
+public pcb-component component :
+  datasheet = "https://datasheet.lcsc.com/szlcsc/Q-J-CR1220-2_C70381.pdf"
+  mpn = "CR1220-2"
+  manufacturer = "Q&J"
+  property(self.height) = "4.1"
+
+  pin-properties :
+    [pin:Ref | pads:Ref ... | side:Dir | electrical-type:String]
+    [p[1] | p[1] | Left | "Passive"]
+    [p[2] | p[2] | Left | "Passive"]
+
+  assign-landpattern(CR12202-1)
+  make-box-symbol()
+
+  supports power:
+    power.vdd => self.p[2]
+    power.gnd => self.p[1]
