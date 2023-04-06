@@ -41,7 +41,7 @@ public pcb-enum /ocdb/utils/parametric-components/CapacitorApplication :
 ; ; ========== Generic passive components ==================
 ; ; ========================================================
 
-public pcb-component dummy-resistor (res:Double, orig:Double|Toleranced):
+public pcb-component dummy-resistor (res:Double|Toleranced orig:Double|Toleranced|False = false):
   port p : pin[[1 2]]
   val sym = resistor-sym(ResistorStd)
   symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
@@ -50,11 +50,14 @@ public pcb-component dummy-resistor (res:Double, orig:Double|Toleranced):
   reference-prefix = "R"
   property(self.resistance) = res
   property(self.resistor) = true
-  property(self.orig-resistance) = orig
+  match(orig:Double|Toleranced) :
+    property(self.orig-resistance) = orig
+  else :
+    property(self.orig-resistance) = res
   ; spice :
   ;   "[R] <p[1]> <p[2]> <res>"
 
-public pcb-component dummy-capacitor (cap:Double, orig:Double|Toleranced):
+public pcb-component dummy-capacitor (cap:Double|Toleranced orig:Double|Toleranced|False = false):
   port p : pin[[1 2]]
   val sym = capacitor-sym(CapacitorNonPolarized)
   symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
@@ -64,11 +67,14 @@ public pcb-component dummy-capacitor (cap:Double, orig:Double|Toleranced):
   property(self.capacitor) = true
   property(self.type) = "ceramic"
   property(self.capacitance) = cap
-  property(self.orig-capacitance) = orig
+  match(orig:Double|Toleranced) :
+    property(self.orig-capacitance) = orig
+  else :
+    property(self.orig-capacitance) = cap
   ; spice :
   ;   "[C] <p[1]> <p[2]> <cap>"
 
-public pcb-component dummy-inductor (ind:Double, orig:Double|Toleranced):
+public pcb-component dummy-inductor (ind:Double|Toleranced orig:Double|Toleranced|False = false):
   port p : pin[[1 2]]
   val sym = inductor-sym(InductorStd)
   symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
@@ -77,7 +83,10 @@ public pcb-component dummy-inductor (ind:Double, orig:Double|Toleranced):
   reference-prefix = "L"
   property(self.inductor) = true
   property(self.inductance) = ind
-  property(self.orig-inductance) = orig
+  match(orig:Double|Toleranced) :
+    property(self.orig-inductance) = orig
+  else :
+    property(self.orig-inductance) = ind
   ; spice :
   ;   "[L] <p[1]> <p[2]> <ind>"
 
@@ -415,7 +424,7 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
               catch (e):
                 println("Warning: generic resistor substitution for %_" % [ref(my-inst)])
                 match(property(my-inst.resistance)) :
-                  (r:Double) : dummy-resistor(r, r)
+                  (r:Double) : dummy-resistor(r)
                   (t:Toleranced) : dummy-resistor(find-std-val(t), t)
             else if has-property?(my-inst.capacitor) :
               try :
@@ -423,7 +432,7 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
               catch (e):
                 println("Warning: generic capacitor substitution for %_" % [ref(my-inst)])
                 match(property(my-inst.capacitance)) :
-                  (c:Double) : dummy-capacitor(c, c)
+                  (c:Double) : dummy-capacitor(c)
                   (t:Toleranced) : dummy-capacitor(find-std-val(t), t)
             else if has-property?(my-inst.inductor) :
               try :
@@ -431,7 +440,7 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
               catch (e):
                 println("Warning: generic inductor substitution for %_" % [ref(my-inst)])
                 match(property(my-inst.inductance)) :
-                  (l:Double) : dummy-inductor(l, l)
+                  (l:Double) : dummy-inductor(l)
                   (t:Toleranced) : dummy-inductor(find-std-val(t), t)
             else :
               fatal("unknown component found")
