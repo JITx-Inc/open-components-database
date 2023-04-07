@@ -28,17 +28,16 @@ public pcb-component component :
   manufacturer = "Macronix"
   mpn = "MX25L3233FM2I-08G"
   reference-prefix = "U"
-  datasheet = "https://www.macronix.com/Lists/Datasheet/Attachments/8933/MX25L3233F,%203V,%2032Mb,%20v1.7.pdf"
+  datasheet = "http://www1.futureelectronics.com/doc/Macronix/MX25L3233F.pdf"
   description = "FLASH - NOR Memory IC 32Mbit SPI - Quad I/O 133 MHz 8-SOP"
-  property(self.rated-temperature) = 85.0
+  property(self.rated-temperature) = min-max(-40.0, 85.0)
 
-  port spi:spi-peripheral()
   pin-properties :
     [pin:Ref   | pads:Ref ... | side:Dir | electrical-type:String | graphical-style:String]
-    [spi.cs    | p[1] | Left | "Input" | -]
-    [spi.sdo   | p[2] | Left | "Bidirectional" | -]
-    [spi.sdi   | p[5] | Left | "Bidirectional" | -]
-    [spi.sck   | p[6] | Left | "Input" | "Clock"]
+    [CS | p[1] | Left | "Input" | -] ; CS#, not CS
+    [SDO | p[2] | Left | "Bidirectional" | -]
+    [SDI | p[5] | Left | "Bidirectional" | -]
+    [SCK | p[6] | Left | "Input" | "Clock"]
     [nWPSIO2   | p[3] | Left | "Bidirectional" | -]
     [GND       | p[4] | Right | "PowerIn" | -]
     [nHOLDSIO3 | p[7] | Left | "Bidirectional" | -]
@@ -49,8 +48,40 @@ public pcb-component component :
 
   property(self.VCC.power-pin) = PowerPin(min-max(2.65, 3.6))
 
+  supports spi-peripheral() :
+    spi-peripheral().cs => self.CS
+    spi-peripheral().sdo => self.SDO
+    spi-peripheral().sdi => self.SDI
+    spi-peripheral().sck => self.SCK
+
   supports power:
     power.vdd => self.VCC
     power.gnd => self.GND
 
   property(self.VCC.power-pin) = PowerPin(min-max(2.65, 3.6))
+
+  eval-when has-property?(self.VCC.voltage):
+    val vdd = property(self.VCC.voltage)
+    val vol = typ(0.4)
+    val voh = typ(vdd - 0.2)
+    val vih = min-max(0.7 * vdd, vdd + 0.4)
+    val vil = min-max(-0.5, 0.8)
+    val cmos = CMOSOutput(vol, voh)
+
+    ; CS == input
+    ; SI/SIO0 == io
+    ; SO/SIO1 == io
+    ; SIO2 == io
+    ; SIO3 == io
+    ; SCLK == input
+    val di-CS = DigitalInput(vil, vih, self.VDD, self.VSS, 2.0e-6)
+    property(self.CS.digital-input) = di-CS
+
+    val di-SCLK = DigitalInput(vil, vih, self.VDD, self.VSS, 2.0e-6)
+    property(self.SCLK.digital-input) = di-SCLK
+
+    val dio-QSPI = DigitalIO(cmos, vil, vih, self.VDD, self.VSS, 2.0e-6)
+    property(self.SDI.digital-io) = dio-QSPI
+    property(self.SDO.digital-io) =  dio-QSPI
+    property(self.nWPSIO2.digital-io) = dio-QSPI
+    property(self.nHOLDSIO3.digital-io) = dio-QSPI

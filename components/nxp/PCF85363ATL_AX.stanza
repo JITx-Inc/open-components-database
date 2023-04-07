@@ -59,3 +59,30 @@ public pcb-component component :
   supports crystal :
     crystal.in => self.OSCI
     crystal.out => self.OSCO
+
+  eval-when has-property?(self.VDD.voltage):
+    val vdd = property(self.VDD.voltage)
+    val vol = min-max(0.0, 0.2 * vdd)
+    val voh = min-max(0.8 * vdd, vdd)
+    val vih = typ(0.7 * vdd)
+    val vil = typ(0.3 * vdd)
+    val cmos = CMOSOutput(vol, voh)
+
+    val oc-SDA = OpenCollector(vol, 8.50e-3)
+    val dio-SDA = DigitalIO(oc-SDA, vil, vih, self.VDD, self.VSS, 0.0)
+    property(self.SCL.digital-io) = dio-SDA
+
+    val di-SCL = DigitalInput(vil, vih, self.VDD, self.VSS, 0.0)
+    property(self.SCL.digital-input) = di-SCL
+
+    val oc-nINTA = OpenCollector(vol, 6.00e-3)
+    val dio-nINTA = DigitalIO(oc-nINTA, vil, vih, self.VDD, self.VSS, 0.0)
+    property(self.nINTA_CLK.digital-io) = dio-nINTA
+
+    val oc-TS = OpenCollector(vol, 3.00e-3)
+    val dio-TS = DigitalIO(oc-TS, vil, vih, self.VDD, self.VSS, 0.0)
+    property(self.nTS_CLKINTB.digital-io) = dio-TS
+
+    val cmos-CLK = CMOSOutput(vol, voh)
+    val do-CLK = DigitalOutput(cmos-CLK, false, self.VDD, self.VSS)
+    property(self.CLK.digital-output) = do-CLK

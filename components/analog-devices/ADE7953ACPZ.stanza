@@ -7,6 +7,19 @@ defpackage ocdb/components/analog-devices/ADE7953ACPZ :
   import ocdb/utils/box-symbol
   import ocdb/utils/landpatterns
   import ocdb/utils/bundles
+  import ocdb/utils/property-structs
+
+pcb-check gnd-check (component:JITXObject):
+    #CHECK(
+    name =                 ""
+    description =          "Check that EP is connected to AGND and DGND"
+    condition =            connected?([component.EP, component.AGND, component.DGND]),
+    category =             "Connection"
+    subcheck-description =          "Check that EP is connected to AGND and DGND"
+    pass-message =         "EP is connected to AGND and DGND"
+    fail-message =         "EP is not connected to AGND and DGND"
+    locators =             [instance-definition(component)]
+    )
 
 pcb-check pull-low-check (component:JITXObject):
     #CHECK(
@@ -17,6 +30,18 @@ pcb-check pull-low-check (component:JITXObject):
     subcheck-description =          "Check that PULL_LOW is connected to AGND"
     pass-message =         "PULL_LOW is connected to AGND"
     fail-message =         "PULL_LOW is not connected to AGND"
+    locators =             [instance-definition(component)]
+    )
+
+pcb-check pull-high-check (component:JITXObject):
+    #CHECK(
+    name =                 ""
+    description =          "Check that PULL_HIGH is connected to VDD"
+    condition =            connected?([component.PULL_HIGH, component.VDD]),
+    category =             "Connection"
+    subcheck-description =          "Check that PULL_HIGH is connected to VDD"
+    pass-message =         "PULL_HIGH is connected to VDD"
+    fail-message =         "PULL_HIGH is not connected to VDD"
     locators =             [instance-definition(component)]
     )
 
@@ -49,9 +74,6 @@ public pcb-component component :
   description = "Single Phase, Multifunction Metering IC with Neutral Current Measurement"
   property(self.rated-temperature) = 85.0
 
-  ; port i2c:i2c
-  port spi:spi-peripheral()
-  port reset:reset
   pin-properties :
     [pin:Ref | pads:Ref ... | side:Dir | electrical-type:String]
     [ZX | p[1] | Left | "Passive"]
@@ -65,23 +87,22 @@ public pcb-component component :
     [VDD | p[17] | Left | "Passive"]
     [CLKIN | p[18] | Left | "Passive"]
     [CLKOUT | p[19] | Right | "Passive"]
-    [reset.reset | p[2] | Left | "Passive"]
+    [RESET | p[2] | Left | "Passive"]
     [REVP | p[20] | Right | "Passive"]
     [ZX_I | p[21] | Right | "Passive"]
     [IRQ | p[22] | Right | "Passive"]
     [CF1 | p[23] | Right | "Passive"]
     [CF2 | p[24] | Right | "Passive"]
-    [spi.sck | p[25] | Left | "Passive"]
-    [spi.sdo | p[26] | Right | "Passive"]
-    [spi.sdi | p[27] | Right | "Passive"]
-    [spi.cs | p[28] | Right | "Passive"]
+    [sck | p[25] | Left | "Passive"]
+    [sdo | p[26] | Right | "Passive"]
+    [sdi | p[27] | Right | "Passive"]
+    [cs | p[28] | Right | "Passive"]
     [EP | p[29] | Left | "Passive"]
     [VINTD | p[3] | Left | "Passive"]
     [DGND | p[4] | Left | "Passive"]
     [IAP | p[5] | Left | "Passive"]
     [IAN | p[6] | Left | "Passive"]
-    [PULL_HIGH_2 | p[7] | Left | "Passive"]
-    [PULL_HIGH | p[8] | Left | "Passive"]
+    [PULL_HIGH | p[7] p[8] | Left | "Passive"]
     [IBP | p[9] | Left | "Passive"]
 
   assign-landpattern(LFCSP-WQ)
@@ -91,8 +112,25 @@ public pcb-component component :
     crystal.in => self.CLKIN
     crystal.out => self.CLKOUT
 
+  supports spi-peripheral() :
+    spi-peripheral().sck => self.sck
+    spi-peripheral().sdo => self.sdo
+    spi-peripheral().sdi => self.sdi
+    spi-peripheral().cs => self.cs
+
   supports i2c :
-    i2c.sda => self.spi.sdo
-    i2c.scl => self.spi.sdi
+    i2c.sda => self.sdo
+    i2c.scl => self.sdi
+
+  supports reset :
+    reset.reset => self.RESET
+
+  supports power:
+    power.vdd => self.VDD
+    power.gnd => self.DGND
+
+  property(self.VDD.power-pin) = PowerPin(tol%(3.3, 0.1))
 
   check pull-low-check(self)
+  check pull-high-check(self)
+  check gnd-check(self)
