@@ -7,7 +7,8 @@ defpackage ocdb/utils/parametric-components:
   import jitx
   import jitx/commands
   import esir/ir
-
+  import lang-utils with :
+    prefix(min-max) => lang-
 
   import ocdb/utils/bundles
   import ocdb/utils/landpatterns
@@ -41,7 +42,7 @@ public pcb-enum /ocdb/utils/parametric-components/CapacitorApplication :
 ; ; ========== Generic passive components ==================
 ; ; ========================================================
 
-public pcb-component dummy-resistor (res:Double orig:Double|Toleranced):
+public pcb-component dummy-resistor (res:Double|Toleranced orig:Double|Toleranced|False = false):
   port p : pin[[1 2]]
   val sym = resistor-sym(ResistorStd)
   symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
@@ -50,11 +51,14 @@ public pcb-component dummy-resistor (res:Double orig:Double|Toleranced):
   reference-prefix = "R"
   property(self.resistance) = res
   property(self.resistor) = true
-  property(self.orig-resistance) = orig
+  match(orig:Double|Toleranced) :
+    property(self.orig-resistance) = orig
+  else :
+    property(self.orig-resistance) = res
   ; spice :
   ;   "[R] <p[1]> <p[2]> <res>"
 
-public pcb-component dummy-capacitor (cap:Double orig:Double|Toleranced):
+public pcb-component dummy-capacitor (cap:Double|Toleranced orig:Double|Toleranced|False = false):
   port p : pin[[1 2]]
   val sym = capacitor-sym(CapacitorNonPolarized)
   symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
@@ -64,11 +68,14 @@ public pcb-component dummy-capacitor (cap:Double orig:Double|Toleranced):
   property(self.capacitor) = true
   property(self.type) = "ceramic"
   property(self.capacitance) = cap
-  property(self.orig-capacitance) = orig
+  match(orig:Double|Toleranced) :
+    property(self.orig-capacitance) = orig
+  else :
+    property(self.orig-capacitance) = cap
   ; spice :
   ;   "[C] <p[1]> <p[2]> <cap>"
 
-public pcb-component dummy-inductor (ind:Double orig:Double|Toleranced):
+public pcb-component dummy-inductor (ind:Double|Toleranced orig:Double|Toleranced|False = false):
   port p : pin[[1 2]]
   val sym = inductor-sym(InductorStd)
   symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
@@ -77,22 +84,16 @@ public pcb-component dummy-inductor (ind:Double orig:Double|Toleranced):
   reference-prefix = "L"
   property(self.inductor) = true
   property(self.inductance) = ind
-  property(self.orig-inductance) = orig
+  match(orig:Double|Toleranced) :
+    property(self.orig-inductance) = orig
+  else :
+    property(self.orig-inductance) = ind
   ; spice :
   ;   "[L] <p[1]> <p[2]> <ind>"
-
-defn smd-query-properties () -> Tuple<KeyValue<String, ?>> :
-  ["mounting" => "smd"
-   "case" => get-valid-pkg-list()
-   "minimum_quantity" => 1
-   "min-stock" => 5 * DESIGN-QUANTITY]
 
 defn app-query-properties (app:CapacitorApplication) -> Tuple<KeyValue<String, ?>> :
   switch(app) :
     CapBypass : ["tolerance" => 0.10]
-
-defn kvs<?K,?V> (xs:Seqable<KeyValue<?K,?V>>) :
-  for x in xs seq : [key(x), value(x)]
 
 ; ========================================================
 ; ==================== parametric-capacitor ==============
@@ -327,71 +328,68 @@ public defn parametric-resistor (res:Double|Toleranced, pkg:String) :
 public defn parametric-resistor (res:Double|Toleranced, tol:Double) -> Instantiable :
   parametric-resistor(["resistance" => res "tolerance" => tol])
 
+
+; ========================================================
+; ========== parametric part helper functions ============
+; ========================================================
+
+; ----- proposal ----
+public defn between-std-val (v:Toleranced, tol:Double) -> Double :
+  val DEFAULT-VALUE = [-1.0, 0.0]
+  val expon-min = floor(log10(min-value(v)))
+  val expon-max = floor(log10(max-value(v)))
+
+  defn valid? (args: [Double, Int]) -> True|False :
+    in-range?(v, make-value(args))
+
+  defn distance-to-center (args: [Double, Int]) -> Double :
+    abs(make-value(args) - center-value(v))
+
+  defn make-value (args: [Double, Int]) -> Double :
+    val [std-val, exp] = args
+    c-r(std-val, exp)
+
+  defn c-r (v:Double e:Int) -> Double :
+    v * pow(10.0, to-double(e))
+
+  val exp-range = to-int(expon-min) through to-int(expon-max)
+
+  val valid-pairs = to-tuple $ filter(valid?, zip(union-std-vals(tol), exp-range))
+
+  if empty?(valid-pairs) :
+    val closest-std-value = closest-std-val(typ(v), tol)
+    println("No standard value matching request v=%_, tol=%_. Using closest std value %_." % [v, tol, closest-std-value])
+    closest-std-value
+  else :
+    make-value $ minimum(distance-to-center, valid-pairs)
+
+public defn find-std-val (v:Toleranced) -> Double:
+  var done = 0
+  var ans = 0.0
+  val my-val = 
+    label<Double> return :
+      for tol in std-tols do :
+        ans = between-std-val(v, tol)
+        ; println("Debug tol(%_) ans(%_)" % [tol, ans])
+        return(ans) when ans > 0.0
+      fatal("Could not find appropriate component value (%_)" % [v])
+  ; println("Found (%_) for range (%_)" % [my-val, v])
+  my-val
+
 ; ========================================================
 ; ==================== solve parametric parts ============
 ; ========================================================
 
 public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
 
-  defn c-r (v:Double e:Int) :
-    v * pow(10.0, to-double(e))
-
-  ; Returns a value within the range of v in the tolerance range specified by tol
-  defn between-std-val (v:Toleranced, tol:Double) -> Double :
-    val expon-min = floor(log10(min-value(v)))
-    val expon-max = floor(log10(max-value(v)))    
-    var match-exp = 0.0
-    var match-val = -1.0
-    var match-diff = 1.0e6
-    ; println("Need to find exp range (%_ %_) for range (%_)" % [expon-min, expon-max, v])
-    for exp in to-int(expon-min) to to-int(expon-max + 1.0) do :
-      for std-val in union-std-vals(tol) as List<Double> do :
-        ; println("in-range?(%_, %_)" % [v, c-r(std-val, exp)])
-        if in-range?(v, c-r(std-val, exp)) :
-          val diff = abs(c-r(std-val, exp) - center-value(v))
-          if diff < match-diff :
-            ; std-val component (at the appropriate exp range) is closest to center()
-            match-diff = diff
-            match-val = std-val
-            match-exp = to-double(exp)
-    match-val * pow(10.0, match-exp)
-
-  defn find-std-val (v:Toleranced) -> Double:
-    var done = 0
-    var ans = 0.0
-    val my-val = 
-      label<Double> return :
-        for tol in std-tols do :
-          ans = between-std-val(v, tol)
-          ; println("Debug tol(%_) ans(%_)" % [tol, ans])
-          return(ans) when ans > 0.0
-        fatal("Could not find appropriate component value (%_)" % [v])
-    ; println("Found (%_) for range (%_)" % [my-val, v])
-    my-val
-
-  defn replace-param (params:Tuple<KeyValue>) -> Tuple<KeyValue> :
-    ; need to check if resistance is passed a Toleranced() value
-    val replaced-params = to-tuple $
-      generate<KeyValue<String, ?>> :
-        for [myk, myv] in kvs(params) do :
-          ; not checking for min-resistance / max-resistance
-          match(myv) :
-            ; (d:Double) : 
-            ;   yield(myk => d)
-            (t:Toleranced) :
-              ; println("found Toleranced key %_ val %_" % [myk t])
-              switch(myk) :
-                "resistance" : 
-                  yield("resistance" => find-std-val(t))
-                "capacitance" : 
-                  yield("capacitance" => find-std-val(t))
-                "inductance" : 
-                  yield("inductance" => find-std-val(t))
-            (_) :
-              yield(myk => myv)
-    ; println("param transformed %_ into %_" % [params replaced-params])
-    replaced-params
-      
+  defn replace-tol-param (params:Tuple<KeyValue>) -> Tuple<KeyValue> : 
+    ; need to check if resistance/capacitance/inductance is passed a Toleranced() value and if 
+    ; so, transform it appropriately 
+    to-tuple $ for [myk, myv] in kvs(params) seq-cat : 
+      match(myv:Toleranced) : 
+        if replaceable-key(myk): [myk => find-std-val(myv)]
+        else : [myk => myv]
+      else : [myk => myv]      
   
   defn resolve-components (my-para:HashTable<Double|Toleranced, Vector<JITXObject>>,
                            my-fix:HashTable<Double|Toleranced, Vector<JITXObject>>) ->  Vector<Instantiable> :
@@ -402,7 +400,7 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
         for my-inst in value(rs) do :
           if not has-property?(my-inst.user-params) :
             fatal("Instance %_ does not have expected property (user-params)" % [ref(my-inst)])
-          val user-params = replace-param(property(my-inst.user-params))
+          val user-params = replace-tol-param(property(my-inst.user-params))
           ; println("Searching with user-params => %_" % [user-params])
           val new-comp =
             if has-property?(my-inst.resistor) :
@@ -411,7 +409,7 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
               catch (e):
                 println("Warning: generic resistor substitution for %_" % [ref(my-inst)])
                 match(property(my-inst.resistance)) :
-                  (r:Double) : dummy-resistor(r, r)
+                  (r:Double) : dummy-resistor(r)
                   (t:Toleranced) : dummy-resistor(find-std-val(t), t)
             else if has-property?(my-inst.capacitor) :
               try :
@@ -419,7 +417,7 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
               catch (e):
                 println("Warning: generic capacitor substitution for %_" % [ref(my-inst)])
                 match(property(my-inst.capacitance)) :
-                  (c:Double) : dummy-capacitor(c, c)
+                  (c:Double) : dummy-capacitor(c)
                   (t:Toleranced) : dummy-capacitor(find-std-val(t), t)
             else if has-property?(my-inst.inductor) :
               try :
@@ -427,7 +425,7 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
               catch (e):
                 println("Warning: generic inductor substitution for %_" % [ref(my-inst)])
                 match(property(my-inst.inductance)) :
-                  (l:Double) : dummy-inductor(l, l)
+                  (l:Double) : dummy-inductor(l)
                   (t:Toleranced) : dummy-inductor(find-std-val(t), t)
             else :
               fatal("unknown component found")
@@ -441,12 +439,12 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
 
   within transform-module(m) :
     inside pcb-module :
-      val knownR = HashTable<Double|Toleranced, Vector<JITXObject>>()
-      val knownC = HashTable<Double|Toleranced, Vector<JITXObject>>()
-      val knownL = HashTable<Double|Toleranced, Vector<JITXObject>>()
-      val paraR = HashTable<Double|Toleranced, Vector<JITXObject>>()
-      val paraC = HashTable<Double|Toleranced, Vector<JITXObject>>()
-      val paraL = HashTable<Double|Toleranced, Vector<JITXObject>>()
+      val knownR = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{})
+      val knownC = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{})
+      val knownL = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{})
+      val paraR  = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{}) 
+      val paraC  = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{}) 
+      val paraL  = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{}) 
 
       ; Need to recursively retrieve all instances (including instances of modules.)
       ; Loop runs twice: 1 find, 1 add part.
@@ -454,56 +452,19 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
         if has-property?(i.parametric) :
           ; println("Sorting part %_ with desired value %_" % [ref(i) property(i.resistance)])
           if has-property?(i.resistor) :
-            match(get?(paraR, property(i.resistance))) : 
-              (v:Vector<JITXObject>) : add(v,i)
-              (_) : 
-                val t = Vector<JITXObject>()
-                add(t,i)
-                set(paraR, property(i.resistance), t)
+            add(paraR[property(i.resistance)], i)
           else if has-property?(i.capacitor) :
-            match(get?(paraC, property(i.capacitance))) : 
-              (v:Vector<JITXObject>) : add(v,i)
-              (_) : 
-                val t = Vector<JITXObject>()
-                add(t,i)
-                set(paraC, property(i.capacitance), t)
+            add(paraR[property(i.capacitance)], i)
           else if has-property?(i.inductor) :
-            match(get?(paraL, property(i.inductance))) : 
-              (v:Vector<JITXObject>) : add(v,i)
-              (_) : 
-                val t = Vector<JITXObject>()
-                add(t,i)
-                set(paraL, property(i.inductance), t)
+            add(paraR[property(i.inductance)], i)
           else :
-            fatal("Parametric component is not a resistor, capacitor, or inductor.")
-        else if has-property?(i.resistance) :
-          val r = property(i.resistance)
-          ; println("Found standard resistor (%_) of value (%_)" % [ref(i), r])
-          match(get?(knownR, r)) : 
-            (v:Vector<JITXObject>) : add(v,i)
-            (_) : 
-              val t = Vector<JITXObject>()
-              add(t,i)
-              set(knownR, r, t)
-        else if has-property?(i.capacitance) :
-          val c = property(i.capacitance)
-          ; println("Found standard capacitor (%_) of value (%_)" % [ref(i), r])
-          match(get?(knownC, c)) : 
-            (v:Vector<JITXObject>) : add(v,i)
-            (_) : 
-              val t = Vector<JITXObject>()
-              add(t,i)
-              set(knownC, c, t)
-        else if has-property?(i.inductance) :
-          val c = property(i.inductance)
-          ; println("Found standard inductor (%_) of value (%_)" % [ref(i), r])
-          match(get?(knownL, c)) : 
-            (v:Vector<JITXObject>) : add(v,i)
-            (_) : 
-              val t = Vector<JITXObject>()
-              add(t,i)
-              set(knownL, c, t)
-    
+            fatal("Parametric component is not a resistor, capacitor, or inductor. Other components are not currently supported.")
+        else if has-property?(i.resistor) :
+          add(knownR[property(i.resistance)], i)
+        else if has-property?(i.capacitor) :
+          add(knownC[property(i.capacitance)], i)
+        else if has-property?(i.inductor) :
+          add(knownL[property(i.inductance)], i)    
       ; we have 2n Hashtables here 
       ; paraR,paraC,.. are the parametric components
       ; knownR,knownC,... are the known fixed components (non-parametric)
@@ -511,14 +472,9 @@ public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
       resolve-components(paraC, knownC)
       resolve-components(paraL, knownL)
 
-public defn list-all-instances () -> Vector<JITXObject> :
-  inside pcb-module :
-    val all-instances = Vector<JITXObject>()
 
-    defn look-inside (m:JITXObject) :
-      for i in single-instances(m) do :
-        add(all-instances, i)
-        look-inside(i)
+public defn list-all-instances () -> Seqable<JITXObject> :
+  let loop (m:JITXObject = self) :
+    for i in single-instances(m) seq-cat :
+      cat([i], loop(i))
 
-    look-inside(self)
-    all-instances
