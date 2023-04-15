@@ -40,6 +40,7 @@ pcb-module para-res-0b (num-r:Int) :
     net (gnd  r1d0[index].p[2])
 
   symbol(gnd) = ocdb/utils/symbols/ground-sym
+  schematic-group(self) = para-res-0b
 
 pcb-module para-cap-0b (num-c:Int) :
   port io : pin[[1 2]]
@@ -59,6 +60,7 @@ pcb-module para-cap-0b (num-c:Int) :
     net (gnd  c1d0[index].p[2])
 
   symbol(gnd) = ocdb/utils/symbols/ground-sym
+  schematic-group(self) = para-cap-0b
 
 pcb-module para-ind-0b (num-l:Int) :
   port io : pin[[1 2]]
@@ -78,7 +80,7 @@ pcb-module para-ind-0b (num-l:Int) :
     net (gnd  l1d0[index].p[2])
 
   symbol(gnd) = ocdb/utils/symbols/ground-sym
-
+  schematic-group(self) = para-ind-0b
 
 pcb-module para-components-0 :
   ; Design goes here
@@ -99,27 +101,32 @@ pcb-module para-components-0 :
   inst l1d1 : parametric-inductor(1.5e-9)[num-c]
   inst l1t1 : parametric-inductor(min-max(520.0e-6, 880.0e-6))
 
+  schematic-group([r1d0 r1t0 r1d1 r1t1 c1d0 c1t0 c1d1 c1t1 l1d0 l1t0 l1d1 l1t1]) = x1x0-1
+
   inst hierA : para-res-0b(num-r) ; 3 + num-r
   inst hierB : para-res-0b(num-r)[2] ; num-r * (3 + num-r)
   inst hierC : para-cap-0b(num-c) ; 3 + num-c
   inst hierD : para-cap-0b(num-c)[2] ; num-c * (3 + num-c)
   inst hierE : para-ind-0b(num-l) ; 3 + num-c
   inst hierF : para-ind-0b(num-l)[2] ; num-c * (3 + num-c)
+  schematic-group([hierA hierB hierC hierD hierE hierF]) = hierX
 
   inst r2 : chip-resistor(["resistance" => min-max(150.0, 750.0)])
   inst c2 : ceramic-cap(["capacitance" => min-max(15.0e-9, 80.0e-9)])
   inst l2 : smd-inductor(["inductance" => min-max(15.0e-9, 80.0e-9)])
+  schematic-group([r2 c2 l2]) = x2
 
   ; not findable so the dummy-* component should be instantiated
   inst r3 : parametric-resistor(["resistance" => 1.0e20, "tolerance" => 0.02])
   inst c3 : parametric-capacitor(["capacitance" => min-max(15.0e-18, 80.0e-18)])
   inst l3 : parametric-inductor(["inductance" => min-max(15.0, 80.0)])
-
+  schematic-group([r3 c3 l3]) = x3
 
   ; not findable so the dummy-* component should be instantiated
   inst r4 : chip-resistor(["resistance" => 1.0e20, "tolerance" => 0.02])
   inst c4 : ceramic-cap(["capacitance" => min-max(15.0e-18, 80.0e-18)])
   inst l4 : smd-inductor(["inductance" => min-max(15.0, 80.0)])
+  schematic-group([r4 c4 l4]) = x4
 
   ; total resistor count = 3 + num-r + 3 + num-r + num-r * (3 + num-r)
   ; = 6 + 5 * num-r + num-r * num-r
