@@ -21,6 +21,7 @@ defpackage ocdb/tests/parametric-components :
 DESIGN-QUANTITY = 0
 DEFAULT-ALLOW-ALL-VENDOR-PART-NUMBERS = true
 MIN-CAP-VOLTAGE = 1.0
+MIN-PKG = "01005"
 
 pcb-module para-res-0b (num-r:Int) :
   port io : pin[[1 2]]
@@ -40,6 +41,7 @@ pcb-module para-res-0b (num-r:Int) :
     net (gnd  r1d0[index].p[2])
 
   symbol(gnd) = ocdb/utils/symbols/ground-sym
+  schematic-group(self) = para-res-0b
 
 pcb-module para-cap-0b (num-c:Int) :
   port io : pin[[1 2]]
@@ -59,6 +61,7 @@ pcb-module para-cap-0b (num-c:Int) :
     net (gnd  c1d0[index].p[2])
 
   symbol(gnd) = ocdb/utils/symbols/ground-sym
+  schematic-group(self) = para-cap-0b
 
 pcb-module para-ind-0b (num-l:Int) :
   port io : pin[[1 2]]
@@ -78,6 +81,7 @@ pcb-module para-ind-0b (num-l:Int) :
     net (gnd  l1d0[index].p[2])
 
   symbol(gnd) = ocdb/utils/symbols/ground-sym
+  schematic-group(self) = para-ind-0b
 
 
 pcb-module para-components-0 :
@@ -86,18 +90,18 @@ pcb-module para-components-0 :
   val num-c = 8
   val num-l = 3
   ; total of 3 + num-r resistors in this block
-  inst r1d0 : parametric-resistor(["resistance" => 1.0e6, "tolerance" => 0.02])
-  inst r1t0 : parametric-resistor(min-max(560.0e3, 880.0e3))
-  inst r1d1 : parametric-resistor(1.5e3)[num-r]
-  inst r1t1 : parametric-resistor(min-max(520.0, 880.0))
-  inst c1d0 : parametric-capacitor(["capacitance" => 1.0e-6, "tolerance" => 0.05])
-  inst c1t0 : parametric-capacitor(["capacitance" => min-max(560.0e-15, 880.0e-15) "minimum_quantity" => 0])
-  inst c1d1 : parametric-capacitor(1.5e-9)[num-c]
-  inst c1t1 : parametric-capacitor(min-max(520.0e-9, 880.0e-9))
-  inst l1d0 : parametric-inductor(["inductance" => 1.0e-6, "tolerance" => 0.05])
-  inst l1t0 : parametric-inductor(min-max(560.0e-9, 880.0e-9))
-  inst l1d1 : parametric-inductor(1.5e-9)[num-c]
-  inst l1t1 : parametric-inductor(min-max(520.0e-6, 880.0e-6))
+  inst r0d0 : parametric-resistor(["resistance" => 1.0e6, "tolerance" => 0.02, "minimum_quantity" => 1000])
+  inst r0t0 : parametric-resistor(min-max(560.0e3, 880.0e3))
+  inst r0d1 : parametric-resistor(1.5e3)[num-r]
+  inst r0t1 : parametric-resistor(min-max(520.0, 880.0))
+  inst c0d0 : parametric-capacitor(["capacitance" => 1.0e-6, "tolerance" => 0.05])
+  inst c0t0 : parametric-capacitor(["capacitance" => min-max(560.0e-15, 880.0e-15) "minimum_quantity" => 0])
+  inst c0d1 : parametric-capacitor(1.5e-9)[num-c]
+  inst c0t1 : parametric-capacitor(min-max(520.0e-9, 880.0e-9))
+  inst l0d0 : parametric-inductor(["inductance" => 1.0e-6, "tolerance" => 0.05])
+  inst l0t0 : parametric-inductor(min-max(560.0e-9, 880.0e-9))
+  inst l0d1 : parametric-inductor(1.5e-9)[num-l]
+  inst l0t1 : parametric-inductor(min-max(520.0e-6, 880.0e-6))
 
   inst hierA : para-res-0b(num-r) ; 3 + num-r
   inst hierB : para-res-0b(num-r)[2] ; num-r * (3 + num-r)
@@ -110,46 +114,59 @@ pcb-module para-components-0 :
   inst c2 : ceramic-cap(["capacitance" => min-max(15.0e-9, 80.0e-9)])
   inst l2 : smd-inductor(["inductance" => min-max(15.0e-9, 80.0e-9)])
 
+  net (r2.p[1] c2.p[1] l2.p[1])
+  net (r2.p[2] c2.p[2] l2.p[2])
+
   ; not findable so the dummy-* component should be instantiated
   inst r3 : parametric-resistor(["resistance" => 1.0e20, "tolerance" => 0.02])
   inst c3 : parametric-capacitor(["capacitance" => min-max(15.0e-18, 80.0e-18)])
   inst l3 : parametric-inductor(["inductance" => min-max(15.0, 80.0)])
+  net (r3.p[1] c3.p[1] l3.p[1])
+  net (r3.p[2] c3.p[2] l3.p[2])
 
 
   ; not findable so the dummy-* component should be instantiated
   inst r4 : chip-resistor(["resistance" => 1.0e20, "tolerance" => 0.02])
   inst c4 : ceramic-cap(["capacitance" => min-max(15.0e-18, 80.0e-18)])
   inst l4 : smd-inductor(["inductance" => min-max(15.0, 80.0)])
+  net (r4.p[1] c4.p[1] l4.p[1])
+  net (r4.p[2] c4.p[2] l4.p[2])
 
   ; total resistor count = 3 + num-r + 3 + num-r + num-r * (3 + num-r)
   ; = 6 + 5 * num-r + num-r * num-r
 
-  net connA (r1d0.p[1] r1t0.p[1] c1d0.p[1] c1t0.p[1] l1d0.p[1] l1t0.p[1] hierA.io[1] hierC.io[1] hierE.io[1])
-  net connB (r1t1.p[1] c1t1.p[1] l1t1.p[1])
-  net gnd (r1d0.p[2] r1t0.p[2] c1d0.p[2] c1t0.p[2] l1d0.p[2] l1t0.p[2])
-  net connC (r1t1.p[2] hierA.io[2] c1t1.p[2] hierC.io[2] l1t1.p[2] hierE.io[2])
+  net connA (r0d0.p[1] r0t0.p[1] c0d0.p[1] c0t0.p[1] l0d0.p[1] l0t0.p[1] hierA.io[1] hierC.io[1] hierE.io[1])
+  net connB (r0t1.p[1] c0t1.p[1] l0t1.p[1])
+  net gnd (r0d0.p[2] r0t0.p[2] c0d0.p[2] c0t0.p[2] l0d0.p[2] l0t0.p[2])
+  net connC (r0t1.p[2] hierA.io[2] c0t1.p[2] hierC.io[2] l0t1.p[2] hierE.io[2])
 
   for index in 0 to 2 do :
     net (connA hierB[index].io[1])
-    net (connB r1d1[index].p[1])
     net (gnd hierB[index].io[2])
-    net (connC r1d1[index].p[2])
+    for sub-index in 0 to num-r do :
+      net (connB r0d1[sub-index].p[1])
+      net (connC r0d1[sub-index].p[2])
 
   for index in 0 to 2 do :
     net (connA hierD[index].io[1])
-    net (connB c1d1[index].p[1])
     net (gnd hierD[index].io[2])
-    net (connC c1d1[index].p[2])
+    for sub-index in 0 to 8 do :
+      net (connB c0d1[sub-index].p[1])
+      net (connC c0d1[sub-index].p[2])
 
   for index in 0 to 2 do :
     net (connA hierF[index].io[1])
-    net (connB l1d1[index].p[1])
     net (gnd hierF[index].io[2])
-    net (connC l1d1[index].p[2])
+    for sub-index in 0 to num-l do :
+      net (connB l0d1[sub-index].p[1])
+      net (connC l0d1[sub-index].p[2])
 
   symbol(gnd) = ocdb/utils/symbols/ground-sym
   ; println $ list-all-instances()
-
+  ; schematic-group([hierA hierB hierC hierD hierE hierF]) = hier
+  schematic-group([r2 c2 l2]) = twos 
+  schematic-group([r3 c3 l3]) = threes 
+  schematic-group([r4 c4 l4]) = fours 
 
 pcb-module para-resistor-1-mod (lo:Double, hi:Double):
   port p : pin[[1 2]]
@@ -192,13 +209,13 @@ pcb-board B :
   boundary = brd-outline
   signal-boundary = brd-outline
 
-val output-dir = "parametric-components-test"
+val output-name = "parametric-components-test"
 ; println("Deleting project output directory: %_ ..." % [output-dir])
 ; try : delete-recursive(output-dir)
 ; catch (e) : false
-println("Output folder: %_" % [output-dir])
+println("Output folder: %_" % [output-name])
 
-set-current-design(output-dir)
+set-current-design(output-name)
 set-board(B)
 set-rules(sierra-adv-rules)
 var top-level = para-components-0
