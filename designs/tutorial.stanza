@@ -8,16 +8,14 @@ defpackage ocdb/designs/tutorial :
   import ocdb/utils/design-vars
   import ocdb/utils/generic-components
 
-DEFAULT-ALLOW-ALL-VENDOR-PART-NUMBERS = true
-
 ; ==========================================
-; Implement other modules used by our design 
+; Implement other modules used by our design
 ; ==========================================
 pcb-module lm317a-regulator (output-voltage:Toleranced) :
-  pin vin 
-  pin vout 
-  pin adj 
-  pin gnd 
+  pin vin
+  pin vout
+  pin adj
+  pin gnd
 
   inst lm317a : ocdb/components/unisonic/LM317A/component
   net (lm317a.input, vin)
@@ -43,12 +41,12 @@ pcb-module lm317a-regulator (output-voltage:Toleranced) :
   inst output-voltage-divider : ocdb/modules/passive-circuits/voltage-divider(high-voltage, adj-voltage, current) where :
     val high-voltage = tol%(center-value(output-voltage) - est-v-adj-offset, 0.0)
     val adj-voltage = tol%(typ-value(ref-voltage), target-variance)
-    val current = divider-current                                                
+    val current = divider-current
 
   net (output-voltage-divider.in, lm317a.output)
   net (output-voltage-divider.out, lm317a.adj adj)
   net (output-voltage-divider.lo, gnd)
-  ; inside pcb-module lm317a-regulator 
+  ; inside pcb-module lm317a-regulator
   schematic-group(self) = lm317a
 
   ; Calculate the actual offset now that we know the optimized value of the resistors
@@ -69,7 +67,7 @@ pcb-module lm317a-regulator (output-voltage:Toleranced) :
 val board-shape = RoundedRectangle(35.0, 30.0, 0.5)
 pcb-module regulator-fixture :
   val target-voltage = tol%(3.3, 10.0)
-  
+
   inst reg : lm317a-regulator(target-voltage)
 
   inst source : banana-plug-module() ; shortcut to instantiate and place two `banana-plug`s plus the electrical support
@@ -86,7 +84,7 @@ pcb-module regulator-fixture :
   val target-current = 1000.0e-3
   val target-load = closest-std-val(typ-value(target-voltage) / target-current, 5.0)
   inst load : chip-resistor(["resistance" => target-load "min-rated-power" => typ-value(target-voltage) * target-current * 2.0 ])
-  
+
   net (load.p[1], reg.vout)
   net (load.p[2], gnd)
 
@@ -103,19 +101,19 @@ pcb-module regulator-fixture :
 ; Configure the design, then run or check it
 ; ==========================================
 defn run-design (circuit:Instantiable, run-checks?:True|False) :
-  set-design-directory("CAD")
+  set-current-design("jitx-design")
   set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-jlc2313, board-shape))
   set-rules(ocdb/manufacturers/rules/jlcpcb-rules)
 
   var main-module = circuit
   if run-checks? :
     main-module = ocdb/utils/generator-utils/run-final-passes(circuit) ; Analyze design with a pass
-  
+
   set-main-module(main-module) ; Treat the provided module as a design, and compile it.
-  
+
   if run-checks? :
     run-checks("checks.txt")
-  else:  
+  else:
     view-board()
     view-schematic()
 

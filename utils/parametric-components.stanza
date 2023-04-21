@@ -1,0 +1,480 @@
+#use-added-syntax(jitx)
+defpackage ocdb/utils/parametric-components:
+  import core
+  import collections
+  import math
+
+  import jitx
+  import jitx/commands
+  import esir/ir
+  import lang-utils with :
+    prefix(min-max) => lang-
+
+  import ocdb/utils/bundles
+  import ocdb/utils/landpatterns
+  import ocdb/utils/generator-utils
+  import ocdb/utils/db-parts
+  import ocdb/utils/design-vars
+  import ocdb/utils/symbols
+  import ocdb/utils/box-symbol
+  import ocdb/utils/property-structs
+  import ocdb/utils/symbol-utils
+  import ocdb/utils/checks
+  import ocdb/utils/parts
+  import ocdb/utils/generic-components
+
+
+public pcb-enum /ocdb/utils/parametric-components/ResistorApplication :
+  ResistorPull
+  ResistorPrecision
+  ResistorTerm
+  ResistorSense
+  ResistorPower
+;  ; application:ResistorApplication
+
+public pcb-enum /ocdb/utils/parametric-components/CapacitorApplication :
+  CapBypass
+  CapFilter
+  CapPrecision
+  CapLoad
+
+; ; ========================================================
+; ; ========== Generic passive components ==================
+; ; ========================================================
+
+public pcb-component dummy-resistor (res:Double|Toleranced orig:Double|Toleranced|False = false):
+  port p : pin[[1 2]]
+  val sym = resistor-sym(ResistorStd)
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+  val pkg = ipc-two-pin-landpattern("0402")
+  landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+  reference-prefix = "R"
+  property(self.resistance) = res
+  property(self.resistor) = true
+  match(orig:Double|Toleranced) :
+    property(self.orig-resistance) = orig
+  else :
+    property(self.orig-resistance) = res
+  ; spice :
+  ;   "[R] <p[1]> <p[2]> <res>"
+
+public pcb-component dummy-capacitor (cap:Double|Toleranced orig:Double|Toleranced|False = false):
+  port p : pin[[1 2]]
+  val sym = capacitor-sym(CapacitorNonPolarized)
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+  val pkg = ipc-two-pin-landpattern("0402")
+  landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+  reference-prefix = "C"
+  property(self.capacitor) = true
+  property(self.type) = "ceramic"
+  property(self.capacitance) = cap
+  match(orig:Double|Toleranced) :
+    property(self.orig-capacitance) = orig
+  else :
+    property(self.orig-capacitance) = cap
+  ; spice :
+  ;   "[C] <p[1]> <p[2]> <cap>"
+
+public pcb-component dummy-inductor (ind:Double|Toleranced orig:Double|Toleranced|False = false):
+  port p : pin[[1 2]]
+  val sym = inductor-sym(InductorStd)
+  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+  val pkg = ipc-two-pin-landpattern("0402")
+  landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+  reference-prefix = "L"
+  property(self.inductor) = true
+  property(self.inductance) = ind
+  match(orig:Double|Toleranced) :
+    property(self.orig-inductance) = orig
+  else :
+    property(self.orig-inductance) = ind
+  ; spice :
+  ;   "[L] <p[1]> <p[2]> <ind>"
+
+defn app-query-properties (app:CapacitorApplication) -> Tuple<KeyValue<String, ?>> :
+  switch(app) :
+    CapBypass : ["tolerance" => 0.10]
+
+; ========================================================
+; ==================== parametric-capacitor ==============
+; ========================================================
+public pcb-module parametric-inductor (user-params:Tuple<KeyValue>) :
+  port p : pin[[1 2]]
+  property(self.parametric) = true ; property to set so that we know this is a parametric comp.
+  property(self.inductor) = true
+  property(self.reference-prefix) = "L"
+  val params = remove-duplicate-keys([smd-query-properties() user-params])
+
+  ; store the de-duped argument list in a property to retrieve it later
+  property(self.user-params) = user-params
+  ; we can also create properties for each individual kv but retrieval of those
+  ; will be a bit messy as we need to loop over all or try explicit names
+  for [myk, myv] in kvs(params) do :
+    set-property(self, to-symbol(myk), myv)
+
+  ; possible properties to extract from params:
+  ; area
+  ; case
+  ; category
+  ; current-rating
+  ; dc-resistance
+  ; dimensions.area
+  ; dimensions.x
+  ; dimensions.y
+  ; dimensions.z
+  ; inductance
+  ; manufacturer
+  ; material-core
+  ; metadata.datasheets
+  ; metadata.description
+  ; metadata.digi-key-part-number
+  ; metadata.image
+  ; metadata.packaging
+  ; minimum_quantity
+  ; mounting
+  ; mpn
+  ; price
+  ; quality-factor
+  ; quality-factor-frequency
+  ; rated-temperature.max
+  ; rated-temperature.min
+  ; saturation-current
+  ; self-resonant-frequency
+  ; shielding
+  ; stock
+  ; tolerance
+  ; tolerance.max
+  ; tolerance.min
+  ; trust
+  ; type
+  ; update_date
+  ; vendor_part_numbers.<VENDOR_STRING>
+  ; x
+  ; y
+  ; z  
+  
+  ; re-enable when spice is available in jitx-client in the Docker image for CI
+  ; spice:
+  ;   "[L <p[1]> <p[2]> <property(self.inductance)>"
+
+public defn parametric-inductor (ind:Double|Toleranced) :
+  parametric-inductor(["inductance" => ind])
+
+public defn parametric-inductor (ind:Double|Toleranced, tol:Double) :
+  parametric-inductor(["inductance" => ind "tolerance" => tol])
+
+; ========================================================
+; ==================== parametric-capacitor ==============
+; ========================================================
+public pcb-module parametric-capacitor (user-params:Tuple<KeyValue>) :
+  port p : pin[[1 2]]
+  property(self.parametric) = true ; property to set so that we know this is a parametric comp.
+  property(self.capacitor) = true
+  property(self.reference-prefix) = "C"
+  val params = remove-duplicate-keys([smd-query-properties() user-params])
+
+  ; store the de-duped argument list in a property to retrieve it later
+  property(self.user-params) = user-params
+  ; we can also create properties for each individual kv but retrieval of those
+  ; will be a bit messy as we need to loop over all or try explicit names
+  for [myk, myv] in kvs(params) do :
+    set-property(self, to-symbol(myk), myv)
+
+  ; possible properties to extract from params:
+  ; anode
+  ; area
+  ; capacitance
+  ; case
+  ; category
+  ; dimensions.area
+  ; dimensions.x
+  ; dimensions.y
+  ; dimensions.z
+  ; electrolyte
+  ; esr
+  ; esr_frequency
+  ; manufacturer
+  ; metadata.applications
+  ; metadata.datasheets
+  ; metadata.description
+  ; metadata.digi-key-part-number
+  ; metadata.image
+  ; metadata.lead-spacing
+  ; metadata.lifetime-temp
+  ; metadata.packaging
+  ; metadata.ripple-current-high-frequency
+  ; metadata.ripple-current-low-frequency
+  ; minimum_quantity
+  ; mounting
+  ; mpn
+  ; price
+  ; rated-current-pk
+  ; rated-current-rms
+  ; rated-temperature.max
+  ; rated-temperature.min
+  ; rated-voltage
+  ; rated-voltage-ac
+  ; stock
+  ; temperature-coefficient.change
+  ; temperature-coefficient.code
+  ; temperature-coefficient.lower-temperature
+  ; temperature-coefficient.raw_data
+  ; temperature-coefficient.tolerance
+  ; temperature-coefficient.upper-temperature
+  ; temperature-coefficient.value
+  ; tolerance
+  ; tolerance.max
+  ; tolerance.min
+  ; trust
+  ; type
+  ; update_date
+  ; vendor_part_numbers.<VENDOR_STRING>
+  ; x
+  ; y
+  ; z
+
+  ; re-enable when spice is available in jitx-client (CI Docker image)
+  ; spice:
+  ;   "[C] <p[1]> <p[2]> <property(self.capacitance)>"
+
+public defn parametric-capacitor (cap:Double|Toleranced) :
+  parametric-capacitor(["capacitance" => cap "type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE])
+
+public defn parametric-capacitor (cap:Double|Toleranced, tol:Double, pkg:String) :
+  parametric-capacitor(["capacitance" => cap "tolerance" => tol "case" => pkg "type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE])
+
+public defn parametric-capacitor (cap:Double|Toleranced, pkg:String) :
+  parametric-capacitor(["capacitance" => cap "case" => pkg "type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE])
+
+public defn parametric-capacitor (cap:Double|Toleranced, tol:Double) -> Instantiable :
+  parametric-capacitor(["capacitance" => cap "tolerance" => tol "type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE])
+
+
+; ========================================================
+; ==================== parametric-resistor ===============
+; ========================================================
+
+public pcb-module parametric-resistor (user-params:Tuple<KeyValue>) :
+  port p : pin[[1 2]]
+  property(self.parametric) = true ; property to set so that we know this is a parametric comp.
+  property(self.resistor) = true
+  property(self.reference-prefix) = "R"
+  val params = remove-duplicate-keys([smd-query-properties() user-params])
+
+  ; store the deduped argument list in a property to retrieve it later
+  property(self.user-params) = user-params
+  ; we can also create properties for each individual kv but retrieval of those
+  ; will be a bit messy as we need to loop over all or try explicit names
+  for [myk, myv] in kvs(params) do :
+    set-property(self, to-symbol(myk), myv)
+
+  ; possible properties to extract from params:
+  ; area
+  ; case
+  ; category
+  ; composition
+  ; dimensions.area
+  ; dimensions.x
+  ; dimensions.y
+  ; dimensions.z
+  ; manufacturer
+  ; metadata.datasheets
+  ; metadata.description
+  ; metadata.digi-key-part-number
+  ; metadata.features
+  ; metadata.image
+  ; metadata.number-of-terminations
+  ; metadata.packaging
+  ; metadata.series
+  ; metadata.supplier-device-package
+  ; minimum_quantity
+  ; mounting
+  ; mpn
+  ; price
+  ; rated-power
+  ; rated-temperature.max
+  ; rated-temperature.min
+  ; resistance
+  ; stock
+  ; tcr.neg
+  ; tcr.pos
+  ; tolerance
+  ; tolerance.max
+  ; tolerance.min
+  ; trust
+  ; type
+  ; update_date
+  ; vendor_part_numbers.<VENDOR_STRING>
+  ; x
+  ; y
+  ; z
+
+  ; re-enable when spice is available in jitx-client Docker image for CI
+  ; spice:
+  ;   "[R] <p[1]> <p[2]> <property(self.resistance)>"
+
+public defn parametric-resistor (res:Double|Toleranced) :
+  parametric-resistor(["resistance" => res])
+
+public defn parametric-resistor (res:Double|Toleranced, tol:Double, pkg:String) :
+  parametric-resistor(["resistance" => res "tolerance" => tol "rated-power" => 0.0625 "case" => pkg])
+
+public defn parametric-resistor (res:Double|Toleranced, tol:Double, pwr:Double) :
+  parametric-resistor(["resistance" => res "tolerance" => tol "rated-power" => pwr "case" => "0402"])
+
+public defn parametric-resistor (res:Double|Toleranced, pkg:String) :
+  parametric-resistor(["resistance" => res "tolerance" => 2.0 "rated-power" => 0.0625 "case" => pkg])
+
+public defn parametric-resistor (res:Double|Toleranced, tol:Double) -> Instantiable :
+  parametric-resistor(["resistance" => res "tolerance" => tol])
+
+
+; ========================================================
+; ========== parametric part helper functions ============
+; ========================================================
+
+; ----- proposal ----
+public defn between-std-val (v:Toleranced, tol:Double) -> Double :
+  val DEFAULT-VALUE = [-1.0, 0.0]
+  val expon-min = floor(log10(min-value(v)))
+  val expon-max = floor(log10(max-value(v)))
+
+  defn valid? (args: [Double, Int]) -> True|False :
+    in-range?(v, make-value(args))
+
+  defn distance-to-center (args: [Double, Int]) -> Double :
+    abs(make-value(args) - center-value(v))
+
+  defn make-value (args: [Double, Int]) -> Double :
+    val [std-val, exp] = args
+    c-r(std-val, exp)
+
+  defn c-r (v:Double e:Int) -> Double :
+    v * pow(10.0, to-double(e))
+
+  val exp-range = to-int(expon-min) through to-int(expon-max)
+
+  val valid-pairs = to-tuple $ filter(valid?, zip(union-std-vals(tol), exp-range))
+
+  if empty?(valid-pairs) :
+    val closest-std-value = closest-std-val(typ(v), tol)
+    println("No standard value matching request v=%_, tol=%_. Using closest std value %_." % [v, tol, closest-std-value])
+    closest-std-value
+  else :
+    make-value $ minimum(distance-to-center, valid-pairs)
+
+public defn find-std-val (v:Toleranced) -> Double:
+  var done = 0
+  var ans = 0.0
+  val my-val = 
+    label<Double> return :
+      for tol in std-tols do :
+        ans = between-std-val(v, tol)
+        ; println("Debug tol(%_) ans(%_)" % [tol, ans])
+        return(ans) when ans > 0.0
+      fatal("Could not find appropriate component value (%_)" % [v])
+  ; println("Found (%_) for range (%_)" % [my-val, v])
+  my-val
+
+; ========================================================
+; ==================== solve parametric parts ============
+; ========================================================
+
+public defn solve-parametric-parts (m:Instantiable) -> Instantiable :
+
+  defn replace-tol-param (params:Tuple<KeyValue>) -> Tuple<KeyValue> : 
+    ; need to check if resistance/capacitance/inductance is passed a Toleranced() value and if 
+    ; so, transform it appropriately 
+    to-tuple $ for [myk, myv] in kvs(params) seq-cat : 
+      match(myv:Toleranced) : 
+        if replaceable-key(myk): [myk => find-std-val(myv)]
+        else : [myk => myv]
+      else : [myk => myv]      
+  
+  defn resolve-components (my-para:HashTable<Double|Toleranced, Vector<JITXObject>>,
+                           my-fix:HashTable<Double|Toleranced, Vector<JITXObject>>) ->  Vector<Instantiable> :
+    inside pcb-module :
+      val new-comps = Vector<Instantiable>()
+      for rs in my-para do :
+        val r-val = key(rs)
+        for my-inst in value(rs) do :
+          if not has-property?(my-inst.user-params) :
+            fatal("Instance %_ does not have expected property (user-params)" % [ref(my-inst)])
+          val user-params = replace-tol-param(property(my-inst.user-params))
+          ; println("Searching with user-params => %_" % [user-params])
+          val new-comp =
+            if has-property?(my-inst.resistor) :
+              try :
+                chip-resistor(user-params)
+              catch (e):
+                println("Warning: generic resistor substitution for %_" % [ref(my-inst)])
+                match(property(my-inst.resistance)) :
+                  (r:Double) : dummy-resistor(r)
+                  (t:Toleranced) : dummy-resistor(find-std-val(t), t)
+            else if has-property?(my-inst.capacitor) :
+              try :
+                ceramic-cap(user-params)
+              catch (e):
+                println("Warning: generic capacitor substitution for %_" % [ref(my-inst)])
+                match(property(my-inst.capacitance)) :
+                  (c:Double) : dummy-capacitor(c)
+                  (t:Toleranced) : dummy-capacitor(find-std-val(t), t)
+            else if has-property?(my-inst.inductor) :
+              try :
+                smd-inductor(user-params)
+              catch (e):
+                println("Warning: generic inductor substitution for %_" % [ref(my-inst)])
+                match(property(my-inst.inductance)) :
+                  (l:Double) : dummy-inductor(l)
+                  (t:Toleranced) : dummy-inductor(find-std-val(t), t)
+            else :
+              fatal("unknown component found")
+          inst my-new-comp : new-comp
+          property(my-new-comp.name) = to-symbol(ref(my-inst))
+          ; hook in new component to old parametric instance pins (in parallel)
+          net (my-new-comp.p[1] my-inst.p[1])
+          net (my-new-comp.p[2] my-inst.p[2])
+          add(new-comps, new-comp)
+    new-comps
+
+  within transform-module(m) :
+    inside pcb-module :
+      val knownR = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{})
+      val knownC = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{})
+      val knownL = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{})
+      val paraR  = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{}) 
+      val paraC  = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{}) 
+      val paraL  = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{}) 
+
+      ; Need to recursively retrieve all instances (including instances of modules.)
+      ; Loop runs twice: 1 find, 1 add part.
+      for i in list-all-instances() do :
+        if has-property?(i.parametric) :
+          ; println("Sorting part %_ with desired value %_" % [ref(i) property(i.resistance)])
+          if has-property?(i.resistor) :
+            add(paraR[property(i.resistance)], i)
+          else if has-property?(i.capacitor) :
+            add(paraR[property(i.capacitance)], i)
+          else if has-property?(i.inductor) :
+            add(paraR[property(i.inductance)], i)
+          else :
+            fatal("Parametric component is not a resistor, capacitor, or inductor. Other components are not currently supported.")
+        else if has-property?(i.resistor) :
+          add(knownR[property(i.resistance)], i)
+        else if has-property?(i.capacitor) :
+          add(knownC[property(i.capacitance)], i)
+        else if has-property?(i.inductor) :
+          add(knownL[property(i.inductance)], i)    
+      ; we have 2n Hashtables here 
+      ; paraR,paraC,.. are the parametric components
+      ; knownR,knownC,... are the known fixed components (non-parametric)
+      resolve-components(paraR, knownR)
+      resolve-components(paraC, knownC)
+      resolve-components(paraL, knownL)
+
+
+public defn list-all-instances () -> Seqable<JITXObject> :
+  let loop (m:JITXObject = self) :
+    for i in single-instances(m) seq-cat :
+      cat([i], loop(i))
+
