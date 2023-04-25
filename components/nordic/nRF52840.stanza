@@ -285,10 +285,8 @@ doc: \<DOC>
 public pcb-module module (-- include-LFO?:True|False = true, include-antenna?:True|False = true, power-config:Int = 5) :
   pin gnd
   inst mcu : ocdb/components/nordic/nRF52840/component
+  net (gnd, mcu.VSS, mcu.VSS_PA)
 
-  net (gnd, usb.vbus.gnd, mcu.VSS, mcu.VSS_PA)
-
-  ; Configure to be in normal voltage mode, DCDC1 enabled (config 5 from datasheet)
   ; Setup Bypass caps
   switch(power-config) :
     5 : 
@@ -315,18 +313,18 @@ public pcb-module module (-- include-LFO?:True|False = true, include-antenna?:Tr
         schematic-group(c) = power
         layout-group(c) = power
 
-  inst pwr-ind : smd-inductor([
-    "inductance" => 10.0e-6 
-    "min-current-rating" => 50.0e-3 ])
-  
-  inst filt-ind : smd-inductor([
-    "inductance" => 15.0e-9, 
-    "min-self-resonant-frequency" => 2.0e9,
-    "material-core" => "ceramic"])
-  
-  net (pwr-ind.p[1] mcu.DCCH)
-  net (pwr-ind.p[2] filt-ind.p[1])
-  net (mcu.DEC4 mcu.DEC6 filt-ind.p[2])
+      inst pwr-ind : smd-inductor([
+        "inductance" => 10.0e-6 
+        "min-current-rating" => 50.0e-3 ])
+      
+      inst filt-ind : smd-inductor([
+        "inductance" => 15.0e-9, 
+        "min-self-resonant-frequency" => 2.0e9,
+        "material-core" => "ceramic"])
+      
+      net (pwr-ind.p[1] mcu.DCCH)
+      net (pwr-ind.p[2] filt-ind.p[1])
+      net (mcu.DEC4 mcu.DEC6 filt-ind.p[2])
 
       for i in 0 through 4 do : 
         net (vdd mcu.VDDH mcu.VDD[i])
