@@ -207,53 +207,69 @@ public pcb-component component :
   ; LFXO for 50ppm
   property(P0[01].crystal-oscillator) = CrystalOscillator(3.1e-6, 0.5e-6, 4.0e-12, 50.0e-6 * 32.768e3, 32.768e3)
 
-; This module is a WIP.
-public pcb-module module :
-  port usb : usb-2
+doc: \<DOC>
+  NRF52840 reference module.
+  ## Args:
+  `include-lfo?:True|False = true` - include a low frequency resonator in the design?
+  `power-config:Int = 5` - Currently supports (5, 6) circuit configuration from https://infocenter.nordicsemi.com/index.jsp?topic=%2Fps_nrf52840%2Fref_circuitry.html
+  ## Example use:
+  ```
+    inst nrf : ocdb/components/nordic/nRF52840/module(include-lfo? = false, power-config = 6)
+  ```
+<DOC>
+public pcb-module module (include-LFO?:True|False = true, power-config:Int = 5) :
   pin gnd
   inst mcu : ocdb/components/nordic/nRF52840/component
+  net (gnd, mcu.VSS, mcu.VSS_PA)
 
-  net (gnd, usb.vbus.gnd, mcu.VSS, mcu.VSS_PA)
-
-  ; Configure to be in normal voltage mode, DCDC1 enabled (config 5 from datasheet)
   ; Setup Bypass caps
-  for [pin_, cap_] in kvs([
-    mcu.DEC1    => 100.0e-9,
-    mcu.DEC3    => 100.0e-12,
-    mcu.DEC5    => 820.0e-12,
-    mcu.DECUSB  => 4.7e-6,
-    mcu.VBUS    => 4.7e-6,
-    mcu.DEC4    => 1.0e-6,
-    mcu.VDDH    => 4.7e-6,
-    mcu.VDD[0]  => 0.1e-6,
-    mcu.VDD[1]  => 0.1e-6,
-    mcu.VDD[2]  => 0.1e-6,
-    mcu.VDD[3]  => 1.0e-6,
-    mcu.VDD[4]  => 1.0e-6
-  ]) do:
-    bypass-cap-strap(pin_, gnd, cap_)
+  switch(power-config) :
+    5 : 
+      port usb : usb-2 ; USB enabled
+      net (gnd, usb.vbus.gnd)
+      ; Configure to be in normal voltage mode, DCDC1 enabled (config 5 from datasheet)
+      for [pin_, cap_] in kvs([
+        mcu.DEC1    => 100.0e-9,
+        mcu.DEC3    => 100.0e-12,
+        mcu.DEC5    => 820.0e-12,
+        mcu.DECUSB  => 4.7e-6,
+        mcu.VBUS    => 4.7e-6,
+        mcu.DEC4    => 1.0e-6,
+        mcu.VDDH    => 4.7e-6,
+        mcu.VDD[0]  => 0.1e-6,
+        mcu.VDD[1]  => 0.1e-6,
+        mcu.VDD[2]  => 0.1e-6,
+        mcu.VDD[3]  => 1.0e-6,
+        mcu.VDD[4]  => 1.0e-6
+      ]) do:
+        bypass-cap-strap(pin_, gnd, cap_)
 
-  inst pwr-ind : smd-inductor([
-    "inductance" => 10.0e-6 
-    "min-current-rating" => 50.0e-3 ])
-  
-  inst filt-ind : smd-inductor([
-    "inductance" => 15.0e-9, 
-    "min-self-resonant-frequency" => 2.0e9,
-    "material-core" => "ceramic"])
-  
-  net (pwr-ind.p[1] mcu.DCCH)
-  net (pwr-ind.p[2] filt-ind.p[1])
-  net (mcu.DEC4 mcu.DEC6 filt-ind.p[2])
+      inst pwr-ind : smd-inductor([
+        "inductance" => 10.0e-6 
+        "min-current-rating" => 50.0e-3 ])
+      
+      inst filt-ind : smd-inductor([
+        "inductance" => 15.0e-9, 
+        "min-self-resonant-frequency" => 2.0e9,
+        "material-core" => "ceramic"])
+      
+      net (pwr-ind.p[1] mcu.DCCH)
+      net (pwr-ind.p[2] filt-ind.p[1])
+      net (mcu.DEC4 mcu.DEC6 filt-ind.p[2])
 
-  for i in 0 through 4 do : 
-    net (mcu.VDD[0] mcu.VDD[i])
+      for i in 0 through 4 do : 
+        net (mcu.VDD[0] mcu.VDD[i])
+    ; 6 :
+    else :
+      false
 
-  inst lfosc : ocdb/components/epson/FC-135/component
-  net (mcu.P0[0] lfosc.p[1])
-  net (mcu.P0[1] lfosc.p[2])
-  val lf-cb = add-xtal-caps(lfosc, gnd)
-  check-resonator(lfosc, property(mcu.P0[1].crystal-oscillator), lf-cb)
+
+  if include-LFO? :  
+    inst lfosc : ocdb/components/epson/FC-135/component
+    net (mcu.P0[0] lfosc.p[1])
+    net (mcu.P0[1] lfosc.p[2])
+    val lf-cb = add-xtal-caps(lfosc, gnd)
+    check-resonator(lfosc, property(mcu.P0[1].crystal-oscillator), lf-cb)
 
   inst hfosc : ocdb/components/epson/TSX-3225/component(32.0e6)
   net (mcu.XC1 hfosc.p[1])
