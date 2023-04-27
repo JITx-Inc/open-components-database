@@ -12,24 +12,38 @@ val board-shape = RoundedRectangle(30.0, 25.0, 3.0)
 
 ; Setup the board
 defn setup-board () :
-  set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-2-layer, board-shape))
-  set-rules(ocdb/manufacturers/rules/jlcpcb-rules)
+  set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-jlc2313, board-shape))
+  set-rules(ocdb/manufacturers/rules/jlcpcb-basic-rules)
+  set-use-layout-groups()
 
 pcb-module nrf-motion :
 
-  inst nrf : ocdb/components/nordic/nRF52840/module()
+  inst bat : database-part(["mpn" => "BS-08-B2AA016", "manufacturer" => "MYOUNG"])
 
-  ; Add an accelerometer
-  inst xl : ocdb/components/st-microelectronics/LIS3DH/module
-;   require acc-i2c:i2c from stm.mcu
-;   net (acc-i2c, xl.i2c)
-;   add-open-drain-pullups(acc-i2c, stm.power.vdd)
-;   require tap-detect:gpio from stm.mcu
-;   net WAKE (tap-detect.gpio, xl.int[1])
 
-  ; Connect power, apply symbols
-  net GND (nrf.gnd)
-  property(GND.voltage) = typ(0.0)
+  ; inst nrf : ocdb/components/nordic/nRF52840/module(include-LFO? = true, power-config = 5)
+  
+  ; ; Add an accelerometer
+  ; inst xl : ocdb/components/st-microelectronics/LIS3DH/module
+
+  ; ; Connect power, apply symbols
+  ; net GND (nrf.gnd xl.power.gnd bat.p[2])
+  ; net VDD (nrf.vdd xl.power.vdd xl.vio bat.p[1])
+  ; symbol(GND) = ocdb/utils/symbols/ground-sym
+  ; symbol(VDD) = ocdb/utils/symbols/supply-sym
+  ; property(GND.voltage) = typ(0.0)
+  ; property(VDD.voltage) = min-max(2.8, 3.0)
+
+  ; require acc-i2c:i2c from nrf.mcu
+  ; net (acc-i2c, xl.i2c)
+  ; add-open-drain-pullups(acc-i2c, nrf.vdd)
+
+  ; require tap-detect:gpio from nrf.mcu
+  ; net WAKE (tap-detect.gpio, xl.int[1])
+
+  ; geom(GND) :
+  ;   copper-pour(LayerIndex(1), isolate = 0.2) = board-shape
+  ;   copper-pour(LayerIndex(2), isolate = 0.2) = board-shape
 
   ; Run the schematic review
   check-design(self)
@@ -37,13 +51,13 @@ pcb-module nrf-motion :
 set-current-design("nrf-motion")
 set-paper(ANSI-A)
 setup-board()
-set-main-module(nrf-motion)
 
-;   val main-module = ocdb/utils/generator-utils/run-final-passes(nrf-motion) ; Analyze design with a pass
-;   set-main-module(main-module) ; Treat the provided module as a design, and compile it.
-;   run-checks("checks.txt")
+val main-module = ocdb/utils/generator-utils/run-final-passes(nrf-motion) ; Analyze design with a pass
+set-main-module(main-module) ; Treat the provided module as a design, and compile it.
+run-checks("checks.txt")
 
 ; View the results
+
 view-board()
 view-schematic()
 view-design-explorer()
