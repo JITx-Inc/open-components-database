@@ -7,8 +7,11 @@ defpackage ocdb/designs/nrf-motion:
   import ocdb/utils/checks
   import ocdb/utils/generic-components
   import ocdb/utils/generator-utils
+  import ocdb/utils/design-vars
 
-val board-shape = RoundedRectangle(30.0, 25.0, 3.0)
+val board-shape = RoundedRectangle(28.0, 25.0, 3.0)
+
+OPTIMIZE-FOR = ["area"]
 
 ; Setup the board
 defn setup-board () :
@@ -20,30 +23,36 @@ pcb-module nrf-motion :
 
   inst bat : database-part(["mpn" => "BS-08-B2AA016", "manufacturer" => "MYOUNG"])
 
+  inst nrf : ocdb/components/nordic/nRF52840/module(include-LFO? = false power-config = 6)
 
-  ; inst nrf : ocdb/components/nordic/nRF52840/module(include-LFO? = true, power-config = 5)
-  
-  ; ; Add an accelerometer
-  ; inst xl : ocdb/components/st-microelectronics/LIS3DH/module
+  ; Add an accelerometer
+  inst xl : ocdb/components/st-microelectronics/LIS3DH/module
 
-  ; ; Connect power, apply symbols
-  ; net GND (nrf.gnd xl.power.gnd bat.p[2])
-  ; net VDD (nrf.vdd xl.power.vdd xl.vio bat.p[1])
-  ; symbol(GND) = ocdb/utils/symbols/ground-sym
-  ; symbol(VDD) = ocdb/utils/symbols/supply-sym
-  ; property(GND.voltage) = typ(0.0)
-  ; property(VDD.voltage) = min-max(2.8, 3.0)
+  ; Connect power, apply symbols
+  net GND (nrf.gnd xl.power.gnd bat.p[2])
+  net VDD (nrf.vdd xl.power.vdd xl.vio bat.p[1])
 
-  ; require acc-i2c:i2c from nrf.mcu
-  ; net (acc-i2c, xl.i2c)
-  ; add-open-drain-pullups(acc-i2c, nrf.vdd)
+  symbol(GND) = ocdb/utils/symbols/ground-sym
+  symbol(VDD) = ocdb/utils/symbols/supply-sym
 
-  ; require tap-detect:gpio from nrf.mcu
-  ; net WAKE (tap-detect.gpio, xl.int[1])
+  property(GND.voltage) = typ(0.0)
+  property(VDD.voltage) = min-max(2.8, 3.0)
 
-  ; geom(GND) :
-  ;   copper-pour(LayerIndex(1), isolate = 0.2) = board-shape
-  ;   copper-pour(LayerIndex(2), isolate = 0.2) = board-shape
+  require acc-i2c:i2c from nrf.mcu
+  net (acc-i2c, xl.i2c)
+  add-open-drain-pullups(xl.i2c, nrf.vdd)
+
+  require tap-detect:gpio from nrf.mcu
+  net WAKE (tap-detect.gpio, xl.int[1])
+
+  require debug : swd([SWD-SWO]) from nrf.mcu
+
+  add-testpoint([GND VDD])
+  add-testpoint(pins(debug))
+
+  geom(GND) :
+    copper-pour(LayerIndex(1), isolate = 0.2) = board-shape
+    copper-pour(LayerIndex(2), isolate = 0.2) = board-shape
 
   ; Run the schematic review
   check-design(self)
