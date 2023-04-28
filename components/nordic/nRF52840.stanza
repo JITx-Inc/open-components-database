@@ -3,7 +3,8 @@ defpackage ocdb/components/nordic/nRF52840 :
   import core
   import collections
   import math
-  import lang-utils
+  import lang-utils with:
+    prefix(min-max) => lang-
   import jitx
   import jitx/commands
 
@@ -202,14 +203,9 @@ public pcb-component component :
   check connected(self.SWDCLK)
   check connected(self.SWDIO)
 
-  ; HFXO for 30ppm
-  property(self.XC2.crystal-oscillator) = CrystalOscillator(3.5e-3, 100.0e-6, 3.0e-12, 30.0e-6 * 32.0e6, 32.0e6)
-  ; LFXO for 50ppm
-  property(self.P0[01].crystal-oscillator) = CrystalOscillator(3.1e-6, 0.5e-6, 4.0e-12, 50.0e-6 * 32.768e3, 32.768e3)
-
-  supports low-freq-oscillator :
-    low-freq-oscillator.in => self.P0[0]
-    low-freq-oscillator.out => self.P0[1]
+  val driver = DigitalIO( CMOSOutput(min-max(0.0, 0.4), OffsetVoltage(-0.4, self.VDD[0])), 
+                          FractionalVoltage(0.3, self.VDD[0]), 
+                          FractionalVoltage(0.7, self.VDD[0]), self.VDD[0], self.VSS, 50.0e-9)
 
   pcb-bundle io-pin : 
     pin p
@@ -217,9 +213,12 @@ public pcb-component component :
   for p  in pins(self.P0) do :
     supports io-pin :
       io-pin.p => p
+    property(p.digital-io) = driver
+    
   for p  in pins(self.P1) do :
     supports io-pin :
       io-pin.p => p
+    property(p.digital-io) = driver
 
   for i in 0 to 48 do :
     supports gpio :
@@ -235,6 +234,7 @@ public pcb-component component :
       require pins:io-pin[2] 
       i2c.sda => pins[0].p
       i2c.scl => pins[1].p
+
   for i in 0 to 3 do :
     supports spi-controller() :
       require pins:io-pin[4] 
@@ -242,6 +242,7 @@ public pcb-component component :
       spi-controller().cipo => pins[1].p
       spi-controller().sck => pins[2].p
       spi-controller().cs => pins[3].p
+
   for i in 0 to 2 do :
     supports uart([UART-RX UART-TX UART-CTS UART-RTS]) :
       require pins:io-pin[4]
@@ -249,10 +250,23 @@ public pcb-component component :
       uart([UART-RX UART-TX UART-CTS UART-RTS]).rx => pins[1].p
       uart([UART-RX UART-TX UART-CTS UART-RTS]).rts => pins[2].p
       uart([UART-RX UART-TX UART-CTS UART-RTS]).cts => pins[3].p
-  supports swd() :
-    swd().swdio => self.SWDIO
-    swd().swdclk => self.SWDCLK
 
+  supports swd([SWD-SWO]) :
+    swd([SWD-SWO]).swdio => self.SWDIO
+    swd([SWD-SWO]).swdclk => self.SWDCLK
+    swd([SWD-SWO]).swo => self.P1[00]
+
+  supports reset :
+    reset.reset => self.P0[18]
+
+  ; HFXO for 30ppm
+  property(self.XC2.crystal-oscillator) = CrystalOscillator(3.5e-3, 100.0e-6, 3.0e-12, 30.0e-6 * 32.0e6, 32.0e6)
+  ; LFXO for 50ppm
+  property(self.P0[01].crystal-oscillator) = CrystalOscillator(3.1e-6, 0.5e-6, 4.0e-12, 50.0e-6 * 32.768e3, 32.768e3)
+
+  supports low-freq-oscillator :
+    low-freq-oscillator.in => self.P0[0]
+    low-freq-oscillator.out => self.P0[1]
 
 doc: \<DOC>
   NRF52840 reference module.
@@ -279,6 +293,7 @@ public pcb-module module (-- include-LFO?:True|False = true, include-antenna?:Tr
       port usb : usb-2 ; USB enabled
       pin vdd
       net (gnd, usb.vbus.gnd)
+      net (mcu.VBUS, usb.vbus.vdd)
       ; Configure to be in normal voltage mode, DCDC1 enabled (config 5 from datasheet)
       for [pin_, cap_] in kvs([
         mcu.DEC1    => 100.0e-9,
@@ -312,7 +327,7 @@ public pcb-module module (-- include-LFO?:True|False = true, include-antenna?:Tr
       net (mcu.DEC4 mcu.DEC6 filt-ind.p[2])
 
       for i in 0 through 4 do : 
-        net (vdd mcu.VDD[0] mcu.VDD[i])
+        net (vdd mcu.VDDH mcu.VDD[i])
     6 :
       ; Battery power only, no USB, no NFC
       pin vdd 
@@ -363,9 +378,9 @@ public pcb-module module (-- include-LFO?:True|False = true, include-antenna?:Tr
   ; Antenna
   if include-antenna? :
     inst ant : inverted-f-antenna-cmp
-    inst c3 : ceramic-cap(["capacitance" => 0.8e-12 "temperature-coefficient.code" => "C0G"])
-    inst c4 : ceramic-cap(["capacitance" => 0.5e-12 "temperature-coefficient.code" => "C0G"])
-    inst l2 : smd-inductor(["inductance" => 4.7e-9 "min-self-resonant-frequency" => 7.0e6 "min-quality-factor" => 8.0])
+    inst c3 : ceramic-cap(["capacitance" => 0.8e-12 "temperature-coefficient.code" => "C0G" "case" => "0402"])
+    inst c4 : ceramic-cap(["capacitance" => 0.5e-12 "temperature-coefficient.code" => "C0G" "case" => "0402"])
+    inst l2 : smd-inductor(["inductance" => 4.7e-9 "min-self-resonant-frequency" => 7.0e6 "min-quality-factor" => 8.0 "case" => "0402"])
     net (gnd c3.p[2] c4.p[2] ant.gnd)
     net (mcu.ANT c3.p[1] l2.p[1])
     net launch (l2.p[2] c4.p[1] ant.launch)
