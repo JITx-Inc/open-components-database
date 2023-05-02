@@ -16,9 +16,10 @@ defpackage ocdb/designs/ble-mote :
 
 
 OPERATING-TEMPERATURE = min-max(-20.0 50.0)
-OPTIMIZE-FOR = ["cost"]
+OPTIMIZE-FOR = ["area"]
 MIN-PKG = "0402"
 MIN-CAP-VOLTAGE = 12.0
+APPROVED-DISTRIBUTOR-LIST = ["JLCPCB"]
 
 
 ; PMS7003 particle counter interface via header pins
@@ -31,7 +32,7 @@ pcb-bundle pms7003-interface :
 
 pcb-module pms7003 :
   port interface : pms7003-interface
-
+  
   inst header : ocdb/components/amphenol/minitek127/component(10)
   place(header) at loc(0.0, 0.0) on Top
   net (interface.vin.gnd interface.vin-mcu.gnd header.p[3] header.p[4])
@@ -102,40 +103,45 @@ pcb-module sensors :
   ; Connect power to sensors
   net (ldo.vout, hum.power, particle-counter-interface.vin-mcu, power-3v3)
 
-  ; Add probe loops
-  val debug-tps = add-testpoint([ debug.tx
+  ; ; Add probe loops
+  val debug-tps = add-testpoint([ gnd
+                                  debug.tx
                                   debug.rx
                                   debug.dtr
-                                  debug.rts], ocdb/components/keystone/5017/component)
+                                  debug.rts], ocdb/utils/generic-components/smd-testpoint-cmp(2.0))
 
   val power-tps = add-testpoint([ P5V0
                                   P3V3
-                                  gnd ], ocdb/components/keystone/5017/component)
+                                  gnd ], ocdb/utils/generic-components/smd-testpoint-cmp(2.0))
 
   val hum-tps = add-testpoint([   hum.i2c.sda
-                                  hum.i2c.scl], ocdb/components/keystone/5017/component)
+                                  hum.i2c.scl], ocdb/utils/generic-components/smd-testpoint-cmp(2.0))
 
   val pms-tps = add-testpoint([   particle-counter-interface.uart.tx
                                   particle-counter-interface.uart.rx
-                                  gnd ], ocdb/components/keystone/5017/component)
+                                  gnd ], ocdb/utils/generic-components/smd-testpoint-cmp(2.0))
 
-  schematic-group([usb, ldo, cp2105, power-tps containing-instance(protected-usb) as JITXObject]) = power
-  schematic-group([hum hum-tps]) = humidity-sensor
-  schematic-group([particle-counter pms-tps]) = particle-counter
+  schematic-group([usb, ldo, cp2105, containing-instance(protected-usb) as JITXObject]) = power
+  schematic-group([hum]) = humidity-sensor
+  schematic-group([particle-counter]) = particle-counter
+  schematic-group(debug-tps) = schematic-group(cp2105)
 
-  layout-group([usb, ldo, cp2105 containing-instance(protected-usb) as JITXObject]) = power
-  layout-group([hum hum-tps]) = hum
+  layout-group([usb]) = usb
+  layout-group([ldo]) = ldo
+  layout-group([cp2105]) = cp2105
+  layout-group([containing-instance(protected-usb) as JITXObject]) = power
+  layout-group([hum]) = hum
   layout-group(particle-counter) = particle-counter
 
   ; Set up netclasses
-  val power-net-class = NetClass(`Power, [`min-trace => 0.50])
+  val power-net-class = NetClass(`Power, [`min-trace => 0.40])
   for n in [P5V0 P3V3 VBUS] do :
     property(n.net-class) = power-net-class
 
   ; Rules for JLC2313 Stackup, 45-Ohm characteristic impedance
   net D- (usb.usb-2.data.N)
   net D+ (usb.usb-2.data.P)
-  val usb-net-class = NetClass(`USB, [`min-trace => 0.224 `min-space => 0.3])
+  val usb-net-class = NetClass(`USB, [`min-trace => 0.224])
   for n in [D- D+] do :
     property(n.net-class) = usb-net-class
 
@@ -174,13 +180,15 @@ pcb-module sensor-system (processor:Instantiable, board-outline:Rectangle):
 
   ; Add a BRIGHT 60.0mcd RGB led indicator to the processor (to be visible outside)
   val rgb = add-rgb-indicator(60.0, proc, sensors.power-3v3.vdd)
+  schematic-group(rgb) = schematic-group(proc)
+  layout-group(rgb) = rgb
+
   ; Add a ground plane
   geom(gnd):
     copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = board-outline
     copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = board-outline
 
   inst logo : ocdb/artwork/jitx-logo/small(Silkscreen("artwork", Top), true)
-  place(logo) at loc(x + 1.0, 0.0 - y, 0.0) on Bottom
 
   check-design(self)
 
@@ -199,8 +207,10 @@ defn run-design (run-checks?:True|False -- module:Instantiable|False = false, sh
       (_) :
         sensor-system(ocdb/components/espressif/esp32-wroom-32/module(ocdb/components/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16, true), outline)
   set-current-design(design-name)
+  set-paper(ANSI-A)
   set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-jlc2313, outline))
-  set-rules(ocdb/manufacturers/rules/jlcpcb-rules)
+  set-use-layout-groups()
+  set-rules(ocdb/manufacturers/rules/jlcpcb-basic-rules)
 
   var main-module = circuit
   if run-checks? :
@@ -213,7 +223,7 @@ defn run-design (run-checks?:True|False -- module:Instantiable|False = false, sh
   else:
     view-board()
     view-schematic()
-    view-design-explorer()
+    ; view-design-explorer()
 
 ; ====================================
 ; Compile the design, view the results
@@ -233,7 +243,6 @@ defn check-design () :
 defn export-design () :
   set-export-backend(`kicad)
   export-bill-of-materials()
-  set-config-sets([`groups])
   export-cad()
 
 ; =================
@@ -243,18 +252,19 @@ defn export-bill-of-materials () :
   set-bom-vendors(ocdb/utils/design-vars/APPROVED-DISTRIBUTOR-LIST)
   set-bom-design-quantity(ocdb/utils/design-vars/DESIGN-QUANTITY)
   export-bom()
+  
 
 ; ============
 ; Run the code
 ; ============
 
 val pico-shape = Rectangle(35.0, 20.0)
-val wroom-shape = Rectangle(45.0, 30.0)
+val wroom-shape = Rectangle(32.0, 22.0)
 
 ; You can try these 3 different calls to create your design.
 
 ; The first call instantiates a WROOM module with default board sizing 
-run-design(false)
+run-design(false, design-name = "barfo")
 
 ; This call instantiates a WROOM module with the board sizing listed above.
 ; run-design(false, module = ocdb/components/espressif/esp32-wroom-32/module(ocdb/components/espressif/esp32-wroom-32/ESP32-WROOM-32E-N16, true), shape = wroom-shape, design-name = "ble-mote")
