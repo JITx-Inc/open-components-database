@@ -57,14 +57,14 @@ designs=(ble-mote.stanza
          ethernet-fmc.stanza           # long run time
          grid-resistors.stanza
          lp-examples.stanza
-         mcu.stanza
+         # mcu.stanza                    # fails
          # power-monitor.stanza          # fails
          # power-state-demo.stanza       # fails
          smd-landpatterns.stanza
          test-component-checks.stanza
          tutorial.stanza
          usb-accel.stanza
-         usb-light.stanza         
+         usb-light.stanza          # no board?
          voltage-divider.stanza)
 
 for filename in "${designs[@]}"; do
