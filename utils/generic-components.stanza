@@ -7,7 +7,6 @@ defpackage ocdb/utils/generic-components:
   import jitx
   import jitx/commands
   import jitx/errors
-  import jitx/http
 
   import lang-utils with :
     prefix(min-max) => lang-
@@ -24,6 +23,7 @@ defpackage ocdb/utils/generic-components:
   import ocdb/utils/checks
   import ocdb/utils/parts
   import ocdb/utils/parametric-components
+  import ocdb/artwork/board-text
 
 ; ========================================================
 ; ====== Standard packages for the passive solver ========
@@ -163,7 +163,6 @@ public defn database-parts (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<In
 public defn smd-query-properties () -> Tuple<KeyValue<String, ?>> :
   ["mounting" => "smd"
    "case" => get-valid-pkg-list()
-   "minimum_quantity" => 1
    "min-stock" => 5 * DESIGN-QUANTITY]
 
 public defn remove-duplicate-keys (hs:Seqable<Seqable<KeyValue<String, ?>>>) -> Tuple<KeyValue<String, ?>> :
@@ -228,8 +227,8 @@ public defn ceramic-cap (user-params:Tuple<KeyValue>) -> Instantiable :
   catch (e:jitx/errors/NoComponentMeetingRequirements) :
     println("No capacitor found that satisfies requirements.")
     find-subs-comp(params, "capacitance")
-  catch (e:HTTPError) :
-    println("HTTP error connecting to parts database.")
+  catch (e:QueryInternetConnectionError) :
+    println("Internet connection error while connecting to parts database.")
     find-subs-comp(params, "capacitance")
   ; we are not catching the following errors so that the normal error handlers can provide 
   ; more detailed feedback. However the design will stop compiling and will require the user
@@ -278,8 +277,8 @@ public defn tantalum-cap (user-params:Tuple<KeyValue>) -> Instantiable :
   catch (e:jitx/errors/NoComponentMeetingRequirements) :
     println("No capacitor found that satisfies requirements.")
     find-subs-comp(params, "capacitance")
-  catch (e:HTTPError) :
-    println("HTTP error connecting to parts database.")
+  catch (e:QueryInternetConnectionError) :
+    println("Internet connection error while connecting to parts database.")
     find-subs-comp(params, "capacitance")
 
 public defn tantalum-cap (cap:Double|Toleranced) -> Instantiable :
@@ -320,8 +319,8 @@ public defn chip-resistor (user-params:Tuple<KeyValue>) -> Instantiable :
   catch (e:jitx/errors/NoComponentMeetingRequirements) :
     println("No resistor found that satisfies requirements.")
     find-subs-comp(params, "resistance")
-  catch (e:HTTPError) :
-    println("HTTP error connecting to parts database.")
+  catch (e:QueryInternetConnectionError) :
+    println("Internet connection error while connecting to parts database.")
     find-subs-comp(params, "resistance")
 
 public defn chip-resistor (resistance:Double|Toleranced) -> Instantiable :
@@ -358,8 +357,8 @@ public defn smd-inductor (user-params:Tuple<KeyValue>) -> Instantiable :
   catch (e:jitx/errors/NoComponentMeetingRequirements) :
     println("No inductor found that satisfies requirements.")
     find-subs-comp(params, "inductance")
-  catch (e:HTTPError) :
-    println("HTTP error connecting to parts database.")
+  catch (e:QueryInternetConnectionError) :
+    println("Internet connection error while connecting to parts database.")
     find-subs-comp(params, "inductance")
 
 public defn smd-inductor (ind:Double|Toleranced) -> Instantiable :
@@ -696,9 +695,11 @@ public pcb-module banana-plug-module ():
   val pitch = 0.75 / 2.0 * 25.4
   place(vdd-plug) at loc(pitch * -1.0, 0.0) on Top
   place(gnd-plug) at loc(pitch, 0.0) on Top
-  layer(Silkscreen("Pol", Top)) = Text("VIN", 1.5, C, loc(pitch * -1.0, -8.0))
-  layer(Silkscreen("Pol", Top)) = Text("GND", 1.5, C, loc(pitch, -8.0))
 
+  inst vin-label : text("VIN", 1.2, 0.0)
+  inst gnd-label : text("GND", 1.2, 0.0)
+  place(vin-label) at loc(pitch * -1.0, -7.5) on Top
+  place(gnd-label) at loc(pitch, -7.5) on Top
 
 public pcb-component pin-header (n-pin:Int, n-row:Int, pin-pitch:Double, row-pitch:Double) :
   description = "Generic pin-header"
@@ -1017,4 +1018,3 @@ public defn add-rgb-indicator (brightness:Double, proc:JITXObject, vin:JITXObjec
     net (vin, rgb.led.l.a)
     net (control-pins rgb.control-pins)
     rgb
-
