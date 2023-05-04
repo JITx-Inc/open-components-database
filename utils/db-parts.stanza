@@ -30,6 +30,9 @@ public defmulti sellers (component: Component) -> Tuple<Seller>|False
 public defmulti resolved-price (component: Component) -> Double|False
 public defmulti vendor-part-numbers (component: Component) -> Tuple<KeyValue<String, String>>
 public defmulti to-jitx (component: Component) -> Instantiable
+; The top-level Component includes queryable fields used in parametric queries.
+; This inner component represents the actual ESIR-instantiable object, including symbols/landpattern.
+public defmulti component (component: Component) -> ComponentCode
 
 defmethod area (component: Component) -> Double :
   x(component) * y(component)
@@ -85,7 +88,7 @@ public defstruct Resistor <: Component :
   TCR: TCR|False ; Temperature coefficient of resistance (ohms/ohm*degC)
   sellers: Tuple<Seller>|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
-  component: ComponentCode
+  component: ComponentCode with: (as-method => true)
   vendor-part-numbers: Tuple<KeyValue<String, String>> with: (as-method => true)
 
 public defn delta-resistance (resistor: Resistor, temperature: Double) -> Double :
@@ -182,35 +185,13 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
                                 emodel-pourcentage-tolerance(tolerance(resistor)),
                                 double-or-unknown(rated-power(resistor)))
         reference-prefix = "R"
-        val TCR = TCR(resistor)
-        val rated-temperature = rated-temperature(resistor)
-        val tolerance = tolerance(resistor)
-        val resistance = resistance(resistor)
-        ; Backwards compatibility
-        property(self.resistor) = true
-        ; This is how parts-db does it
-        property(self.category) = "resistor"
-        property(self.trust) = trust(resistor)
-        property(self.x) = x(resistor)
-        property(self.y) = y(resistor)
-        property(self.z) = z(resistor)
-        property(self.mounting) = mounting(resistor)
-        match(rated-temperature: Toleranced): property(self.rated-temperature) = rated-temperature
-        property(self.case) = /case(resistor)
-        property(self.metadata) = metadata(resistor)
-        property(self.type) = type(resistor)
-        match(tolerance: MinMaxRange):
-          ;[TODO] Current exporter IR crashes unless tolerance is a Double.
-          ;So this feature is commented out until that is fixed.
-          ;property(self.tolerance) = [min(tolerance), max(tolerance)]
-          property(self.tolerance) = max(tolerance)
-        property(self.resistance) = resistance
-        property(self.composition) = composition(resistor)  ; this is the type => "thick-film" in gen-res-cmp
-        property(self.rated-power) = /rated-power(resistor)
-        match(TCR: TCR): property(self.TCR) = [positive(TCR), negative(TCR)]
+
+        ; Include parts-db component properties
+        map(to-jitx, properties(component))
+
         ; spice :
         ;   "[R] <p[1]> <p[2]> <resistance>"
-        set-properties-for-vendor-part-numbers(resistor)
+
       my-resistor
 
 ; ========================================================
@@ -303,7 +284,7 @@ defstruct Capacitor <: Component :
   rated-current-rms: Double|False ; Maximum rms current rating from manufacturer (Amperes)
   sellers: Tuple<Seller>|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
-  component: ComponentCode
+  component: ComponentCode with: (as-method => true)
   vendor-part-numbers: Tuple<KeyValue<String, String>> with: (as-method => true)
 
 defstruct ESR :
@@ -339,7 +320,7 @@ public defn Capacitor (raw-json: JObject) -> Capacitor :
             optional-double(json, "rated-current-rms"),
             parse-sellers(json),
             optional-double(json, "resolved_price"),
-           ComponentCode(json["component"] as JObject),
+            ComponentCode(json["component"] as JObject),
             parse-vendor-part-numbers(json))
 
 defn parse-esr (json: JObject) -> ESR|False :
@@ -436,8 +417,6 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
           ;   spice :
           ;     "[C] <p[1]> <p[2]> <capacitance(capacitor)>"
 
-        set-properties-for-vendor-part-numbers(capacitor)
-
         emodel = EModel-Capacitor(capacitance(capacitor),
                                 emodel-pourcentage-tolerance(tolerance(capacitor)),
                                 double-or-unknown(rated-voltage(capacitor)),
@@ -446,31 +425,9 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
                                 string-or-unknown(temperature-coefficient(capacitor)),
                                 UNKNOWN) ; FIXME: find out the dielectric information (look at type and anode?)
         reference-prefix = "C"
-        val rated-temperature = rated-temperature(capacitor)
-        val capacitance = capacitance(capacitor)
-        val tolerance = tolerance(capacitor)
-        ; Backwards compatibility
-        property(self.capacitor) = true
-        ; This is how parts-db does it
-        property(self.category) = "capacitor"
-        property(self.trust) = trust(capacitor)
-        property(self.x) = x(capacitor)
-        property(self.y) = y(capacitor)
-        property(self.z) = z(capacitor)
-        property(self.mounting) = mounting(capacitor)
-        match(rated-temperature: Toleranced): property(self.rated-temperature) = rated-temperature
-        property(self.metadata) = metadata(capacitor)
-        property(self.type) = type(capacitor)
-        match(tolerance: MinMaxRange): property(self.tolerance) = [min(tolerance), max(tolerance)]
-        property(self.capacitance) = capacitance
-        property(self.anode) = anode(capacitor)
-        property(self.electrolyte) = electrolyte(capacitor)
-        property(self.temperature-coefficient) = temperature-coefficient(capacitor)
-        match(esr: ESR): property(self.esr) = value(esr)
-        match(esr: ESR): property(self.esr-frequency) = frequency(esr)
-        property(self.rated-voltage) = /rated-voltage(capacitor)
-        property(self.rated-current-pk) = rated-current-pk(capacitor)
-        property(self.rated-current-rms) = rated-current-rms(capacitor)
+
+        ; Include parts-db component properties
+        map(to-jitx, properties(component))
 
       my-capacitor
 
@@ -563,7 +520,7 @@ defstruct Inductor <: Component :
   self-resonant-frequency: Double|False ; Frequency at which inductor impedance becomes very high / open circuit (freq in Hz)
   sellers: Tuple<Seller>|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
-  component: ComponentCode
+  component: ComponentCode with: (as-method => true)
   vendor-part-numbers: Tuple<KeyValue<String, String>> with: (as-method => true)
 
 public defn Inductor (raw-json: JObject) -> Inductor :
@@ -642,33 +599,12 @@ defmethod to-jitx (inductor: Inductor) -> Instantiable :
                                 emodel-pourcentage-tolerance(tolerance(inductor)),
                                 double-or-unknown(current-rating(inductor)))
         reference-prefix = "L"
-        val rated-temperature = rated-temperature(inductor)
-        val tolerance = tolerance(inductor)
-        ; Backwards compatibility
-        property(self.inductor) = true
-        ; This is how parts-db does it
-        property(self.category) = "inductor"
-        property(self.trust) = trust(inductor)
-        property(self.x) = x(inductor)
-        property(self.y) = y(inductor)
-        property(self.z) = z(inductor)
-        property(self.mounting) = mounting(inductor)
-        match(rated-temperature: Toleranced): property(self.rated-temperature) = rated-temperature
-        property(self.case) = /case(inductor)
-        property(self.metadata) = metadata(inductor)
-        property(self.type) = type(inductor)
-        match(tolerance: MinMaxRange): property(self.tolerance) = [min(tolerance), max(tolerance)]
-        property(self.inductance) = inductance
-        property(self.material-core) = material-core(inductor)
-        property(self.shielding) = shielding(inductor)
-        property(self.current-rating) = current-rating(inductor)
-        property(self.saturation-current) = saturation-current(inductor)
-        property(self.dc-resistance) = dc-resistance(inductor)
-        property(self.quality-factor) = quality-factor(inductor)
-        property(self.self-resonant-frequency) = self-resonant-frequency(inductor)
+
+        ; Include parts-db component properties
+        map(to-jitx, properties(component))
+
         spice :
           "[L] <p[1]> <p[2]> <inductance>"
-        set-properties-for-vendor-part-numbers(inductor)
       my-inductor
 
 ; ========================================================
