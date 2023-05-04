@@ -22,27 +22,20 @@ defpackage ocdb/utils/parts :
 ;============ Public API ==============
 ;======================================
 
-; TODO: JITX-4034 - Remove these warnings
-
-; WARNING: This is an alpha feature at the moment.
 public defn PartsDBComponent (user-properties:Tuple<KeyValue>) -> Component :
   val query-properties = remove-duplicate-keys $ [
-    ["_type" => "parts-db"],
     user-properties
   ]
-  parse-component $ dbquery-first(query-properties) as JObject
+  parse-component $ dbquery-first-allow-non-stock(query-properties) as JObject
 
-; WARNING: This is an alpha feature at the moment.
 public defn PartsDBComponents (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Component> :
   val query-properties = remove-duplicate-keys $ [
-    ["_type" => "parts-db"],
     user-properties
   ]
   map{parse-component, _} $ dbquery(query-properties, limit) as Tuple<JObject>
 
-; WARNING: This is an alpha feature at the moment.
 public defstruct Part <: Component :
-  component: ComponentCode
+  component: ComponentCode with: (as-method => true)
   description: String
   manufacturer: String
   mpn: String
@@ -65,20 +58,15 @@ with :
 
 ; Parse parts conditionally, based on their category.
 public defn parse-component (json: JObject) -> Component :
-  val component-code = json["component"] as JObject
-  match(component-code["landpattern"]):
-    (lp:JObject):
-      ; If the landpattern is included, this part should have everything it needs.
+  match(json["category"]):
+    (c:String):
+      switch(c):
+        "capacitor": Capacitor(json)
+        "inductor": Inductor(json)
+        "resistor": Resistor(json)
+        else: Part(json)
+    (c:JNull):
       Part(json)
-    (c):
-      ; Otherwise, fall back on the V1 deserializers, which inject everything for 2-pin passives.
-      ; We still haven't migrated all the OCDB generative logic to the parts-db population script.
-      match(json["category"]):
-        (c:String):
-          switch(c):
-            "capacitor": Capacitor(json)
-            "inductor": Inductor(json)
-            "resistor": Resistor(json)
 
 ;======================================
 ;============= Internals ==============
@@ -112,6 +100,7 @@ public defstruct ComponentCode :
   description: String
   manufacturer: String
   mpn: String
+  datasheet: String
   reference_prefix: String
   emodel: EModel|False
   pin-properties: False|PinPropertiesCode
@@ -260,6 +249,7 @@ public defn ComponentCode (json: JObject) -> ComponentCode :
     json["description"] as String,
     json["manufacturer"] as String,
     json["mpn"] as String,
+    json["datasheet"] as String,
     json["reference_prefix"] as String,
     emodel,
     PinPropertiesCode(json["pin_properties"] as JObject),
@@ -522,6 +512,8 @@ public defn to-jitx (c: ComponentCode) -> Instantiable :
     match(mpn: String) :
       mpn = mpn
 
+    datasheet = datasheet(c)
+
     val emodel = emodel(c)
     match(emodel: EModel) :
       emodel = emodel
@@ -627,7 +619,7 @@ defn to-jitx (nc: NoConnectCode) :
     val jitx-pin = self.(to-ref(/pin(nc)))
     no-connect(jitx-pin)
 
-defn to-jitx (prop: ComponentPropertyCode) :
+public defn to-jitx (prop: ComponentPropertyCode) :
   inside pcb-component :
     val prop-name = name(prop)
     val prop-value = value(prop)
@@ -895,7 +887,7 @@ public-when(TESTING) defn PCBLayerValue (json: JObject) -> PCBLayerValue :
     Text(json["text"] as JObject),
   )
 
-public-when(TESTING) defstruct LandPatternCode :
+public defstruct LandPatternCode :
   name: String
   pads: Tuple<LandPatternPadCode>
   pcb-layer-reference: PCBLayerReference
