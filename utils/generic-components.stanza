@@ -901,7 +901,7 @@ public pcb-component hole-component (hole-shape:Shape):
   reference-prefix = "H"
 
 ; Add mounting holes to the board given its shape, a screw size, and hole indices to exclude.
-public defn add-mounting-holes (board-shape:Shape, screw-size:String|Double, no-hole:Tuple<Int>) :
+public defn add-mounting-holes (board-shape:Shape, screw-size:String|Double, no-hole:Tuple<Int> -- offset:Double = 0.0) :
   val d = dims(board-shape)
   val board = Rectangle(x(d), y(d))
   inside pcb-module :
@@ -918,7 +918,11 @@ public defn add-mounting-holes (board-shape:Shape, screw-size:String|Double, no-
           else : fatal("Unsupported screw-size %_ for mounting hole" % [screw])
       (diameter:Double) : diameter / 2.0
       (f) : fatal("Unsupported call to mounting hole")
-    val offs = r * 6.0 ;1.5X bolt diameter * 2
+    val offs = 
+      if offset > 0.0 :
+        r * 2.0 + (offset);* 6.0 ;1.5X bolt diameter * 2
+      else :
+        r * 6.0
     for (l in grid-locs(2, 2, w - offs, h - offs), i in 1 through 4) do :
       if not contains?(no-hole, i) :
         inst hole : mounting-hole(r)
