@@ -208,12 +208,76 @@ public pcb-bundle usb-c-full-bundle :
   pin SSTXN2
   
 public pcb-bundle rgmii :
-  port txd : pin[4]
+  port txd : pin[4] 
   port rxd : pin[4]
+  pin tx-clk  ; should be txc
+  pin tx-ctrl ; tx-ctl
+  pin rx-clk  ; rxc
+  pin rx-ctrl ; rx-ctl
+
+public pcb-bundle miim :
+  pin mdc
+  pin mdio
+
+; Gigabit Media Independent Interface (GMII)
+; https://en.wikipedia.org/wiki/Media-independent_interface#GMII
+public pcb-bundle mii (): 
+  pin gtxclk
+  pin txclk
+  port txd : pin[8]
+  pin txen
+  pin txer
+  pin rxclk
+  port rxd : pin[8]
+  pin rxdv
+  pin rxer
+  pin col
+  pin cs
+
+
+public pcb-enum ocdb/utils/bundles/MIIPins-Extra:
+  ; Optional on MII
+  MII-TX-ER  
+
+; Standard Media Independent Interface (MII)
+; https://en.wikipedia.org/wiki/Media-independent_interface#Standard_MII
+public pcb-bundle mii (pins:Tuple<MIIPins-Extra>): 
   pin tx-clk
-  pin tx-ctrl
+  pin tx-en
+  port txd : pin[4]
   pin rx-clk
-  pin rx-ctrl
+  port rxd : pin[4]
+  pin rx-dv
+  pin rx-er
+  pin crs
+  pin col
+  for p in pins do:
+    switch(p):
+      MII-TX-ER : make-pin(`tx-er)
+
+public defn mii () : 
+  ; Without tx error
+  mii([])
+
+public pcb-enum ocdb/utils/bundles/RMIIPins-Extra:
+  ; Optional on RMII
+  RMII-RX-ER  
+
+; Reduced Media Independent Interface (RMII)
+; https://en.wikipedia.org/wiki/Media-independent_interface#RMII
+public pcb-bundle rmii (pins:Tuple<RMIIPins-Extra>) :
+  pin ref-clk
+  port txd : pin[2]
+  pin tx-en
+  port rxd : pin[2]
+  pin crs-dv  
+  for p in pins do:
+    switch(p):
+      RMII-RX-ER : make-pin(`rx-er)
+
+; Default implementation with no rx-er
+public defn rmii ():
+  rmii([])
 
 public pcb-bundle ethernet-1000 :
   port mdi : diff-pair[4]
@@ -343,6 +407,26 @@ public defn get-bundle-by-name (name:String, options:Tuple<String>) -> Bundle | 
       spi-controller()
     else :
       fatal("Bundle '%_' is not supported." % [name])
+
+
+public pcb-enum ocdb/utils/bundles/ULPIBusMode:
+  ULPI-SDR-8x
+  ULPI-DDR-4x
+
+defn ULPI-PortArray (cnt:Int) -> PortArray : 
+  PortArray(SinglePin(), to-tuple $ 0 to cnt)
+
+public pcb-bundle ulpi (mode:ULPIBusMode) :
+  pin dir
+  pin stp
+  pin nxt
+  pin clk
+  switch(mode):
+    ULPI-SDR-8x: make-port(`d, ULPI-PortArray(8))
+    ULPI-DDR-4x: make-port(`d, ULPI-PortArray(4))
+
+public defn ulpi () :
+  ulpi(ULPI-SDR-8x)
 
 public defn get-bundle-by-name (name:String) -> Bundle | [Bundle, Bundle] :
   get-bundle-by-name(name, [])
