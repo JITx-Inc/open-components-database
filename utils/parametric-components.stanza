@@ -102,7 +102,7 @@ public pcb-module parametric-inductor (user-params:Tuple<KeyValue>) :
   property(self.parametric) = true ; property to set so that we know this is a parametric comp.
   property(self.inductor) = true
   property(self.reference-prefix) = "L"
-  val params = remove-duplicate-keys([smd-query-properties() user-params])
+  val params = normalize-params([smd-query-properties() user-params])
 
   ; store the de-duped argument list in a property to retrieve it later
   property(self.user-params) = user-params
@@ -170,7 +170,7 @@ public pcb-module parametric-capacitor (user-params:Tuple<KeyValue>) :
   property(self.parametric) = true ; property to set so that we know this is a parametric comp.
   property(self.capacitor) = true
   property(self.reference-prefix) = "C"
-  val params = remove-duplicate-keys([smd-query-properties() user-params])
+  val params = normalize-params([smd-query-properties() user-params])
 
   ; store the de-duped argument list in a property to retrieve it later
   property(self.user-params) = user-params
@@ -258,7 +258,7 @@ public pcb-module parametric-resistor (user-params:Tuple<KeyValue>) :
   property(self.parametric) = true ; property to set so that we know this is a parametric comp.
   property(self.resistor) = true
   property(self.reference-prefix) = "R"
-  val params = remove-duplicate-keys([smd-query-properties() user-params])
+  val params = normalize-params([smd-query-properties() user-params])
 
   ; store the deduped argument list in a property to retrieve it later
   property(self.user-params) = user-params
@@ -331,6 +331,23 @@ public defn parametric-resistor (res:Double|Toleranced, tol:Double) -> Instantia
 ; ========================================================
 ; ========== parametric part helper functions ============
 ; ========================================================
+
+public defn normalize-params (hs:Seqable<Seqable<KeyValue<String, ?>>>) -> Tuple<KeyValue<String, ?>> :
+  seq(substitute-params, hs)
+    $> remove-duplicate-keys
+
+; Substitute user params to match expectations:
+;   - https://en.wikipedia.org/wiki/Principle_of_least_astonishment
+defn substitute-params (params: Seqable<KeyValue<String, ?>>) -> Tuple<KeyValue<String, ?>> :
+  to-tuple $ for kv in params seq :
+    switch {key(kv) == _} :
+      "minimum_quantity" : "max-minimum_quantity" => value(kv)
+      "stock" : "min-stock" => value(kv)
+      else :
+        kv
+
+defn remove-duplicate-keys (hs:Seqable<Seqable<KeyValue<String, ?>>>) -> Tuple<KeyValue<String, ?>> :
+  to-tuple $ to-hashtable<String, ?>(cat-all(hs))
 
 ; ----- proposal ----
 public defn between-std-val (v:Toleranced, tol:Double) -> Double :

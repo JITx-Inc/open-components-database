@@ -1,5 +1,5 @@
 #use-added-syntax(jitx)
-defpackage ocdb/designs/checks/inductors :
+defpackage ocdb/designs/run-checks/resistors :
   import core
   import collections
   import jitx
@@ -16,65 +16,61 @@ defpackage ocdb/designs/checks/inductors :
   import ocdb/utils/design-vars
   import ocdb/utils/generic-components
 
-pcb-component inductor-pass :
-  reference-prefix = "L"
-
+pcb-component resistor-pass :
+  reference-prefix = "R"
   pin-properties :
     [ pin : Ref | pads : Int ... ]
     [ p[1]      | 1              ]
     [ p[2]      | 2              ]
   
   assign-landpattern(ipc-two-pin-landpattern("0603"))
-  val sym = inductor-sym()
+  val sym = resistor-sym()
   symbol =
     sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
 
-  property(self.inductor)       = true
-  property(self.dc-resistance)  = 16.0
-  property(self.rated-power)    = 5.0
-  property(self.inductance)     = 1.0e-6
+  property(self.resistor)    = true
+  property(self.resistance)  = 1.0e3
+  property(self.rated-power) = 1.0
   property(self.rated-temperature) = min-max(-55.0, 100.0)
 
-pcb-component inductor-fail :
-  reference-prefix = "L"
-
+pcb-component resistor-fail :
+  reference-prefix = "R"
   pin-properties :
     [ pin : Ref | pads : Int ... ]
     [ p[1]      | 1              ]
     [ p[2]      | 2              ]
   
   assign-landpattern(ipc-two-pin-landpattern("0603"))
-  val sym = inductor-sym()
+  val sym = resistor-sym()
   symbol =
     sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
 
-  property(self.inductor)       = true
-  property(self.dc-resistance)  = 16.0
-  property(self.rated-power)    = 0.25
-  property(self.inductance)     = 1.0e-6
+  property(self.resistor)    = true
+  property(self.resistance)  = 1.0  ; 1 ohm
+  property(self.rated-power) = 0.25 ; .25 W
   property(self.rated-temperature) = min-max(-55.0, 100.0)
 
-pcb-component inductor-info :
-  reference-prefix = "L"
-
+pcb-component resistor-info :
+  reference-prefix = "R"
   pin-properties :
     [ pin : Ref | pads : Int ... ]
     [ p[1]      | 1              ]
     [ p[2]      | 2              ]
   
   assign-landpattern(ipc-two-pin-landpattern("0603"))
-  val sym = inductor-sym()
+  val sym = resistor-sym()
   symbol =
     sym(self.p[1] => sym.p[1], self.p[2] => sym.p[2])
 
-  property(self.inductor)       = true
+  property(self.resistor) = true
 
-public pcb-module inductors :
+public pcb-module resistors :
   port power : ocdb/utils/bundles/power
-  val answer = dbquery(["category" => "inductor", "inductance" => 1.0e-6], 1)
-  inst Lreal : smd-inductor(1.0e-6)
-  inst Lpass : inductor-pass
-  inst Lfail : inductor-fail
-  inst Linfo : inductor-info
-  net VDD (power.vdd, Lreal.p[1], Lpass.p[1], Lfail.p[1], Linfo.p[1])
-  net GND (power.gnd, Lreal.p[2], Lpass.p[2], Lfail.p[2], Linfo.p[2])
+
+  inst Rreal : chip-resistor(1.0e3)
+  inst Rfail : resistor-fail
+  inst Rpass : resistor-pass
+  inst Rinfo : resistor-info
+  
+  net (power.vdd, Rreal.p[1], Rfail.p[1], Rpass.p[1], Rinfo.p[1])
+  net (power.gnd, Rreal.p[2], Rfail.p[2], Rpass.p[2], Rinfo.p[2])

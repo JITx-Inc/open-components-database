@@ -49,14 +49,24 @@ cd ..
 echo "Launching ocdb designs..."
 cd open-components-database/designs
 # tutorial.stanza and mcu.stanza use part sourcing more
-designs=(tutorial.stanza
-         ble-mote.stanza
-         mcu.stanza
+designs=(ble-mote.stanza
+         can-stm32.stanza
          class-a.stanza
+         comprehensive-checks.stanza
+         doc-examples.stanza
          ethernet-fmc.stanza
+         grid-resistors.stanza
+         lp-examples.stanza
+         mcu.stanza
+         power-monitor.stanza
+         # power-state-demo.stanza       # fails
          smd-landpatterns.stanza
          test-component-checks.stanza
-         voltage-divider.stanza)
+         tutorial.stanza
+         usb-accel.stanza
+         usb-light.stanza          # no board?
+         voltage-divider.stanza
+         run-checks/checked-design.stanza)
 
 for filename in "${designs[@]}"; do
     echo "Running $filename..."
