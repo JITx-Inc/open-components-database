@@ -18,6 +18,18 @@ defpackage ocdb/utils/parts :
   import ocdb/utils/generic-components
   import ocdb/utils/property-structs
 
+; HACK: prototype to allow injecting local 3d model files
+public defn create-model-3d (filename: String) -> Model3D :
+  ; Relative to "open-components-database/utils"
+  val path = to-string("../../%_" % [filename])
+  Model3D(
+    path,
+    Vec3D(0.0, 0.0, 0.0),
+    ; Pat: Has to be non-zero to show up in Kicad (not sure why?)
+    Vec3D(1.0, 1.0, 1.0),
+    Vec3D(0.0, 0.0, 0.0),
+  )
+
 ;======================================
 ;============ Public API ==============
 ;======================================
@@ -494,9 +506,15 @@ defn NoConnectCode (json: JObject) -> NoConnectCode :
   NoConnectCode(PinByTypeCode(json["pin"] as JObject))
 
 public defmethod to-jitx (part: Part) -> Instantiable :
-  to-jitx $ component(part)
+  to-jitx(part, false)
+
+public defmethod to-jitx (part: Part, model-3d: Model3D|False) -> Instantiable :
+  to-jitx(component(part), model-3d)
 
 public defn to-jitx (c: ComponentCode) -> Instantiable :
+  to-jitx(c, false)
+
+public defn to-jitx (c: ComponentCode, model-3d: Model3D|False) -> Instantiable :
   pcb-component my-component :
     name = name(c)
 
@@ -532,7 +550,7 @@ public defn to-jitx (c: ComponentCode) -> Instantiable :
       val pad-name = name(pp)
       jitx-pads-by-pcb-pad-name[pad-name] = jitx-pad
 
-    val landpattern-def = to-jitx(landpattern(c) as LandPatternCode, jitx-pads-by-pcb-pad-name)
+    val landpattern-def = to-jitx(landpattern(c) as LandPatternCode, jitx-pads-by-pcb-pad-name, model-3d)
     assign-landpattern(landpattern-def)
 
     assign-symbols(
@@ -982,7 +1000,7 @@ defn Side (s: String) -> Side :
     "Top": Top
     "Bottom": Bottom
 
-defn to-jitx (lp: LandPatternCode, jitx-pads-by-pcb-pad-name: HashTable<String, Pad>) -> LandPattern :
+defn to-jitx (lp: LandPatternCode, jitx-pads-by-pcb-pad-name: HashTable<String, Pad>, model-3d:Model3D|False) -> LandPattern :
   pcb-landpattern my-landpattern :
     name = name(lp)
     for p in /pads(lp) do :
@@ -998,6 +1016,9 @@ defn to-jitx (lp: LandPatternCode, jitx-pads-by-pcb-pad-name: HashTable<String, 
     do(to-jitx, layers(lp))
     do(to-jitx, geometries(lp))
     do(to-jitx, model3ds(lp))
+
+    match(model-3d:Model3D) :
+      to-jitx(model-3d)
 
   my-landpattern
 
