@@ -7,7 +7,6 @@ defpackage ocdb/utils/generic-components:
   import jitx
   import jitx/commands
   import jitx/errors
-  import jitx/http
 
   import lang-utils with :
     prefix(min-max) => lang-
@@ -164,11 +163,7 @@ public defn database-parts (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<In
 public defn smd-query-properties () -> Tuple<KeyValue<String, ?>> :
   ["mounting" => "smd"
    "case" => get-valid-pkg-list()
-   "minimum_quantity" => 1
    "min-stock" => 5 * DESIGN-QUANTITY]
-
-public defn remove-duplicate-keys (hs:Seqable<Seqable<KeyValue<String, ?>>>) -> Tuple<KeyValue<String, ?>> :
-  to-tuple $ to-hashtable<String, ?>(cat-all(hs))
 
 ; ========================================================
 ; ========== Handle min/max value searching ==============
@@ -220,7 +215,7 @@ defn find-subs-comp (params:Tuple<KeyValue>, param-name:String) :
 
 ; Generic ceramic capacitor from database (of 600k options)
 public defn ceramic-cap (user-params:Tuple<KeyValue>) -> Instantiable :
-  val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+  val params = normalize-params $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         user-params]
   val my-params = replace-params(params)
@@ -229,8 +224,8 @@ public defn ceramic-cap (user-params:Tuple<KeyValue>) -> Instantiable :
   catch (e:jitx/errors/NoComponentMeetingRequirements) :
     println("No capacitor found that satisfies requirements.")
     find-subs-comp(params, "capacitance")
-  catch (e:HTTPError) :
-    println("HTTP error connecting to parts database.")
+  catch (e:QueryInternetConnectionError) :
+    println("Internet connection error while connecting to parts database.")
     find-subs-comp(params, "capacitance")
   ; we are not catching the following errors so that the normal error handlers can provide 
   ; more detailed feedback. However the design will stop compiling and will require the user
@@ -247,7 +242,7 @@ public defn ceramic-cap (cap:Double|Toleranced, tolerance:Double) -> Instantiabl
   ceramic-cap(["capacitance" => cap "tolerance" => tolerance])
 
 public defn ceramic-caps (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
-  val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+  val params = normalize-params $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         user-params]
   map(to-jitx, Capacitors(replace-params(params), limit))
@@ -260,7 +255,7 @@ public defn look-up-ceramic-caps (attribute: String) -> Tuple :
   look-up-ceramic-caps(attribute, [])
 
 public defn look-up-ceramic-caps (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
-  val params = remove-duplicate-keys $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+  val params = normalize-params $ [["type" => "ceramic" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         filter-properties]
   look-up-capacitors(attribute, replace-params(params))
@@ -270,7 +265,7 @@ public defn look-up-ceramic-caps (attribute: String, filter-properties:Tuple<Key
 ; ========================================================
 ; Use for adding an instance of a tantalum cap from the JITX database to your design.
 public defn tantalum-cap (user-params:Tuple<KeyValue>) -> Instantiable :
-  val params = remove-duplicate-keys $ [["anode" => "tantalum" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+  val params = normalize-params $ [["anode" => "tantalum" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         user-params]
   val my-params = replace-params(params)
@@ -279,8 +274,8 @@ public defn tantalum-cap (user-params:Tuple<KeyValue>) -> Instantiable :
   catch (e:jitx/errors/NoComponentMeetingRequirements) :
     println("No capacitor found that satisfies requirements.")
     find-subs-comp(params, "capacitance")
-  catch (e:HTTPError) :
-    println("HTTP error connecting to parts database.")
+  catch (e:QueryInternetConnectionError) :
+    println("Internet connection error while connecting to parts database.")
     find-subs-comp(params, "capacitance")
 
 public defn tantalum-cap (cap:Double|Toleranced) -> Instantiable :
@@ -290,7 +285,7 @@ public defn tantalum-cap (cap:Double|Toleranced, tolerance:Double) -> Instantiab
   tantalum-cap(["capacitance" => cap "tolerance" => tolerance])
 
 public defn tantalum-caps (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
-  val params = remove-duplicate-keys $ [["anode" => "tantalum" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+  val params = normalize-params $ [["anode" => "tantalum" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         user-params]
   map(to-jitx, Capacitors(replace-params(params), limit))
@@ -303,7 +298,7 @@ public defn look-up-tantalum-caps (attribute: String) -> Tuple :
   look-up-tantalum-caps(attribute, [])
 
 public defn look-up-tantalum-caps (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
-  val params = remove-duplicate-keys $ [["anode" => "tantalum" "min-rated-voltage" => MIN-CAP-VOLTAGE]
+  val params = normalize-params $ [["anode" => "tantalum" "min-rated-voltage" => MIN-CAP-VOLTAGE]
                                         smd-query-properties()
                                         filter-properties]
   look-up-capacitors(attribute, replace-params(params))
@@ -327,15 +322,15 @@ doc: \<DOC>
   
 <DOC>
 public defn chip-resistor (user-params:Tuple<KeyValue>) -> Instantiable :
-  val params = remove-duplicate-keys([smd-query-properties() user-params])
+  val params = normalize-params([smd-query-properties() user-params])
   val my-params = replace-params(params)
   try :
     to-jitx $ Resistor(my-params)
   catch (e:jitx/errors/NoComponentMeetingRequirements) :
     println("No resistor found that satisfies requirements.")
     find-subs-comp(params, "resistance")
-  catch (e:HTTPError) :
-    println("HTTP error connecting to parts database.")
+  catch (e:QueryInternetConnectionError) :
+    println("Internet connection error while connecting to parts database.")
     find-subs-comp(params, "resistance")
 
 public defn chip-resistor (resistance:Double|Toleranced) -> Instantiable :
@@ -345,7 +340,7 @@ public defn chip-resistor (resistance:Double|Toleranced, tolerance:Double) -> In
   chip-resistor(["resistance" => resistance "tolerance" => tolerance])
 
 public defn chip-resistors (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
-  val params = remove-duplicate-keys([smd-query-properties() user-params])
+  val params = normalize-params([smd-query-properties() user-params])
   map(to-jitx, Resistors(replace-params(params), limit))
 
 ; ========================================================
@@ -356,7 +351,7 @@ public defn look-up-chip-resistors (attribute: String) -> Tuple :
   look-up-resistors(attribute, [])
 
 public defn look-up-chip-resistors (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
-  val params = remove-duplicate-keys([smd-query-properties() filter-properties])
+  val params = normalize-params([smd-query-properties() filter-properties])
   look-up-resistors(attribute, replace-params(params))
 
 ;============================================================
@@ -365,15 +360,15 @@ public defn look-up-chip-resistors (attribute: String, filter-properties:Tuple<K
 
 ; Generic inductors from database of standard packages (0402, 0603... 10k options)
 public defn smd-inductor (user-params:Tuple<KeyValue>) -> Instantiable :
-  val params = remove-duplicate-keys([smd-query-properties() user-params])
+  val params = normalize-params([smd-query-properties() user-params])
   val my-params = replace-params(params)
   try :
     to-jitx $ Inductor(my-params)
   catch (e:jitx/errors/NoComponentMeetingRequirements) :
     println("No inductor found that satisfies requirements.")
     find-subs-comp(params, "inductance")
-  catch (e:HTTPError) :
-    println("HTTP error connecting to parts database.")
+  catch (e:QueryInternetConnectionError) :
+    println("Internet connection error while connecting to parts database.")
     find-subs-comp(params, "inductance")
 
 public defn smd-inductor (ind:Double|Toleranced) -> Instantiable :
@@ -383,7 +378,7 @@ public defn smd-inductor (ind:Double|Toleranced, tolerance:Double) -> Instantiab
   smd-inductor(["inductance" => ind "tolerance" => tolerance])
 
 public defn smd-inductors (user-params:Tuple<KeyValue>, limit: Int) -> Tuple<Instantiable> :
-  val params = remove-duplicate-keys([smd-query-properties() user-params])
+  val params = normalize-params([smd-query-properties() user-params])
   map(to-jitx, Inductors(replace-params(params), limit))
 
 ; ========================================================
@@ -394,7 +389,7 @@ public defn look-up-smd-inductors (attribute: String) -> Tuple :
   look-up-smd-inductors(attribute, [])
 
 public defn look-up-smd-inductors (attribute: String, filter-properties:Tuple<KeyValue>) -> Tuple :
-  val params = remove-duplicate-keys([smd-query-properties() filter-properties])
+  val params = normalize-params([smd-query-properties() filter-properties])
   look-up-inductors(attribute, replace-params(params))
 
 ; ========================================================
@@ -780,7 +775,7 @@ public defn  usb2-on-a-usb-c-connector ():
 public pcb-module usb2-on-a-usb-c-connector (conref:Instantiable):
   port usb-2 : usb-2
   port usb-c : usb-c
-  inst con : conref
+  public inst con : conref
   place(con) at loc(0.0, 0.0) on Top
   net (usb-c con.usb-c)
   net (usb-2.data.N con.usb-c.data[1].N con.usb-c.data[2].N)
@@ -1042,4 +1037,3 @@ public defn add-rgb-indicator (brightness:Double, proc:JITXObject, vin:JITXObjec
     net (vin, rgb.led.l.a)
     net (control-pins rgb.control-pins)
     rgb
-
