@@ -23,6 +23,20 @@ defpackage ocdb/utils/parts :
 ;============ Public API ==============
 ;======================================
 
+; HACK: prototype to allow injecting local 3d model files with optional user-settable vectors
+; the default values seem to work around 50% of the time for JLCPCB OBJ data
+public defn create-model-3d (filename: String -- P:Vec3D = Vec3D(0.0, -2.0, 0.0), S:Vec3D = Vec3D(0.4, 0.4, 0.4), R:Vec3D = Vec3D(180.0, 0.0, 0.0)) -> Model3D :
+  val path = to-string("%_" % [filename])
+  if file-exists?(path) :
+    Model3D(
+      path,
+      P,
+      S,
+      R,
+    )
+  else :
+    fatal("Expected 3D file %_ cannot be accessed. Did you provide the full path and correct name of the file?", path)
+
 public defn PartsDBComponent (user-properties:Tuple<KeyValue>) -> Component :
   val query-properties = normalize-params $ [
     user-properties
