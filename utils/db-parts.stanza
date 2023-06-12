@@ -47,6 +47,7 @@ public defstruct Sourcing :
 ;============================================================
 
 public pcb-struct ocdb/utils/db-parts/Seller :
+  updated-at: String|False
   company-name: String
   resolved-price: Double
   offers: Tuple<SellerOffer>
@@ -149,7 +150,7 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
   match(landpattern(component)) :
     (lp:LandPatternCode):
       ; If the landpattern is included, this part should have everything it needs.
-      to-jitx $ component
+      to-jitx(component, sellers(resistor))
     (c):
       ; Otherwise, fall back on the V1 deserializers, which inject everything for 2-pin passives.
       ; We still haven't migrated all the OCDB generative logic to the parts-db population script.
@@ -188,6 +189,7 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
 
         ; Include parts-db component properties
         map(to-jitx, properties(component))
+        set-sellers-as-property(sellers(resistor))
 
         ; spice :
         ;   "[R] <p[1]> <p[2]> <resistance>"
@@ -342,7 +344,7 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
   match(landpattern(component)):
     (lp:LandPatternCode):
       ; If the landpattern is included, this part should have everything it needs.
-      to-jitx $ component
+      to-jitx(component, sellers(capacitor))
     (c):
       ; Otherwise, fall back on the V1 deserializers, which inject everything for 2-pin passives.
       ; We still haven't migrated all the OCDB generative logic to the parts-db population script.
@@ -428,6 +430,7 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
 
         ; Include parts-db component properties
         map(to-jitx, properties(component))
+        set-sellers-as-property(sellers(capacitor))
 
       my-capacitor
 
@@ -563,7 +566,7 @@ defmethod to-jitx (inductor: Inductor) -> Instantiable :
   match(landpattern(component)):
     (lp:LandPatternCode):
       ; If the landpattern is included, this part should have everything it needs.
-      to-jitx $ component
+      to-jitx(component, sellers(inductor))
     (c):
       ; Otherwise, fall back on the V1 deserializers, which inject everything for 2-pin passives.
       ; We still haven't migrated all the OCDB generative logic to the parts-db population script.
@@ -602,6 +605,7 @@ defmethod to-jitx (inductor: Inductor) -> Instantiable :
 
         ; Include parts-db component properties
         map(to-jitx, properties(component))
+        set-sellers-as-property(sellers(inductor))
 
         spice :
           "[L] <p[1]> <p[2]> <inductance>"
@@ -768,6 +772,7 @@ defmethod print (o:OutputStream, s:Sourcing) :
 
 defmethod print (o:OutputStream, s:Seller) :
   val items = [
+    "updated-at = %_" % [updated-at(s)]
     "company-name = %_" % [company-name(s)]
     "resolved-price = %_" % [resolved-price(s)]
     "offers = (%_)" % [indented-list(offers(s))]]
@@ -857,7 +862,10 @@ public defn parse-sellers (json: JObject) -> Tuple<Seller>|False:
 
   if json-sellers is-not False :
     for json-seller in json-sellers as Tuple<JObject> map :
-      Seller{json-seller["company_name"] as String, json-seller["resolved_price"] as Double, _} $
+      val updated-at = match(get?(json-seller, "updated_at")) :
+        (s:String) : s
+        (_) : false
+      Seller{updated-at, json-seller["company_name"] as String, json-seller["resolved_price"] as Double, _} $
         for json-offer in json-seller["offers"] as Tuple<JObject> map :
           SellerOffer{int(json-offer["inventory_level"]), _} $
             for json-price in json-offer["prices"] as Tuple<JObject> map :
