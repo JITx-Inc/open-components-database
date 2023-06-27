@@ -33,13 +33,13 @@ public defn PartsDBComponent (user-properties:Tuple<KeyValue>) -> Component :
   val query-properties = normalize-params $ [
     user-properties
   ]
-  parse-component $ dbquery-first-allow-non-stock(query-properties) as JObject
+  parse-component{_, query-properties} $ dbquery-first-allow-non-stock(query-properties) as JObject
 
 public defn PartsDBComponents (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Component> :
   val query-properties = normalize-params $ [
     user-properties
   ]
-  map{parse-component, _} $ dbquery(query-properties, limit) as Tuple<JObject>
+  map{{parse-component(_, query-properties)}, _} $ dbquery(query-properties, limit) as Tuple<JObject>
 
 public defstruct Part <: Component :
   component: ComponentCode with: (as-method => true)
@@ -64,24 +64,24 @@ with :
   printer => true
 
 ; Parse parts conditionally, based on their category.
-public defn parse-component (json: JObject) -> Component :
+public defn parse-component (json: JObject, query-params:Tuple<KeyValue<String, ?>>) -> Component :
   match(json["category"]):
     (c:String):
       switch(c):
-        "capacitor": Capacitor(json)
-        "inductor": Inductor(json)
-        "resistor": Resistor(json)
-        else: Part(json)
+        "capacitor": Capacitor(json, query-params)
+        "inductor": Inductor(json, query-params)
+        "resistor": Resistor(json, query-params)
+        else: Part(json, query-params)
     (c:JNull):
-      Part(json)
+      Part(json, query-params)
 
 ;======================================
 ;============= Internals ==============
 ;======================================
 
-defn Part (json: JObject) -> Part :
+defn Part (json: JObject, query-params:Tuple<KeyValue<String, ?>>) -> Part :
   Part(
-    ComponentCode(json["component"] as JObject),
+    ComponentCode(json["component"] as JObject, query-params),
     json["description"] as String,
     json["manufacturer"] as String,
     json["mpn"] as String,
@@ -118,6 +118,7 @@ public defstruct ComponentCode :
   properties: Tuple<ComponentPropertyCode>
   bundles:Tuple<BundleCode>
   supports:Tuple<SupportCode>
+  query-params:Tuple<KeyValue<String, ?>>
 with :
   printer => true
 
@@ -227,7 +228,7 @@ public-when(TESTING) defstruct PowerPinCode :
 with :
   printer => true
 
-public defn ComponentCode (json: JObject) -> ComponentCode :
+public defn ComponentCode (json: JObject, query-params:Tuple<KeyValue<String, ?>>) -> ComponentCode :
   val name = json["name"] as String
   val json-empty:Tuple<JObject> = []
   val json-bundles = if key?(json, "bundles") :
@@ -267,6 +268,7 @@ public defn ComponentCode (json: JObject) -> ComponentCode :
     map(ComponentPropertyCode, json["properties"] as Tuple<JObject>),
     map(BundleCode, json-bundles),
     map(SupportCode, json-supports),
+    query-params
   )
 
 public defn VendorPartNumbers (json: JObject) -> Tuple<KeyValue<String, String>> :
@@ -507,7 +509,6 @@ public defn to-jitx (c: ComponentCode) -> Instantiable :
   to-jitx(c, false)
 
 public defn to-jitx (c: ComponentCode, sellers: Tuple<Seller>|False) -> Instantiable :
-  create-component-file(c)
   pcb-component my-component :
     name = name(c)
 
@@ -1047,6 +1048,8 @@ public-when(TESTING) defstruct SymbolCode :
   layer-reference: LayerReference
   layer-value: LayerValue
   layers: Tuple<SymbolLayerCode>
+with:
+  printer => true
 
 public-when(TESTING) defstruct SymbolPinCode :
   pin: PinByTypeCode
@@ -1055,6 +1058,8 @@ public-when(TESTING) defstruct SymbolPinCode :
   length: Double
   number-size: Double|False
   name-size: Double|False
+with:
+  printer => true
 
 public-when(TESTING) defstruct SymbolLayerCode :
   name: String
@@ -1221,7 +1226,8 @@ public defn to-file-code (c:ComponentCode) -> cg-FileCode :
     [component],
     [], [],         ; modules, stackups
     [], [], [], [], ; materials, layer-names, rules, opaque-rules
-    [], [], []      ; boards, functions, commands
+    [], [], [],     ; boards, functions, commands
+    comments
     ) where :
     val symbol = cg-SymbolCode{"my-symbol", _} $ for sym in symbols(c) map :
       cg-SymbolUnitCode(cg-DefaultAccessModifier, name(sym), map(t pins(sym)), map(t layers(sym)))
@@ -1240,19 +1246,28 @@ public defn to-file-code (c:ComponentCode) -> cg-FileCode :
       landpattern-name, to-symbol-assignment-codes(symbols(c)),
       to-tuple $ cat(to-power-pin-properties(pin-properties(c)) map(t properties(c)) )
     )
+    val q-str = string-join{_ ", "} $ for q in query-params(c) seq :
+      to-string $ "%~ => %~" % [key(q) value(q)]
+    val comments = [
+      cg-CommentCode(0, "This file is generated based on the parts database query below:")
+      cg-CommentCode(1, to-string $ "  database-part([%_])" % [q-str])
+    ]
 
-public defn create-component-file (c:ComponentCode) -> False :
+public defn create-component-file (c:ComponentCode, root-path:String|False) -> String :
   ; [TODO] check if what logic we are in
   val cg = CodeGenerator()
   val fc = to-file-code(c)
   generate-code(cg fc)
-  val absolute-path = path-join $ [get-cwd() cg-path(fc)]
+  val project-path = match(root-path) :
+    (s:String) : s
+    (_) : get-cwd()
+  val absolute-path = path-join $ [project-path cg-path(fc)]
   val absolute-dir = enclosing-dir(absolute-path)
   val ss = StringBuffer()
   print(ss, absolute-dir)
   create-dir-recursive(to-string(ss))
   spit(absolute-path flush(cg))
-  val stanza-proj-path = path-join $ [get-cwd() "stanza.proj"]
+  val stanza-proj-path = path-join $ [project-path "stanza.proj"]
   if file-exists?(stanza-proj-path) :
     val o = StringBuffer()
     print(o, "package %_ defined-in \"%_\"" % [cg-package(fc) cg-path(fc)])
@@ -1260,3 +1275,4 @@ public defn create-component-file (c:ComponentCode) -> False :
     val str = slurp(stanza-proj-path)
     if not substring?(str, defined-in-statement) :
       spit{stanza-proj-path, _} $ string-join([str to-string(o)], "\n")
+  string-join([cg-package(fc), "component"], "/")
