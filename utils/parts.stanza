@@ -1194,9 +1194,11 @@ public defn to-file-code (c:ComponentCode) -> cg-FileCode :
     match(pp:PinPropertiesCode) :
       map({cg-NoConnectCode(Ref(`self).(to-ref(pin(_))))} no-connects(pp))
     else : []
+  defn make-symbol-name (s:String) -> String :
+    string-join(["sym" s] "-")
   defn to-symbol-assignment-codes (syms:Tuple<SymbolCode>) -> Tuple<cg-SymbolAssignmentCode> :
     for sym in syms map :
-      cg-SymbolAssignmentCode(name(sym), to-string $ bank(sym), false)
+      cg-SymbolAssignmentCode(make-symbol-name $ name(sym), to-string $ bank(sym), false)
   defn t (p:ComponentPropertyCode) -> cg-PropertyCode :
     cg-PropertyCode(Ref(`self).(VarRef(name(p))), t $ value(p))
   defn t (v:JITXValue|None) -> cg-ValueCode :
@@ -1226,8 +1228,9 @@ public defn to-file-code (c:ComponentCode) -> cg-FileCode :
     [], [], [], [], ; materials, layer-names, rules, opaque-rules
     [], [], [],     ; boards, functions, commands
     ) where :
+
     val symbol = cg-SymbolCode{"my-symbol", _} $ for sym in symbols(c) map :
-      cg-SymbolUnitCode(cg-DefaultAccessModifier, name(sym), map(t pins(sym)), map(t layers(sym)))
+      cg-SymbolUnitCode(cg-DefaultAccessModifier, make-symbol-name(name(sym)), map(t pins(sym)), map(t layers(sym)))
     val pads = for p in pcb-pads(c) map :
       cg-PadCode(name(p), name(p), false, type(p), shape(p), map(t layers(p)), false)
       ; [TODO] soldermask-registration
