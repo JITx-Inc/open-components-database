@@ -1,9 +1,11 @@
 #use-added-syntax(jitx)
 defpackage ocdb/utils/parts :
   import core
+  import core/parsed-path
   import collections
   import json
   import lang-utils
+  import utils/file-system
 
   import jitx with :
     prefix(Resistor) => EModel-
@@ -11,6 +13,10 @@ defpackage ocdb/utils/parts :
     prefix(Inductor) => EModel-
   import jitx/commands
   import jitx/value
+  import jitx/importer2/sanitize
+  import jitx/code-generator/api
+  import jitx/code-generator/ir with:
+    prefix => cg-
 
   import ocdb/utils/box-symbol
   import ocdb/utils/bundles
@@ -260,7 +266,7 @@ public defn ComponentCode (json: JObject) -> ComponentCode :
     map(MetadataCode, json["metadata"] as Tuple<JObject>),
     map(ComponentPropertyCode, json["properties"] as Tuple<JObject>),
     map(BundleCode, json-bundles),
-    map(SupportCode, json-supports),
+    map(SupportCode, json-supports)
   )
 
 public defn VendorPartNumbers (json: JObject) -> Tuple<KeyValue<String, String>> :
@@ -1040,6 +1046,8 @@ public-when(TESTING) defstruct SymbolCode :
   layer-reference: LayerReference
   layer-value: LayerValue
   layers: Tuple<SymbolLayerCode>
+with:
+  printer => true
 
 public-when(TESTING) defstruct SymbolPinCode :
   pin: PinByTypeCode
@@ -1048,6 +1056,8 @@ public-when(TESTING) defstruct SymbolPinCode :
   length: Double
   number-size: Double|False
   name-size: Double|False
+with:
+  printer => true
 
 public-when(TESTING) defstruct SymbolLayerCode :
   name: String
@@ -1139,3 +1149,129 @@ defn to-jitx (p: SymbolPinCode) :
 defn to-jitx (l: SymbolLayerCode) :
   inside pcb-symbol :
     layer(name(l)) = shape(l)
+
+doc: \<public>
+Convert ComponentCode from parts-db into FileCode in code generator
+To avoid potential name conflict, the structs defined in code-generator/ir
+are prefixed with "cg-"
+All the "t" functions are the "transformer". If a specific form is needed,
+it is termed as "to-..."
+<public>
+public defstruct ToFileCodeError <: Exception :
+  msg : Printable|String
+
+public defn to-file-code (c:ComponentCode) -> cg-FileCode :
+  defn t (p:SymbolPinCode) -> cg-SymbolPinCode :
+    cg-SymbolPinCode(to-ref(/pin(p)), point(p), direction(p), length(p), number-size(p), name-size(p))
+  defn t (l:SymbolLayerCode) -> cg-SymbolLayerCode :
+    cg-SymbolLayerCode(name(l), shape(l))
+  defn t (p:PCBLayerCode) -> cg-PCBLayerCode :
+    cg-PCBLayerCode(layer(p) shape(p))
+  defn t (p:LandPatternPadCode) -> cg-LandPatternPadCode :
+    cg-LandPatternPadCode(to-ref(/pin(p)), cg-SimpleStanzaId(pcb-pad-name(p)), pose(p), side(p))
+  defn t (g:GeomCode) -> cg-GeomCode :
+    match(g) :
+      (c:CopperCode) :
+        cg-CopperCode(layer(c), shape(c))
+      (p:PourCode) :
+        cg-PourCode(layer(p), shape(p), isolate(p), rank(p), orphans(p))
+      (v:ViaCode) :
+        cg-ViaCode(type(v), start(v), end(v), center-point(v), radius(v), hole-radius(v))
+      (_) : throw(ToFileCodeError("Unrecognized GeomCode %_" % [g]))
+  defn to-pin-properties (pp:PinPropertiesCode|False) -> cg-PinPropertiesCode|False :
+    match(pp:PinPropertiesCode) :
+      cg-PinPropertiesCode(
+        [ cg-PinPropertiesHeaderCode("pin", cg-SimpleStanzaId("Ref"), false)
+          cg-PinPropertiesHeaderCode("pads", cg-SimpleStanzaId("Ref"), true)
+          cg-PinPropertiesHeaderCode("side", cg-SimpleStanzaId("Dir"), false)
+          cg-PinPropertiesHeaderCode("electrical-type", cg-SimpleStanzaId("String"), false)
+          cg-PinPropertiesHeaderCode("bank", cg-SimpleStanzaId("Int"), false)]
+        map(t pins(pp))
+      )
+  defn t (p:PinPropertyCode) -> cg-PinPropertyCode :
+    cg-PinPropertyCode(to-ref(/pin(p)) [map(to-ref pads(p)) direction(p) electrical-type(p) bank(p)])
+  defn to-no-connects (pp:PinPropertiesCode|False) :
+    match(pp:PinPropertiesCode) :
+      map({cg-NoConnectCode(Ref(`self).(to-ref(pin(_))))} no-connects(pp))
+    else : []
+  defn make-symbol-name (s:String) -> String :
+    string-join(["sym" s] "-")
+  defn to-symbol-assignment-codes (syms:Tuple<SymbolCode>) -> Tuple<cg-SymbolAssignmentCode> :
+    for sym in syms map :
+      cg-SymbolAssignmentCode(make-symbol-name $ name(sym), to-string $ bank(sym), false)
+  defn t (p:ComponentPropertyCode) -> cg-PropertyCode :
+    cg-PropertyCode(Ref(`self).(VarRef(name(p))), t $ value(p))
+  defn t (v:JITXValue|None) -> cg-ValueCode :
+    match(v:JITXValue & cg-ValueCode) : v
+    else : false
+  defn to-power-pin-properties (pp:PinPropertiesCode|False) -> Tuple<cg-PropertyCode> :
+    match(pp:PinPropertiesCode) :
+      map(t power-pins(pp))
+    else : []
+  defn t (pp:PowerPinCode) -> cg-PropertyCode :
+    val ref = Ref(`self).(to-ref(/pin(pp)))
+    val min = min-voltage(pp)
+    val max = max-voltage(pp)
+    val toleranced = cg-StanzaCall("ocdb/utils/property-structs/PowerPin(jitx/min-max)", [min, max])
+    cg-PropertyCode(ref.(VarRef(`power-pin)) toleranced)
+
+  ; Go!
+  val sanitized-manufacturer = sanitize-id-with-replacement(manufacturer(c))
+  val sanitized-mpn = sanitize-id-with-replacement(mpn(c))
+  val filename = string-join([sanitized-mpn "stanza"], ".")
+  val relative-path = string-join(["components" sanitized-manufacturer filename], "/")
+  val package-name = string-join(["components" sanitized-manufacturer sanitized-mpn], "/")
+  cg-FileCode(relative-path, ["jitx"], package-name, ["core" "jitx" "jitx/commands"],
+    [symbol], pads, landpatterns,
+    [component],
+    [], [],         ; modules, stackups
+    [], [], [], [], ; materials, layer-names, rules, opaque-rules
+    [], [], [],     ; boards, functions, commands
+    ) where :
+
+    val symbol = cg-SymbolCode{"my-symbol", _} $ for sym in symbols(c) map :
+      cg-SymbolUnitCode(cg-DefaultAccessModifier, make-symbol-name(name(sym)), map(t pins(sym)), map(t layers(sym)))
+    val pads = for p in pcb-pads(c) map :
+      cg-PadCode(name(p), name(p), false, type(p), shape(p), map(t layers(p)), false)
+      ; [TODO] soldermask-registration
+    val landpattern-name = "lp"
+    val landpatterns = match(landpattern(c)) :
+      (lp:LandPatternCode) :
+        [cg-LandPatternCode(cg-DefaultAccessModifier, landpattern-name, map(t /pads(lp)), map(t layers(lp)),
+          map(t geometries(lp)), model3ds(lp))]
+      (_) : []
+    val component = cg-ComponentCode(cg-PublicAccessModifier, "component",
+      name(c), description(c), manufacturer(c), mpn(c),
+      emodel(c), datasheet(c), to-pin-properties(pin-properties(c)), to-no-connects(pin-properties(c)),
+      landpattern-name, to-symbol-assignment-codes(symbols(c)),
+      to-tuple $ cat(to-power-pin-properties(pin-properties(c)) map(t properties(c)) )
+    )
+
+public defn create-component-file (c:ComponentCode, query-params:Tuple<KeyValue<String, ?>>, root-path:String|False) -> [String String]:
+  val cg = CodeGenerator()
+  val fc = to-file-code(c)
+  generate-code(cg fc)
+  val project-path = match(root-path) :
+    (s:String) : s
+    (_) : get-cwd()
+  val absolute-path = path-join $ [project-path cg-path(fc)]
+  val absolute-dir = enclosing-dir(absolute-path)
+  val ss = StringBuffer()
+  print(ss, absolute-dir)
+  create-dir-recursive(to-string(ss))
+
+  val f-str = flush(cg)
+  val q-str = string-join{_ ", "} $ for q in query-params seq :
+      to-string $ "%~ => %~" % [key(q) value(q)]
+  val comments = to-string $ \<S>; This file is generated based on the parts database query below:")
+;   database-part([%_])<S> % [q-str]
+  spit{absolute-path _} $ string-join([comments f-str], "\n")
+  val stanza-proj-path = path-join $ [project-path "stanza.proj"]
+  val o = StringBuffer()
+  print(o, "package %_ defined-in \"%_\"" % [cg-package(fc) cg-path(fc)])
+  val defined-in-statement = to-string(o)
+  val str = if file-exists?(stanza-proj-path) : slurp(stanza-proj-path)
+  else : ""   ; still create a stanza.proj staring from empty string
+  if not substring?(str, defined-in-statement) :
+    spit{stanza-proj-path, _} $ string-join([str to-string(o)], "\n")
+  [string-join([cg-package(fc), "component"], "/") absolute-path]
