@@ -1267,11 +1267,11 @@ public defn create-component-file (c:ComponentCode, , query-params:Tuple<KeyValu
 ;   database-part([%_])<S> % [q-str]
   spit{absolute-path _} $ string-join([comments f-str], "\n")
   val stanza-proj-path = path-join $ [project-path "stanza.proj"]
-  if file-exists?(stanza-proj-path) :
-    val o = StringBuffer()
-    print(o, "package %_ defined-in \"%_\"" % [cg-package(fc) cg-path(fc)])
-    val defined-in-statement = to-string(o)
-    val str = slurp(stanza-proj-path)
-    if not substring?(str, defined-in-statement) :
-      spit{stanza-proj-path, _} $ string-join([str to-string(o)], "\n")
+  val o = StringBuffer()
+  print(o, "package %_ defined-in \"%_\"" % [cg-package(fc) cg-path(fc)])
+  val defined-in-statement = to-string(o)
+  val str = if file-exists?(stanza-proj-path) : slurp(stanza-proj-path)
+  else : ""   ; still create a stanza.proj staring from empty string
+  if not substring?(str, defined-in-statement) :
+    spit{stanza-proj-path, _} $ string-join([str to-string(o)], "\n")
   string-join([cg-package(fc), "component"], "/")
