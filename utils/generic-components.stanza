@@ -585,17 +585,19 @@ public defn gen-led-cmp (pkg-name:String) :
 ; ========================================================
 ; These functions attach a passive component between two pins. e.g. strap a pull up resistor between an IO and VDD
 
-public defn bypass-cap-strap (power-pin:JITXObject, gnd-pin:JITXObject, params:Tuple<KeyValue>) -> JITXObject :
+defn bypass-cap-strap (power-pin:JITXObject, gnd-pin:JITXObject, capacitance:Double|Toleranced|False = false -- params:Tuple<KeyValue>, tol:Double|False = false) -> JITXObject :
   inside pcb-module:
-    val cap = cap-strap(gnd-pin, power-pin, params)
-    short-trace(cap.p[2], power-pin)
-    cap
-
-public defn bypass-cap-strap (first-pin:JITXObject, second-pin:JITXObject, capacitance:Double|Toleranced, tol:Double) :
-  bypass-cap-strap(first-pin, second-pin, ["capacitance" => capacitance "tolerance" => tol])
-
-public defn bypass-cap-strap (first-pin:JITXObject, second-pin:JITXObject, capacitance:Double|Toleranced) :
-  bypass-cap-strap(first-pin, second-pin, ["capacitance" => capacitance])
+    if capacitance:
+      if tol:
+        val cap = bypass-cap-strap(power-pin, gnd-pin, params = ["capacitance" => capacitance "tolerance" => tol])
+        cap
+      else:
+        val cap = bypass-cap-strap(power-pin, gnd-pin, params = ["capacitance" => capacitance])
+        cap
+    else:
+      val cap = cap-strap(gnd-pin, power-pin, params)
+      short-trace(cap.p[2], power-pin)
+      cap
 
 public defn bypass-caps (power-pin:JITXObject|Symbol, gnd-pin:JITXObject|Symbol, voltage:Double, caps:Tuple<Double|Toleranced>, name:Symbol) :
   inside pcb-module:
