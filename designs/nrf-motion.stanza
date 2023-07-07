@@ -12,6 +12,9 @@ defpackage ocdb/designs/nrf-motion:
 val board-shape = RoundedRectangle(28.0, 25.0, 3.0)
 
 OPTIMIZE-FOR = ["area"]
+DESIGN-QUANTITY = 100
+OPERATING-TEMPERATURE = min-max(-40.0 90.0)
+
 
 ; Setup the board
 defn setup-board () :
@@ -23,7 +26,7 @@ pcb-module nrf-motion :
 
   inst bat : database-part(["mpn" => "BS-08-B2AA016", "manufacturer" => "MYOUNG"])
 
-  inst nrf : ocdb/components/nordic/nRF52840/module(include-LFO? = false power-config = 5)
+  inst nrf : ocdb/components/nordic/nRF52840/module(include-LFO? = false power-config = 6)
 
   ; Add an accelerometer
   inst xl : ocdb/components/st-microelectronics/LIS3DH/module
@@ -47,10 +50,12 @@ pcb-module nrf-motion :
 
   require debug : swd([SWD-SWO]) from nrf.mcu
 
-
-
   add-testpoint([GND VDD])
   add-testpoint(pins(debug))
+
+  inst amp :  ocdb/modules/amplifiers/microphone-preamp
+  net (amp.power.gnd GND)
+  net (amp.power.vdd VDD)
 
   geom(GND) :
     copper-pour(LayerIndex(1), isolate = 0.2) = board-shape
