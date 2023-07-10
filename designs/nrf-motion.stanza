@@ -53,9 +53,24 @@ pcb-module nrf-motion :
   add-testpoint([GND VDD])
   add-testpoint(pins(debug))
 
+  inst microphone : database-part(["mpn" => "AP3722AT", "manufacturer" => "ALLPOWER(ShenZhen Quan Li Semiconductor)"])
   inst amp :  ocdb/modules/amplifiers/microphone-preamp
-  net (amp.power.gnd GND)
-  net (amp.power.vdd VDD)
+  inst load-sw : ocdb/modules/load-switch/discrete-mosfet()
+
+  net (load-sw.power VDD)
+  val cb = bypass-cap-strap(microphone.VDD, GND, 0.1e-6)
+  schematic-group([microphone cb]) = schematic-group(amp)
+  layout-group([microphone cb]) = layout-group(amp)
+  
+  net (amp.power.gnd GND microphone.GND0 microphone.GND1 load-sw.gnd)
+  net VDDA (amp.power.vdd load-sw.load microphone.VDD)
+  symbol(VDDA) = ocdb/utils/symbols/supply-sym
+  net (amp.in microphone.OUT)
+
+  require sw : gpio from nrf.mcu
+  require mic:adc from nrf.mcu
+  net (sw.gpio, load-sw.control)
+  net (mic.adc, amp.out)
 
   geom(GND) :
     copper-pour(LayerIndex(1), isolate = 0.2) = board-shape
@@ -75,7 +90,6 @@ set-main-module(main-module) ; Treat the provided module as a design, and compil
 run-checks("checks.txt")
 
 ; View the results
-
 view-board()
 view-schematic()
 view-design-explorer()
