@@ -23,35 +23,79 @@ public pcb-module microphone-preamp :
   port power : power
 
   inst op-amp : database-part(["mpn" => "MCP6001T-E/OT", "manufacturer" => "Microchip"])
-  cap-strap(op-amp.VIN+, in, 1.0e-6)
-  cap-strap(op-amp.VOUT, out, 1.0e-6)
   bypass-cap-strap(op-amp.VDD power.gnd, 10.0e-6)
   bypass-cap-strap(op-amp.VDD power.gnd, 10.0e-9)
   net (op-amp.VSS, power.gnd)
   net (op-amp.VDD, power.vdd)
 
-  ; Low pass input filter and bias
-  inst r : chip-resistor(["resistance" => 10.0e3 "tolerance" => 0.01])[4]
-  net (power.vdd r[0].p[1])
-  net (r[0].p[2] r[1].p[1] r[2].p[1])
-  bypass-cap-strap(r[1].p[1] power.gnd, 22.0e-6)
-  net (r[1].p[2] power.gnd)
+  ;  Amplifier is a standard inverting amplifier in a bandpass
+  ;    configuration.  
+  ; @TODO - compute bandpass filter parameters here. 
 
-  net (r[2].p[2] r[3].p[2])
-  cap-strap(r[2].p[2] power.gnd, 10.0e-6)
-  net (r[3].p[1] op-amp.VIN+)
+  val VDD = 3.0
+  val Vref = VDD / 2.0 
+  val G = 34.0 
+  val f-low = 100.0; 
+  val f-high = 20.0e3; 
 
-  ; Feedback
-  inst r-f : chip-resistor(27.0e3)
-  inst c-f : ceramic-cap(560.0e-12)
-  net (r-f.p[1] c-f.p[1] op-amp.VIN-)
-  net (r-f.p[2] c-f.p[2] op-amp.VOUT)
+  ; Feedback for setting the gain in the 
+  ;  pass band.
+  val Rf_v = 51.0e3
+  val Rg_v = Rf_v / G
 
-  ; High pass filter
+  ; Resistive divider for the ref on IN+
+  val Rl = Rf_v 
+  val Rh = Rl  ;@TODO equation for other resistor here. 
 
-  inst r-hp : chip-resistor(820.0)
-  net (r-hp.p[1] r-f.p[1])
-  cap-strap(r-hp.p[2] power.gnd, 3.3e-6)
+  ; @TODO checks on resistor values 1k < R < 1M
+
+  ; Compute the capacitor values. 
+  ;  The feedback cap sets the upper freq limit
+  ;    for the bandpass filter. 
+  val Cf_v = 1. / (2. * 3.14 * Rf_v * f-high)
+  ;  The input blocking cap sets the lower freq limit
+  val Cin_v = 1. / (2. * 3.14 * Rg_v * f-low )
+
+  ; @TODO checks on capacitor values 
+  ;  10pF < C < 10e-6
+
+  ; @TODO - check minimum voltage slew rate 
+  ; @TODO - check input voltage offset for noise 
+
+  ; Input High Pass
+  inst Cin : ceramic-cap(Cin_v)
+  inst Rg : chip-resistor(Rg_v)
+
+  net vin (in, Cin.p[1])
+  net (Cin.p[2], Rg.p[1])
+  net op- (op-amp.VIN-, Rg.p[2] )
+
+  ; Feedback Low Pass
+  inst Cf : ceramic-cap(Cf_v)
+  inst Rf : chip-resistor(Rf_v)
+  
+  net (op- Cf.p[1], Rf.p[1])
+  net vout (Cf.p[2], Rf.p[2], op-amp.VOUT, out)
+
+  ; Set the reference voltage of the output
+  ;  by applying a voltage divider. 
+  
+  inst R1 : chip-resistor(51.e3)
+  inst R2 : chip-resistor(51.e3) 
+
+  net (R1.p[1] power.vdd)
+  net vref (R1.p[2] R2.p[1])
+  net (R2.p[2] power.gnd)
+  net (vref op-amp.VIN+)
+
+  ; inst ref-divider : ocdb/modules/passive-circuits/voltage-divider(typ(VDD), typ(Vref), 5.0e-3)
+
+  ; net (ref-divider.lo power.gnd)
+  ; net (ref-divider.in power.vdd)
+  ; net op+ (ref-divider.out op-amp.VIN+)
+
+  ; Add a touch of filtering to the ref set point.
+  bypass-cap-strap(op-amp.VIN+ power.gnd, 1.0e-6)
 
   ; Noise calculation - https://www.ti.com/lit/pdf/slva043
   ; ENB - equivalent noise bandwidth - 1.57 * corner-frequency
@@ -64,24 +108,24 @@ public pcb-module microphone-preamp :
   ; R1 - resistor from V- to gnd
   ; R2 - feedback resistor
   ; R3 - resistor from V+ to gnd
-  val R1 = 820.0
-  val R2 = 27.0e3
-  val R3 = 20.0e3 ; Is this right? Confiuration does not match application note. 20k to biased reference voltage.
-  val A = (R1 + R2) / R1
-  ; iw - white current noise specification (input noise current density A/Hz^0.5)
-  val iw = 0.6e-15
-  ; finc - current noise corner frequency
-  val finc = 300.0 ; The same as the voltage corner?
-  ; ew - white noise voltage specification (Input noise current density V/Hz^0.5)
-  val ew = 28.0e-9
-  ; fenc - voltage noise corner specification (Figure 2-12 Hz)
-  val fenc = 300.0
+  ; val R1 = 820.0
+  ; val R2 = 27.0e3
+  ; val R3 = 20.0e3 ; Is this right? Confiuration does not match application note. 20k to biased reference voltage.
+  ; val A = (R1 + R2) / R1
+  ; ; iw - white current noise specification (input noise current density A/Hz^0.5)
+  ; val iw = 0.6e-15
+  ; ; finc - current noise corner frequency
+  ; val finc = 300.0 ; The same as the voltage corner?
+  ; ; ew - white noise voltage specification (Input noise current density V/Hz^0.5)
+  ; val ew = 28.0e-9
+  ; ; fenc - voltage noise corner specification (Figure 2-12 Hz)
+  ; val fenc = 300.0
 
-  val output-rms-voltage-noise = sqrt(ENB * (4.0 * k * T * R2 * A + 4.0 * k * T * R3 * pow(A, 2.0)) + 
-                                      pow(iw, 2.0) * (pow(R2, 2.0), + pow(R3, 2.0) * pow(A, 2.0)) * (finc * log(ENB) + ENB) + 
-                                      pow(ew, 2.0) *  pow(A,  2.0) * (fenc * log(ENB) + ENB))
+  ; val output-rms-voltage-noise = sqrt(ENB * (4.0 * k * T * R2 * A + 4.0 * k * T * R3 * pow(A, 2.0)) + 
+  ;                                     pow(iw, 2.0) * (pow(R2, 2.0), + pow(R3, 2.0) * pow(A, 2.0)) * (finc * log(ENB) + ENB) + 
+  ;                                     pow(ew, 2.0) *  pow(A,  2.0) * (fenc * log(ENB) + ENB))
 
-  println(output-rms-voltage-noise)
+  ; println(output-rms-voltage-noise)
 
   schematic-group(self) = microphone-preamp
   layout-group(self) = microphone-preamp
