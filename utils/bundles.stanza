@@ -329,6 +329,31 @@ public pcb-bundle mipi-d-phy :
   port clk : diff-pair
   port data : diff-pair
 
+
+; Operational Amplifier's are typically a differential input
+;   amplifier with a single-ended output.
+;   They may optionally include a TRIM input for correcting 
+;   input offset voltages.
+
+public pcb-enum ocdb/utils/bundles/OpAmp :
+  TRIM-OFFSET
+
+public pcb-bundle op-amp (pins:Tuple<ocdb/utils/bundles/OpAmp>) :
+  pin in+
+  pin in-
+  pin out
+  for p in pins do :
+    switch(p) :
+      TRIM-OFFSET : 
+        make-pin(`trim+)
+        make-pin(`trim-)
+
+; Helper for a simple op-amp bundle without 
+;   trim inputs.
+public defn op-amp () : 
+  op-amp([])
+
+
 ; Dynamic lookup for simplicity
 ; Could pre-populate for performance at some point, if needed
 public defn get-bundle-by-name (name:String, options:Tuple<String>) -> Bundle | [Bundle, Bundle] :
@@ -406,6 +431,10 @@ public defn get-bundle-by-name (name:String, options:Tuple<String>) -> Bundle | 
           "SPI-SDIO" : SPI-SDIO
     "spi-controller" :
       spi-controller()
+    "op-amp" : op-amp $
+      for option in options map : 
+        switch(option) : 
+          "TRIM" : TRIM-OFFSET
     else :
       fatal("Bundle '%_' is not supported." % [name])
 
@@ -431,3 +460,4 @@ public defn ulpi () :
 
 public defn get-bundle-by-name (name:String) -> Bundle | [Bundle, Bundle] :
   get-bundle-by-name(name, [])
+
