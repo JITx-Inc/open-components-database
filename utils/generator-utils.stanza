@@ -209,14 +209,16 @@ defn connected-group (obj: Pin|Net) :
 ; =======================================
 ; Attach the DNP (do not populate) to objects (components, array of instances, or module)
 ; =======================================
-public defn do-not-populate (objs:Seqable<JITXObject>) :
+public defn dnp (objs:Seqable<JITXObject>) :
   inside pcb-module :
     for obj in objs do :
-      match(instance-type(obj): SingleComponent) : property(obj.DNP) = true
-      else : do-not-populate $ component-instances(obj)
+      switch(instance-type(obj)):
+        SingleComponent: do-not-populate(obj)
+        else:
+          dnp $ component-instances(obj)
 
-public defn dnp (objs:Seqable<JITXObject>) :
-  do-not-populate(objs)
+public defn dnp (obj:JITXObject) :
+  dnp([obj])
 
 ; =======================================
 ; Attach the power generator to designs and loads.
