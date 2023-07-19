@@ -1,0 +1,47 @@
+#use-added-syntax(jitx, tests)
+defpackage ocdb/tests/bom-related : 
+  import core
+  import jitx
+  import jitx/commands
+  import ocdb/utils/generator-utils
+
+defn capture-output<?T> ( func : () -> ?T ) -> String :
+  val buf = StringBuffer(128)
+  val result:T = with-output-stream(buf, func)
+  to-string(buf)
+
+deftest(ocdb, bom-related) test-do-not-populate :
+
+  pcb-module UUT:
+    inst J10: ocdb/components/tag-connect/TC2050-IDC/module
+    inst J11: ocdb/components/tag-connect/TC2050-IDC/module
+
+  pcb-module M1:
+    inst J1 : ocdb/components/tag-connect/TC2050-IDC/module
+    inst J2 : ocdb/components/tag-connect/TC2050-IDC/module
+
+    inst J3: ocdb/components/tag-connect/TC2050-IDC/module
+    inst J4: ocdb/components/tag-connect/TC2050-IDC/module
+    inst J5: ocdb/components/tag-connect/TC2050-IDC/module 
+
+    inst MU : UUT
+
+    dnp(J1)
+    dnp([J3, J4, J5])
+    dnp(MU)
+
+  val output = capture-output({print-def(M1)})
+  println("Captured")
+  ; I expect to see 6 `DoNotPopulateStmt`s in the output
+  ;   and 7 component instances
+  val lines = split(output, "\n")
+  println("Split Output")
+  
+  defn has-substr (s:String) -> True|False : 
+    match(index-of-chars(s, "DoNotPopulateStmt")):
+      (x:Int) : true
+      (_:False) : false
+
+  val numStmts = count(has-substr, lines)
+  #EXPECT(numStmts == 6)
+  ; print-def(mod)
