@@ -1,0 +1,46 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/tag-connect/TC2030-CTX :
+  import core
+  import jitx
+  import jitx/commands
+  import ocdb/utils/symbols
+  import ocdb/utils/box-symbol
+  import ocdb/utils/bundles
+  import ocdb/utils/property-structs
+
+
+pcb-component int-component :
+  description = "Insertion point for TC2030-CTX adapter"
+  datasheet = "https://www.tag-connect.com/wp-content/uploads/bsk-pdf-manager/TC2030-CTX_1.pdf"
+  manufacturer = "Tag-Connect"
+  mpn = "TC2030-CTX"
+  property(self.trust) = "built"
+  port p: pin[1 through 6]
+
+  val sym = header-symbol(6, 2)
+  symbol = sym(for i in 1 through 6 do : p[i] => sym.p[i])
+
+  val fp = ocdb/components/tag-connect/TC2030-IDC/TC2030-IDC-footprint
+  landpattern = fp(for i in 1 through 6 do : p[i] => fp.p[i])
+  reference-prefix = "J"
+
+  property(self.rated-temperature) = false
+
+public pcb-module component: 
+  public inst conn : int-component
+  component-status(conn) :
+    bom-status = NotInBOM
+
+  port supply : power
+  net (supply.vdd, conn.p[1])
+  net (supply.gnd, conn.p[5])
+
+  port reset-n : reset
+  net (reset-n.reset, conn.p[3])
+
+  port swd : swd-swo()
+  net SWDIO (swd.swdio, conn.p[2])
+  net SWDCLK (swd.swdclk, conn.p[4])
+  net SWDSWO (swd.swo, conn.p[6])
+
+
