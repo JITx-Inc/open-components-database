@@ -283,15 +283,16 @@ doc: \<DOC>
   ```
 <DOC>
 public pcb-module module (-- include-LFO?:True|False = true, include-antenna?:True|False = true, power-config:Int = 5) :
-  pin gnd
+  port vin : power
+
   public inst mcu : ocdb/components/nordic/nRF52840/component
-  net (gnd, mcu.VSS, mcu.VSS_PA)
+  net gnd (vin.gnd, mcu.VSS, mcu.VSS_PA)
 
   ; Setup Bypass caps
   switch(power-config) :
     5 : 
       port usb : usb-2 ; USB enabled
-      pin vdd
+      
       net (gnd, usb.vbus.gnd)
       net (mcu.VBUS, usb.vbus.vdd)
       ; Configure to be in normal voltage mode, DCDC1 enabled (config 5 from datasheet)
@@ -327,11 +328,9 @@ public pcb-module module (-- include-LFO?:True|False = true, include-antenna?:Tr
       net (mcu.DEC4 mcu.DEC6 filt-ind.p[2])
 
       for i in 0 through 4 do : 
-        net (vdd mcu.VDDH mcu.VDD[i])
+        net (vin.vdd mcu.VDDH mcu.VDD[i])
     6 :
       ; Battery power only, no USB, no NFC
-      pin vdd 
-
       for [pin_, cap_] in kvs([
         mcu.DEC1    => 100.0e-9,
         mcu.DEC3    => 100.0e-12,
@@ -348,11 +347,11 @@ public pcb-module module (-- include-LFO?:True|False = true, include-antenna?:Tr
         layout-group(c) = power
       net (mcu.VBUS gnd)
       net (mcu.DEC4 mcu.DEC6)
-      net (vdd mcu.VDDH)
+      net (vin.vdd mcu.VDDH)
       no-connect(mcu.D+)
       no-connect(mcu.D-)
       for i in 0 through 4 do : 
-        net (vdd mcu.VDD[i])
+        net (vin.vdd mcu.VDD[i])
         ; Normal voltage mode.
         property(mcu.VDD[i].power-pin) = PowerPin(min-typ-max(1.7, 3.0, 3.6))
       property(mcu.VDDH.power-pin) = PowerPin(min-typ-max(1.7, 3.0, 3.6))
