@@ -15,21 +15,37 @@ defpackage ocdb/modules/amplifiers :
   import ocdb/utils/property-structs
   import ocdb/utils/bundles
 
+;public defn compute-preamp-gain (VoutRMS, Pmax)
+
+; Compute the Expected VRMS output for a given mic input
+;  pressure: Pascals 
+;    1 Pa is pretty loud (lawn mower at 1m)
+;    0.01 to 0.1 Pa is like normal talking and whispering at 1m
+;  sensitivity: dBV / Pa - see datasheet
+;  Returns output in Vrms 
+public defn compute-expected-mic-vrms (pressure:Double, sensitivity:Double) -> Double : 
+  pow(10.0, sensitivity / 20.0) * pressure 
+
 ; Non-inverting opamp, from AN4598, bias signal to vcc/2, ac coupled input, AC coupled output, 
 ; https://www.st.com/resource/en/application_note/an4598-preamplifying-the-analog-output-of-a-mems-microphone-stmicroelectronics.pdf
 public pcb-module microphone-preamp :
   pin in
   pin out
-  port power : power
+  port vin : power
 
   inst op-amp : database-part(["mpn" => "MCP6001T-E/OT", "manufacturer" => "Microchip"])
-  bypass-cap-strap(op-amp.VDD power.gnd, 10.0e-6)
-  bypass-cap-strap(op-amp.VDD power.gnd, 10.0e-9)
-  net (op-amp.VSS, power.gnd)
-  net (op-amp.VDD, power.vdd)
+  bypass-cap-strap(op-amp.VDD vin.gnd, 10.0e-6)
+  bypass-cap-strap(op-amp.VDD vin.gnd, 10.0e-9)
+  net (op-amp.VSS, vin.gnd)
+  net (op-amp.VDD, vin.vdd)
 
   ;  Amplifier is a standard inverting amplifier in a bandpass
   ;    configuration.  
+  ;
+  ;  Requirements: 
+  ;    - Filter Bandwidth: 100 - 20kHz
+  ;    - Close to linear phase response
+  ;    -  
   ; @TODO - compute bandpass filter parameters here. 
 
   val VDD = 3.0
@@ -66,7 +82,7 @@ public pcb-module microphone-preamp :
   inst Cin : ceramic-cap(Cin_v)
   inst Rg : chip-resistor(Rg_v)
 
-  net vin (in, Cin.p[1])
+  net signal (in, Cin.p[1])
   net (Cin.p[2], Rg.p[1])
   net op- (op-amp.VIN-, Rg.p[2] )
 
@@ -83,9 +99,9 @@ public pcb-module microphone-preamp :
   inst R1 : chip-resistor(51.e3)
   inst R2 : chip-resistor(51.e3) 
 
-  net (R1.p[1] power.vdd)
+  net (R1.p[1] vin.vdd)
   net vref (R1.p[2] R2.p[1])
-  net (R2.p[2] power.gnd)
+  net (R2.p[2] vin.gnd)
   net (vref op-amp.VIN+)
 
   ; inst ref-divider : ocdb/modules/passive-circuits/voltage-divider(typ(VDD), typ(Vref), 5.0e-3)
@@ -95,7 +111,7 @@ public pcb-module microphone-preamp :
   ; net op+ (ref-divider.out op-amp.VIN+)
 
   ; Add a touch of filtering to the ref set point.
-  bypass-cap-strap(op-amp.VIN+ power.gnd, 1.0e-6)
+  bypass-cap-strap(op-amp.VIN+ vin.gnd, 1.0e-6)
 
   ; Noise calculation - https://www.ti.com/lit/pdf/slva043
   ; ENB - equivalent noise bandwidth - 1.57 * corner-frequency
