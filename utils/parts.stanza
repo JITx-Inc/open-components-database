@@ -51,7 +51,7 @@ public defstruct Part <: Component :
   ; Power dissipation limit as rated by manufacturer. One value, or PWL function (W | [degC, W])
   rated-power: Double|False
 
-  ; Optionally appended by jit-backend (does not come from parts-db)
+  ; These may be populated in Parts DB, or updated values may be inserted by the backend.
   sellers: Tuple<Seller>|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
 with :
@@ -143,26 +143,26 @@ public-when(TESTING) defstruct PinMappingCode :
 with :
   printer => true
 
-deftype PinByTypeCode
+public deftype PinByTypeCode
 
-public-when(TESTING) defstruct PinByNameCode <:PinByTypeCode :
+public defstruct PinByNameCode <:PinByTypeCode :
   pin-name: String
 with :
   printer => true
 
-public-when(TESTING) defstruct PinByBundleCode <:PinByTypeCode :
+public defstruct PinByBundleCode <:PinByTypeCode :
   bundle-name: String
   pin-name: String
 with :
   printer => true
 
-public-when(TESTING) defstruct PinByIndexCode <:PinByTypeCode :
+public defstruct PinByIndexCode <:PinByTypeCode :
   name: String
   index: Int
 with :
   printer => true
 
-public-when(TESTING) defstruct PinByRequireCode <:PinByTypeCode :
+public defstruct PinByRequireCode <:PinByTypeCode :
   bundle-name: String
 with :
   printer => true
@@ -187,25 +187,25 @@ public-when(TESTING) defstruct MetadataCode :
 with :
   printer => true
 
-public-when(TESTING) defstruct ComponentPropertyCode :
+public defstruct ComponentPropertyCode :
   name: Symbol
   value: JITXValue|None
 with :
   printer => true
 
-public-when(TESTING) defstruct NoConnectCode :
+public defstruct NoConnectCode :
   pin: PinByTypeCode
 with :
   printer => true
 
-public-when(TESTING) defstruct PinPropertiesCode :
+public defstruct PinPropertiesCode :
   pins: Tuple<PinPropertyCode>
   power-pins: Tuple<PowerPinCode>
   no-connects: Tuple<NoConnectCode>
 with :
   printer => true
 
-public-when(TESTING) defstruct PinPropertyCode :
+public defstruct PinPropertyCode :
   pin: PinByTypeCode
   pads: Tuple<PinByTypeCode>
   direction: Dir
@@ -214,7 +214,7 @@ public-when(TESTING) defstruct PinPropertyCode :
 with :
   printer => true
 
-public-when(TESTING) defstruct PowerPinCode :
+public defstruct PowerPinCode :
   pin: PinByTypeCode
   min-voltage: Double
   max-voltage: Double
@@ -260,7 +260,7 @@ public defn ComponentCode (json: JObject) -> ComponentCode :
     map(MetadataCode, json["metadata"] as Tuple<JObject>),
     map(ComponentPropertyCode, json["properties"] as Tuple<JObject>),
     map(BundleCode, json-bundles),
-    map(SupportCode, json-supports),
+    map(SupportCode, json-supports)
   )
 
 public defn VendorPartNumbers (json: JObject) -> Tuple<KeyValue<String, String>> :
@@ -495,9 +495,12 @@ defn NoConnectCode (json: JObject) -> NoConnectCode :
   NoConnectCode(PinByTypeCode(json["pin"] as JObject))
 
 public defmethod to-jitx (part: Part) -> Instantiable :
-  to-jitx $ component(part)
+  to-jitx(component(part), sellers(part))
 
 public defn to-jitx (c: ComponentCode) -> Instantiable :
+  to-jitx(c, false)
+
+public defn to-jitx (c: ComponentCode, sellers: Tuple<Seller>|False) -> Instantiable :
   pcb-component my-component :
     name = name(c)
 
@@ -524,6 +527,8 @@ public defn to-jitx (c: ComponentCode) -> Instantiable :
       to-jitx(pin-props)
 
     map(to-jitx, properties(c))
+
+    set-property(self, `sellers, sellers)
 
     reference-prefix = reference_prefix(c)
 
@@ -635,13 +640,13 @@ public defn to-jitx (prop: ComponentPropertyCode) :
 ;---------------- Pad -----------------
 ;--------------------------------------
 
-public-when(TESTING) defstruct PCBPadCode :
+public defstruct PCBPadCode :
   name: String
   type: PadType
   shape: Shape
   layers: Tuple<PCBLayerCode>
 
-public-when(TESTING) defn PCBPadCode (json: JObject) ->PCBPadCode :
+public defn PCBPadCode (json: JObject) ->PCBPadCode :
   PCBPadCode(
     json["name"] as String,
     PadType(json["type"] as String),
@@ -649,13 +654,13 @@ public-when(TESTING) defn PCBPadCode (json: JObject) ->PCBPadCode :
     map(PCBLayerCode, json["layers"] as Tuple<JObject>)
   )
 
-public-when(TESTING) defstruct LandPatternPadCode :
+public defstruct LandPatternPadCode :
   pin: PinByTypeCode
   pcb-pad-name: String
   pose: Pose
   side: Side
 
-public-when(TESTING) defn LandPatternPadCode (json: JObject) -> LandPatternPadCode :
+public defn LandPatternPadCode (json: JObject) -> LandPatternPadCode :
   LandPatternPadCode(
     PinByTypeCode(json["pin"] as JObject),
     json["pcb_pad_name"] as String,
@@ -663,7 +668,7 @@ public-when(TESTING) defn LandPatternPadCode (json: JObject) -> LandPatternPadCo
     Side(json["side"] as String)
   )
 
-public-when(TESTING) defstruct PCBLayerCode :
+public defstruct PCBLayerCode :
   layer: LayerSpecifier
   shape: Shape
 
@@ -868,11 +873,11 @@ defn to-jitx (l: PCBLayerCode) :
 ;------------ Landpattern -------------
 ;--------------------------------------
 
-public-when(TESTING) defstruct PCBLayerReference :
+public defstruct PCBLayerReference :
   layer-specifier: LayerSpecifier
   text: Text
 
-public-when(TESTING) defstruct PCBLayerValue :
+public defstruct PCBLayerValue :
   layer-specifier: LayerSpecifier
   text: Text
 
@@ -909,20 +914,20 @@ public-when(TESTING) defn LandPatternCode (json: JObject) -> LandPatternCode :
   )
 
 ;Represents a via, copper, or pour.
-deftype GeomCode <: Comparable
+public deftype GeomCode <: Comparable
 
-public-when(TESTING) defstruct CopperCode <: GeomCode :
+public defstruct CopperCode <: GeomCode :
   layer:LayerIndex
   shape:Shape
 
-defstruct PourCode <: GeomCode :
+public defstruct PourCode <: GeomCode :
   layer:LayerIndex
   shape:Shape
   isolate:Double
   rank:Int
   orphans:True|False
 
-defstruct ViaCode <: GeomCode :
+public defstruct ViaCode <: GeomCode :
   type:ViaType
   start:LayerIndex
   end:LayerIndex
@@ -1020,31 +1025,35 @@ defn to-jitx (g: Model3D) :
 ;--------------- Symbol ---------------
 ;--------------------------------------
 
-public-when(TESTING) defstruct LayerReference :
+public defstruct LayerReference :
   layer: String
   text: Text
 
-public-when(TESTING) defstruct LayerValue :
+public defstruct LayerValue :
   layer: String
   text: Text
 
-public-when(TESTING) defstruct SymbolCode :
+public defstruct SymbolCode :
   name: String
   bank: Int
   pins: Tuple<SymbolPinCode>
   layer-reference: LayerReference
   layer-value: LayerValue
   layers: Tuple<SymbolLayerCode>
+with:
+  printer => true
 
-public-when(TESTING) defstruct SymbolPinCode :
+public defstruct SymbolPinCode :
   pin: PinByTypeCode
   point: Point
   direction: Dir
   length: Double
   number-size: Double|False
   name-size: Double|False
+with:
+  printer => true
 
-public-when(TESTING) defstruct SymbolLayerCode :
+public defstruct SymbolLayerCode :
   name: String
   shape: Shape
 

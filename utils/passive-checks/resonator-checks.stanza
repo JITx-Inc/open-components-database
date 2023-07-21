@@ -115,7 +115,13 @@ public pcb-check resonator-pullability-check (o:JITXObject, intf:CrystalOscillat
   val op = property(o.crystal-resonator)
   val pullability = motional-capacitance(op) / (2.0 * pow(shunt-capacitance(op) + load-capacitance(op), 2.0))
   
-  val dC = (property(load-cap.capacitance) as Double) * (property(load-cap.tolerance)[1] as Double)
+  ; Parse in backwards-compatible manner.
+  ; We used to insert as a Double, but updated to a Toleranced.
+  val tolerance = match(property(load-cap.tolerance)) :
+    (toleranced:Toleranced) : typ(toleranced)
+    (tolerance:Double) : tolerance
+
+  val dC = (property(load-cap.capacitance) as Double) * tolerance
   val freq-error = (pullability as Double) * (dC as Double) * frequency(op)
   #CHECK(
     condition = frequency-tolerance(op) + freq-error < frequency-tolerance(intf),
