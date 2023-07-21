@@ -181,6 +181,12 @@ public-when(TESTING) defstruct TolerancedCode :
 with :
   printer => true
 
+public-when(TESTING) defstruct TolerancedMinMaxCode :
+  min: Double
+  max: Double
+with :
+  printer => true
+
 public-when(TESTING) defstruct MetadataCode :
   key: String
   value: String
@@ -292,6 +298,11 @@ public-when(TESTING) defn TolerancedCode (json: JObject) -> Toleranced :
   val minus = json["minus"] as Double
   Toleranced(typical, plus, minus)
 
+public-when(TESTING) defn TolerancedMinMaxCode (json: JObject) -> Toleranced :
+  val min = json["min"] as Double
+  val max = json["max"] as Double
+  jitx/min-max(min, max)
+
 public-when(TESTING) defn MetadataCode (json: JObject) -> MetadataCode :
   val key = json["key"] as String
   val value = json["value"] as String
@@ -317,6 +328,8 @@ public-when(TESTING) defn component-property-value-by-type (json: JObject) -> JI
       to-symbol(json["value"] as String)
     "TypeToleranced":
       TolerancedCode(json["value"] as JObject)
+    "TypeTolerancedMinMax":
+      TolerancedMinMaxCode(json["value"] as JObject)
     "TypeKeyValue":
       val value = json["value"] as JObject
       KeyValue(value["key"] as String, value["value"] as String)
