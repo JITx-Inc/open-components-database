@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -Eeuo pipefail
 
 # check for any optional argument to run fewer tests (skip Octopart queries, for example)
 if [[ $# -ne 0 ]]; then
@@ -8,17 +8,31 @@ else
     restrict=false
 fi
 
+# Defaulted env var inputs - can override if necessary
+echo "JITX_PLATFORM = \"${JITX_PLATFORM:=linux}\""
+echo "JITPCB_VERSION = \"${JITPCB_VERSION:=current}\""
+
+JITX_HOME="${HOME}/.jitx"
+if [[ "$JITX_PLATFORM" = "windows" ]] ; then
+  JITX_HOME="$USERPROFILE/.jitx"
+fi
+JITX_INSTALL_DIR="${JITX_HOME}/${JITPCB_VERSION}"
+echo "JITX_INSTALL_DIR = \"${JITX_INSTALL_DIR}\""
+
+JITX="${JITX_INSTALL_DIR}/jitx"
+echo "JITX = \"${JITX}\""
+
 echo "Installation details"
 
-jitx version
-jitx check-install
+"${JITX}" version
+"${JITX}" check-install
 
-echo "/root/.jitx/user.params:"
-cat /root/.jitx/user.params
+echo "${JITX_HOME}/user.params:"
+cat "${JITX_HOME}/user.params"
 
 # Tests need to take into account the root stanza.proj so that they find the source files from the ocdb repo and not a pkg from the jitx-client docker image
-export JITX_RUN="jitx run /app/open-components-database/stanza.proj"
-export JITX_RUN_TEST="jitx run-test /app/open-components-database/stanza.proj"
+export JITX_RUN="${JITX} run /app/open-components-database/stanza.proj"
+export JITX_RUN_TEST="${JITX} run-test /app/open-components-database/stanza.proj"
 
 #==============================================
 #=========== Component Models test ============
