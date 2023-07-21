@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -e
 
+# check for any optional argument to run fewer tests (skip Octopart queries, for example)
+if [[ $# -ne 0 ]]; then
+    restrict=true
+else
+    restrict=false
+fi
+
 echo "Installation details"
 
 jitx version
@@ -48,7 +55,6 @@ cd ..
 
 echo "Launching ocdb designs..."
 cd open-components-database/designs
-# tutorial.stanza and mcu.stanza use part sourcing more
 designs=(ble-mote.stanza
          can-stm32.stanza
          class-a.stanza
@@ -57,20 +63,24 @@ designs=(ble-mote.stanza
          ethernet-fmc.stanza
          grid-resistors.stanza
          lp-examples.stanza
-         mcu.stanza
          power-monitor.stanza
          # power-state-demo.stanza       # fails
          smd-landpatterns.stanza
          test-component-checks.stanza
-         tutorial.stanza
          usb-accel.stanza
          usb-light.stanza          # no board?
          voltage-divider.stanza
          run-checks/checked-design.stanza)
 
+# tutorial.stanza and mcu.stanza use part sourcing more
+if [[ $restrict == false ]]; then
+    designs+=(mcu.stanza tutorial.stanza)
+fi
+
 for filename in "${designs[@]}"; do
     echo "Running $filename..."
     $JITX_RUN $filename
 done
+
 cd ../..
 
