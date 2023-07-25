@@ -47,18 +47,16 @@ public pcb-module high-side-mosfet-switch (PFET:InstantiableType) :
 
   ; Connect the pull-up resistor between the power pin and the P-channel MOSFET gate
   ;   This will make sure that the VDDA power domain is OFF by default.
-  res-strap(vin.vdd, Psw.G, ["resistance" => 1.0e6 "tolerance" => 0.05])
+  res-strap(vin.vdd, Psw.G, ["resistance" => min-max(900.0e3, 1.5e6), "tolerance" => 0.05])
 
-  eval-when has-property?(Psw.S.net-voltage) :
-    val vdd = property(Psw.S.net-voltage) 
+  ; Add a bit of ESD protection to the Source by adding a capacitor.
+  ;  In a more industrial application we might add a MOV or TVS here. 
+  bypass-cap-strap(Psw.S, vin.gnd, min-max(0.1e-6, 1.0e-6), 0.20)
+
+  eval-when has-property?(Psw.S.voltage) :
+    val vdd = property(Psw.S.voltage) 
     ; TODO Look at SPICE computations for this threshold voltage
-    property(Nctl.G.digital-input) = DigitalInput(typ(0.5), vdd - property(Psw.vth), vin.vdd, vin.gnd, 10.0e-9)
-
-    ; Add a decoupling cap on the input rail to provide a modicum
-    ;   of ESD protection. 
-    ;  @TODO capacitor margin rating - industrial vs consumer ? 
-    val margin = 2.0
-    cap-strap(vin.vdd, vin.gnd, ["capacitance" => 0.1e-6, "min-rated-voltage" => (vdd * margin)])
+    property(Nctl.G.digital-input) = DigitalInput(typ(0.5), vdd - property(Psw.Vgs-th), vin.vdd, vin.gnd, 10.0e-9)
 
   schematic-group(self) = load-sw
   layout-group(self) = load-sw
