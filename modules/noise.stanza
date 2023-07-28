@@ -1,0 +1,95 @@
+defpackage ocdb/modules/noise : 
+  import core
+  import math
+  import jitx 
+
+; Equivalent Noise Bandwidth (ENB)
+;   Filters aren't perfect so we expand the out from the 
+;   corner frequency depending on what order filter we have 
+;   This allows us to more accurately estimate the noise
+;   a particular circuit might encounter.
+
+; Simplified representation of the ENB offset
+;   @TODO compute these in the future based on filter
+;   characteristics? I think this is approximately
+;   the 6dB point for filters of orders 1, 2, 3, 4,
+;   respectively. 
+val ENB-lookup = [1.57, 1.11, 1.05, 1.025]
+
+; Equaivalent Noise Bandwidth - Low Pass
+; @param corner-freq - low-pass corner frequency. 
+; @param order - filter order (1st, 2nd, etc)
+; @return frequency for the ENB upper bound. 
+public defn compute-ENB-lp (corner-freq:Double, order:Int) -> Double : 
+  corner-freq * ENB-lookup[order - 1]
+
+; Equaivalent Noise Bandwidth - HighPass
+; @param corner-freq - high-pass corner frequency. 
+; @param order - filter order (1st, 2nd, etc)
+; @return frequency for the ENB lower bound. 
+public defn compute-ENB-hp (corner-freq:Double, order:Int) -> Double : 
+  corner-freq * (1.0 / ENB-lookup[order - 1])
+
+; Convert to kelvin - we should probably 
+;   move this to another location.
+public defn kelvin (C:Double) -> Double : 
+  C + 273.15
+
+; Boltzman's Constant
+;   we should probably put this somewhere else with 
+;   other constant definitions
+val kB =  1.38e-23
+
+; Compute the Johnson Thermal noise from a resistor: 
+; @see: https://en.wikipedia.org/wiki/Johnson%E2%80%93Nyquist_noise
+; @param R = Resistance 
+; @param T = Temperature in kelvin
+; @param power spectral density in V (variance) / Hz
+public defn johnson-spectral-density (R:Double, T:Double) -> Double:
+  4.0 * kB * T * R
+
+; Compute the Johnson RMS noise.
+;   This is the power spectral density integrated over a frequency bandwidth
+; @return Noise in V-RMS
+public defn johnson-rms (R:Double, T:Double, dF:Double) -> Double: 
+  sqrt(johnson-spectral-density(R, T) * dF)
+
+; For an opamp - there is typically a noise 3dB corner frequency. Below the 
+;   corner frequency, the noise scales with 1/frequency. 
+;   After the corner frequency, the noise levels off to white noise defined by
+;   the Equivalent input noise voltage power spectral density (V / sqrt(Hz))
+; This function uses the start-f and the stop-f to compute what the
+;   integral of the power spectral density. 
+; @param Fc - Noise 3dB Corner Frequency in Hz
+; @param start-f starting frequency of the ENB
+;   This value must be >= 0.0
+; @param stop-f  end frequency of the ENB
+;   This value must be > 0.0 and greater than start-f
+public defn opamp-noise-integral (Fc:Double, start-f:Double, stop-f:Double) -> Double : 
+  if ( not (start-f >= 0.0)): 
+    throw $ Exception("Invalid Start Frequency: %_ >= 0.0" % [start-f])
+
+  if ( not (stop-f > 0.0)):
+    throw $ Exception("Invalid Stop Frequency: %_ > 0.0" % [stop-f])
+
+  if ( not (start-f < stop-f)) :
+    throw $ Exception("Invalid Start/Stop Frequency: %_ < %_" % [start-f, stop-f])
+
+  ; There are 3 main conditions for this function: 
+  ;  1.  start-f and stop-f < Fc
+  ;  2.  start-f < Fc < stop-f  
+  ;  3.  start-f and stop-f > Fc 
+
+  if (stop-f < Fc): 
+    ; All of the bandwidth is in the 1/f region  
+    stop-f * log( stop-f / start-f )
+  else if (start-f > Fc): 
+    ; All of the bandwidth is in the white noise region    
+    stop-f - start-f
+  else: 
+    ; The bandwidth straddles the Fc and we need to compute both
+    ;  regions and sum them together.
+    val white = stop-f - Fc
+    val invf = Fc * log(Fc / start-f)
+    white + invf
+
