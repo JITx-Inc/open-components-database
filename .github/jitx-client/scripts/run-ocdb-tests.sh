@@ -27,8 +27,14 @@ echo "Installation details"
 "${JITX}" version
 "${JITX}" check-install
 
-echo "${JITX_HOME}/user.params:"
-cat "${JITX_HOME}/user.params"
+if [ -e ${JITX_HOME}/user.params ] ; then
+  echo "${JITX_HOME}/user.params:"
+  echo ----
+  cat "${JITX_HOME}/user.params"
+  echo ----
+else
+  echo "${JITX_HOME}/user.params does not exist"
+fi
 
 # Tests need to take into account the root stanza.proj so that they find the source files from the ocdb repo and not a pkg from the jitx-client docker image
 export JITX_RUN="${JITX} run /app/open-components-database/stanza.proj"
