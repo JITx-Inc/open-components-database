@@ -353,6 +353,18 @@ public pcb-module module (-- include-LFO?:True|False = true, include-antenna?:Tr
         val c = bypass-cap-strap(pin_, gnd, cap_)
         schematic-group(c) = power
         layout-group(c) = power
+
+      no-connect(mcu.DECUSB)
+      no-connect(mcu.DCCH)
+      no-connect(mcu.DCC)
+
+      ; Add a bypass to dec6 and make it dnp so that we can
+      ;  optionally stuff during testing.
+      val dec6Cap = bypass-cap-strap(mcu.DEC6, gnd, 0.1e-6)
+      schematic-group(dec6Cap) = power
+      layout-group(dec6Cap) = power
+      dnp(dec6Cap)
+
       net (mcu.VBUS gnd)
       net (mcu.DEC4 mcu.DEC6)
       net (vin.vdd mcu.VDDH)
@@ -366,6 +378,12 @@ public pcb-module module (-- include-LFO?:True|False = true, include-antenna?:Tr
 
     else :
       false
+
+  ; Not stuffed per reference material.
+  val decCap = bypass-cap-strap(mcu.DEC2, gnd, 0.1e-6)
+  schematic-group(decCap) = power
+  layout-group(decCap) = power
+  dnp(decCap)
 
   if include-LFO? :  
     inst lfosc : ocdb/components/epson/FC-135/component
