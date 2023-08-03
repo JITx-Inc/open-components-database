@@ -19,6 +19,14 @@ defpackage ocdb/designs/ethernet-fmc :
 OPERATING-TEMPERATURE = min-max(-20.0 50.0)
 OPTIMIZE-FOR = ["area"]
 
+
+val board-shape = Rectangle(60.0, 69.0)
+; Setup the board
+defn setup-board () :
+  set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-jlc2313, board-shape))
+  set-rules(ocdb/manufacturers/rules/jlcpcb-rules)
+  set-use-layout-groups()
+
 pcb-module my-design :
 
   ; Instantiate devices
@@ -42,17 +50,25 @@ pcb-module my-design :
   require eth-1:ethernet-1000 from ethernet-jack[1]
   connect-phy(rgmii[1], eth-1)
 
-  ; schematic-group(fmc) = fmc
-  ; schematic-group(ethernet-jack) = ethernet-jack
-  ; schematic-group(fpga) = fpga
+  schematic-group(fmc) = fmc
+  schematic-group(ethernet-jack) = ethernet-jack
+  schematic-group(fpga) = fpga
 
   ; Geometry constraints
   place(fmc) at loc(-18.5, 0.0, 90.0) on Top
   place(ethernet-jack[0]) at loc(15.0, 22.0, 270.0) on Top
   place(ethernet-jack[1]) at loc(15.0, -22.0, 270.0) on Top
+  
+  geom(gnd) :
+    copper-pour(LayerIndex(1), isolate = 0.2) = board-shape
 
 set-current-design("output-ethernet-fmc")
+set-paper(ANSI-A)
+setup-board()
 
-val my-design* = transform-module(generate-power, my-design)
-make-default-board(my-design*, 4, Rectangle(60.0, 69.0))
-export-cad()
+set-main-module(my-design) ; Treat the provided module as a design, and compile it.
+
+; View the results
+view-board()
+view-schematic()
+view-design-explorer()

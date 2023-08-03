@@ -25,7 +25,7 @@ defn setup-board () :
 pcb-module nrf-motion :
 
   inst bat : database-part(["mpn" => "BS-08-B2AA016", "manufacturer" => "MYOUNG"])
-
+  place(bat) at loc(0.0, 0.0) on Bottom
   inst nrf : ocdb/components/nordic/nRF52840/module(include-LFO? = false power-config = 6)
 
   ; Add an accelerometer
@@ -50,6 +50,7 @@ pcb-module nrf-motion :
 
   require debug : swd([SWD-SWO]) from nrf.mcu
 
+
   add-testpoint([GND VDD])
   add-testpoint(pins(debug))
 
@@ -66,6 +67,11 @@ pcb-module nrf-motion :
   net VDDA (amp.power.vdd load-sw.load microphone.VDD)
   symbol(VDDA) = ocdb/utils/symbols/supply-sym
   net (amp.in microphone.OUT)
+
+
+  val power-net-class = NetClass(`Power, [`min-trace => 0.40])
+  for n in [VDD VDDA GND] do :
+    property(n.net-class) = power-net-class
 
   require sw : gpio from nrf.mcu
   require mic:adc from nrf.mcu
