@@ -1,0 +1,229 @@
+#use-added-syntax(jitx)
+defpackage ocdb/designs/biquad :
+
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+
+  import ocdb/utils/bundles
+  import ocdb/utils/connects
+  import ocdb/utils/defaults
+  import ocdb/utils/design-vars
+  import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/property-structs
+  import ocdb/utils/checks
+  import ocdb/utils/micro-controllers
+
+val BOARD-SHAPE = RoundedRectangle(50.0, 50.0, 0.25)
+DESIGN-QUANTITY = 0
+
+; BiQuad is an amplifier structure for creating
+; high Q filters with low component sensitivity
+public defstruct BiQuadFilter :
+  center : Double     ;  Center Frequency
+  bandwidth : Double  ;  Filter bandwidth centered on Center Frequency
+  gain : Double       ;  Gain
+
+public defstruct BiQuadSolution :
+  Rf : Double
+  Rg : Double
+  Rb : Double
+  Cb : Double
+
+public defn center-freq (s:BiQuadSolution) -> Double :
+  1.0 / ( 2.0 * PI * Rf(s) * Cb(s) )
+
+public defn bandwidth (s:BiQuadSolution) -> Double :
+  1.0 / ( 2.0 * PI * Rb(s) * Cb(s) )
+
+public defn gain (s:BiQuadSolution) -> Double :
+  Rb(s) / Rg(s)
+
+public defn print-soln (s:BiQuadSolution, f:BiQuadFilter) :
+  println("BiQuad solution: Rf=%_ Rg=%_ Rb=%_ Cb=%_uF" % [Rf(s), Rg(s), Rb(s), Cb(s) * 1.0e6])
+  println("BiQuad frequencies: Fc=%_Hz BW=%_Hz Gain=%_" % [center-freq(s), bandwidth(s), gain(s)])
+  println("BiQuad solution deltas: Fc=%_Hz BW=%_Hz Gain=%_" % [center(f) - center-freq(s), bandwidth(f) - bandwidth(s), gain(f) / gain(s)])
+
+; public defn biquad-lowpass-circuit (sol:BiQuadSolution, part:Instantiable) :
+;   pcb-module biquad-circuit :
+;     pin VCC
+;     pin VEE
+;     pin VREF
+;     pin VOUT
+;     pin VIN
+;     ; <TODO> fill out rest of connectivity for low-pass
+;     inst r1 : chip-resistor(1.0e3)
+;   biquad-circuit
+
+; public defn biquad-highpass-circuit (sol:BiQuadSolution, part:Instantiable) :
+;   pcb-module biquad-circuit :
+;     pin VCC
+;     pin VEE
+;     pin VREF
+;     pin VOUT
+;     pin VIN
+;     ; <TODO> fill out rest of connectivity for high-pass
+;     inst r1 : chip-resistor(1.0e3)
+;   biquad-circuit
+
+public defn biquad-bandpass-circuit (sol:BiQuadSolution, part:Instantiable ) :
+  pcb-module biquad-circuit :
+    pin VCC
+    pin VEE
+    pin VREF
+    pin VOUT
+    pin VIN
+
+    ; Source our resistors and capacitors for the design
+    val pRf = chip-resistor(["resistance"  => Rf(sol), "tolerance" =>  1.0, "minimum_quantity" => 1000])
+    val pRb = chip-resistor(["resistance"  => Rb(sol), "tolerance" =>  1.0, "minimum_quantity" => 1000])
+    val pRg = chip-resistor(["resistance"  => Rg(sol), "tolerance" =>  1.0, "minimum_quantity" => 1000])
+    val pCb =   ceramic-cap(["capacitance" => Cb(sol), "tolerance" => 10.0, "minimum_quantity" => 1000])
+
+    ; For the inverter feedback resistors, we want to select
+    ; one of the resistors that we have already spec'd. Any will
+    ; likely do fine.
+    val pRi = pRf
+
+    ; need 3 amplifiers per BiQuad solution
+    val numOpamps = 3
+    inst opamp : part[numOpamps]
+
+    inst pCapDecoupleL : ceramic-cap(2.2e-6)[numOpamps]
+    inst pCapDecoupleS : ceramic-cap(10.0e-9)[numOpamps]
+
+    for i in 0 to numOpamps do :
+      net (VCC, opamp[i].V+)
+      net (VEE, opamp[i].V-)
+      net (VCC, pCapDecoupleL[i].p[1] pCapDecoupleS[i].p[1])
+      net (VEE, pCapDecoupleL[i].p[2] pCapDecoupleS[i].p[2])
+
+    ; Inverter
+    inst Ri1 : pRi
+    inst Ri2 : pRi
+
+    net invInput (Ri1.p[1])
+    net (Ri1.p[2], opamp[0].-IN, Ri2.p[1])
+    net (VREF, opamp[0].+IN)
+    net (VOUT, opamp[0].OUT, Ri2.p[2])
+    schematic-group([Ri1, Ri2, pCapDecoupleL[0], pCapDecoupleS[0], opamp[0]]) = inverter
+    layout-group([Ri1, Ri2, pCapDecoupleL[0], pCapDecoupleS[0], opamp[0]]) = inverter
+
+    ; Feedback Integrator
+    inst Rf1 : pRf
+    inst Rf2 : pRf
+    inst Cf : pCb
+
+    net (VOUT, Rf1.p[1])
+    net (Rf1.p[2], opamp[1].-IN, Cf.p[1])
+    net (opamp[1].OUT, Rf2.p[1], Cf.p[2])
+    net (VREF, opamp[1].+IN)
+    net fb (Rf2.p[2])
+    schematic-group([Rf1, Rf2, Cf, pCapDecoupleL[1], pCapDecoupleS[1], opamp[1]]) = feedback
+    layout-group([Rf1, Rf2, Cf, pCapDecoupleL[1], pCapDecoupleS[1], opamp[1]]) = feedback
+
+    ; Input Integrator
+    inst Rg : pRg
+    inst Rb : pRb
+    inst Cb : pCb
+
+    net (VIN, Rg.p[1])
+    net (fb, Rg.p[2], opamp[2].-IN, Rb.p[1], Cb.p[1])
+    net (Rb.p[2], Cb.p[2], opamp[2].OUT, invInput)
+    net (VREF, opamp[2].+IN)
+    schematic-group([Rg, Rb, Cb, pCapDecoupleL[2], pCapDecoupleS[2], opamp[2]]) = integrator
+    layout-group([Rg, Rb, Cb, pCapDecoupleL[2], pCapDecoupleS[2], opamp[2]]) = integrator
+  ; return the circuit
+  biquad-circuit
+
+defn find-biquad-soln (req:BiQuadFilter) -> BiQuadSolution :
+  
+  ; let's start with a simple solver for now
+  ; and that means fix the capacitance and calculate the R
+  ; for the frequency first. Then calculate the Q and then the gain
+  val cb-start = 10.0e-9 ; 1uF initial
+  val rf-start = closest-std-val(1.0 / (2.0 * PI * cb-start * center(req)), 0.1)
+  val rg-start = closest-std-val(rf-start / gain(req), 0.1)
+  val rb-start = closest-std-val(1.0 / (2.0 * PI * bandwidth(req) * cb-start), 0.1)
+  BiQuadSolution(rf-start, rg-start, rb-start, cb-start)
+
+pcb-module biquad-circuit-test:  
+  ; need to calculate biquad solution given the fc,bw, and gain desired
+  ; also need to use bw of opamp to limit max operating frequency, etc.
+  val my-amp = ocdb/components/analog-devices/ADA4004/component
+
+  val numFilters = 3
+  val filter-request0 = BiQuadFilter(10.0e3, 1.000e3, 1.0)
+  val filter-request1 = BiQuadFilter(7.50e3, 0.750e3, 1.0)
+  val solution0 = find-biquad-soln(filter-request0)
+  val solution1 = find-biquad-soln(filter-request1)
+
+  ; val solution = BiQuadSolution(1000.0, 2000.0, 3000.0, 10.0e-9)
+  println("-------------------------------------------------------------")
+  println("Biquad details (solution0):")
+  print-soln(solution0, filter-request0)
+  println("-------------------------------------------------------------")
+  println("Biquad details (solution1):")
+  print-soln(solution1, filter-request1)
+  println("-------------------------------------------------------------")
+
+  inst filter : biquad-bandpass-circuit(solution0, my-amp)[numFilters]
+
+  inst filterA : biquad-bandpass-circuit(solution1, my-amp)
+  inst filterB : biquad-bandpass-circuit(solution1, my-amp)
+
+  net P2V5 ()
+  net gnd ()
+  net P5V0 ()
+  net in ()
+  net out ()
+
+  net (P2V5 filterA.VREF)
+  net (gnd filterA.VEE )
+  net (P5V0 filterA.VCC)
+  net (in filterA.VIN)
+  net (out filterA.VOUT)
+  net (P2V5 filterB.VREF)
+  net (gnd filterB.VEE )
+  net (P5V0 filterB.VCC)
+  net (in filterB.VIN)
+  net (out filterB.VOUT)
+
+  for index in 0 to numFilters do :
+    val ref = Ref("filter")[index]
+    schematic-group([filter[index]]) = (ref)
+    net (P2V5 filter[index].VREF)
+    net (gnd filter[index].VEE )
+    net (P5V0 filter[index].VCC)
+    net (in filter[index].VIN)
+    net (out filter[index].VOUT)
+
+  symbol(P5V0) = ocdb/utils/symbols/altium-power-bar-sym
+  symbol(P2V5) = ocdb/utils/symbols/altium-power-wave-sym
+  symbol(gnd) = ocdb/utils/symbols/ground-sym
+
+  val power-net-class = NetClass(`Power, [`min-trace => 0.381])
+  property(gnd.net-class) = power-net-class
+  property(P5V0.net-class) = power-net-class
+  property(P2V5.net-class) = power-net-class
+  
+  geom(gnd) :
+    copper-pour(LayerIndex(1), isolate = 0.5, rank = 1, orphans = true) = BOARD-SHAPE
+  geom(P5V0) :
+    copper-pour(LayerIndex(2), isolate = 0.5, rank = 1, orphans = true) = BOARD-SHAPE
+  geom(P2V5) :
+    copper-pour(LayerIndex(3), isolate = 0.5, rank = 1, orphans = true) = BOARD-SHAPE
+  geom(gnd) :
+    copper-pour(LayerIndex(4), isolate = 0.5, rank = 1, orphans = true) = BOARD-SHAPE
+
+
+
+set-current-design("biquad-out")
+set-paper(ANSI-B)
+make-default-board(biquad-circuit-test, 6, BOARD-SHAPE)
+view-board()
+view-schematic()
+; view-design-explorer()
