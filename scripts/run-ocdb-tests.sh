@@ -4,6 +4,10 @@ set -Eeuo pipefail
 #
 # This script expects to be run from the `open-components-database` directory
 #
+if [ ! "$(basename $PWD)" == "open-components-database" ] ; then
+    echo "Error: this script expects to be run from the open-components-database directory"
+    exit -1
+fi
 
 PYTHON=python3.10
 
@@ -43,8 +47,8 @@ else
 fi
 
 # Tests need to take into account the root stanza.proj so that they find the source files from the ocdb repo and not a pkg from the jitx-client docker image
-JITX_RUN="${JITX} run /app/open-components-database/stanza.proj"
-JITX_RUN_TEST="${JITX} run-test /app/open-components-database/stanza.proj"
+JITX_RUN="${JITX} run ${PWD}/stanza.proj"  # i.e. open-components-database/stanza.proj
+JITX_RUN_TEST="${JITX} run-test ${PWD}/stanza.proj"
 
 #==============================================
 #=========== Component Models test ============
