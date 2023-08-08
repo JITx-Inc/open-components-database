@@ -6,9 +6,6 @@ set -Eeuo pipefail
 #
 
 PYTHON=python3.10
-# Tests need to take into account the root stanza.proj so that they find the source files from the ocdb repo and not a pkg from the jitx-client docker image
-JITX_RUN="${JITX} run /app/open-components-database/stanza.proj"
-JITX_RUN_TEST="${JITX} run-test /app/open-components-database/stanza.proj"
 
 # check for any optional argument to run fewer tests (skip Octopart queries, for example)
 if [[ $# -ne 0 ]]; then
@@ -44,6 +41,10 @@ if [ -e ${JITX_HOME}/user.params ] ; then
 else
   echo "${JITX_HOME}/user.params does not exist"
 fi
+
+# Tests need to take into account the root stanza.proj so that they find the source files from the ocdb repo and not a pkg from the jitx-client docker image
+JITX_RUN="${JITX} run /app/open-components-database/stanza.proj"
+JITX_RUN_TEST="${JITX} run-test /app/open-components-database/stanza.proj"
 
 #==============================================
 #=========== Component Models test ============
