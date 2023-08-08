@@ -414,18 +414,17 @@ public defn solve-placeholder-parts (m:Instantiable) -> Instantiable :
         else : [myk => myv]
       else : [myk => myv]      
   
-  defn resolve-components (my-placeholder:HashTable<Double|Toleranced, Vector<JITXObject>>,
-                           my-fix:HashTable<Double|Toleranced, Vector<JITXObject>>) ->  Vector<Instantiable> :
+  defn resolve-components (placeholder-table:HashTable<Double|Toleranced, Vector<JITXObject>>,
+                           fixed-table:HashTable<Double|Toleranced, Vector<JITXObject>>) ->  Vector<Instantiable> :
     inside pcb-module :
-      val new-comps = Vector<Instantiable>()
-      for rs in my-placeholder do :
+      val new-components = Vector<Instantiable>()
+      for rs in placeholder-table do :
         val r-val = key(rs)
         for old-inst in value(rs) do :
           if not has-property?(old-inst.user-params) :
             fatal("Instance %_ does not have expected property (user-params)" % [ref(old-inst)])
           val user-params = replace-tol-param(property(old-inst.user-params))
-          ; println("Searching with user-params => %_" % [user-params])
-          val new-comp =
+          val new-component =
             if has-property?(old-inst.resistor) :
               try :
                 chip-resistor(user-params)
@@ -453,13 +452,14 @@ public defn solve-placeholder-parts (m:Instantiable) -> Instantiable :
             else :
               fatal("unknown component found")
           val inst-name = "new-comp-%_" % [ref(old-inst)]
-          val new-inst = make-inst(to-symbol(inst-name), new-comp, false)
-          property(new-inst.name) = ref(old-inst) ; to-symbol(ref(old-inst))
+          val new-inst = make-inst(to-symbol(inst-name), new-component, false)
+          property(new-inst.name) = ref(old-inst)
           ; hook in new component to old placeholder instance pins (in parallel)
+          ; can't delete the old placeholder so....
           net (new-inst.p[1] old-inst.p[1])
           net (new-inst.p[2] old-inst.p[2])
-          add(new-comps, new-comp)
-    new-comps
+          add(new-components, new-component)
+    new-components
 
   within transform-module(m) :
     inside pcb-module :
