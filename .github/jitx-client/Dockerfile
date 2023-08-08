@@ -9,4 +9,4 @@ WORKDIR /app
 COPY ./user.params /root/.jitx/user.params
 COPY ./license /root/.jitx/license
 
-CMD ["/bin/bash", "open-components-database/scripts/run-ocdb-tests.sh"]
+CMD ["/bin/bash", "-c", "cd open-components-database ; scripts/run-ocdb-tests.sh"]
