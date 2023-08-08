@@ -4,7 +4,7 @@ set -Eeuo pipefail
 #
 # This script expects to be run from the `open-components-database` directory
 #
-if [ ! "$(basename $PWD)" == "open-components-database" ] ; then
+if [ "$(basename $PWD)" != "open-components-database" ] ; then
     echo "Error: this script expects to be run from the open-components-database directory"
     exit -1
 fi
