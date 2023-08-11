@@ -187,7 +187,7 @@ def parse_package_name(file: File):
     raise Exception("No defpackage statement")
 
 def write_stanza_dot_proj():
-    file = ['include "../open-components-database/stanza.proj"',
+    file = ['include "../stanza.proj"',  # i.e. open-components-database/stanza.proj
             PACKAGE_TEMPLATE.format(package_name=TEST_ENTRYPOINT_PACKAGE_NAME,
                                     file_name=TEST_ENTRYPOINT_FILE_NAME)]
     for top_level in TopLevel:
