@@ -27,8 +27,8 @@ public defn add-xtal-caps (xtal:JITXObject, gnd:JITXObject, stray-capacitance:Do
   inside pcb-module:
     val c-load = load-capacitance(property(xtal.crystal-resonator))
     val c-bal = closest-std-val(2.0 * (c-load - stray-capacitance), 5.0)
-    cap-strap(xtal.p[1], gnd, ["capacitance" => c-bal "temperature-coefficient.code" => "C0G" ])
-    val c = cap-strap(xtal.p[2], gnd, ["capacitance" => c-bal "temperature-coefficient.code" => "C0G" ])
+    cap-strap(xtal.p[1], gnd, ["capacitance" => c-bal "temperature-coefficient.code" => "C0G" "max-tolerance.max" => 0.05])
+    val c = cap-strap(xtal.p[2], gnd, ["capacitance" => c-bal "temperature-coefficient.code" => "C0G" "max-tolerance.max" => 0.05])
     c 
 ; Default stray capacitance assumed 5pf. 
 public defn add-xtal-caps (xtal:JITXObject, gnd:JITXObject) :
@@ -151,18 +151,18 @@ public defn connect-gnd-pins ():
           net (self.gnd, p)
 
 public defn is-resistor? (i: JITXObject) :
-  match(get-property?(i, `category)) :
-    (p:One) : p == "resistor"
+  match(get-property?(i, `resistance)) :
+    (p:One) : true
     (p:None) : false
 
 public defn is-capacitor? (i: JITXObject) :
-  match(get-property?(i, `category)) :
-    (p:One) : p == "capacitor"
+  match(get-property?(i, `capacitance)) :
+    (p:One) : true
     (p:None) : false
 
 public defn is-inductor? (i: JITXObject) :
-  match(get-property?(i, `category)) :
-    (p:One) : p == "inductor"
+  match(get-property?(i, `inductance)) :
+    (p:One) : true
     (p:None) : false
 
 public defn resistance! (i: JITXObject) :

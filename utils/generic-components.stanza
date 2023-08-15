@@ -316,7 +316,20 @@ public defn look-up-tantalum-caps (attribute: String, filter-properties:Tuple<Ke
 ; ==================== chip-resistor =====================
 ; ========================================================
 
-; Generic chip resistor from database (of 600k options)
+doc: \<DOC>
+  Generic chip resistor from database (of 600k options)
+  ## Args:
+  `user-params:Tuple<KeyValue>` - a collection of filtering parmeters to select an SMD thin or thick film resistor
+  ## Returns:
+  `Instantiable` - an instantiable of a real resistor matching the provided parameters.
+  ## Example use:
+  ```
+    inst r : chip-resistor(["resistance" => 0.01 "tolerance" => 0.005 "min-rated-power" => 0.5])
+
+  ## More info:
+  https://docs.jitx.com/reference/components/resistors.html#chip-resistor
+  
+<DOC>
 public defn chip-resistor (user-params:Tuple<KeyValue>) -> Instantiable :
   val params = normalize-params([smd-query-properties() user-params])
   val my-params = replace-params(params)
@@ -608,6 +621,7 @@ public defn bypass-caps (power-pin:JITXObject|Symbol, gnd-pin:JITXObject|Symbol,
       match(power-pin) :
         (r:JITXObject) :
           net (r, c.p[1])
+          short-trace(r, c.p[1])
         (s:Symbol) :
           make-net(s, false, [c.p[1]], false)
       match(gnd-pin) :
@@ -815,7 +829,7 @@ pcb-module test-points (count:Int, method:ocdb/utils/generic-components/Testpoin
       inst point : ocdb/components/te-connectivity/RC/component[count]
       point
     (method:Testpoint-SMDPad) :
-      inst point : gen-testpad(2.0)[count]
+      inst point : gen-testpad(1.0)[count]
       point
     (method:Instantiable) :
       inst point : method[count]
@@ -831,7 +845,7 @@ public defn add-testpoint (rs:Tuple<JITXObject>, method:ocdb/utils/generic-compo
     test-points
 
 public defn add-testpoint (rs:Tuple<JITXObject>) :
-  add-testpoint(rs, Testpoint-PTHLoop)
+  add-testpoint(rs, Testpoint-SMDPad)
 
 public pcb-component gen-testpad (d:Double) :
   pin p
@@ -949,21 +963,30 @@ public defn add-mounting-holes (board:Shape, no-hole:Tuple<Int>) :
 
 pcb-landpattern ant-2GHz4-inverted-f-geom :
 
-  pad launch : smd-pad(0.5, 0.5) at loc(0.0, 0.25)
+  pcb-pad launch-pad :
+    name  = "Ant Launch Pad"
+    type  = SMD
+    shape = Polygon([Point(-0.25, -0.25)
+                    ; Game the "center" point choice.
+                    Point(-0.15, -0.25) Point(0.0, -0.25) Point(0.15, -0.25)
+                    Point(0.25, -0.25)
+                    Point(0.25, 1.25) Point(-0.25, 1.25)])
+
+  pad launch : launch-pad at loc(0.0, 0.25)
   pad gnd : smd-pad(0.9, 0.5) at loc(-2.1, 0.25)
 
   copper(LayerIndex(0)) = Line(0.5, [Point(-2.1, 5.15), Point(2.2, 5.15), Point(2.2, 2.51), 
                                 Point(4.7, 2.51),  Point(4.7, 5.15), Point(6.9, 5.15), 
                                 Point(6.9, 2.51),  Point(9.4, 2.51), Point(9.4, 5.15), 
                                 Point(11.6, 5.15), Point(11.6, 0.96)])
-  copper(LayerIndex(0)) = Line(0.5, [Point(0.0, 0.0),   Point(0.0, 5.15)])
-  copper(LayerIndex(0)) = Rectangle(0.9, 5.4, loc(-2.1, 2.7))
-  via(LayerIndex(0), LayerIndex(0, Bottom), 
-    radius = 0.3, hole-radius = 0.125) 
-    at Point(-2.1, 0.0)
-  layer(ForbidCopper(LayerIndex(0), LayerIndex(0, Bottom))) = Rectangle(25.0, 5.5, loc(5.0, 3.25))
-  layer(Courtyard(Top)) = Rectangle(25.0, 5.5, loc(5.0, 3.25))
-  layer(Courtyard(Bottom)) = Rectangle(25.0, 5.5, loc(5.0, 3.25))
+  ; copper(LayerIndex(0)) = Line(0.5, [Point(0.0, 0.0),   Point(0.0, 5.15)])
+  ; copper(LayerIndex(0)) = Rectangle(0.9, 5.4, loc(-2.1, 2.7))
+  ; layer(ForbidCopper(LayerIndex(0), LayerIndex(0, Bottom))) = Rectangle(30.0, 5.5, loc(5.0, 3.25))
+  copper(LayerIndex(0)) = Rectangle(0.5, 4.10 loc(0., 3.325)) ; [Point(0.0, 0.0),   Point(0.0, 5.15)])
+  copper(LayerIndex(0)) = Rectangle(0.9, 4.9, loc(-2.1, 2.95))
+  ; layer(SolderMask(Top)) = Rectangle(30.0, 5.5, loc(5.0, 3.25))
+  layer(Courtyard(Top)) = Rectangle(30.0, 5.5, loc(5.0, 3.25))
+  layer(Courtyard(Bottom)) = Rectangle(30.0, 5.5, loc(5.0, 3.25))
   layer(BoardEdge()) = Line(0.0, [Point(17.0, 6.0), Point(-7.0, 6.0)])
   ref-label()
 
