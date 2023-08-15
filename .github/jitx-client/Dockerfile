@@ -7,7 +7,6 @@ RUN apt install -y python3.10
 
 WORKDIR /app
 COPY ./user.params /root/.jitx/user.params
-COPY ./scripts/ scripts/
 COPY ./license /root/.jitx/license
 
-CMD ["/bin/bash", "scripts/run-ocdb-tests.sh"]
+CMD ["/bin/bash", "-c", "cd open-components-database ; scripts/run-ocdb-tests.sh"]

@@ -40,53 +40,52 @@ public pcb-enum /ocdb/utils/placeholder-components/CapacitorApplication :
 ; ; ========================================================
 ; ; ========== Generic passive components ==================
 ; ; ========================================================
-
-public pcb-component dummy-resistor (res:Double|Toleranced orig:Double|Toleranced|False = false):
+public pcb-component dummy-resistor (res:Double|Toleranced -- original:Double|Toleranced|False = false case:String|False = false):
   port p : pin[[1 2]]
   val sym = resistor-sym(ResistorStd)
   symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
-  val pkg = ipc-two-pin-landpattern("0402")
+  val pkg = ipc-two-pin-landpattern(select-pkg(case))
   landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
   reference-prefix = "R"
   property(self.resistance) = res
   property(self.resistor) = true
-  match(orig:Double|Toleranced) :
-    property(self.orig-resistance) = orig
+  match(original:Double|Toleranced) :
+    property(self.original-resistance) = original
   else :
-    property(self.orig-resistance) = res
+    property(self.original-resistance) = res
   ; spice :
   ;   "[R] <p[1]> <p[2]> <res>"
 
-public pcb-component dummy-capacitor (cap:Double|Toleranced orig:Double|Toleranced|False = false):
+public pcb-component dummy-capacitor (cap:Double|Toleranced -- original:Double|Toleranced|False = false case:String|False = false):
   port p : pin[[1 2]]
   val sym = capacitor-sym(CapacitorNonPolarized)
   symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
-  val pkg = ipc-two-pin-landpattern("0402")
+  val pkg = ipc-two-pin-landpattern(select-pkg(case))
   landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
   reference-prefix = "C"
   property(self.capacitor) = true
   property(self.type) = "ceramic"
   property(self.capacitance) = cap
-  match(orig:Double|Toleranced) :
-    property(self.orig-capacitance) = orig
+  match(original:Double|Toleranced) :
+    property(self.original-capacitance) = original
   else :
-    property(self.orig-capacitance) = cap
+    property(self.original-capacitance) = cap
   ; spice :
   ;   "[C] <p[1]> <p[2]> <cap>"
 
-public pcb-component dummy-inductor (ind:Double|Toleranced orig:Double|Toleranced|False = false):
+public pcb-component dummy-inductor (ind:Double|Toleranced -- original:Double|Toleranced|False = false case:String|False = false):
   port p : pin[[1 2]]
   val sym = inductor-sym(InductorStd)
   symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
-  val pkg = ipc-two-pin-landpattern("0402")
+  val pkg = ipc-two-pin-landpattern(select-pkg(case))
   landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
   reference-prefix = "L"
   property(self.inductor) = true
   property(self.inductance) = ind
-  match(orig:Double|Toleranced) :
-    property(self.orig-inductance) = orig
+  match(original:Double|Toleranced) :
+    property(self.original-inductance) = original
   else :
-    property(self.orig-inductance) = ind
+    property(self.original-inductance) = ind
   ; spice :
   ;   "[L] <p[1]> <p[2]> <ind>"
 
@@ -407,60 +406,61 @@ public defn solve-placeholder-parts (m:Instantiable) -> Instantiable :
         else : [myk => myv]
       else : [myk => myv]      
   
-  defn resolve-components (my-para:HashTable<Double|Toleranced, Vector<JITXObject>>,
-                           my-fix:HashTable<Double|Toleranced, Vector<JITXObject>>) ->  Vector<Instantiable> :
+  defn resolve-components (placeholder-table:HashTable<Double|Toleranced, Vector<JITXObject>>,
+                           fixed-table:HashTable<Double|Toleranced, Vector<JITXObject>>) ->  Vector<Instantiable> :
     inside pcb-module :
-      val new-comps = Vector<Instantiable>()
-      for rs in my-para do :
+      val new-components = Vector<Instantiable>()
+      for rs in placeholder-table do :
         val r-val = key(rs)
-        for my-inst in value(rs) do :
-          if not has-property?(my-inst.user-params) :
-            fatal("Instance %_ does not have expected property (user-params)" % [ref(my-inst)])
-          val user-params = replace-tol-param(property(my-inst.user-params))
-          ; println("Searching with user-params => %_" % [user-params])
-          val new-comp =
-            if has-property?(my-inst.resistor) :
+        for old-inst in value(rs) do :
+          if not has-property?(old-inst.user-params) :
+            fatal("Instance %_ does not have expected property (user-params)" % [ref(old-inst)])
+          val user-params = replace-tol-param(property(old-inst.user-params))
+          val new-component =
+            if has-property?(old-inst.resistor) :
               try :
                 chip-resistor(user-params)
               catch (e):
-                println("Warning: generic resistor substitution for %_" % [ref(my-inst)])
-                match(property(my-inst.resistance)) :
+                println("Warning: generic resistor substitution for %_" % [ref(old-inst)])
+                match(property(old-inst.resistance)) :
                   (r:Double) : dummy-resistor(r)
-                  (t:Toleranced) : dummy-resistor(find-std-val(t), t)
-            else if has-property?(my-inst.capacitor) :
+                  (t:Toleranced) : dummy-resistor(find-std-val(t), original = t)
+            else if has-property?(old-inst.capacitor) :
               try :
                 ceramic-cap(user-params)
               catch (e):
-                println("Warning: generic capacitor substitution for %_" % [ref(my-inst)])
-                match(property(my-inst.capacitance)) :
+                println("Warning: generic capacitor substitution for %_" % [ref(old-inst)])
+                match(property(old-inst.capacitance)) :
                   (c:Double) : dummy-capacitor(c)
-                  (t:Toleranced) : dummy-capacitor(find-std-val(t), t)
-            else if has-property?(my-inst.inductor) :
+                  (t:Toleranced) : dummy-capacitor(find-std-val(t), original = t)
+            else if has-property?(old-inst.inductor) :
               try :
                 smd-inductor(user-params)
               catch (e):
-                println("Warning: generic inductor substitution for %_" % [ref(my-inst)])
-                match(property(my-inst.inductance)) :
+                println("Warning: generic inductor substitution for %_" % [ref(old-inst)])
+                match(property(old-inst.inductance)) :
                   (l:Double) : dummy-inductor(l)
-                  (t:Toleranced) : dummy-inductor(find-std-val(t), t)
+                  (t:Toleranced) : dummy-inductor(find-std-val(t), original = t)
             else :
               fatal("unknown component found")
-          inst my-new-comp : new-comp
-          property(my-new-comp.name) = to-symbol(ref(my-inst))
+          val inst-name = "new-comp-%_" % [ref(old-inst)]
+          val new-inst = make-inst(to-symbol(inst-name), new-component, false)
+          property(new-inst.name) = ref(old-inst)
           ; hook in new component to old placeholder instance pins (in parallel)
-          net (my-new-comp.p[1] my-inst.p[1])
-          net (my-new-comp.p[2] my-inst.p[2])
-          add(new-comps, new-comp)
-    new-comps
+          ; can't delete the old placeholder so....
+          net (new-inst.p[1] old-inst.p[1])
+          net (new-inst.p[2] old-inst.p[2])
+          add(new-components, new-component)
+    new-components
 
   within transform-module(m) :
     inside pcb-module :
       val knownR = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{})
       val knownC = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{})
       val knownL = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{})
-      val paraR  = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{}) 
-      val paraC  = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{}) 
-      val paraL  = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{}) 
+      val placeholderR  = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{}) 
+      val placeholderC  = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{}) 
+      val placeholderL  = HashTable-init<Double|Toleranced, Vector<JITXObject>>(Vector<JITXObject>{}) 
 
       ; Need to recursively retrieve all instances (including instances of modules.)
       ; Loop runs twice: 1 find, 1 add part.
@@ -468,11 +468,11 @@ public defn solve-placeholder-parts (m:Instantiable) -> Instantiable :
         if has-property?(i.placeholder) :
           ; println("Sorting part %_ with desired value %_" % [ref(i) property(i.resistance)])
           if has-property?(i.resistor) :
-            add(paraR[property(i.resistance)], i)
+            add(placeholderR[property(i.resistance)], i)
           else if has-property?(i.capacitor) :
-            add(paraR[property(i.capacitance)], i)
+            add(placeholderC[property(i.capacitance)], i)
           else if has-property?(i.inductor) :
-            add(paraR[property(i.inductance)], i)
+            add(placeholderL[property(i.inductance)], i)
           else :
             fatal("placeholder component is not a resistor, capacitor, or inductor. Other components are not currently supported.")
         else if has-property?(i.resistor) :
@@ -482,11 +482,11 @@ public defn solve-placeholder-parts (m:Instantiable) -> Instantiable :
         else if has-property?(i.inductor) :
           add(knownL[property(i.inductance)], i)    
       ; we have 2n Hashtables here 
-      ; paraR,paraC,.. are the placeholder components
+      ; placeholderR,placeholderC,.. are the placeholder components
       ; knownR,knownC,... are the known fixed components (non-placeholder)
-      resolve-components(paraR, knownR)
-      resolve-components(paraC, knownC)
-      resolve-components(paraL, knownL)
+      resolve-components(placeholderR, knownR)
+      resolve-components(placeholderC, knownC)
+      resolve-components(placeholderL, knownL)
 
 
 public defn list-all-instances () -> Seqable<JITXObject> :
