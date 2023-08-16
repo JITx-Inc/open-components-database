@@ -55,7 +55,7 @@ JITX_RUN_TEST="${JITX} run-test ${PWD}/stanza.proj"
 #==============================================
 echo "Checking that ocdb/components files conform to spec and compile."
 scripts/gen-components-file.sh
-jitx run components.stanza
+${JITX} run components.stanza
 rm components.stanza
 
 #==============================================
