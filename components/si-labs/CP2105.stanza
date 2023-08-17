@@ -59,10 +59,14 @@ public pcb-component component :
   property(self.rated-temperature) = min-max(-40.0, 85.0)
 
 
-  ; VIO can be independent of VDD/REGIN/VBUS
-  val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.4),
-                                  DualOffsetVoltage(-0.2, 0.0, self.VIO)), 
-                                  false, self.VIO, self.GND)
+  var vio-v = min-max(0.0, 0.0)
+  eval-when has-property?(self.VIO.voltage) :
+    vio-v = property(self.VIO.voltage) 
+    ; VIO can be independent of VDD/REGIN/VBUS
+    val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.4),
+                                    min-max(min-value(vio-v) - 0.2, max-value(vio-v))),
+                                    false, self.VIO, self.GND)
+
   val input-props = DigitalInput(typ(0.6), FractionalVoltage(0.7, self.VIO), 
                                   self.VIO, self.GND, 50.0e-6)
   val outs = [

@@ -53,18 +53,20 @@ public pcb-component component :
   manufacturer = "Texas Instruments"
   mpn = "SN65HVD1781QDRQ1"
 
-  val drive-props = DigitalOutput(
-    CMOSOutput(min-max(0.0, 0.8), 
-               DualOffsetVoltage(0.0, -0.3, self.VDD)),
-    false, self.VDD, self.GND)
+  var vdd-v = min-max(0.0, 0.0)
+  eval-when has-property?(self.VDD.voltage) :
+    vdd-v = property(self.VDD.voltage)
+    val drive-props = DigitalOutput(
+      CMOSOutput(min-max(0.0, 0.8), 
+                min-max(min-value(vdd-v) - 0.3, max-value(vdd-v))),
+      false, self.VDD, self.GND)
+    for o in [self.R] do :
+      property(o.digital-output) = drive-props
 
   val input-props = DigitalInput(
     typ(0.8), typ(2.0), 
     self.VDD, self.GND, 50.0e-6)
 
-  for o in [self.R] do :
-    property(o.digital-output) = drive-props
-  
   for i in [self.D self.DE self.NRE] do :
     property(i.digital-input) = input-props
 
