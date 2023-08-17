@@ -58,17 +58,6 @@ public pcb-component component :
   property(self.REGIN.power-pin) = PowerPin(min-max(3.0, 5.25))
   property(self.rated-temperature) = min-max(-40.0, 85.0)
 
-
-  var vio-v = min-max(0.0, 0.0)
-  eval-when has-property?(self.VIO.voltage) :
-    vio-v = property(self.VIO.voltage) 
-    ; VIO can be independent of VDD/REGIN/VBUS
-    val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.4),
-                                    min-max(min-value(vio-v) - 0.2, max-value(vio-v))),
-                                    false, self.VIO, self.GND)
-
-  val input-props = DigitalInput(typ(0.6), FractionalVoltage(0.7, self.VIO), 
-                                  self.VIO, self.GND, 50.0e-6)
   val outs = [
     self.TXD_ECI,
     self.DTR_ECI,
@@ -77,16 +66,28 @@ public pcb-component component :
     self.DTR_SCI,
     self.RTS_SCI
   ]
+
   val ins = [
     self.RXD_ECI,
     self.RXD_SCI
   ]
-  
-  for o in outs do :
-    property(o.digital-output) = drive-props
 
+  val input-props = DigitalInput(typ(0.6), FractionalVoltage(0.7, self.VIO), 
+                                  self.VIO, self.GND, 50.0e-6)
+  
   for i in ins do :
     property(i.digital-input) = input-props
+
+  var vio-v = min-max(0.0, 0.0)
+  eval-when has-property?(self.VIO.voltage) :
+    vio-v = property(self.VIO.voltage) 
+    ; VIO can be independent of VDD/REGIN/VBUS
+    val drive-props = DigitalOutput(CMOSOutput(min-max(0.0, 0.4),
+                                    min-max(min-value(vio-v) - 0.2, max-value(vio-v))),
+                                    false, self.VIO, self.GND)
+    for o in outs do :
+      property(o.digital-output) = drive-props
+
 
 public pcb-module module (bus-powered?:True|False):
   port usb-2 : usb-2
