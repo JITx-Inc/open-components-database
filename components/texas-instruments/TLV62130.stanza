@@ -42,9 +42,22 @@ public pcb-component component :
   property(self.PVIN.power-pin) = PowerPin(min-max(3.0, 17.0))
   property(self.rated-temperature) = min-max(-40.0, 85.0)
   
-  property(self.EN.generic-pin)   = GenericPin(DualOffsetVoltage(0.0, 0.3, self.PVIN), 2000.0)
-  property(self.SS.generic-pin)   = GenericPin(DualOffsetVoltage(0.0, 0.3, self.PVIN), 2000.0)
-  property(self.SW.generic-pin)   = GenericPin(DualOffsetVoltage(0.0, 0.3, self.PVIN), 2000.0)
+  var pvin-v = min-max(0.0, 0.0)
+  eval-when has-property?(self.PVIN.voltage) :
+    pvin-v = property(self.PVIN.voltage)
+    property(self.EN.generic-pin)   = GenericPin(min-max(min-value(pvin-v), max-value(pvin-v) + 0.3), 2000.0)
+    property(self.SS.generic-pin)   = GenericPin(min-max(min-value(pvin-v), max-value(pvin-v) + 0.3), 2000.0)
+    property(self.SW.generic-pin)   = GenericPin(min-max(min-value(pvin-v), max-value(pvin-v) + 0.3), 2000.0)
+    ; match(pvin-v) :
+    ;   (x:Toleranced) :
+    ;     property(self.EN.generic-pin)   = GenericPin(min-max(min-value(x), max-value(x) + 0.3), 2000.0)
+    ;     property(self.SS.generic-pin)   = GenericPin(min-max(min-value(x), max-value(x) + 0.3), 2000.0)
+    ;     property(self.SW.generic-pin)   = GenericPin(min-max(min-value(x), max-value(x) + 0.3), 2000.0)
+    ;   (y:Double) :
+    ;     property(self.EN.generic-pin)   = GenericPin(min-max(y, y + 0.3), 2000.0)
+    ;     property(self.SS.generic-pin)   = GenericPin(min-max(y, y + 0.3), 2000.0)
+    ;     property(self.SW.generic-pin)   = GenericPin(min-max(y, y + 0.3), 2000.0)
+
 
   ; Static properties
   property(self.PVIN.generic-pin) = GenericPin(min-max(-0.3, 20.0), 2000.0)
