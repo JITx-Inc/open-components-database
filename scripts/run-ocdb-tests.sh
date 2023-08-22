@@ -32,7 +32,9 @@ echo "JITX_INSTALL_DIR = \"${JITX_INSTALL_DIR}\""
 JITX="${JITX_INSTALL_DIR}/jitx"
 echo "JITX = \"${JITX}\""
 
+echo -e "\n\n--------------------------------------------------------------------------------"
 echo "Installation details"
+echo "--------------------------------------------------------------------------------"
 
 "${JITX}" version
 "${JITX}" check-install
@@ -53,7 +55,9 @@ JITX_RUN_TEST="${JITX} run-test ${PWD}/stanza.proj"
 #==============================================
 #=========== Component Models test ============
 #==============================================
+echo -e "\n\n--------------------------------------------------------------------------------"
 echo "Checking that ocdb/components files conform to spec and compile."
+echo "--------------------------------------------------------------------------------"
 scripts/gen-components-file.sh
 ${JITX} run components.stanza
 rm components.stanza
@@ -61,11 +65,15 @@ rm components.stanza
 #==============================================
 #==== public pcb-* macro evaluation tests =====
 #==============================================
+echo -e "\n\n--------------------------------------------------------------------------------"
 echo "Searching for pcb objects and generating tests..."
+echo "--------------------------------------------------------------------------------"
 ${PYTHON} scripts/evaluate_pcb_objects.py
 (
 cd test-evaluate/
+echo -e "\n\n--------------------------------------------------------------------------------"
 echo "Launching pcb object tests..."
+echo "--------------------------------------------------------------------------------"
 ${JITX_RUN_TEST} test/evaluate/api
 cd ..
 )
@@ -74,13 +82,17 @@ rm -rf test-evaluate
 #==============================================
 #================= Unit-tests =================
 #==============================================
+echo -e "\n\n--------------------------------------------------------------------------------"
 echo "Launching ocdb tests, they can depend on jitx-client..."
+echo "--------------------------------------------------------------------------------"
 ${JITX_RUN_TEST} tests/all.stanza -not-tagged part-query long not-implemented-yet
 
 #==============================================
 #============= Integration tests ==============
 #==============================================
+echo -e "\n\n--------------------------------------------------------------------------------"
 echo "Launching ocdb designs..."
+echo -e "--------------------------------------------------------------------------------"
 (
 cd designs
 designs=(ble-mote.stanza
@@ -106,7 +118,9 @@ if [[ $restrict == false ]]; then
 fi
 
 for filename in "${designs[@]}"; do
+    echo -e "\n\n--------------------------------------------------------------------------------"
     echo "Running $filename..."
+    echo "--------------------------------------------------------------------------------"
     ${JITX_RUN} $filename
 done
 
