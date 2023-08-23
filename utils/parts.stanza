@@ -900,7 +900,7 @@ public defstruct LandPatternCode :
   pcb-layer-value: PCBLayerValue
   layers: Tuple<PCBLayerCode>
   geometries: Tuple<GeomCode>
-  model3ds: Tuple<Model3D>
+  model3ds: Tuple<Model3DCode>
 
 public-when(TESTING) defn LandPatternCode (json: JObject) -> LandPatternCode :
   LandPatternCode(
@@ -910,7 +910,7 @@ public-when(TESTING) defn LandPatternCode (json: JObject) -> LandPatternCode :
     PCBLayerValue(json["pcb_layer_value"] as JObject),
     map(PCBLayerCode, json["layers"] as Tuple<JObject>),
     map(GeomCode, json["geometries"] as Tuple<JObject>),
-    map(Model3D, json["model3ds"] as Tuple<JObject>)
+    map(Model3DCode, json["model3ds"] as Tuple<JObject>)
   )
 
 ;Represents a via, copper, or pour.
@@ -967,11 +967,18 @@ defn ViaType (s: String) -> ViaType :
     "MicroVia": MicroVia
     "BlindVia": BlindVia
 
-defn Model3D (json: JObject) -> Model3D :
-  Model3D(json["filename"] as String,
-          Vec3D(json["position"] as JObject),
-          Vec3D(json["scale"] as JObject),
-          Vec3D(json["rotation"] as JObject))
+public defstruct Model3DCode :
+  model3d: Model3D
+  model3d-id: String
+
+public defn Model3DCode (json: JObject) -> Model3DCode :
+  Model3DCode(
+    Model3D(json["filename"] as String,
+            Vec3D(json["position"] as JObject),
+            Vec3D(json["scale"] as JObject),
+            Vec3D(json["rotation"] as JObject))
+    json["jitx_model_3d_id"] as String
+  )
 
 defn Vec3D (json: JObject) -> Vec3D :
   Vec3D(json["x"] as Double,
@@ -1003,7 +1010,7 @@ defn to-jitx (lp: LandPatternCode, jitx-pads-by-pcb-pad-name: HashTable<String, 
 
     do(to-jitx, layers(lp))
     do(to-jitx, geometries(lp))
-    do(to-jitx, model3ds(lp))
+    do(to-jitx{model3d(_)}, model3ds(lp))
 
   my-landpattern
 
