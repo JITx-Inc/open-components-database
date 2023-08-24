@@ -1,77 +1,3 @@
-<<<<<<< HEAD
-; This design uses the MAX16061ETP+ to monitor a set of four power rails on an FPGA.
-; The tree of power regulators for supplying loads is generated automatically.
-; support/require statements are used to connect IO between an FMC connector and an FPGA.
-; The LVDS bus is terminated using a parametric circuit generator.
-; The operating environment for this design is Earth orbit, so a set of derating checks
-; is run to verify component compatibility with that environment. Some of these components
-; are not compatible with spaceflight, so we expect these checks to fail.
-#use-added-syntax(jitx)
-defpackage ocdb/designs/power-monitor :
-  import core
-  import collections
-  import jitx
-  import jitx/commands
-  import ocdb/utils/defaults
-  import ocdb/utils/generic-components
-  import ocdb/utils/bundles
-  import ocdb/utils/design-vars
-  import ocdb/utils/micro-controllers
-  import ocdb/utils/generator-utils
-  import ocdb/utils/property-structs
-  import ocdb/utils/checks
-
-val board-shape = RoundedRectangle(3.55 * 25.4, 3.775 * 25.4, 1.0)
-
-OPERATING-TEMPERATURE = min-max(-40.0, 90.0)
-
-pcb-module power-monitor :
-  inst fmc :ocdb/components/samtec/ASP-134488-01/component
-  place(fmc) at loc(0.0, -35.0) on Top
-  set-power-source(fmc.v12p0, fmc.gnd, 12.0)
-
-  net GND (fmc.gnd)
-  symbol(GND) = ocdb/utils/symbols/ground-sym
-
-  inst fpga : ocdb/components/microsemi/A2F200M3F-FGG256I/module
-
-; Rails to monitor
-  val power-rails = [ PowerRail(fmc.v12p0,         tol%(12.0, 2.0))
-                      PowerRail(fpga.src-1V5.vdd,  tol%(1.50, 2.0))
-                      PowerRail(fpga.src-3V3.vdd,  tol%(3.30, 2.0))
-                      PowerRail(fpga.src-io.vdd,   tol%(1.80, 2.0))]
-
-  inst mon : ocdb/components/maxim/MAX1606x/module(power-rails)
-  net gnd (mon.power.gnd GND)
-  net vdd (mon.power.vdd fmc.v3p3)
-
-  require POD:gpio[30] from fpga
-  require POD-ext:gpio[30] from fmc
-  net (POD, POD-ext)
-
-  require comm-bus:lvds[16] from fpga
-  require comm-bus-ext:lvds[16] from fmc
-  for i in 0 to 16 do :
-    net (ocdb/modules/terminations/terminate-lvds(comm-bus[i], gnd, vdd, ocdb/modules/terminations/LVDSTerminationACSimple), comm-bus-ext[i])
-
-  ; Mechanicals
-  add-mounting-holes(board-shape, "M2", [2 3])
-
-  ; Run the schematic review 
-  property(GND.net-voltage) = typ(0.0)
-  eval-when true:
-    check-design(self)
-
-defn run-design (module:Instantiable) :
-  val powered-design = run-final-passes(transform-module(generate-power, module))
-  make-default-board(powered-design, 4, board-shape)
-
-  view-board()
-  view-schematic()
-
-  export-cad()
-
-=======
 ; This design uses the MAX16061ETP+ to monitor a set of four power rails on an FPGA.
 ; The tree of power regulators for supplying loads is generated automatically.
 ; support/require statements are used to connect IO between an FMC connector and an FPGA.
@@ -145,5 +71,4 @@ defn run-design (module:Instantiable) :
 
   export-cad()
 
->>>>>>> 500c33dc1ac811f5f5378bc6c93eaa04a4efbc37
 run-design(power-monitor)
