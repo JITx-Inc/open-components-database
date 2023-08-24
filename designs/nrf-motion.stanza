@@ -1,0 +1,101 @@
+#use-added-syntax(jitx)
+defpackage ocdb/designs/nrf-motion:
+  import core
+  import jitx
+  import jitx/commands
+  import ocdb/utils/bundles
+  import ocdb/utils/checks
+  import ocdb/utils/generic-components
+  import ocdb/utils/generator-utils
+  import ocdb/utils/design-vars
+
+val board-shape = RoundedRectangle(28.0, 25.0, 3.0)
+
+OPTIMIZE-FOR = ["area"]
+DESIGN-QUANTITY = 100
+OPERATING-TEMPERATURE = min-max(-40.0 90.0)
+
+
+; Setup the board
+defn setup-board () :
+  set-board(ocdb/utils/defaults/default-board(ocdb/manufacturers/stackups/jlcpcb-jlc2313, board-shape))
+  set-rules(ocdb/manufacturers/rules/jlcpcb-basic-rules)
+  set-use-layout-groups()
+
+pcb-module nrf-motion :
+
+  inst bat : database-part(["mpn" => "BS-08-B2AA016", "manufacturer" => "MYOUNG"])
+  place(bat) at loc(0.0, 0.0) on Bottom
+  inst nrf : ocdb/components/nordic/nRF52840/module(include-LFO? = false power-config = 6)
+
+  ; Add an accelerometer
+  inst xl : ocdb/components/st-microelectronics/LIS3DH/module
+
+  ; Connect power, apply symbols
+  net GND (nrf.gnd xl.power.gnd bat.p[2])
+  net VDD (nrf.vdd xl.power.vdd xl.vio bat.p[1])
+
+  symbol(GND) = ocdb/utils/symbols/ground-sym
+  symbol(VDD) = ocdb/utils/symbols/supply-sym
+
+  property(GND.voltage) = typ(0.0)
+  property(VDD.voltage) = min-max(2.8, 3.0)
+
+  require acc-i2c:i2c from nrf.mcu
+  net (acc-i2c, xl.i2c)
+  add-open-drain-pullups(xl.i2c, nrf.vdd)
+
+  require tap-detect:gpio from nrf.mcu
+  net WAKE (tap-detect.gpio, xl.int[1])
+
+  require debug : swd([SWD-SWO]) from nrf.mcu
+
+
+  add-testpoint([GND VDD])
+  add-testpoint(pins(debug))
+
+  inst microphone : database-part(["mpn" => "AP3722AT", "manufacturer" => "ALLPOWER(ShenZhen Quan Li Semiconductor)"])
+  inst amp :  ocdb/modules/amplifiers/microphone-preamp
+  inst load-sw : ocdb/modules/load-switch/discrete-mosfet()
+
+  net (load-sw.power VDD)
+  val cb = bypass-cap-strap(microphone.VDD, GND, 0.1e-6)
+  schematic-group([microphone cb]) = schematic-group(amp)
+  layout-group([microphone cb]) = layout-group(amp)
+  
+  net (amp.power.gnd GND microphone.GND0 microphone.GND1 load-sw.gnd)
+  net VDDA (amp.power.vdd load-sw.load microphone.VDD)
+  symbol(VDDA) = ocdb/utils/symbols/supply-sym
+  net (amp.in microphone.OUT)
+
+
+  val power-net-class = NetClass(`Power, [`min-trace => 0.40])
+  for n in [VDD VDDA GND] do :
+    property(n.net-class) = power-net-class
+
+  require sw : gpio from nrf.mcu
+  require mic:adc from nrf.mcu
+  net (sw.gpio, load-sw.control)
+  net (mic.adc, amp.out)
+
+  geom(GND) :
+    copper-pour(LayerIndex(1), isolate = 0.2) = board-shape
+    copper-pour(LayerIndex(2), isolate = 0.2) = board-shape
+  
+  property(VDD.net-class) = NetClass(`Power, [`min-trace => 0.35])
+
+  ; Run the schematic review
+  check-design(self)
+
+set-current-design("nrf-motion")
+set-paper(ANSI-A)
+setup-board()
+
+val main-module = ocdb/utils/generator-utils/run-final-passes(nrf-motion) ; Analyze design with a pass
+set-main-module(main-module) ; Treat the provided module as a design, and compile it.
+run-checks("checks.txt")
+
+; View the results
+view-board()
+view-schematic()
+view-design-explorer()

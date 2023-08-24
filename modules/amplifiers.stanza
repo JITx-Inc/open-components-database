@@ -1,0 +1,91 @@
+#use-added-syntax(jitx)
+defpackage ocdb/modules/amplifiers :
+  import core
+  import collections
+  import math
+  import jitx 
+  import jitx/commands
+  import ocdb/utils/defaults
+  import ocdb/utils/generic-components
+  import ocdb/utils/generator-utils
+  
+  import ocdb/utils/checks
+  import ocdb/utils/design-vars
+
+  import ocdb/utils/property-structs
+  import ocdb/utils/bundles
+
+; Non-inverting opamp, from AN4598, bias signal to vcc/2, ac coupled input, AC coupled output, 
+; https://www.st.com/resource/en/application_note/an4598-preamplifying-the-analog-output-of-a-mems-microphone-stmicroelectronics.pdf
+public pcb-module microphone-preamp :
+  pin in
+  pin out
+  port power : power
+
+  inst op-amp : database-part(["mpn" => "MCP6001T-E/OT", "manufacturer" => "Microchip"])
+  cap-strap(op-amp.VIN+, in, 1.0e-6)
+  cap-strap(op-amp.VOUT, out, 1.0e-6)
+  bypass-cap-strap(op-amp.VDD power.gnd, 10.0e-6)
+  bypass-cap-strap(op-amp.VDD power.gnd, 10.0e-9)
+  net (op-amp.VSS, power.gnd)
+  net (op-amp.VDD, power.vdd)
+
+  ; Low pass input filter and bias
+  inst r : chip-resistor(["resistance" => 10.0e3 "tolerance" => 0.01])[4]
+  net (power.vdd r[0].p[1])
+  net (r[0].p[2] r[1].p[1] r[2].p[1])
+  bypass-cap-strap(r[1].p[1] power.gnd, 22.0e-6)
+  net (r[1].p[2] power.gnd)
+
+  net (r[2].p[2] r[3].p[2])
+  cap-strap(r[2].p[2] power.gnd, 10.0e-6)
+  net (r[3].p[1] op-amp.VIN+)
+
+  ; Feedback
+  inst r-f : chip-resistor(27.0e3)
+  inst c-f : ceramic-cap(560.0e-12)
+  net (r-f.p[1] c-f.p[1] op-amp.VIN-)
+  net (r-f.p[2] c-f.p[2] op-amp.VOUT)
+
+  ; High pass filter
+
+  inst r-hp : chip-resistor(820.0)
+  net (r-hp.p[1] r-f.p[1])
+  cap-strap(r-hp.p[2] power.gnd, 3.3e-6)
+
+  ; Noise calculation - https://www.ti.com/lit/pdf/slva043
+  ; ENB - equivalent noise bandwidth - 1.57 * corner-frequency
+  ; fH - highest frequency of interest, fL - lowest frequency of interest. fH/fL set equal to ENB 
+  val ENB = 1.57 * 10.5e3 ; First order low pass filter 3db
+  ; k - Boltzman's constant 
+  val k = 1.38e-23
+  ; T - Absolute temperature
+  val T = max-value(OPERATING-TEMPERATURE) ; Worst case
+  ; R1 - resistor from V- to gnd
+  ; R2 - feedback resistor
+  ; R3 - resistor from V+ to gnd
+  val R1 = 820.0
+  val R2 = 27.0e3
+  val R3 = 20.0e3 ; Is this right? Confiuration does not match application note. 20k to biased reference voltage.
+  val A = (R1 + R2) / R1
+  ; iw - white current noise specification (input noise current density A/Hz^0.5)
+  val iw = 0.6e-15
+  ; finc - current noise corner frequency
+  val finc = 300.0 ; The same as the voltage corner?
+  ; ew - white noise voltage specification (Input noise current density V/Hz^0.5)
+  val ew = 28.0e-9
+  ; fenc - voltage noise corner specification (Figure 2-12 Hz)
+  val fenc = 300.0
+
+  val output-rms-voltage-noise = sqrt(ENB * (4.0 * k * T * R2 * A + 4.0 * k * T * R3 * pow(A, 2.0)) + 
+                                      pow(iw, 2.0) * (pow(R2, 2.0), + pow(R3, 2.0) * pow(A, 2.0)) * (finc * log(ENB) + ENB) + 
+                                      pow(ew, 2.0) *  pow(A,  2.0) * (fenc * log(ENB) + ENB))
+
+  println(output-rms-voltage-noise)
+
+  schematic-group(self) = microphone-preamp
+  layout-group(self) = microphone-preamp
+
+
+
+  
