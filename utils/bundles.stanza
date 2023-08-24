@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #use-added-syntax(jitx)
 defpackage ocdb/utils/bundles :
   import core
@@ -242,3 +243,438 @@ public defn i2s () :
 public pcb-bundle mipi-d-phy :
   port clk : diff-pair
   port data : diff-pair
+=======
+#use-added-syntax(jitx)
+defpackage ocdb/utils/bundles :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/utils/defaults
+
+defn diff-pair-pins () :
+  inside pcb-bundle:
+    pin N
+    pin P
+
+public pcb-bundle rtd :
+  port N : pin[2]
+  port P : pin[2]
+
+public pcb-bundle diff-pair :
+  diff-pair-pins()
+
+public pcb-bundle lvds : 
+  diff-pair-pins()
+
+public pcb-bundle SPST :
+  pin p
+  pin t
+
+public pcb-bundle power :
+  pin vdd
+  pin gnd
+
+public pcb-bundle fpga-diff : 
+  diff-pair-pins()
+
+public pcb-enum ocdb/utils/bundles/JTAGPins :
+  JTAG-TRSTN
+
+public pcb-bundle jtag (pins:Tuple<ocdb/utils/bundles/JTAGPins>):
+  pin tck
+  pin tdi
+  pin tdo
+  pin tms
+  for p in pins do :
+    switch(p) :
+      JTAG-TRSTN : make-pin(`trstn)
+
+public defn jtag ():
+  jtag([JTAG-TRSTN])
+
+public pcb-bundle gpio :
+  pin gpio
+
+public pcb-bundle timer :
+  pin timer
+
+public pcb-bundle adc :
+  pin adc
+
+public pcb-bundle dac :
+  pin dac
+
+public pcb-bundle reset :
+  pin reset
+
+public pcb-bundle i2c :
+  pin sda
+  pin scl
+
+public pcb-bundle can :
+  pin canh
+  pin canl
+
+public pcb-bundle can-interface :
+  pin rx
+  pin tx
+
+public pcb-enum ocdb/utils/bundles/SWDPins :
+  SWD-SWO
+  SWD-TRACESWO
+
+public pcb-bundle swd (pins:Tuple<ocdb/utils/bundles/SWDPins>):
+  pin swdio
+  pin swdclk
+  for p in pins do :
+    switch(p) :
+      SWD-SWO : make-pin(`swo)
+      SWD-TRACESWO : make-pin(`traceswo)
+
+public defn swd ():
+  swd([])
+      
+public pcb-enum ocdb/utils/bundles/UARTPins :
+  UART-DTR
+  UART-CTS
+  UART-DCD
+  UART-RI
+  UART-DST
+  UART-RTS
+  UART-CK
+  UART-DE
+  UART-CS
+  UART-RX
+  UART-TX
+
+public pcb-bundle uart (pins:Tuple<UARTPins>) :
+  for p in pins do :
+    switch(p) :
+      UART-DTR : make-pin(`dtr)
+      UART-CTS : make-pin(`cts)
+      UART-DCD : make-pin(`dcd)
+      UART-RI  : make-pin(`ri)
+      UART-DST : make-pin(`dst)
+      UART-RTS : make-pin(`rts)
+      UART-CK : make-pin(`ck)
+      UART-DE : make-pin(`de)
+      UART-CS : make-pin(`cs)
+      UART-RX : make-pin(`rx)
+      UART-TX : make-pin(`tx)
+
+public defn uart ():
+  uart([UART-RX, UART-TX])
+
+public pcb-bundle usart (pins:Tuple<ocdb/utils/bundles/UARTPins>) :
+  for p in pins do :
+    switch(p) :
+      UART-DTR : make-pin(`dtr)
+      UART-CTS : make-pin(`cts)
+      UART-DCD : make-pin(`dcd)
+      UART-RI  : make-pin(`ri)
+      UART-DST : make-pin(`dst)
+      UART-RTS : make-pin(`rts)
+      UART-CK : make-pin(`ck)
+      UART-DE : make-pin(`de)
+      UART-CS : make-pin(`cs)
+      UART-RX : make-pin(`rx)
+      UART-TX : make-pin(`tx)
+
+public defn usart ():
+  usart([UART-RX, UART-TX, UART-CK])
+
+public pcb-enum ocdb/utils/bundles/SPIPins :
+  SPI-SDO
+  SPI-SDI
+  SPI-CS
+  SPI-CIPO
+  SPI-COPI
+  SPI-SDIO
+
+public pcb-bundle spi  (pins:Tuple<SPIPins>):
+  pin sck
+  for p in pins do :
+    switch(p) :
+      SPI-SDI : make-pin(`sdi)
+      SPI-SDO : make-pin(`sdo)
+      SPI-CS  : make-pin(`cs)
+      SPI-CIPO  : make-pin(`cipo)
+      SPI-COPI  : make-pin(`copi)
+      SPI-SDIO  : make-pin(`sdio)
+
+; Most common spi bundle
+public defn spi-peripheral () :
+  spi([SPI-SDO SPI-SDI SPI-CS])
+
+public defn spi-controller () :
+  spi([SPI-COPI SPI-CIPO SPI-CS])
+
+public pcb-bundle quad-spi :
+  port sdio : pin[4]
+  pin sck
+  pin cs
+
+public pcb-bundle usb-2-data :
+  diff-pair-pins()
+
+public pcb-bundle usb-2 :
+  port data : usb-2-data
+  port vbus : power
+  pin id
+
+public pcb-bundle usb-c :
+  port data : usb-2-data[[1 2]]
+  port vbus : power
+  port cc : pin[[1 2]]
+  port sbu : pin[[1 2]]
+  port rx : diff-pair[[1 2]]
+  port tx : diff-pair[[1 2]]
+
+public pcb-bundle usb-c-full-bundle :
+  pin VBUS
+  pin CC1
+  pin CC2
+  pin DP1
+  pin DN1
+  pin DP2
+  pin DN2
+  pin SBU1
+  pin SBU2
+  pin GND
+  pin shield
+  pin SSTXP1
+  pin SSTXN1
+  pin SSRXP1
+  pin SSRXN1
+  pin SSRXP2
+  pin SSRXN2
+  pin SSTXP2
+  pin SSTXN2
+  
+public pcb-bundle rgmii :
+  port txd : pin[4] 
+  port rxd : pin[4]
+  pin tx-clk  ; should be txc
+  pin tx-ctrl ; tx-ctl
+  pin rx-clk  ; rxc
+  pin rx-ctrl ; rx-ctl
+
+public pcb-bundle miim :
+  pin mdc
+  pin mdio
+
+; Gigabit Media Independent Interface (GMII)
+; https://en.wikipedia.org/wiki/Media-independent_interface#GMII
+; ; NOTE 2023-7-25: this conflicts with public defn mii() below when compiled in optimized mode
+;; public pcb-bundle mii ():
+;;   pin gtxclk
+;;   pin txclk
+;;   port txd : pin[8]
+;;   pin txen
+;;   pin txer
+;;   pin rxclk
+;;   port rxd : pin[8]
+;;   pin rxdv
+;;   pin rxer
+;;   pin col
+;;   pin cs
+
+
+public pcb-enum ocdb/utils/bundles/MIIPins-Extra:
+  ; Optional on MII
+  MII-TX-ER  
+
+; Standard Media Independent Interface (MII)
+; https://en.wikipedia.org/wiki/Media-independent_interface#Standard_MII
+public pcb-bundle mii (pins:Tuple<MIIPins-Extra>): 
+  pin tx-clk
+  pin tx-en
+  port txd : pin[4]
+  pin rx-clk
+  port rxd : pin[4]
+  pin rx-dv
+  pin rx-er
+  pin crs
+  pin col
+  for p in pins do:
+    switch(p):
+      MII-TX-ER : make-pin(`tx-er)
+
+public defn mii () : 
+  ; Without tx error
+  mii([])
+
+public pcb-enum ocdb/utils/bundles/RMIIPins-Extra:
+  ; Optional on RMII
+  RMII-RX-ER  
+
+; Reduced Media Independent Interface (RMII)
+; https://en.wikipedia.org/wiki/Media-independent_interface#RMII
+public pcb-bundle rmii (pins:Tuple<RMIIPins-Extra>) :
+  pin ref-clk
+  port txd : pin[2]
+  pin tx-en
+  port rxd : pin[2]
+  pin crs-dv  
+  for p in pins do:
+    switch(p):
+      RMII-RX-ER : make-pin(`rx-er)
+
+; Default implementation with no rx-er
+public defn rmii ():
+  rmii([])
+
+public pcb-bundle ethernet-1000 :
+  port mdi : diff-pair[4]
+
+public pcb-bundle trd :
+  port trd : diff-pair
+  pin common
+
+public pcb-bundle rgb-led :
+  pin r
+  pin g
+  pin b
+  pin a
+
+public pcb-bundle crystal :
+  pin in
+  pin out
+
+public pcb-bundle low-freq-oscillator :
+  pin in
+  pin out
+
+public pcb-bundle high-freq-oscillator : 
+  pin in
+  pin out
+
+public pcb-bundle rs485 :
+  pin b
+  pin a
+  
+public pcb-enum ocdb/utils/bundles/I2SPins :
+  I2S-SDMI
+  I2S-MCK
+
+public pcb-bundle i2s  (pins:Tuple<ocdb/utils/bundles/I2SPins>):
+  pin ck
+  pin ws
+  pin sdmo
+  for p in pins do :
+    switch(p) :
+      I2S-SDMI : make-pin(`sdmi)
+      I2S-MCK  : make-pin(`mck)
+
+public defn i2s () :
+  i2s([])
+
+public pcb-bundle mipi-d-phy :
+  port clk : diff-pair
+  port data : diff-pair
+
+; Dynamic lookup for simplicity
+; Could pre-populate for performance at some point, if needed
+public defn get-bundle-by-name (name:String, options:Tuple<String>) -> Bundle | [Bundle, Bundle] :
+  switch(name) :
+    ;============= Single Pin Bundles ===============
+    "gpio"  : gpio
+    "adc"   : adc
+    "dac"   : dac
+    "timer" : timer
+
+    ;=============== Two Pin Bundles ================
+    "low-freq-oscillator"  : low-freq-oscillator
+    "high-freq-oscillator" : high-freq-oscillator
+    "can-interface"        : can-interface
+    "i2c"                  : i2c
+
+    ;=============== 3+ Pin Bundles =================
+    "quad-spi" : quad-spi
+
+    ;========== Optionally Pinned Bundles ===========
+    ;Collect the optional pins and pass them as Bundle arguments.
+    "swd" : swd $
+      for option in options map :
+        switch(option) :
+          "SWD-SWO" : SWD-SWO
+          "SWD-TRACESWO" : SWD-TRACESWO
+    "jtag" : jtag $
+      for option in options map :
+        switch(option) :
+          "JTAG-TRSTN" : JTAG-TRSTN
+    "i2s" : i2s $
+      for option in options map :
+        switch(option) :
+          "I2S-MCK" : I2S-MCK
+          "I2S-SDMI" : I2S-SDMI
+    "uart" :
+      val options =
+        for option in options map :
+          switch(option) :
+            "UART-DTR" : UART-DTR
+            "UART-CTS" : UART-CTS
+            "UART-DCD" : UART-DCD
+            "UART-RI" : UART-RI
+            "UART-DST" : UART-DST
+            "UART-RTS" : UART-RTS
+            "UART-CK" : UART-CK
+            "UART-DE" : UART-DE
+            "UART-CS" : UART-CS
+            "UART-RX" : UART-RX
+            "UART-TX" : UART-TX
+      [uart(options) usart(options)]
+    "usart" :
+      usart $
+        for option in options map :
+          switch(option) :
+            "UART-DTR" : UART-DTR
+            "UART-CTS" : UART-CTS
+            "UART-DCD" : UART-DCD
+            "UART-RI" : UART-RI
+            "UART-DST" : UART-DST
+            "UART-RTS" : UART-RTS
+            "UART-CK" : UART-CK
+            "UART-DE" : UART-DE
+            "UART-CS" : UART-CS
+            "UART-RX" : UART-RX
+            "UART-TX" : UART-TX
+    "spi" : spi $
+      for option in options map :
+        switch(option) :
+          "SPI-SDO" : SPI-SDO
+          "SPI-SDI" : SPI-SDI
+          "SPI-CS" : SPI-CS
+          "SPI-CIPO" : SPI-CIPO
+          "SPI-COPI" : SPI-COPI
+          "SPI-SDIO" : SPI-SDIO
+    "spi-controller" :
+      spi-controller()
+    else :
+      fatal("Bundle '%_' is not supported." % [name])
+
+
+public pcb-enum ocdb/utils/bundles/ULPIBusMode:
+  ULPI-SDR-8x
+  ULPI-DDR-4x
+
+defn ULPI-PortArray (cnt:Int) -> PortArray : 
+  PortArray(SinglePin(), to-tuple $ 0 to cnt)
+
+public pcb-bundle ulpi (mode:ULPIBusMode) :
+  pin dir
+  pin stp
+  pin nxt
+  pin clk
+  switch(mode):
+    ULPI-SDR-8x: make-port(`d, ULPI-PortArray(8))
+    ULPI-DDR-4x: make-port(`d, ULPI-PortArray(4))
+
+public defn ulpi () :
+  ulpi(ULPI-SDR-8x)
+
+public defn get-bundle-by-name (name:String) -> Bundle | [Bundle, Bundle] :
+  get-bundle-by-name(name, [])
+>>>>>>> 500c33dc1ac811f5f5378bc6c93eaa04a4efbc37

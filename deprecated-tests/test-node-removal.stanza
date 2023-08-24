@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #use-added-syntax(esir)
 defpackage ocdb/tests/test-node-removal :
   import core
@@ -54,4 +55,62 @@ pcb-design main-design :
 
 ;val esir = repl-lib/assign-concrete-pins()
 ;match(esir:Collection<TStmt>) :
+=======
+#use-added-syntax(esir)
+defpackage ocdb/tests/test-node-removal :
+  import core
+  import collections
+  import esir
+  import ocdb/tests/default-harness
+
+pcb-bundle simple-b :
+  pin p
+
+pcb-component mycomponent :
+  pin a
+  pin b
+  supports simple-b :
+    p => a
+  supports simple-b :
+    p => b
+  ; spice: "APIN <a>"
+  ; spice: "BPIN <b>"
+  ; spice: "NET <a> <b>"
+
+pcb-module mymodule :
+  pin a
+  pin b
+  ; spice: "MNET <a> <b>"
+  inst c : mycomponent
+  net (a, c.a)
+
+pcb-module mymodule2 :
+  pin a
+  pin b
+
+pcb-module main :
+  inst c1 : mycomponent
+  inst c2 : mycomponent
+  net gnd (c1.a)
+  net na (c1.a, c1.b)
+  net nb (c2.a, c2.b)
+  require a:simple-b from c1
+  require b:simple-b from c2
+  net (a, b)
+
+pcb-module main2 :
+  inst m : mymodule
+  inst m2 : mymodule2
+  ; spice: "CONNECT_PIN <m.a>"
+  ; spice: "CONNECT_MODULE <m2.b>"
+  net gnd (m2.a, m2.b)
+
+pcb-design main-design :
+  module = main
+  rules = default-rules
+  board = {default-board(4, 10.0, 10.0)}
+
+;val esir = repl-lib/assign-concrete-pins()
+;match(esir:Collection<TStmt>) :
+>>>>>>> 500c33dc1ac811f5f5378bc6c93eaa04a4efbc37
 ;  do(println, esir)

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #use-added-syntax(jitx)
 defpackage ocdb/utils/pin-checks/power-pin-checks :
   import core
@@ -56,3 +57,63 @@ pcb-check power-pin (p:JITXObject) :
       % [property(p.net-voltage), context(p), recommended-voltage],
     locators = [p]
   )
+=======
+#use-added-syntax(jitx)
+defpackage ocdb/utils/pin-checks/power-pin-checks :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/property-structs
+  import ocdb/utils/pin-checks/utils
+
+val NAME        = "Power Pin Checks"
+val DESCRIPTION = "Check voltage on power pins"
+
+public defn check-power-pin (p:JITXObject) :
+  inside pcb-module :
+    check power-pin(p)
+
+pcb-check power-pin (p:JITXObject) :
+  val p-props = property(p.power-pin)
+
+  #CHECK(
+    condition = p-props is PowerPin
+    name = context(p)
+    category = "Power Pin Checks (Data)"
+    description = DESCRIPTION
+    subcheck-description = "Verify the power pin has the correct PowerPin property attached"
+    pass-message = "Pin %_ has the correct PowerPin property attached" 
+      % [context(p)]
+    fail-message = "Pin %_ does not have the correct PowerPin property attached" 
+      % [context(p)]
+    locators = [p]
+  )
+
+  #CHECK(
+    condition = has-property?(p.voltage)
+    name = context(p)
+    category = "Power Pin Checks (Data)"
+    description = DESCRIPTION
+    subcheck-description = "Verify the power pin has a correct voltage property",
+    pass-message = "Pin %_ has a voltage property of %_V" 
+      % [context(p), property(p.voltage)],
+    info-message =  "Pin %_ does not have known voltage property." 
+      % [context(p)]
+    locators = [p]
+  )
+
+  val recommended-voltage = eval-voltage(recommended-voltage(p-props))
+  #CHECK(
+    condition = in-range?(recommended-voltage, property(p.voltage))
+    name = context(p)
+    category = "Power Pin Checks"
+    description = DESCRIPTION
+    subcheck-description = "Check the power pin's voltage property is within the design specification",
+    pass-message = "voltage %_V on pin %_ is within the recommended operating range %_V" 
+      % [property(p.voltage), context(p), recommended-voltage],
+    fail-message = "voltage %_V on pin %_ is outside the recommended operating range %_V" 
+      % [property(p.voltage), context(p), recommended-voltage],
+    locators = [p]
+  )
+>>>>>>> 500c33dc1ac811f5f5378bc6c93eaa04a4efbc37

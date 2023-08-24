@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #use-added-syntax(jitx)
 defpackage ocdb/designs/mcu :
   import core
@@ -35,3 +36,44 @@ match(value?(best-mcu)):
     view-board()
     view-schematic()
   (_:False) : println("No mcu fits this design.")
+=======
+#use-added-syntax(jitx)
+defpackage ocdb/designs/mcu :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/defaults
+  import ocdb/utils/generic-components
+  import ocdb/utils/bundles
+  import ocdb/utils/design-vars
+  import ocdb/utils/micro-controllers
+
+set-current-design("output-mcu")
+
+val BOARD-SHAPE = RoundedRectangle(25.0, 25.0, 0.25)
+DESIGN-QUANTITY = 0
+OPTIMIZE-FOR = ["area"]
+
+val mcu-parameters = ["series" => "STM32F4" "mpn" => "STM32F410RBI6"] ; "mpn" => "STM32F410TBY6"]
+val module-parameters = [`debug-interface => jtag()]
+
+pcb-module mcu-design (mcu:Instantiable):
+  inst stm32 : mcu
+  require leds : gpio[3] from stm32.mcu
+  require usart : usart([UART-RX UART-TX])[3] from stm32.mcu
+  require spi : spi-controller()[3] from stm32.mcu
+  require i2s : i2s() from stm32.mcu
+  ; require i2c : i2c[3] from stm32.mcu
+
+  add-mounting-holes(BOARD-SHAPE, [2, 3])
+
+val best-mcu = find-micro-controller(mcu-parameters, module-parameters, mcu-design)
+
+match(value?(best-mcu)):
+  (mcu:Instantiable):
+    make-default-board(mcu-design(mcu), 4, BOARD-SHAPE)
+    ; view-board()
+    view-schematic()
+  (_:False) : println("No mcu fits this design.")
+>>>>>>> 500c33dc1ac811f5f5378bc6c93eaa04a4efbc37

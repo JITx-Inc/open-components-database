@@ -1,0 +1,239 @@
+#use-added-syntax(jitx)
+defpackage ocdb/components/analog-devices/ADA4004:
+  import core
+  import collections
+  import math
+
+  import jitx
+  import jitx/commands
+
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/generic-components
+  import ocdb/utils/generator-utils
+  import ocdb/utils/symbols
+  import ocdb/utils/box-symbol
+  import ocdb/utils/bundles
+  import ocdb/utils/property-structs
+
+; Opamp
+public pcb-component component :
+  name = "ADA4004-1"
+  manufacturer = "Analog Devices"
+  mpn = "ADA4004-1ARJZ-R2"
+  description = "General Purpose Amplifier 1 Circuit SOT-23-5"
+  pin-properties :
+    [pin:Ref | pads:Int ... ]
+    [OUT     | 1            ]
+    [V-      | 2            ]
+    [+IN     | 3            ]
+    [-IN     | 4            ]
+    [V+      | 5            ]
+
+  symbol = op-amp-sym(self.+IN => op-amp-sym.in+
+                      self.-IN => op-amp-sym.in-
+                      self.OUT => op-amp-sym.out
+                      self.V-  => op-amp-sym.v-
+                      self.V+  => op-amp-sym.v+)
+
+  assign-landpattern(SOT95P280X145-5N)
+  ; spice:
+  ;   "* AD4004 SPICE Macro-model                 "
+  ;   "* ADI-SJ/HH "
+  ;   "* This model simulates typical values at Vs=+/-15V"
+  ;   "*"
+  ;   "* Copyright 2012 by Analog Devices, Inc."
+  ;   "*"
+  ;   "* Refer to README.DOC file for License Statement.  Use of this model"
+  ;   "* indicates your acceptance with the terms and provisions in the License Statement."
+  ;   "*"
+  ;   "* Node assignments"
+  ;   "*          	     non-inverting input"
+  ;   "*          	     |   inverting input"
+  ;   "*          	     |   |   positive supply"
+  ;   "*          	     |   |   |     negative supply"
+  ;   "*          	     |   |   |     |   output"
+  ;   "*             	   |   |   |     |     |"
+  ;   ".SUBCKT ADA4004   1   2   99    50    45"
+  ;   "*"
+  ;   "* INPUT STAGE & POLE "
+  ;   "*"
+  ;   "R3   5  99    5.0E+03"
+  ;   "R4   6  99    5.0E+03"
+  ;   "Cdm  1   2    4.0E-12"
+  ;   "Ccm1 1  50    3.0E-12"
+  ;   "Ccm2 2  50    3.0E-12"
+  ;   "Ri2  5  5a    5.5E+03"
+  ;   "Ci2  5a   6   1.9E-13"
+  ;   "IOS  1   2    35E-09"
+  ;   "* EOS  9   1    POLY(3) 73 98 229 98 12 98 60E-6  1 1 1"
+  ;   "BOS  9   1    V={60.0E-6 + 1.0 * V(73,98) + 1.0 * V(229,98) + 1.0 * V(12,98)}"
+  ;   "Q1   5   2  7  QNX"
+  ;   "Q2   6   9  8  QNX"
+  ;   "R5a   7   4   3.9E-6"
+  ;   "R6a   8   4   3.9E-6"
+  ;   "I1   4  50    500E-06"
+  ;   "Din1   2   1    DZ"
+  ;   "Din2   1   2    DZ"
+  ;   "D101 50 1 DX"
+  ;   "D102 50 2 DX"
+  ;   "D103  1 99 DX"
+  ;   "D104  2 99 DX"
+  ;   "V1  91   50   2.2"
+  ;   "D1  91   4   DX"
+  ;   "GN1  2  50  15  98  1"
+  ;   "GN2  1  50  18  98  1"
+  ;   "*"
+  ;   "* GAIN STAGE & DOMINANT POLE "
+  ;   "*"
+  ;   "G1   98 30    5  6  2.917E-03"
+  ;   "R7   30 98    8.127E+05"
+  ;   "C3   30 98    1.72E-09"
+  ;   "*"
+  ;   "V4   21 98      12.99;  Voh"
+  ;   "D5   30 21     DX"
+  ;   "V3   22 98     -12.823;  Vol"
+  ;   "D6   22 30     DX"
+  ;   "*"
+  ;   "* POLE "
+  ;   "*"
+  ;   "R12  27 98     1E+01"
+  ;   "C5   27 98     1E-10	"
+  ;   "G4   98 27     30 98 1E-01"
+  ;   "*"
+  ;   "*  zero"
+  ;   "*"
+  ;   "E1   28  98     27 98  1E6"
+  ;   "R13  28 129     1E0"
+  ;   "C6   28 129     5.0E-13"
+  ;   "R14  129 98     1E-06"
+  ;   "*"
+  ;   "* POLE "
+  ;   "*"
+  ;   "G6a  98 32    129 98  1E-02"
+  ;   "R16  32 98     1E+02"
+  ;   "C7   32 98     7.4E-11"
+  ;   "*"
+  ;   "* VOLTAGE NOISE SOURCE WITH FLICKER NOISE"
+  ;   "*"
+  ;   "VN1  11  98   DC 2"
+  ;   "DN1  11  12   DEN"
+  ;   "DN2  12  13   DEN"
+  ;   "VN2  98  13   DC 2"
+  ;   "*"
+  ;   "* CURRENT NOISE SOURCE WITH FLICKER NOISE"
+  ;   "*"
+  ;   "DN3  14  15   DIN"
+  ;   "DN4  15  16   DIN"
+  ;   "VN3  14  98   DC 2"
+  ;   "VN4  98  16   DC 2"
+  ;   "*"
+  ;   "* SECOND CURRENT NOISE SOURCE"
+  ;   "*"
+  ;   "DN5  17  18   DIN"
+  ;   "DN6  18  19   DIN"
+  ;   "VN5  17  98   DC 2"
+  ;   "VN6  98  19   DC 2"
+  ;   "*"
+  ;   "* COMMON-MODE GAIN NETWORK "
+  ;   "*"
+  ;   "* E5a 98 72 POLY(2) (1,98) (2,98) 0 8.635E-02 8.635E-02"
+  ;   "B5a 98 72 V={0.0 + 8.635E-02 * V(1,98) + 8.635E-02 * V(2,98)}"
+  ;   "R10 72 73 8.377E+01"
+  ;   "R20 73 98 7.958E-03"
+  ;   "C10 72 73 1.00E-06"
+  ;   "*"
+  ;   "* PSRR"
+  ;   "*"
+  ;   "* EPSY 219 98 POLY(1) (50,99) 2.993E+01 9.976E-01"
+  ;   "BPSY 219 98 V={2.993E+01 +  9.976E-01 * V(50,99)}"
+  ;   "RPS1 219 229 3.979E+02"
+  ;   "RPS2 229 98  7.958E-03"
+  ;   "CPS1 219 229 1.000E-06"
+  ;   "*"
+  ;   "R17  33 99     500E+03"
+  ;   "R18  33 50     500E+03"
+  ;   "EREF  98 0    33  0  1"
+  ;   "* GSY  99 50     POLY(1) 99 50 1.0853E-03 4.59E-06"
+  ;   "BSY  99 50   I={1.0853E-03 + 4.59E-06 * V(99,50)}"
+  ;   "*"
+  ;   "* OUTPUT STAGE"
+  ;   "*"
+  ;   "R5   34 99     200"
+  ;   "R6   34 50     200"
+  ;   "G5   34 99     99 32  5.0E-3"
+  ;   "G6   50 34     32 50  5.0E-3"
+  ;   "*"
+  ;   "V5   35 34     1.2; Voh Isc"
+  ;   "D9   30 35     DX"
+  ;   "V6   34 36     1.2; Vol Isc"
+  ;   "D10  36 30     DX"
+  ;   "L3   34 45     1E-8;  45 is output "
+  ;   "*"
+  ;   "G17  37 50     32 34  5.0E-3"
+  ;   "G18  38 50     34 32  5.0E-3"
+  ;   "D11  99 37     DX; xx"
+  ;   "D12  99 38     DX; xx"
+  ;   "D13  50 37     DY"
+  ;   "D14  50 38     DY"
+  ;   "*"
+  ;   "* MODELS USED"
+  ;   "*"
+  ;   ".MODEL QNX NPN(BF=6.250E+03 VA=130)"
+  ;   ".MODEL DX   D(IS=1E-16 BV=50)"
+  ;   ".MODEL DY   D(IS=1E-16 BV=50)"
+  ;   ".MODEL DZ   D(IS=1E-15 RS=1E2 BV=36)"
+  ;   ".MODEL DEN  D(IS=1E-12 RS=1.729E+02 KF=1.87E-16 AF=1)"
+  ;   ".MODEL DIN  D(IS=1E-12 RS=1.045E-4 KF=3.35E-15 AF=1)"
+  ;   "*"
+  ;   ".ENDS ADA4004"
+  ;   "[X] <self.+IN> <self.-IN> <self.V+> <self.V-> <self.OUT> ADA4004"
+  ;   "*"
+
+  ; limits for opamp pins
+  property(self.V+.power-pin) = PowerPin(min-max(2.0, 33.0))
+  property(self.V-.power-pin) = PowerPin(typ(0.0))
+
+  defn vdd-has-voltage? () -> True|False :
+    val result = has-property?(self.V+.voltage)
+    println("Does V+ (%_) have voltage? %_" % [ref(self.V+), result])
+    result
+
+  ;eval-when has-property?(self.OUT1.voltage) :
+  eval-when vdd-has-voltage?() :
+    check voltage-does-not-exceed(max-value(property(self.V+.voltage)), 33.0)
+
+
+;Check to ensure that the .net-voltage property on 'p' is within
+;the given range.
+pcb-check voltage-is-within (p:Toleranced, value:Toleranced) :
+  val t = p
+  val name = "Voltage Within Check"
+  val description = "Check that voltage of a pin is within a given range"
+  val category = "value-check"
+  #CHECK(
+    condition =            in-range?(value, t),
+    name =                 "Within Check",
+    description =          "Check that a value is within a given range",
+    category =             "Value checks"
+    subcheck-description = "Check that a value is within a given range"
+    pass-message =         "Range %_ is correctly within %_" % [t value]
+    fail-message =         "Value %_ to %_ is not within the range of %_ to %_" % [min-value(t) max-value(t) min-value(value) max-value(value)]
+    locators =             []
+    )    
+
+;Check to ensure that the value does not exceed threshold
+pcb-check voltage-does-not-exceed (pt:Double, thres:Double) :
+  val name = "Voltage Does Not Exceed Check"
+  val description = "Check that voltage of a pin does not exceed a threshold"
+  val category = "value-check"
+  #CHECK(
+    condition =            pt <= thres,
+    name =                 "Exceed Check",
+    description =          "Check that a value is below a threshold",
+    category =             "Value checks"
+    subcheck-description = "Check that a value is below a given threshold"
+    pass-message =         "Value %_ is correctly less than or equal to %_" % [pt thres]
+    fail-message =         "Value %_ exceeds %_" % [pt thres]
+    locators =             []
+    )

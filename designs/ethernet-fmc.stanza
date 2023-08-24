@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #use-added-syntax(jitx)
 defpackage ocdb/designs/ethernet-fmc :
   import core
@@ -54,3 +55,63 @@ pcb-module my-design :
 val my-design* = transform-module(generate-power, my-design)
 make-default-board(my-design*, 4, Rectangle(60.0, 69.0))
 export-cad()
+=======
+#use-added-syntax(jitx)
+defpackage ocdb/designs/ethernet-fmc :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/utils/defaults
+  import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
+  ; import ocdb/calculate-connected
+  import ocdb/utils/connects
+  import ocdb/utils/bundles
+  import ocdb/utils/design-vars
+  import ocdb/modules/power-regulators
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+
+OPERATING-TEMPERATURE = min-max(-20.0 50.0)
+OPTIMIZE-FOR = ["area"]
+
+pcb-module my-design :
+
+  ; Instantiate devices
+  inst fmc : ocdb/components/samtec/ASP-134488-01/component
+  inst ethernet-jack : ocdb/components/pulse-electronics/J0G-0009NL/component[2]
+  inst fpga : ocdb/components/microsemi/A2F200M3F-FGG256I/module
+
+  ; Set up power
+  set-power-source(fmc.v12p0, fmc.gnd, 12.0)
+  net gnd (fmc.gnd)
+  symbol(gnd) = ground-sym
+
+  ; Create connections
+  require fpga-lvds:lvds[16] from fpga
+  require fmc-lvds:lvds[16] from fmc
+  net (fpga-lvds, fmc-lvds)
+
+  require rgmii:rgmii[2] from fpga
+  require eth-0:ethernet-1000 from ethernet-jack[0]
+  connect-phy(rgmii[0], eth-0)
+  require eth-1:ethernet-1000 from ethernet-jack[1]
+  connect-phy(rgmii[1], eth-1)
+
+  ; schematic-group(fmc) = fmc
+  ; schematic-group(ethernet-jack) = ethernet-jack
+  ; schematic-group(fpga) = fpga
+
+  ; Geometry constraints
+  place(fmc) at loc(-18.5, 0.0, 90.0) on Top
+  place(ethernet-jack[0]) at loc(15.0, 22.0, 270.0) on Top
+  place(ethernet-jack[1]) at loc(15.0, -22.0, 270.0) on Top
+
+set-current-design("output-ethernet-fmc")
+
+val my-design* = transform-module(generate-power, my-design)
+make-default-board(my-design*, 4, Rectangle(60.0, 69.0))
+export-cad()
+>>>>>>> 500c33dc1ac811f5f5378bc6c93eaa04a4efbc37

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #use-added-syntax(jitx)
 defpackage ocdb/components/texas-instruments/TLV743P :
   import core
@@ -60,3 +61,67 @@ public pcb-module module (v-out:Double) :
 
 public pcb-module mod :
   inst m : module(3.3)
+=======
+#use-added-syntax(jitx)
+defpackage ocdb/components/texas-instruments/TLV743P :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/utils/defaults
+  import ocdb/utils/landpatterns
+  import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
+  import ocdb/utils/bundles
+  import ocdb/utils/symbols
+  import ocdb/utils/box-symbol
+  import ocdb/utils/property-structs
+
+public pcb-component component (v-out:Double) :
+  pin en
+  pin gnd
+  pin in
+  pin out
+  pin nc
+  name = "TLV743P"
+  manufacturer = "Texas Instruments"
+  description = "TLV743P 300-mA, Low-Dropout Regulator"
+  val [code spice-code] = switch(v-out) :
+    1.5 : ["15" "TLV74315P"]
+    1.8 : ["15" "TLV74318P"]
+    2.5 : ["25" "TLV74325P"]
+    3.3 : ["33" "TLV74333P"]
+  mpn = to-string("TLV743%_P" % [code])
+  pin-properties :
+    [pin:Ref | pads:Int ... | side:Dir]
+    [gnd     | 2            | Down    ]
+    [in      | 1            | Left    ]
+    [en      | 3            | Left    ]
+    [out     | 5            | Right   ]
+    [nc      | 4            | Down    ]
+  make-box-symbol()
+  assign-landpattern(SOT95P280X145-5N)
+
+  property(out.power-supply-pin) = PowerSupplyPin(typ(v-out), 0.3) 
+  property(in.power-pin) = PowerPin(min-max(1.4, 5.5))
+
+  ; spice:
+  ;   "[X] <en> <gnd> <in> <out> <nc> <spice-code>"
+
+public pcb-module module (v-out:Double) :
+  pin vin
+  pin vout
+  pin gnd
+  pin en
+  inst ps : ocdb/components/texas-instruments/TLV743P/component(v-out)
+  cap-strap(gnd, ps.in, 1.0e-6)
+  cap-strap(gnd, ps.out, 1.0e-6)
+  net (vin, ps.in)
+  net (vout, ps.out)
+  net (gnd, ps.gnd)
+  net (en, ps.en)
+
+public pcb-module mod :
+  inst m : module(3.3)
+>>>>>>> 500c33dc1ac811f5f5378bc6c93eaa04a4efbc37

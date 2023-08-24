@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 on: 
   pull_request:
   workflow_dispatch:
@@ -32,3 +33,39 @@ jobs:
           # Remove automatic end line (truncate last byte) at the end of the license file
           truncate -s -1 jitx-client/license
           docker-compose up --exit-code-from jitx-client
+=======
+on: 
+  pull_request:
+  workflow_dispatch:
+name: Check that esir definitions are valid
+
+jobs:
+  evaluate-macros:
+    name: Test macro validity
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Configure JITX's AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to JITX's Amazon ECR
+        id: login-jitx-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Evaluate public pcb-* macros + run unit-tests + run integration tests
+        run: |
+          # Excludes modules and only supports pcb-* macros that take 0 or 1 argument of primitive type
+          cd .github/
+          # Expires April 6th 2022 (same as JITX CI)
+          echo "${{ secrets.JITX_LICENSE }}" > jitx-client/license
+          # Remove automatic end line (truncate last byte) at the end of the license file
+          truncate -s -1 jitx-client/license
+          docker-compose up --exit-code-from jitx-client
+>>>>>>> 500c33dc1ac811f5f5378bc6c93eaa04a4efbc37

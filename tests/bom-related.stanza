@@ -1,0 +1,42 @@
+#use-added-syntax(jitx, tests)
+defpackage ocdb/tests/bom-related : 
+  import core
+  import jitx
+  import jitx/commands
+  import ocdb/utils/generator-utils
+
+defn capture-output<?T> ( func : () -> ?T ) -> String :
+  val buf = StringBuffer(128)
+  val result:T = with-output-stream(buf, func)
+  to-string(buf)
+
+deftest(ocdb, bom-related) test-do-not-populate :
+
+  pcb-module child:
+    inst J20: ocdb/components/tag-connect/TC2050-IDC/module
+    inst J21: ocdb/components/tag-connect/TC2050-IDC/module
+
+  pcb-module UUT:
+    inst J10: ocdb/components/tag-connect/TC2050-IDC/module
+    inst J11: ocdb/components/tag-connect/TC2050-IDC/module
+    inst JA1 : ocdb/components/tag-connect/TC2050-IDC/module[4]
+    inst UUTkid : child
+
+  pcb-module M1:
+    inst J1 : ocdb/components/tag-connect/TC2050-IDC/module
+    inst J2 : ocdb/components/tag-connect/TC2050-IDC/module
+
+    inst J3: ocdb/components/tag-connect/TC2050-IDC/module
+    inst J4: ocdb/components/tag-connect/TC2050-IDC/module
+    inst J5: ocdb/components/tag-connect/TC2050-IDC/module 
+
+    inst MU : UUT
+
+    dnp(J1)
+    dnp([J3, J4, J5])
+    ; - I expect this to recursive set dnp for all 
+    ;   children and grandchildren.
+    dnp(MU)
+
+  print-def(M1)
+  

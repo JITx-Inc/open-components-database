@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #use-added-syntax(jitx)
 defpackage ocdb/components/texas-instruments/TLV62130 :
   import core
@@ -95,3 +96,115 @@ public pcb-module module (v-out:Double) :
 
 public pcb-module mod :
   inst m : module(3.3)
+=======
+#use-added-syntax(jitx)
+defpackage ocdb/components/texas-instruments/TLV62130 :
+  import core
+  import collections
+  import math
+  import jitx
+  import jitx/commands
+  import ocdb/utils/defaults
+
+  import ocdb/utils/landpatterns
+  import ocdb/utils/symbols
+  import ocdb/utils/box-symbol
+  import ocdb/utils/bundles
+  import ocdb/utils/generator-utils
+  import ocdb/utils/generic-components
+  import ocdb/modules/passive-circuits
+  import ocdb/utils/property-structs
+
+public pcb-component component :
+  manufacturer = "Texas Instruments"
+  mpn = "TLV62130RGTR"
+  description = "TLV62130x 3-V to 17-V 3-A Step-Down Converter In 3x3 QFN"
+  
+  pin-properties :
+    [pin:Ref   | pads:Int ... | side:Dir]
+    [PVIN      | 11 12        | Left    ]
+    [AVIN      | 10           | Left    ]
+    [EN        | 13           | Left    ]
+    [SS        | 9            | Left    ]
+    [DEF       | 8            | Left    ]
+    [FSW       | 7            | Left    ]
+    [SW        | 1 2 3        | Right   ]
+    [VOS       | 14           | Right   ]
+    [PG        | 4            | Right   ]
+    [FB        | 5            | Right   ]
+    [AGND      | 6            | Down    ]
+    [PGND      | 15 16        | Down    ]
+    [PAD       | 17           | Down    ]
+  assign-landpattern(qfn-landpattern(0.5, 3.0, 16, 0.24, 0.5, [1.68, 1.68]))
+  make-box-symbol()
+
+  property(self.PVIN.power-pin) = PowerPin(min-max(3.0, 17.0))
+  property(self.rated-temperature) = min-max(-40.0, 85.0)
+  
+  var pvin-v = min-max(0.0, 0.0)
+  eval-when has-property?(self.PVIN.voltage) :
+    pvin-v = property(self.PVIN.voltage)
+    property(self.EN.generic-pin)   = GenericPin(min-max(min-value(pvin-v), max-value(pvin-v) + 0.3), 2000.0)
+    property(self.SS.generic-pin)   = GenericPin(min-max(min-value(pvin-v), max-value(pvin-v) + 0.3), 2000.0)
+    property(self.SW.generic-pin)   = GenericPin(min-max(min-value(pvin-v), max-value(pvin-v) + 0.3), 2000.0)
+    ; match(pvin-v) :
+    ;   (x:Toleranced) :
+    ;     property(self.EN.generic-pin)   = GenericPin(min-max(min-value(x), max-value(x) + 0.3), 2000.0)
+    ;     property(self.SS.generic-pin)   = GenericPin(min-max(min-value(x), max-value(x) + 0.3), 2000.0)
+    ;     property(self.SW.generic-pin)   = GenericPin(min-max(min-value(x), max-value(x) + 0.3), 2000.0)
+    ;   (y:Double) :
+    ;     property(self.EN.generic-pin)   = GenericPin(min-max(y, y + 0.3), 2000.0)
+    ;     property(self.SS.generic-pin)   = GenericPin(min-max(y, y + 0.3), 2000.0)
+    ;     property(self.SW.generic-pin)   = GenericPin(min-max(y, y + 0.3), 2000.0)
+
+
+  ; Static properties
+  property(self.PVIN.generic-pin) = GenericPin(min-max(-0.3, 20.0), 2000.0)
+  property(self.AVIN.generic-pin) = GenericPin(min-max(-0.3, 20.0), 2000.0)
+  property(self.DEF.generic-pin)  = GenericPin(min-max(-0.3, 7.0), 2000.0)
+  property(self.FSW.generic-pin)  = GenericPin(min-max(-0.3, 7.0), 2000.0)
+  property(self.VOS.generic-pin)  = GenericPin(min-max(-0.3, 7.0), 2000.0)
+  property(self.PG.generic-pin)   = GenericPin(min-max(-0.3, 7.0), 2000.0)
+  property(self.FB.generic-pin)   = GenericPin(min-max(-0.3, 7.0), 2000.0)
+
+
+public pcb-module module (v-out:Double) :
+  pin vin
+  pin vout
+  pin gnd
+  pin en
+  pin pg
+  pin ss
+
+  public inst buck : ocdb/components/texas-instruments/TLV62130/component
+  public inst l    : ocdb/components/abracon/ASPI-0530HI/component(2.2)
+
+  net (gnd buck.AGND buck.PGND buck.PAD buck.DEF buck.FSW)
+  net (vin buck.AVIN buck.PVIN)
+  cap-strap(buck.PVIN, gnd, ["capacitance" => 10.0e-6 "min-rated-voltage" => 30.0])
+  cap-strap(buck.PVIN, gnd, ["capacitance" => 0.1e-6 "min-rated-voltage" => 30.0])
+
+  net (ss buck.SS)
+  cap-strap(buck.SS, gnd, 3.3e-9)
+
+  net sw (l.p[1] buck.SW)
+  net (vout l.p[2] buck.VOS)
+  net (pg buck.PG)
+  net (en buck.EN)
+  res-strap(l.p[2], buck.PG, 100.0e3)
+
+  property(l.p[2].voltage) = tol%(v-out, 1.0)
+
+  ; Create a voltage divider to output 0.8V. Target current : 5uA
+  make-voltage-divider(l.p[2], buck.FB, gnd, min-typ-max(0.78 0.8 0.82) 5.0e-6)
+
+  cap-strap(vout, gnd, 22.0e-6)
+
+  property(l.p[2].power-supply-pin) = PowerSupplyPin(typ(v-out), 3.0) 
+  
+
+
+
+public pcb-module mod :
+  inst m : module(3.3)
+>>>>>>> 500c33dc1ac811f5f5378bc6c93eaa04a4efbc37

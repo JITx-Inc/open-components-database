@@ -1,0 +1,92 @@
+<<<<<<< HEAD:designs/checks/checked-design.stanza
+#use-added-syntax(jitx)
+defpackage ocdb/designs/checks/checked-design :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/checks
+  import ocdb/utils/defaults
+  import ocdb/utils/generator-utils
+  import ocdb/utils/property-structs
+  import ocdb/designs/checks/capacitors
+  import ocdb/designs/checks/digital-io
+  import ocdb/designs/checks/inductors
+  import ocdb/designs/checks/resistors
+
+pcb-module main-module :
+  inst rs: resistors
+  inst cs: capacitors
+  inst ls: inductors
+  inst io: digital-io
+
+  net VDD (rs.power.vdd, ls.power.vdd, cs.power.vdd)
+  net GND (rs.power.gnd, ls.power.gnd, cs.power.gnd, io.power.gnd)
+
+  inst tp : ocdb/components/keystone/500xx/component("yellow")
+  property(tp.p.power-supply-pin) = PowerSupplyPin(typ(5.0), 0.1)
+  net PS-VDD (tp.p io.power.vdd)
+
+  property(VDD.net-voltage) = typ(5.0)
+  property(PS-VDD.net-voltage) = typ(5.0)
+  property(GND.net-voltage) = typ(0.0)
+  check-design(self)
+
+defn main () :
+  set-design-directory("checked-design")
+  run-final-passes(main-module)
+  run-checks("checks.txt")
+
+main()
+=======
+#use-added-syntax(jitx)
+defpackage ocdb/designs/run-checks/checked-design :
+  import core
+  import collections
+  import jitx
+  import jitx/commands
+  import ocdb/utils/checks
+  import ocdb/utils/defaults
+  import ocdb/manufacturers/rules
+  import ocdb/manufacturers/stackups
+  import ocdb/utils/generator-utils
+  import ocdb/utils/property-structs
+  import ocdb/designs/run-checks/capacitors
+  import ocdb/designs/run-checks/digital-io
+  import ocdb/designs/run-checks/inductors
+  import ocdb/designs/run-checks/resistors
+
+pcb-module main-module :
+  inst rs: resistors
+  inst cs: capacitors
+  inst ls: inductors
+  inst io: digital-io
+
+  net VDD (rs.power.vdd, ls.power.vdd, cs.power.vdd)
+  net GND (rs.power.gnd, ls.power.gnd, cs.power.gnd, io.power.gnd)
+
+  inst tp : ocdb/components/keystone/500xx/component("yellow")
+  property(tp.p.power-supply-pin) = PowerSupplyPin(typ(5.0), 0.1)
+  net PS-VDD (tp.p io.power.vdd)
+
+  property(VDD.voltage) = typ(5.0)
+  property(PS-VDD.voltage) = typ(5.0)
+  property(GND.voltage) = typ(0.0)
+  check-design(self)
+
+val brd-outline = Rectangle(50.0, 50.0)
+pcb-board B :
+  stackup = jlcpcb-jlc2313
+  boundary = brd-outline
+  signal-boundary = brd-outline
+
+defn main () :
+  set-current-design("output-checked-design")
+  set-board(B)
+  set-rules(jlcpcb-rules)
+  set-main-module(main-module)
+  run-final-passes(main-module)
+  run-checks("checks.txt")
+
+main()
+>>>>>>> 500c33dc1ac811f5f5378bc6c93eaa04a4efbc37:designs/run-checks/checked-design.stanza
