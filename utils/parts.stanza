@@ -53,6 +53,7 @@ public defstruct Part <: Component :
 
   ; These may be populated in Parts DB, or updated values may be inserted by the backend.
   sellers: Tuple<Seller>|False with: (as-method => true)
+  query-properties: JObject|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
 with :
   printer => true
@@ -89,6 +90,7 @@ defn Part (json: JObject) -> Part :
     parse-rated-temperature(json),
     optional-double(json, "rated-power"),
     parse-sellers(json),
+    parse-query-properties(json),
     optional-double(json, "resolved_price"),
   )
 
@@ -495,12 +497,12 @@ defn NoConnectCode (json: JObject) -> NoConnectCode :
   NoConnectCode(PinByTypeCode(json["pin"] as JObject))
 
 public defmethod to-jitx (part: Part) -> Instantiable :
-  to-jitx(component(part), sellers(part))
+  to-jitx(part, component(part), sellers(part))
 
-public defn to-jitx (c: ComponentCode) -> Instantiable :
-  to-jitx(c, false)
+public defn to-jitx (comp: Component, c: ComponentCode) -> Instantiable :
+  to-jitx(comp, c, false)
 
-public defn to-jitx (c: ComponentCode, sellers: Tuple<Seller>|False) -> Instantiable :
+public defn to-jitx (comp:Component, c: ComponentCode, sellers: Tuple<Seller>|False) -> Instantiable :
   pcb-component my-component :
     name = name(c)
 
@@ -529,6 +531,9 @@ public defn to-jitx (c: ComponentCode, sellers: Tuple<Seller>|False) -> Instanti
     map(to-jitx, properties(c))
 
     set-property(self, `sellers, sellers)
+    val q = query-properties(comp)
+    match(q:JObject) :
+      set-property(self, `query-properties, entries(q))
 
     reference-prefix = reference_prefix(c)
 
