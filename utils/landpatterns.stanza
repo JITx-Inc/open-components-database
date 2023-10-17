@@ -154,6 +154,24 @@ public defn PlusSymbol (center:Point, l:Double) -> Shape:
 public defn PlusSymbol (x:Double, y:Double) -> Shape:
   PlusSymbol(Point(x, y), 1.0)
 
+
+public defn make-thermal-pad (shape:Rectangle, index:Int) :
+  inside pcb-landpattern :
+    val paste-size = RoundedRectangle((width(shape) - 0.5) / 2.0,  (height(shape) - 0.5) / 2.0, 0.05)
+    for l in grid-locs(2, 2, width(paste-size) + 0.2 , height(paste-size) + 0.2) do :
+      layer(Paste(Top)) = l * paste-size
+
+    pcb-pad ep :
+      type = SMD
+      shape = shape
+
+    pad p[index] : ep at loc(0.0, 0.0)
+
+public defn add-thermal-vias (base:Rectangle) :
+  inside pcb-landpattern :
+      for l in grid-locs(3, 3, width(base) / 2.0 - 0.25,  height(base) / 2.0 - 0.25) do :
+        via(LayerIndex(0), LayerIndex(0, Bottom), radius = 0.25, hole-radius = 0.1) at center(l)
+
 ;==============================================================================
 ;================================= Pads =======================================
 ;==============================================================================
