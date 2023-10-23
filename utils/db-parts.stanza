@@ -27,6 +27,7 @@ public defmulti x (component: Component) -> Double
 public defmulti y (component: Component) -> Double
 public defmulti area (component: Component) -> Double
 public defmulti sellers (component: Component) -> Tuple<Seller>|False
+public defmulti query-properties (component: Component) -> JObject|False
 public defmulti resolved-price (component: Component) -> Double|False
 public defmulti vendor-part-numbers (component: Component) -> Tuple<KeyValue<String, String>>
 public defmulti to-jitx (component: Component) -> Instantiable
@@ -88,6 +89,7 @@ public defstruct Resistor <: Component :
   rated-power: Double|False ; Power dissipation limit as rated by manufacturer. One value, or PWL function (W | [degC, W])
   TCR: TCR|False ; Temperature coefficient of resistance (ohms/ohm*degC)
   sellers: Tuple<Seller>|False with: (as-method => true)
+  query-properties: JObject|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
   component: ComponentCode with: (as-method => true)
   vendor-part-numbers: Tuple<KeyValue<String, String>> with: (as-method => true)
@@ -126,6 +128,7 @@ public defn Resistor (raw-json: JObject) -> Resistor :
            optional-double(json, "rated-power"),
            resistance-tcr(json),
            parse-sellers(json),
+           parse-query-properties(json),
            optional-double(json, "resolved_price"),
            ComponentCode(json["component"] as JObject),
            parse-vendor-part-numbers(json))
@@ -150,7 +153,7 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
   match(landpattern(component)) :
     (lp:LandPatternCode):
       ; If the landpattern is included, this part should have everything it needs.
-      to-jitx(component, sellers(resistor))
+      to-jitx(resistor, component, sellers(resistor))
     (c):
       ; Otherwise, fall back on the V1 deserializers, which inject everything for 2-pin passives.
       ; We still haven't migrated all the OCDB generative logic to the parts-db population script.
@@ -190,6 +193,9 @@ defmethod to-jitx (resistor: Resistor) -> Instantiable :
         ; Include parts-db component properties
         map(to-jitx, properties(component))
         set-property(self, `sellers, sellers(resistor))
+        val q = query-properties(resistor)
+        match(q:JObject) :
+          set-property(self, `query-properties, entries(q))
 
         ; spice :
         ;   "[R] <p[1]> <p[2]> <resistance>"
@@ -223,7 +229,7 @@ defn resistor-query-properties (user-properties:Tuple<KeyValue>,
                    sort,
                    operating-temperature,
                    "resistor",
-                   false)
+                   true)
 
 ;============================================================
 ;======================== Look-ups ==========================
@@ -285,6 +291,7 @@ defstruct Capacitor <: Component :
   rated-current-pk: Double|False ; Maximum peak current rating from manufacturer (Amperes)
   rated-current-rms: Double|False ; Maximum rms current rating from manufacturer (Amperes)
   sellers: Tuple<Seller>|False with: (as-method => true)
+  query-properties: JObject|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
   component: ComponentCode with: (as-method => true)
   vendor-part-numbers: Tuple<KeyValue<String, String>> with: (as-method => true)
@@ -321,6 +328,7 @@ public defn Capacitor (raw-json: JObject) -> Capacitor :
             optional-double(json, "rated-current-pk"),
             optional-double(json, "rated-current-rms"),
             parse-sellers(json),
+            parse-query-properties(json),
             optional-double(json, "resolved_price"),
             ComponentCode(json["component"] as JObject),
             parse-vendor-part-numbers(json))
@@ -344,7 +352,7 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
   match(landpattern(component)):
     (lp:LandPatternCode):
       ; If the landpattern is included, this part should have everything it needs.
-      to-jitx(component, sellers(capacitor))
+      to-jitx(capacitor, component, sellers(capacitor))
     (c):
       ; Otherwise, fall back on the V1 deserializers, which inject everything for 2-pin passives.
       ; We still haven't migrated all the OCDB generative logic to the parts-db population script.
@@ -431,6 +439,9 @@ defmethod to-jitx (capacitor: Capacitor) -> Instantiable :
         ; Include parts-db component properties
         map(to-jitx, properties(component))
         set-property(self, `sellers, sellers(capacitor))
+        val q = query-properties(capacitor)
+        match(q:JObject) :
+          set-property(self, `query-properties, entries(q))
 
       my-capacitor
 
@@ -461,7 +472,7 @@ defn capacitor-query-properties (user-properties:Tuple<KeyValue>,
                    sort,
                    operating-temperature,
                    "capacitor",
-                   false)
+                   true)
 
 ;============================================================
 ;======================== Look-ups ==========================
@@ -522,6 +533,7 @@ defstruct Inductor <: Component :
   quality-factor: Double|False ; Loss factor inverse - ratio between inductors resistance and inductance (ratio@freq)
   self-resonant-frequency: Double|False ; Frequency at which inductor impedance becomes very high / open circuit (freq in Hz)
   sellers: Tuple<Seller>|False with: (as-method => true)
+  query-properties: JObject|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
   component: ComponentCode with: (as-method => true)
   vendor-part-numbers: Tuple<KeyValue<String, String>> with: (as-method => true)
@@ -553,6 +565,7 @@ public defn Inductor (raw-json: JObject) -> Inductor :
            optional-double(json, "quality-factor"),
            optional-double(json, "self-resonant-frequency"),
            parse-sellers(json),
+           parse-query-properties(json),
            optional-double(json, "resolved_price"),
            ComponentCode(json["component"] as JObject),
            parse-vendor-part-numbers(json))
@@ -566,7 +579,7 @@ defmethod to-jitx (inductor: Inductor) -> Instantiable :
   match(landpattern(component)):
     (lp:LandPatternCode):
       ; If the landpattern is included, this part should have everything it needs.
-      to-jitx(component, sellers(inductor))
+      to-jitx(inductor, component, sellers(inductor))
     (c):
       ; Otherwise, fall back on the V1 deserializers, which inject everything for 2-pin passives.
       ; We still haven't migrated all the OCDB generative logic to the parts-db population script.
@@ -606,6 +619,9 @@ defmethod to-jitx (inductor: Inductor) -> Instantiable :
         ; Include parts-db component properties
         map(to-jitx, properties(component))
         set-property(self, `sellers, sellers(inductor))
+        val q = query-properties(inductor)
+        match(q:JObject) :
+          set-property(self, `query-properties, entries(q))
 
         spice :
           "[L] <p[1]> <p[2]> <inductance>"
@@ -642,7 +658,7 @@ defn inductor-query-properties (user-properties:Tuple<KeyValue>,
                    sort,
                    operating-temperature,
                    "inductor",
-                   false)
+                   true)
 
 ;============================================================
 ;======================== Look-ups ==========================
@@ -876,6 +892,11 @@ public defn parse-sellers (json: JObject) -> Tuple<Seller>|False:
           SellerOffer{int(json-offer["inventory_level"]), _} $
             for json-price in json-offer["prices"] as Tuple<JObject> map :
               SellerOfferPrice(int(json-price["quantity"]), json-price["converted_price"] as Double)
+
+public defn parse-query-properties (json: JObject) -> JObject|False:
+  val j = get?(json, "query-properties")
+  match(j:JObject) : j
+  else : false
 
 defn optional-mounting (json: JObject) -> String :
   match(get?(json, "mounting")) :

@@ -22,13 +22,13 @@ pcb-module can-connector :
   port power:power
   port can:can
   public inst connector : ocdb/components/phoenix/combicon-mc/component(4)
-  net (connector.p[1], power.gnd)
-  net VIN (connector.p[2], power.vdd)
-  net (connector.p[3], can.canh)
-  net (connector.p[4], can.canl)
+  net (connector.p[1], can.canl)
+  net (connector.p[2], can.canh)
+  net (connector.p[3], power.gnd)
+  net VIN (connector.p[4], power.vdd)
 
   ocdb/modules/terminations/terminate-can(can, power.gnd, CANTerminationParallel)
-  set-power-source(connector.p[2], connector.p[1], 5.0)
+  set-power-source(connector.p[4], connector.p[3], 5.0)
 
 pcb-module first-design :
   inst connector : can-connector
@@ -49,7 +49,7 @@ pcb-module first-design :
   add-open-drain-pullups(acc-i2c, stm.power.vdd)
   require tap-detect:gpio from stm.mcu
   net WAKE (tap-detect.gpio, xl.int[1])
-
+  
   ; Connect power, apply symbols
   net (xr.power, connector.power)
   net (xl.power, stm.power)
@@ -64,6 +64,11 @@ pcb-module first-design :
   add-mounting-holes(board-shape, "M2", [2 3])
   place(connector.connector) at loc(-4.0, -12.5) on Top
 
+  geom(GND) :
+    copper-pour(LayerIndex(1), isolate = 0.1, rank = 1) = board-shape
+  geom(P3V3) :
+    copper-pour(LayerIndex(2), isolate = 0.1, rank = 1) = board-shape
+
   ; Run the schematic review
   check-design(self)
 
@@ -75,4 +80,4 @@ make-default-board(powered-design, 4, board-shape)
 view-board()
 view-schematic()
 
-export-cad()
+; export-cad()
