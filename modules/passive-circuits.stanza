@@ -41,22 +41,22 @@ public pcb-module voltage-divider (-- source-voltage:Toleranced
   else :
     fatal("No solution for voltage divider.")
 
-public pcb-module voltage-divider ( input-voltage:Double
-                                    output-voltage:Double
-                                    tolerance:Double
-                                    current:Double) :
+public pcb-module voltage-divider (-- source-voltage:Double
+                                    divider-output:Double
+                                    tolerance:Double = 10.0
+                                    current:Double = 5.0e-6) :
   pin in
   pin out
   pin lo
-  val solution = voltage-divider-solver(typ(input-voltage), tol%(output-voltage, 10.0), current, tolerance / 100.0, 0.15)
+  val solution = voltage-divider-solver(typ(source-voltage), tol%(divider-output, 10.0), current, tolerance / 100.0, 0.15)
   match(solution: VoltageDividerSolution) :
     public inst r-hi : to-jitx(r1(solution))
     public inst r-lo : to-jitx(r2(solution))
     net (r-hi.p[1] in)
     net (r-lo.p[1] r-hi.p[2] out)
     net (r-lo.p[2] lo)
-    property(r-lo.operating-point) = OperatingPoint(min-max(0.0, output-voltage),       min-max(0.0, output-voltage / property(r-lo.resistance)))
-    property(r-hi.operating-point) = OperatingPoint(min-max(0.0, input-voltage - output-voltage), min-max(0.0, (input-voltage - output-voltage)/ property(r-hi.resistance)))
+    property(r-lo.operating-point) = OperatingPoint(min-max(0.0, divider-output),       min-max(0.0, divider-output / property(r-lo.resistance)))
+    property(r-hi.operating-point) = OperatingPoint(min-max(0.0, source-voltage - divider-output), min-max(0.0, (source-voltage - divider-output)/ property(r-hi.resistance)))
     property(self.output-voltage) = vo(solution)
 
   else :
