@@ -65,17 +65,37 @@ public pcb-rules default-rules :
   min-pth-pin-solder-clearance = 3.0
 set-default-rules(default-rules)
 
+public pcb-via default-via :
+  name = "Default TH"     
+  start = LayerIndex(0, Top)
+  stop = LayerIndex(0, Bottom)
+  diameter = 0.6
+  hole-diameter = 0.3
+  type = MechanicalDrill
+
+public pcb-via minimum-via :
+  name = "Minimum TH"     
+  start = LayerIndex(0, Top)
+  stop = LayerIndex(0, Bottom)
+  val annular = clearance(current-rules(), MinAnnularRing)
+  val drill = clearance(current-rules(), MinDrillDiameter)
+  diameter = drill + annular * 2.0
+  hole-diameter = drill
+  type = MechanicalDrill
+
 ; Creates a pcb-board with default stackup given the number of layers and board outline.
 public pcb-board default-board (num-layers:Int, outline:Shape) :
   stackup = default-stackup(num-layers)
   boundary = outline
   signal-boundary = outline
+  vias = [default-via minimum-via]
 
 ; Creates a pcb-board with default stackup given the number of layers and board outline.
 public pcb-board default-board (stack:Stackup, outline:Shape) :
   stackup = stack
   boundary = outline
   signal-boundary = outline
+  vias = [default-via minimum-via]
 
 ; Creates a design using the default board. 
 public defn make-default-board (module:Instantiable, num-layers:Int, outline:Shape) :
