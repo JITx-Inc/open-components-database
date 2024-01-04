@@ -676,6 +676,32 @@ public defn bypass-caps (power-pin:JITXObject|Symbol, gnd-pin:JITXObject|Symbol,
           make-net(s, false, [c.p[2]], false)
 
 ; ========================================================
+; ====================== electrolytic-strap =======================
+; ========================================================
+defn pin-exists? (inst:JITXObject, pin:Ref) :
+  contains?(seq(ref, pins(inst)), dot(ref(inst), pin))
+
+defn pin-exists? (inst:JITXObject, pin:String) :
+  contains?(seq(ref, pins(inst)), dot(ref(inst), Ref(pin)))
+
+public defn electrolytic-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple<KeyValue>) -> JITXObject :
+  inside pcb-module:
+    inst cap : electrolytic-cap(params)
+    if pin-exists?(cap "a") :
+      net (first-pin, cap.a)
+      net (second-pin, cap.c)
+    else :
+      net (first-pin, cap.p[1])
+      net (second-pin, cap.p[2])
+    cap
+
+public defn electrolytic-strap (first-pin:JITXObject, second-pin:JITXObject, capacitance:Double|Toleranced, tol:Double) :
+  electrolytic-strap(first-pin, second-pin, ["capacitance" => capacitance "tolerance" => tol])
+
+public defn electrolytic-strap (first-pin:JITXObject, second-pin:JITXObject, capacitance:Double|Toleranced) :
+  electrolytic-strap(first-pin, second-pin, ["capacitance" => capacitance])
+
+; ========================================================
 ; ======================= res-strap ======================
 ; ========================================================
 public defn res-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple<KeyValue>) -> JITXObject :
@@ -829,7 +855,7 @@ public defn  usb2-on-a-usb-c-connector ():
 
 public pcb-module usb2-on-a-usb-c-connector (conref:Instantiable):
   port usb-2 : usb-2
-  port usb-c : usb-c
+  port usb-c : usb-c-connector
   public inst con : conref
   place(con) at loc(0.0, 0.0) on Top
   net (usb-c con.usb-c)
