@@ -652,6 +652,17 @@ public defn gen-led-cmp (pkg-name:String) :
 ; ========================================================
 ; These functions attach a passive component between two pins. e.g. strap a pull up resistor between an IO and VDD
 
+; generic function that takes any 2 pin component and straps it between the 
+; 2 pins, could be used for components where the pin names are unknown at the start
+public defn strap (pin1:JITXObject pin2:JITXObject obj:Instantiable) :
+  inside pcb-module :
+    inst comp : obj
+    val the-pins = pins(comp)
+    if length(the-pins) == 2 :
+      net (the-pins[0] pin1)
+      net (the-pins[1] pin2)
+    comp
+
 public defn bypass-cap-strap (power-pin:JITXObject, gnd-pin:JITXObject, params:Tuple<KeyValue>):
   inside pcb-module:
     val cap = cap-strap(gnd-pin, power-pin, params)
@@ -696,12 +707,10 @@ defn pin-exists? (inst:JITXObject, pin:String) :
 public defn electrolytic-strap (first-pin:JITXObject, second-pin:JITXObject, params:Tuple<KeyValue>) -> JITXObject :
   inside pcb-module:
     inst cap : electrolytic-cap(params)
-    if pin-exists?(cap "a") :
-      net (first-pin, cap.a)
-      net (second-pin, cap.c)
-    else :
-      net (first-pin, cap.p[1])
-      net (second-pin, cap.p[2])
+    val the-pins = pins(cap)
+    if length(the-pins) == 2 :
+      net (the-pins[0] first-pin)
+      net (the-pins[1] second-pin)
     cap
 
 public defn electrolytic-strap (first-pin:JITXObject, second-pin:JITXObject, capacitance:Double|Toleranced, tol:Double) :
