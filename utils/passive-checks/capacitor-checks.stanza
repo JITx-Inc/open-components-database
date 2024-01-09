@@ -29,15 +29,17 @@ doc: \<s>
 <s>
 public defn check-capacitor (c:JITXObject) : 
   inside pcb-module :
-    check-has-properties(NAME, c, [`type])
-    val type = property(c.type)
-    ; If the cap has a known type, we perform our analysis with
-    ; the known deratings.
-    switch(type) :
-      "ceramic"      : check-ceramic-capacitor(c)
-      "electrolytic" : check-electrolytic-capacitor(c)
-      "mica"         : check-mica-film-capacitor(c)
-      else           : check-unknown-capacitor(c)
+    if has-property?(c.type?) :
+      val type = property(c.type)
+      ; If the cap has a known type, we perform our analysis with
+      ; the known deratings.
+      switch(type) :
+        "ceramic"      : check-ceramic-capacitor(c)
+        "electrolytic" : check-electrolytic-capacitor(c)
+        "mica"         : check-mica-film-capacitor(c)
+        else           : check-unknown-capacitor(c)
+    else :
+      check-unknown-capacitor(c)
 
 ; The basic capacitor check
 defn check-unknown-capacitor (c:JITXObject) :
