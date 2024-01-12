@@ -61,8 +61,8 @@ public pcb-enum ocdb/utils/generator-utils/USB-C-ConfigurationChannel :
 
 ; Creates and attaches USB-C configuration resistors
 public defn usb-c-configuration-channel (usb-c-bundle:JITXObject, method:USB-C-ConfigurationChannel) :
-  if port-type(usb-c-bundle) != usb-c :
-    fatal("Bundle type passed to usb-c-configuration-channel must be bundle type usb-c.")
+  if port-type(usb-c-bundle) != usb-c-connector :
+    fatal("Bundle type passed to usb-c-configuration-channel must be bundle type usb-c-connector.")
 
   inside pcb-module:
     switch(method) :
@@ -317,15 +317,15 @@ public defn run-final-passes (module:Instantiable) -> Instantiable :
         match(design*: Instantiable) : loop(design*, i + 1)
         else : design
 
-      if i == 5 :
+      if i == 9 :
         throw $ Exception("A loop executing eval-whens, propagating net voltages and assigning pins has been \
-                           encountered: 5 iterations reached. Check that no eval-when generate other eval-whens in an \
+                           encountered: 9 iterations reached. Check that no eval-when generate other eval-whens in an \
                            infinite loop, or that there is no infinite loop of 2nd order between eval-when execution \
                            and net voltage propagation or pin assignment.")
       
       
       ;TODO: Review the order and necessity of those algos
-      val filename = to-string("voltage-propagation-iteration%_.txt" % [i])
+      val filename = to-string("designs/voltage-propagation-iteration%_.txt" % [i])
       design $> ocdb/utils/voltage-propagation/propagate-voltages{_, filename}
              ;$> transform-module{propagate-voltages, _}
              ;$> transform-module{propagate-relative-voltages, _}
