@@ -599,12 +599,19 @@ defn to-jitx (pin-props: PinPropertiesCode) :
         val pin-ref = to-ref(/pin(pin-prop))
         val jitx-pads = map(to-ref, pads(pin-prop))
         [(pin-ref) | (jitx-pads)... | direction(pin-prop) as Dir | electrical-type(pin-prop) | bank(pin-prop) as Int]
+
     do(to-jitx, power-pins(pin-props))
     do(to-jitx, no-connects(pin-props))
 
     for pin-prop in pins(pin-props) do :
       val jitx-pin = self.(to-ref(/pin(pin-prop)))
       set-property(jitx-pin, `direction, direction(pin-prop) as Dir)
+
+      ; This is a hack - I'm forcing pin models on to the components so that
+      ;   I can get topologies to work. 
+      pin-model( jitx-pin ) = PinModel(0.0 +/- 1.0e-12, typ(0.0))
+
+
 
 defn to-ref (pin-by-type:PinByTypeCode) -> Ref :
   match(pin-by-type) :
