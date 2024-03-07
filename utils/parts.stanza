@@ -603,13 +603,20 @@ defn to-jitx (pin-props: PinPropertiesCode) :
     do(to-jitx, power-pins(pin-props))
     do(to-jitx, no-connects(pin-props))
 
-    for pin-prop in pins(pin-props) do :
+    val jitx-pins = to-tuple $ for pin-prop in pins(pin-props) seq :
       val jitx-pin = self.(to-ref(/pin(pin-prop)))
       set-property(jitx-pin, `direction, direction(pin-prop) as Dir)
+      jitx-pin
 
-      ; This is a hack - I'm forcing pin models on to the components so that
-      ;   I can get topologies to work. 
-      pin-model( jitx-pin ) = PinModel(0.0 +/- 1.0e-12, typ(0.0))
+    ; This Pin Model is a pass-through pin model indicating that the signal
+    ;  can flow from one pin through the device and then out the other pin 
+    ;  (or vice versa) with some delay
+    ;  - Note that these defaults are primarily just to get
+    ;    the SI system to work in the current model
+    ;  - The zero delay assumption is probably fine for most
+    ;    symmetric circuits. 
+    ;  - The zero loss assumption is probably inaccurate for most devices. 
+    pin-model( jitx-pins[0], jitx-pins[1] ) = PinModel(typ(0.0), typ(0.0))
 
 
 
