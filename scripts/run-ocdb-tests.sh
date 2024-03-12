@@ -9,7 +9,9 @@ if [ "$(basename $PWD)" != "open-components-database" ] ; then
     exit -1
 fi
 
-PYTHON=python3.10
+#
+# Defaulted env var inputs - can override if necessary
+echo "             PYTHON:" "${PYTHON:=python}"
 
 # check for any optional argument to run fewer tests (skip Octopart queries, for example)
 if [[ $# -ne 0 ]]; then

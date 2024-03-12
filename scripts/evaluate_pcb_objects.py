@@ -59,11 +59,11 @@ class NoResolvedArgumentValueError(Exception):
     pass
 
 def or_regex(strings: Iterable[str]) -> str:
-    return "(?:" + "|".join([s.replace("|", "\|") for s in strings]) + ")"
+    return r"(?:" + r"|".join([s.replace(r"|", r"\|") for s in strings]) + r")"
 
-PACKAGE_REGEX = "[\w!?/-]+"
-VARIABLE_REGEX = "[\w!?-]+"
-VALUE_REGEX = "[-+.!?\"'\w\d]+"
+PACKAGE_REGEX = r"[\w!?/-]+"
+VARIABLE_REGEX = r"[\w!?-]+"
+VALUE_REGEX = r"[-+.!?\"'\w\d]+"
 TYPE_SAMPLE = {
     "Char": '"c"',
     "String": '"hello world"',
@@ -78,8 +78,8 @@ TYPE_REGEX = or_regex(TYPE_SAMPLE.keys())
 
 OBJECT_REGEX = or_regex([o.value for o in TopLevel])
 # We only test public objects
-PCB_OBJECT_REGEX = f"^public +pcb-({OBJECT_REGEX}) +({VARIABLE_REGEX}) *(?:\( *({VARIABLE_REGEX}) *: *({TYPE_REGEX}) *\))? *:"
-DEFPACKAGE_REGEX = f"^defpackage +({PACKAGE_REGEX})"
+PCB_OBJECT_REGEX = fr"^public +pcb-({OBJECT_REGEX}) +({VARIABLE_REGEX}) *(?:\( *({VARIABLE_REGEX}) *: *({TYPE_REGEX}) *\))? *:"
+DEFPACKAGE_REGEX = fr"^defpackage +({PACKAGE_REGEX})"
 PACKAGE_TEMPLATE = 'package {package_name} defined-in "{file_name}"\n'
 # Use Jinja2
 TEST_FILE_HEADER = ["#use-added-syntax(tests)\n",
@@ -129,7 +129,7 @@ def choose_pcb_object_arguments(arg_name: str, arg_type: str, file: File, line_n
             # skip when 1 argument
             raise SkipTestError()
         for number in range(cursor + 1, line_number - 1):
-            if (m := re.match(f"^({VARIABLE_REGEX}):(.*);?", file[number]))\
+            if (m := re.match(fr"^({VARIABLE_REGEX}):(.*);?", file[number]))\
                     and m.group(1) == arg_name\
                     and (n := re.findall(VALUE_REGEX, m.group(2))):
                 if set(n) == {"even", "positive"}:
@@ -147,7 +147,7 @@ def choose_pcb_object_arguments(arg_name: str, arg_type: str, file: File, line_n
         function_code = [l for line in file[line_number + 1:cursor] if not re.match(" *\n", (l := remove_comment(line)))]
         for line_idx, line in enumerate(function_code[:-1]) :
             if f"switch({arg_name})" in line :
-                if (m := re.match(f" *({VALUE_REGEX}) *:", function_code[line_idx + 1])):
+                if (m := re.match(fr" *({VALUE_REGEX}) *:", function_code[line_idx + 1])):
                     return [m.group(1)]
                 else:
                     print(f"Switch parsing failure: can't retrieve example value in\n```\n{line + function_code[line_idx + 1]}\n```")
