@@ -37,10 +37,10 @@ public defn propagate-relative-voltages (netlist:GlobalNetList) :
 
 ; Compute the strongly connected components of a graph of global nets
 defn scc-relative-voltage (netlist:GlobalNetList) -> List<List<GlobalNet>|GlobalNet> :
-  val pin-table = to-hashtable<JITXObject, GlobalNet> $
-    for net in nets(netlist) seq-cat :
-      for pin in pins(net) seq :
-        pin => net
+  val pin-table = HashTable<JITXObject,GlobalNet>(unsafe-hash, equal?)
+  for net in nets(netlist) do :
+    for pin in pins(net) do :
+      pin-table[pin] = net
   
   defn dependencies (p:Pin) -> Seq<GlobalNet> :
     seq(get{pin-table, relative(_)}, relative-voltages(p))

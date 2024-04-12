@@ -125,8 +125,8 @@ defn collect-connected-groups () -> Tuple<ConnectedGroup> :
   ;are a viable starting point, then ensure they are part of a group.
 
   ;Compute the set of all items that are part of some group.
-  val group-set = to-hashset<JITXObject> $
-    seq(object, seq-cat(items, groups))
+  val group-set = HashSet<JITXObject>(unsafe-hash, equal?)
+  do(add{group-set, _}, (seq(object, seq-cat(items, groups))))
 
   ;Find all the objects that are viable starting points,
   ;and put them in a trivial group if necessary.
@@ -232,10 +232,10 @@ defn relative-relations (groups:Tuple<ConnectedGroup>) -> Vector<RelativeRelatio
   ;that a JITXObject corresponds to.
 
   ;An entry, OBJ => G, means that object 'OBJ' is in connected group 'G'.
-  val group-table = HashTable<JITXObject,Int>()
+  val group-table = HashTable<JITXObject,Int>(unsafe-hash, equal?)
   
   ;An entry, OBJ => ITEM, means that object 'OBJ' corresponds to item 'ITEM'.
-  val item-table = HashTable<JITXObject,Item>()
+  val item-table = HashTable<JITXObject,Item>(unsafe-hash, equal?)
 
   ;Scan through input groups and populate 'group-table' and 'item-table'.
   for group in groups do :
@@ -411,7 +411,7 @@ defn check-consistency (start:Vector<GroupVoltage>
                         relations:Vector<RelativeRelation>) :
   ;Build table of voltages. 
   val group-voltage-table = IntTable<Double|Toleranced>()
-  val object-voltage-table = HashTable<JITXObject,Double|Toleranced>()
+  val object-voltage-table = HashTable<JITXObject,Double|Toleranced>(unsafe-hash, equal?)
   for v in start do :
     group-voltage-table[id(v)] = voltage(v)
   for v in group-voltages do :
