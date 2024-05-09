@@ -1,4 +1,6 @@
 #use-added-syntax(jitx)
+#use-added-syntax(defschema)
+
 defpackage ocdb/utils/generic-components:
   import core
   import collections
@@ -7,7 +9,9 @@ defpackage ocdb/utils/generic-components:
   import jitx
   import jitx/commands
   import jitx/errors
-
+  import json
+  import utils/protoschema
+  
   import lang-utils with :
     prefix(min-max) => lang-
 
@@ -24,6 +28,11 @@ defpackage ocdb/utils/generic-components:
   import ocdb/utils/parts
   import ocdb/utils/placeholder-components
   import ocdb/artwork/board-text
+
+defn capture-output<?T> ( func : () -> ?T ) -> String :
+  val buf = StringBuffer(128)
+  val result:T = with-output-stream(buf, func)
+  to-string(buf)
 
 ; ========================================================
 ; ====== Standard packages for the passive solver ========
@@ -207,7 +216,7 @@ defn lookup-val (params:Tuple<KeyValue>, key:String) -> Double|Toleranced|False 
 
 defn find-subs-comp (params:Tuple<KeyValue>, param-name:String) :
   val my-val = lookup-val(params, param-name)
-  println("Warning: dummy substitution for %_ value (%_)" % [param-name, my-val])
+  println("[Warning]: dummy substitution for %_ value (%_)" % [param-name, my-val])
   match(my-val:Double|Toleranced) :
     switch(param-name) :
       "capacitance" : dummy-capacitor(my-val)
@@ -229,14 +238,29 @@ public defn electrolytic-cap (user-params:Tuple<KeyValue>) -> Instantiable :
                                     "mounting" => "smd" "min-stock" => 5 * DESIGN-QUANTITY]
                                     user-params]
   val my-params = replace-params(params)
+  ;val logger = JSONLogger()
+  ; writeToJSON(logger,"-============AAAAAAAAAAA====================")
   try :
     to-jitx $ Capacitor(my-params)
   catch (e:jitx/errors/NoComponentMeetingRequirements) :
-    println("No capacitor found that satisfies requirements.")
+    val title = to-string("No component meeting requirements")
+    jitx/messages-server/add-dbquery-message(
+          jitx/utils/logging/Error,
+          title, to-string(e), my-params)
+    ;println("No capacitor found satisfying requirements: %_" % [user-params])
+    println("[CONTENT]=====>{%_}" % [to-string(e)])
     find-subs-comp(params, "capacitance")
   catch (e:QueryInternetConnectionError) :
     println("Internet connection error while connecting to parts database.")
     find-subs-comp(params, "capacitance")
+  catch (e) :
+    println("Unhandled Exception while searching parts database.")
+    val title = to-string("Unhandled Exception while searching parts database.")
+    jitx/messages-server/add-dbquery-message(
+      jitx/utils/logging/Warning, ; testing 
+      title, to-string(e), my-params)
+    find-subs-comp(params, "capacitance")
+    ;throw(e) ; LFCHAO TMP
   ; we are not catching the following errors so that the normal error handlers can provide 
   ; more detailed feedback. However the design will stop compiling and will require the user
   ; to correct the lookup parameters.
@@ -273,7 +297,7 @@ public defn ceramic-cap (user-params:Tuple<KeyValue>) -> Instantiable :
   try :
     to-jitx $ Capacitor(my-params)
   catch (e:jitx/errors/NoComponentMeetingRequirements) :
-    println("No capacitor found that satisfies requirements.")
+    println("No capacitor found satisfying requirements.")
     find-subs-comp(params, "capacitance")
   catch (e:QueryInternetConnectionError) :
     println("Internet connection error while connecting to parts database.")

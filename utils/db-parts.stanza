@@ -961,17 +961,51 @@ public defn query-distinct (query-properties: Tuple<KeyValue<String, ?>>, callee
 
   values
 
+defn message-content (dbentry) -> String:
+  string-join{_, '\n'} $ for field in ["mpn" "manufacturer" ] map :
+    to-string("%_ = %_" % [field dbentry[field]])
+
 public defn dbquery-first-allow-non-stock (args: Tuple<KeyValue<String, Tuple<String>|Tuple<Double>|String|Double|Int>>) -> JSON :
   try :
-    dbquery-first(args)
+    val answer = dbquery-first(args)
+    val comp = match(answer:JObject): answer["mpn"]
+    val title = to-string("Component %_ found meeting requirements" % [comp])
+    jitx/messages-server/add-dbquery-message(
+      jitx/utils/logging/Info,
+      title, message-content(answer), args)
+    answer
   catch (e:NoComponentMeetingRequirements) :
     if ALLOW-NON-STOCK :
-      println("[WARNING] %_" % [to-string(e)])
-
       ; Do not check stock for this out-of-stock component by
       ; removing "_stock" and "min-stock and retry
       val args2 = to-tuple $ for entry in args filter :
                       (key(entry) != "min-stock") and (key(entry) != "_stock")
-      dbquery-first(args2)
+      val answer2 = dbquery-first(args2)
+      val comp = match(answer2:JObject): answer2["mpn"]
+      val title = to-string("Component %_ found but is out of stock" % [comp])
+      jitx/messages-server/add-dbquery-message(
+          jitx/utils/logging/Warning, title, to-string(e), args)
+      answer2
     else :
-      throw(e)
+      val title = to-string("No component meeting requirements")
+      jitx/messages-server/add-dbquery-message(
+          jitx/utils/logging/Error, 
+          title, to-string(e), args)
+      ;throw(e) ; LFCHAO - only print error when comp not found
+  catch (e:QueryInternetConnectionError) :
+    println("Internet connection error while connecting to parts database.")
+    throw(e)
+  catch (e) :
+    println("Unhandled Exception while searching parts database.")
+    val title = to-string("Unhandled Exception while searching parts database.")
+    jitx/messages-server/add-dbquery-message(
+      jitx/utils/logging/Error, ; testing
+      title, to-string(e), args)
+    ;throw(e) ; LFCHAO TMP
+    ; Example of such unhandled exception:
+    ;    Uncaught Exception: Query error: Error from the JITX Server: {"message": "Internal Server Error"}
+
+defn capture-output<?T> ( func : () -> ?T ) -> String :
+  val buf = StringBuffer(128)
+  val result:T = with-output-stream(buf, func)
+  to-string(buf)
