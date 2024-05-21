@@ -87,8 +87,7 @@ rm -rf test-evaluate
 echo -e "\n\n--------------------------------------------------------------------------------"
 echo "Launching ocdb tests, they can depend on jitx-client..."
 echo "--------------------------------------------------------------------------------"
-${JITX_RUN_TEST} tests/all-part1.stanza -not-tagged part-query long not-implemented-yet
-${JITX_RUN_TEST} tests/all-part2.stanza -not-tagged part-query long not-implemented-yet
+${JITX_RUN_TEST} tests/all.stanza -not-tagged part-query long not-implemented-yet
 
 #==============================================
 #============= Integration tests ==============
