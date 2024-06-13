@@ -27,17 +27,21 @@ public defn PartsDBComponent (user-properties:Tuple<KeyValue>) -> Component :
   val query-properties = normalize-params $ [
     user-properties
   ]
-  parse-component $ dbquery-first-allow-non-stock(query-properties) as JObject
-  
+  val component = parse-component $ dbquery-first-allow-non-stock(query-properties) as JObject
+  dbquery-download-model3d(component)
+  make-model-3d-relative(component, "../../3d-models")
 
 public defn PartsDBComponents (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Component> :
   val query-properties = normalize-params $ [
     user-properties
   ]
-  map{parse-component, _} $ dbquery(query-properties, limit) as Tuple<JObject>
+  val components = map{parse-component, _} $ dbquery(query-properties, limit) as Tuple<JObject>
+  for component in components map :
+    dbquery-download-model3d(component)
+    make-model-3d-relative(component, "../../3d-models")
 
 public defstruct Part <: Component :
-  component: ComponentCode with: (as-method => true)
+  component: ComponentCode with: (as-method => true, updater => sub-component)
   description: String
   manufacturer: String
   mpn: String
@@ -1171,7 +1175,8 @@ doc:\<>
         from "jitx-64d1e771b789d8dc4b8d375d.stp"
         to "../../jitx-64d1e771b789d8dc4b8d375d.stp"
 <>
-public defn make-model-3d-relative (component-code: ComponentCode, relative-model3d-dir: String) -> ComponentCode :
+public defn make-model-3d-relative (component: Component, relative-model3d-dir: String) -> Component :
+  val component-code = /component(component)
   match(landpattern(component-code)):
     (lpc:LandPatternCode):
       val new-model3ds = for model3d-code in model3ds(lpc) map :
@@ -1179,12 +1184,14 @@ public defn make-model-3d-relative (component-code: ComponentCode, relative-mode
           val model3d = model3d(model3d-code)
           val new-filename = to-string("%_/%_" % [relative-model3d-dir, filename(model3d)])
           val new-model = sub-filename(model3d new-filename)
-      sub-landpattern(component-code sub-model3ds(lpc new-model3ds))
+      sub-component{component _ } $
+        sub-landpattern(component-code sub-model3ds(lpc new-model3ds))
 
 doc:\<>
   Download the stp files for the model3ds to the "3d-models" folder of the current project. 
 <>
-public defn dbquery-download-model3d (component-code: ComponentCode) :
+public defn dbquery-download-model3d (component: Component) :
+  val component-code = /component(component)
   match(landpattern(component-code)):
     (lpc:LandPatternCode):
       for model3d-code in model3ds(lpc) do:
