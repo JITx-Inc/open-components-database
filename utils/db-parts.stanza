@@ -109,6 +109,10 @@ public defn Resistor (raw-json: JObject) -> Resistor :
   val json = filter-json(raw-json)
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
 
+  val component = ComponentCode(json["component"] as JObject)
+    $> make-model-3d-relative{_, "../../3d-models"}
+  dbquery-download-model3d(component)
+
   Resistor(json["manufacturer"] as String,
            json["mpn"] as String,
            json["trust"] as String,
@@ -130,7 +134,7 @@ public defn Resistor (raw-json: JObject) -> Resistor :
            parse-sellers(json),
            parse-query-properties(json),
            optional-double(json, "resolved_price"),
-           ComponentCode(json["component"] as JObject),
+           component,
            parse-vendor-part-numbers(json))
 
 defn resistance-tcr (json: JObject) -> TCR|False :
@@ -303,6 +307,10 @@ public defn Capacitor (raw-json: JObject) -> Capacitor :
   val json = filter-json(raw-json)
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
 
+  val component = ComponentCode(json["component"] as JObject)
+    $> make-model-3d-relative{_, "../../3d-models"}
+  dbquery-download-model3d(component)
+
   Capacitor(json["manufacturer"] as String,
             json["mpn"] as String,
             json["trust"] as String,
@@ -329,7 +337,7 @@ public defn Capacitor (raw-json: JObject) -> Capacitor :
             parse-sellers(json),
             parse-query-properties(json),
             optional-double(json, "resolved_price"),
-            ComponentCode(json["component"] as JObject),
+            component,
             parse-vendor-part-numbers(json))
 
 defn parse-esr (json: JObject) -> ESR|False :
@@ -539,6 +547,10 @@ defstruct Inductor <: Component :
 public defn Inductor (raw-json: JObject) -> Inductor :
   val json = filter-json(raw-json)
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
+ 
+  val component = ComponentCode(json["component"] as JObject)
+    $> make-model-3d-relative{_, "../../3d-models"}
+  dbquery-download-model3d(component)
 
   Inductor(json["manufacturer"] as String,
            json["mpn"] as String,
@@ -565,7 +577,7 @@ public defn Inductor (raw-json: JObject) -> Inductor :
            parse-sellers(json),
            parse-query-properties(json),
            optional-double(json, "resolved_price"),
-           ComponentCode(json["component"] as JObject),
+           component,
            parse-vendor-part-numbers(json))
 
 ; ========================================================
@@ -975,3 +987,9 @@ public defn dbquery-first-allow-non-stock (args: Tuple<KeyValue<String, Tuple<St
       dbquery-first(args2)
     else :
       throw(e)
+  catch (e:QueryInternetConnectionError) :
+    println("Internet connection error while connecting to parts database.")
+    throw(e)
+  catch (e) :
+    println("Unhandled Exception while searching parts database.")
+    throw(e)
