@@ -952,7 +952,14 @@ public defn query-properties (user-properties:Tuple<KeyValue>,
 
 public defn query-distinct (query-properties: Tuple<KeyValue<String, ?>>, callee: String) -> Tuple :
   ; 1000 is the maximum number of values that the JITX server is allowed to return at once
-  val values = dbquery(query-properties, 1000) as Tuple
+  val values = to-tuple $ within value = seq(dbquery(query-properties, 1000) as Tuple) :
+    ; remove query-properties from the results
+    match(value) :
+      (j:JObject) :
+        JObject $ to-tuple $ for entry in entries(j) seq? :
+          if key(entry) == "query-properties" : None()
+          else : One(entry)
+      (v) : v
 
   if length(values) == 1000 :
     print("[WARNING] `%_` returned the maximum allowed of 1000 values. " % [callee])
