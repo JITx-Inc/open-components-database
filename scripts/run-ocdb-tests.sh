@@ -40,7 +40,7 @@ echo -e "\n\n-------------------------------------------------------------------
 echo "Installation details"
 echo "--------------------------------------------------------------------------------"
 
-"${JSTANZA}" version
+# "${JSTANZA}" version
 "${JITX}" check-install
 
 if [ -e ${JITX_HOME}/user.params ] ; then
