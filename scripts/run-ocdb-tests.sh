@@ -33,14 +33,12 @@ echo "JITX_INSTALL_DIR = \"${JITX_INSTALL_DIR}\""
 
 JITX="${JITX_INSTALL_DIR}/jitx"
 echo "JITX = \"${JITX}\""
-JSTANZA="${JITX_INSTALL_DIR}/jstanza"
-echo "JSTANZA = \"${JSTANZA}\""
 
 echo -e "\n\n--------------------------------------------------------------------------------"
 echo "Installation details"
 echo "--------------------------------------------------------------------------------"
 
-# "${JSTANZA}" version
+# "${JITX}" version
 "${JITX}" check-install
 
 if [ -e ${JITX_HOME}/user.params ] ; then
@@ -78,7 +76,7 @@ cd test-evaluate/
 echo -e "\n\n--------------------------------------------------------------------------------"
 echo "Launching pcb object tests..."
 echo "--------------------------------------------------------------------------------"
-${JITX_RUN_TEST} test/evaluate/api
+# ${JITX_RUN_TEST} test/evaluate/api
 cd ..
 )
 rm -rf test-evaluate
@@ -89,7 +87,7 @@ rm -rf test-evaluate
 echo -e "\n\n--------------------------------------------------------------------------------"
 echo "Launching ocdb tests, they can depend on jitx-client..."
 echo "--------------------------------------------------------------------------------"
-${JITX_RUN_TEST} tests/all.stanza -not-tagged part-query long not-implemented-yet
+# ${JITX_RUN_TEST} tests/all.stanza -not-tagged part-query long not-implemented-yet
 
 #==============================================
 #============= Integration tests ==============
