@@ -68,3 +68,12 @@ deftest(odcb, part-query) tantalum-cap-instantiation-1uf :
 deftest(odcb, part-query) tantalum-cap-lookup-1uf : 
   val caps = look-up-tantalum-caps("rated-voltage", ["capacitance" => 1.0e-6])
   #ASSERT(not empty?(caps))
+
+deftest(ocdb, part-query) exist-field :
+  pcb-module my-module :
+    public inst a : database-part(["min-resistance" => 5.0 "max-resistance" => 15.0 "_exist" => ["rated-power"] "_sort" => ["rated-power" "-resistance"] "category" => "resistor"])
+    public inst b : database-part(["min-resistance" => 50.0 "max-resistance" => 150.0 "_exist" => ["rated-power"] "_sort" => ["rated-power" "-resistance"] "category" => "resistor"])
+    public inst c : database-part(["min-resistance" => 500.0 "max-resistance" => 1500.0 "_exist" => ["rated-power"] "_sort" => ["rated-power" "-resistance"] "category" => "resistor"])
+  
+  for cmp in public-instances(my-module) do :
+    #ASSERT(property(cmp.rated-power) is-not False)
