@@ -33,12 +33,14 @@ echo "JITX_INSTALL_DIR = \"${JITX_INSTALL_DIR}\""
 
 JITX="${JITX_INSTALL_DIR}/jitx"
 echo "JITX = \"${JITX}\""
+JSTANZA="${JITX_INSTALL_DIR}/jstanza"
+echo "JSTANZA = \"${JSTANZA}\""
 
 echo -e "\n\n--------------------------------------------------------------------------------"
 echo "Installation details"
 echo "--------------------------------------------------------------------------------"
 
-"${JITX}" version
+"${JSTANZA}" version
 "${JITX}" check-install
 
 if [ -e ${JITX_HOME}/user.params ] ; then
