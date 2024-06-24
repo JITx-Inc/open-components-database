@@ -52,7 +52,7 @@ fi
 
 # Tests need to take into account the root stanza.proj so that they find the source files from the ocdb repo and not a pkg from the jitx-client docker image
 JITX_RUN="${JITX} run ${PWD}/stanza.proj"  # i.e. open-components-database/stanza.proj
-JITX_RUN_TEST="${JITX} run-test ${PWD}/stanza.proj"
+JITX_RUN_TEST="${JITX} run --flags TESTING ${PWD}/stanza.proj"
 
 #==============================================
 #=========== Component Models test ============
@@ -76,7 +76,7 @@ cd test-evaluate/
 echo -e "\n\n--------------------------------------------------------------------------------"
 echo "Launching pcb object tests..."
 echo "--------------------------------------------------------------------------------"
-# ${JITX_RUN_TEST} test/evaluate/api
+${JITX_RUN_TEST} test/evaluate/api
 cd ..
 )
 rm -rf test-evaluate
@@ -87,7 +87,7 @@ rm -rf test-evaluate
 echo -e "\n\n--------------------------------------------------------------------------------"
 echo "Launching ocdb tests, they can depend on jitx-client..."
 echo "--------------------------------------------------------------------------------"
-# ${JITX_RUN_TEST} tests/all.stanza -not-tagged part-query long not-implemented-yet
+${JITX_RUN_TEST} tests/all.stanza -not-tagged part-query long not-implemented-yet
 
 #==============================================
 #============= Integration tests ==============
