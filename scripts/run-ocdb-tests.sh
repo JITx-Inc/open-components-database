@@ -38,7 +38,7 @@ echo -e "\n\n-------------------------------------------------------------------
 echo "Installation details"
 echo "--------------------------------------------------------------------------------"
 
-# "${JITX}" version
+"${JITX}" version
 "${JITX}" check-install
 
 if [ -e ${JITX_HOME}/user.params ] ; then
