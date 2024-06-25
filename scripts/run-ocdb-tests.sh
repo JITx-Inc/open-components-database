@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+echo -e "\n\n--------------------------------------------------------------------------------"
+echo "Remove TOML file"
+echo "--------------------------------------------------------------------------------"
+rm slm.toml
+echo -e "\n\n--------------------------------------------------------------------------------"
+echo "Check TOML file"
+echo "--------------------------------------------------------------------------------"
+cat slm.toml
+
 #
 # This script expects to be run from the `open-components-database` directory
 #
