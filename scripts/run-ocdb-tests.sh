@@ -57,7 +57,7 @@ fi
 
 # Tests need to take into account the root stanza.proj so that they find the source files from the ocdb repo and not a pkg from the jitx-client docker image
 JITX_RUN="${JITX} run ${PWD}/stanza.proj"  # i.e. open-components-database/stanza.proj
-JITX_RUN_TEST="${JITX} run --flags TESTING ${PWD}/stanza.proj"
+JITX_RUN_TEST="${JITX} run-test ${PWD}/stanza.proj"
 
 #==============================================
 #=========== Component Models test ============
