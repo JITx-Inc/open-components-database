@@ -34,6 +34,11 @@ public defmulti to-jitx (component: Component) -> Instantiable
 ; The top-level Component includes queryable fields used in parametric queries.
 ; This inner component represents the actual ESIR-instantiable object, including symbols/landpattern.
 public defmulti component (component: Component) -> ComponentCode
+public defmulti sub-component (component: Component, component-code: ComponentCode) -> Component
+
+defmethod sub-component (component: Component, component-code: ComponentCode) -> Component :
+  match(component) :
+    (x:Resistor|Capacitor|Inductor|Part) : sub-component(x, component-code)
 
 defmethod area (component: Component) -> Double :
   x(component) * y(component)
@@ -91,7 +96,7 @@ public defstruct Resistor <: Component :
   sellers: Tuple<Seller>|False with: (as-method => true)
   query-properties: JObject|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
-  component: ComponentCode with: (as-method => true)
+  component: ComponentCode with: (as-method => true, updater => sub-component)
   vendor-part-numbers: Tuple<KeyValue<String, String>> with: (as-method => true)
 
 public defn delta-resistance (resistor: Resistor, temperature: Double) -> Double :
@@ -292,7 +297,7 @@ defstruct Capacitor <: Component :
   sellers: Tuple<Seller>|False with: (as-method => true)
   query-properties: JObject|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
-  component: ComponentCode with: (as-method => true)
+  component: ComponentCode with: (as-method => true, updater => sub-component)
   vendor-part-numbers: Tuple<KeyValue<String, String>> with: (as-method => true)
 
 defstruct ESR :
@@ -533,11 +538,11 @@ defstruct Inductor <: Component :
   sellers: Tuple<Seller>|False with: (as-method => true)
   query-properties: JObject|False with: (as-method => true)
   resolved-price: Double|False with: (as-method => true)
-  component: ComponentCode with: (as-method => true)
+  component: ComponentCode with: (as-method => true, updater => sub-component)
   vendor-part-numbers: Tuple<KeyValue<String, String>> with: (as-method => true)
 
 public defn Inductor (raw-json: JObject) -> Inductor :
-  val json = filter-json(raw-json)
+  val json = filter-json(raw-json) 
   val [x, y, z] = parse-dimensions(json["dimensions"] as JObject)
 
   Inductor(json["manufacturer"] as String,
@@ -952,7 +957,14 @@ public defn query-properties (user-properties:Tuple<KeyValue>,
 
 public defn query-distinct (query-properties: Tuple<KeyValue<String, ?>>, callee: String) -> Tuple :
   ; 1000 is the maximum number of values that the JITX server is allowed to return at once
-  val values = dbquery(query-properties, 1000) as Tuple
+  val values = to-tuple $ within value = seq(dbquery(query-properties, 1000) as Tuple) :
+    ; remove query-properties from the results
+    match(value) :
+      (j:JObject) :
+        JObject $ to-tuple $ for entry in entries(j) seq? :
+          if key(entry) == "query-properties" : None()
+          else : One(entry)
+      (v) : v
 
   if length(values) == 1000 :
     print("[WARNING] `%_` returned the maximum allowed of 1000 values. " % [callee])
@@ -975,3 +987,9 @@ public defn dbquery-first-allow-non-stock (args: Tuple<KeyValue<String, Tuple<St
       dbquery-first(args2)
     else :
       throw(e)
+  catch (e:QueryInternetConnectionError) :
+    println("Internet connection error while connecting to parts database.")
+    throw(e)
+  catch (e) :
+    println("Unhandled Exception while searching parts database.")
+    throw(e)
