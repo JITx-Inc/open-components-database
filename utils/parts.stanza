@@ -27,16 +27,21 @@ public defn PartsDBComponent (user-properties:Tuple<KeyValue>) -> Component :
   val query-properties = normalize-params $ [
     user-properties
   ]
-  parse-component $ dbquery-first-allow-non-stock(query-properties) as JObject
+  val component = parse-component $ dbquery-first-allow-non-stock(query-properties) as JObject
+  dbquery-download-model3d(component)
+  make-model-3d-relative(component, "../../3d-models")
 
 public defn PartsDBComponents (user-properties:Tuple<KeyValue>, limit: Int) -> Tuple<Component> :
   val query-properties = normalize-params $ [
     user-properties
   ]
-  map{parse-component, _} $ dbquery(query-properties, limit) as Tuple<JObject>
+  val components = map{parse-component, _} $ dbquery(query-properties, limit) as Tuple<JObject>
+  for component in components map :
+    dbquery-download-model3d(component)
+    make-model-3d-relative(component, "../../3d-models")
 
 public defstruct Part <: Component :
-  component: ComponentCode with: (as-method => true)
+  component: ComponentCode with: (as-method => true, updater => sub-component)
   description: String
   manufacturer: String
   mpn: String
@@ -108,7 +113,7 @@ public defstruct ComponentCode :
   emodel: EModel|False
   pin-properties: False|PinPropertiesCode
   pcb-pads: Tuple<PCBPadCode>
-  landpattern: LandPatternCode|False
+  landpattern: LandPatternCode|False with : (updater => sub-landpattern)
   symbols: Tuple<SymbolCode>
   metadata: Tuple<MetadataCode>
   properties: Tuple<ComponentPropertyCode>
@@ -902,7 +907,7 @@ public defstruct LandPatternCode :
   pcb-layer-value: PCBLayerValue
   layers: Tuple<PCBLayerCode>
   geometries: Tuple<GeomCode>
-  model3ds: Tuple<Model3DCode>
+  model3ds: Tuple<Model3DCode> with : (updater => sub-model3ds)
 
 public defn LandPatternCode (json: JObject) -> LandPatternCode :
   LandPatternCode(
@@ -970,7 +975,7 @@ defn ViaType (s: String) -> ViaType :
     "BlindVia": BlindVia
 
 public defstruct Model3DCode :
-  model3d: Model3D
+  model3d: Model3D with : (updater => sub-model3d)
   model3d-id: String
 
 public defn Model3DCode (json: JObject) -> Model3DCode :
@@ -996,7 +1001,7 @@ defn Side (s: String) -> Side :
   switch(s) :
     "Top": Top
     "Bottom": Bottom
-
+  
 defn to-jitx (lp: LandPatternCode, jitx-pads-by-pcb-pad-name: HashTable<String, Pad>) -> LandPattern :
   pcb-landpattern my-landpattern :
     name = name(lp)
@@ -1152,3 +1157,44 @@ defn to-jitx (p: SymbolPinCode) :
 defn to-jitx (l: SymbolLayerCode) :
   inside pcb-symbol :
     layer(name(l)) = shape(l)
+
+
+;============================================
+;============ Model3D Handling ==============
+;============================================
+
+doc:\<>
+  Adjust model3d file paths to <project-folder>/3d-models
+
+  Example:
+    Step file under the project folder:
+      3d-models/jitx-64d1e771b789d8dc4b8d375d.stp
+ 
+    make-model-3d-relative(component, "../../3d-models") would change
+      the filename in a Model3D statement from
+        from "jitx-64d1e771b789d8dc4b8d375d.stp"
+        to "../../jitx-64d1e771b789d8dc4b8d375d.stp"
+<>
+public defn make-model-3d-relative (component: Component, relative-model3d-dir: String) -> Component :
+  val component-code = /component(component)
+  match(landpattern(component-code)):
+    (lpc:LandPatternCode):
+      val new-model3ds = for model3d-code in model3ds(lpc) map :
+        sub-model3d(model3d-code new-model) where :
+          val model3d = model3d(model3d-code)
+          val new-filename = to-string("%_/%_" % [relative-model3d-dir, filename(model3d)])
+          val new-model = sub-filename(model3d new-filename)
+      sub-component{component _ } $
+        sub-landpattern(component-code sub-model3ds(lpc new-model3ds))
+
+doc:\<>
+  Download the stp files for the model3ds to the "3d-models" folder of the current project. 
+<>
+public defn dbquery-download-model3d (component: Component) :
+  val component-code = /component(component)
+  match(landpattern(component-code)):
+    (lpc:LandPatternCode):
+      for model3d-code in model3ds(lpc) do:
+        ;The model3d-id is encoded in the filename "jitx-<model3d-id>.stp"
+        dbquery-download-model3d(filename(model3d(model3d-code)))
+    (_) : false
