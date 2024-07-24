@@ -9,6 +9,7 @@ defpackage ocdb/utils/property-structs :
   import ocdb/utils/generator-utils
   import ocdb/utils/connections
   import lang-utils
+  forward jitx/parts/legacy-ocdb-misc
 
 public pcb-struct ocdb/utils/property-structs/OperatingPoint :
   peak-voltage:Toleranced
@@ -41,10 +42,6 @@ public pcb-struct ocdb/utils/property-structs/PowerSupplyPin :
   supply-voltage:Toleranced
   max-current:Double
 
-; Library property name: power-pin
-public pcb-struct ocdb/utils/property-structs/PowerPin :
-  recommended-voltage:Toleranced|RelativeVoltage
-  
 ; Library property name: digital-input
 public pcb-struct ocdb/utils/property-structs/DigitalInput :
   vil:Toleranced|RelativeVoltage    ; Range of voltages that will read as logic low (V)
@@ -147,88 +144,3 @@ public defn set-power-states (obj:JITXObject, states:Tuple<KeyValue<String, True
   val states* = map(PowerState{key(_0), value(_0)}, states)
   set-property(obj, `power-states, states*)
 
-;==============================================================================
-;============================== Relative Voltages =============================
-;==============================================================================
-doc:"A RelativeVoltage represents a relationship between a pin's voltage rating \
-     and the voltage on another object."
-public deftype RelativeVoltage <: Equalable&Hashable&jitx/value/JITXValue
-
-doc:"Compute the voltage."
-public defmulti resolve (rv:RelativeVoltage, v:Toleranced) -> Toleranced
-
-doc:"The object this voltage is relative to."
-public defmulti relative (rv:RelativeVoltage) -> JITXObject
-
-doc:"Check if the relative voltage has a known absolute voltage."
-public defn has-absolute-voltage? (rv:RelativeVoltage) -> True|False :
-  get-property?(relative(rv), `voltage) is One
-
-doc:"Return the absolute voltage of a RelativeVoltage structure."
-public defn absolute-voltage (rv:RelativeVoltage) -> Toleranced :
-  val nv = get-property?(relative(rv), `voltage)
-  match(nv:One<Toleranced>) :
-    resolve(rv, value(nv))
-  else :
-    fatal("%_ is missing a voltage property. run-final-passes(...) must be called" % [ref(relative(rv))])
-
-doc:"Given a Toleranced|RelativeVoltage, return the absolute voltage."
-public defn eval-voltage (v:Toleranced|RelativeVoltage) -> Toleranced :
-  match(v) :
-    (t:Toleranced) : t
-    (rv:RelativeVoltage) : absolute-voltage(rv)
-
-
-doc:"A FractionalVoltage represents a voltage rating that is some factor * voltage on another pin."
-public pcb-struct ocdb/utils/property-structs/FractionalVoltage <: RelativeVoltage :
-  factor:Double|Toleranced
-  pin:JITXObject
-
-doc:"An OffsetVoltage represents a voltage rating that is factor + voltage on another pin."
-public pcb-struct ocdb/utils/property-structs/OffsetVoltage <: RelativeVoltage :
-  factor:Double|Toleranced
-  pin:JITXObject
-
-defmethod print (o:OutputStream, v:OffsetVoltage) :
-  print(o, "%_ volts relative to %_" % [factor(v), pin(v)])
-
-doc:\<doc>
-  A DualOffsetVoltage is a voltage rating that is equal to \
-     
-  ```stanza
-    min-max(min-value(voltage) - factor-min, 
-            max-value(voltage) + factor-max)
-  ```
-
-<doc>                  
-public pcb-struct ocdb/utils/property-structs/DualOffsetVoltage <: RelativeVoltage :
-  factor-min:Double
-  factor-max:Double
-  pin:JITXObject
-
-doc:"A PwlVoltage is a relative voltage that uses piecewise-linear (`PWL`) functions \
-     to represent the min and max values."
-public pcb-struct ocdb/utils/property-structs/PWLVoltage <: RelativeVoltage :
-  pwl-min:PWL
-  pwl-max:PWL
-  pin:JITXObject
-
-defmethod resolve (rv:FractionalVoltage, v:Toleranced) -> Toleranced :
-  factor(rv) * v
-
-defmethod resolve (rv:OffsetVoltage, v:Toleranced) -> Toleranced :
-  factor(rv) + v
-
-defmethod resolve (rv:DualOffsetVoltage, v:Toleranced) -> Toleranced :
-  val min = min-value(v) + factor-min(rv)
-  val max = max-value(v) + factor-max(rv)
-  jitx/min-max(min, max)
-
-defmethod resolve (rv:PWLVoltage, v:Toleranced) -> Toleranced :
-  jitx/min-max(pwl-min(rv)[min-value(v)], 
-               pwl-max(rv)[min-value(v)] )
-
-defmethod relative (rv:FractionalVoltage) : pin(rv)
-defmethod relative (rv:OffsetVoltage) : pin(rv)
-defmethod relative (rv:DualOffsetVoltage) : pin(rv)
-defmethod relative (rv:PWLVoltage) : pin(rv)

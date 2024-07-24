@@ -22,6 +22,8 @@ defpackage ocdb/utils/placeholder-components:
   import ocdb/utils/parts
   import ocdb/utils/generic-components
 
+  forward jitx/parts/legacy-ocdb-misc
+
 
 public pcb-enum /ocdb/utils/placeholder-components/ResistorApplication :
   ResistorPull
@@ -36,58 +38,6 @@ public pcb-enum /ocdb/utils/placeholder-components/CapacitorApplication :
   CapFilter
   CapPrecision
   CapLoad
-
-; ; ========================================================
-; ; ========== Generic passive components ==================
-; ; ========================================================
-public pcb-component dummy-resistor (res:Double|Toleranced -- original:Double|Toleranced|False = false case:String|False = false):
-  port p : pin[[1 2]]
-  val sym = resistor-sym(ResistorStd)
-  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
-  val pkg = ipc-two-pin-landpattern(select-pkg(case))
-  landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
-  reference-prefix = "R"
-  property(self.resistance) = res
-  property(self.resistor) = true
-  match(original:Double|Toleranced) :
-    property(self.original-resistance) = original
-  else :
-    property(self.original-resistance) = res
-  ; spice :
-  ;   "[R] <p[1]> <p[2]> <res>"
-
-public pcb-component dummy-capacitor (cap:Double|Toleranced -- original:Double|Toleranced|False = false case:String|False = false):
-  port p : pin[[1 2]]
-  val sym = capacitor-sym(CapacitorNonPolarized)
-  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
-  val pkg = ipc-two-pin-landpattern(select-pkg(case))
-  landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
-  reference-prefix = "C"
-  property(self.capacitor) = true
-  property(self.type) = "ceramic"
-  property(self.capacitance) = cap
-  match(original:Double|Toleranced) :
-    property(self.original-capacitance) = original
-  else :
-    property(self.original-capacitance) = cap
-  ; spice :
-  ;   "[C] <p[1]> <p[2]> <cap>"
-
-public pcb-component dummy-inductor (ind:Double|Toleranced -- original:Double|Toleranced|False = false case:String|False = false):
-  port p : pin[[1 2]]
-  val sym = inductor-sym(InductorStd)
-  symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
-  val pkg = ipc-two-pin-landpattern(select-pkg(case))
-  landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
-  reference-prefix = "L"
-  property(self.inductor) = true
-  property(self.inductance) = ind
-  match(original:Double|Toleranced) :
-    property(self.original-inductance) = original
-  else :
-    property(self.original-inductance) = ind
-  ; spice :
-  ;   "[L] <p[1]> <p[2]> <ind>"
 
 defn app-query-properties (app:CapacitorApplication) -> Tuple<KeyValue<String, ?>> :
   switch(app) :
@@ -330,23 +280,6 @@ public defn placeholder-resistor (res:Double|Toleranced, tol:Double) -> Instanti
 ; ========================================================
 ; ========== placeholder part helper functions ============
 ; ========================================================
-
-public defn normalize-params (hs:Seqable<Seqable<KeyValue<String, ?>>>) -> Tuple<KeyValue<String, ?>> :
-  seq(substitute-params, hs)
-    $> remove-duplicate-keys
-
-; Substitute user params to match expectations:
-;   - https://en.wikipedia.org/wiki/Principle_of_least_astonishment
-defn substitute-params (params: Seqable<KeyValue<String, ?>>) -> Tuple<KeyValue<String, ?>> :
-  to-tuple $ for kv in params seq :
-    switch {key(kv) == _} :
-      "minimum_quantity" : "max-minimum_quantity" => value(kv)
-      "stock" : "min-stock" => value(kv)
-      else :
-        kv
-
-defn remove-duplicate-keys (hs:Seqable<Seqable<KeyValue<String, ?>>>) -> Tuple<KeyValue<String, ?>> :
-  to-tuple $ to-hashtable<String, ?>(cat-all(hs))
 
 ; ----- proposal ----
 public defn between-std-val (v:Toleranced, tol:Double) -> Double :

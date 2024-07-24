@@ -18,6 +18,8 @@ defpackage ocdb/utils/generator-utils:
   import ocdb/utils/relative-voltages
   import ocdb/utils/propagation
 
+  forward jitx/parts/legacy-ocdb-misc
+
 ; =======================================
 ; Ciruit convenience functions
 ; =======================================
@@ -78,33 +80,6 @@ public defn usb-c-configuration-channel (usb-c-bundle:JITXObject, method:USB-C-C
       SinkDefault: 
         res-strap(usb-c-bundle.cc[1], usb-c-bundle.vbus.gnd, 5.1e3)
         res-strap(usb-c-bundle.cc[2], usb-c-bundle.vbus.gnd, 5.1e3)
-
-; =======================================
-; Piecewise linear functions
-; Example call : PWL([[x0 y0] [x1 y1] ... [xn yn])[x]. Returns interpolated value of y at x
-; =======================================
-public pcb-struct ocdb/utils/generator-utils/PWL :
-  ps:Tuple<[Double, Double]>
-
-public defn get (f:PWL, x:Double) :
-  val ps = ps(f)
-  val n = length(ps)
-  if x < ps[0][0] :
-    ps[0][1]
-  else if x >= ps[0][0] and x <= ps[n - 1][0] :
-    val i = for i in 0 to n find! :
-      ps[i][0] >= x
-    val j = for i in reverse(0 to n) find! :
-      ps[i][0] <= x
-    if i == j :
-      ps[i][1]
-    else :
-      val dydx = (ps[i][1] - ps[j][1]) / (ps[i][0] - ps[j][0])
-      dydx * (x - ps[j][0]) + ps[j][1]
-  else if x > ps[n - 1][0] :
-    ps[n - 1][1]
-  else  :
-    fatal("Something is wrong in PWL with x = %_" % [x])
 
 ; =======================================
 ; Assign a port to its bundle
