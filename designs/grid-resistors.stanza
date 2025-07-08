@@ -3,30 +3,101 @@ defpackage ocdb/designs/grid-resistors :
   import core
 
   import jitx
+  import jitx/emodels
   import jitx/commands
   import ocdb/utils/defaults
-  import ocdb/utils/generic-components
+  import jitx/parts/legacy-ocdb-symbols
+  import jitx/parts/legacy-ocdb-landpatterns
 
-val board-shape = RoundedRectangle(10.0, 10.0, 0.5)
+val board-shape = RoundedRectangle(20.0, 20.0, 0.5)
+
+pcb-pad a-pad :
+  type = SMD
+  val pad-shape = Polygon([Point(0.3 0.4), Point(0.5, -0.4), Point(-0.4, -0.4), Point(-0.4, 0.4)])
+  shape = pad-shape
+  layer(SolderMask(Top)) = expand-or-shrink(pad-shape, -0.05)
+  layer(Paste(Top)) = expand-or-shrink(pad-shape, -0.1)
+
+pcb-pad rect-pad :
+  type = SMD
+  val pad-shape = Rectangle(0.6, 0.4, loc(0.0, 0.0, 90.0)) ; artificially make a turn
+  shape = pad-shape
+  layer(SolderMask(Top)) = expand-or-shrink(pad-shape, -0.05)
+  layer(Paste(Top)) = expand-or-shrink(pad-shape, -0.1)
+
+val HEIGHT = 0.8
+val ANCHOR = S
+val POSE = loc(0.0, 0.8)
+
+pcb-landpattern assymetric-landpattern :
+  pad p[1] : a-pad at loc(-0.5, 0.0)
+  pad p[2] : a-pad at loc(0.5, 0.0)
+  layer(Silkscreen(Top)) = Text(">REF", HEIGHT, ANCHOR, POSE)
+
+
+pcb-landpattern symetric-landpattern :
+  pad p[1] : rect-pad at loc(-0.5, 0.0)
+  pad p[2] : rect-pad at loc(0.5, 0.0)
+  layer(Silkscreen(Top)) = Text(">REF", HEIGHT, ANCHOR, POSE)
+
+pcb-landpattern vertical-landpattern :
+  pad p[1] : rect-pad at loc(0.0, 0.5, 90.0)
+  pad p[2] : rect-pad at loc(0.0, -0.5, 90.0)
+  layer(Silkscreen(Top)) = Text(">REF", HEIGHT, ANCHOR, POSE)
+
+pcb-component gen-res-cmp (res:Double, lp-idx:Int) :
+  _gen-res-cmp(ResistorStd, res, 0.1, 1.0, lp-idx)
+
+
+defn _gen-res-cmp (r-type:ResistorSymbolType, res:Double, tol:Double, pwr:Double, lp-idx:Int) :
+  inside pcb-component :
+    ; if r-type is Symbol and (r-type as Symbol) == `pot :
+    ;   port p : pin[1 2 3]
+    ; else :
+    port p : pin[1 through 2]
+    val sym = resistor-sym(r-type)
+    val lp-table = [assymetric-landpattern, symetric-landpattern, vertical-landpattern]
+    val pkg = lp-table[lp-idx % length(lp-table)]
+    symbol = sym(p[1] => sym.p[1], p[2] => sym.p[2])
+    landpattern = pkg(p[1] => pkg.p[1], p[2] => pkg.p[2])
+    emodel = Resistor(res, tol, pwr)
+    reference-prefix = "R"
+    property(self.type) = "thick-film"
+    property(self.rated-voltage) = 50.0
+    property(self.rated-power) = pwr
+    property(self.derating) = [[-60.0 1.0] [70.0 1.0] [155.0 0.0]]
+    property(self.TCR) = 100.0e-6
+    property(self.rated-temperature) = min-max(-55.0, 125.0)
+    property(self.tolerance) = (tol * 0.01)
+    property(self.resistance) = res
+    property(self.resistor) = true
 
 pcb-module series-resistor :
   port a
   port b
 
-  inst r1 : chip-resistor(1.0e3)
-  inst r2 : chip-resistor(1.0e2)
+  inst r1 : gen-res-cmp(1.0e3, 0)
+  inst r2 : gen-res-cmp(1.0e2, 0)
 
   net (a r1.p[1])
   net (b r1.p[2])
   net (r1.p[2] r2.p[1])
 
-pcb-module series-resistors (n: Int) :
+pcb-module series-resistors (n: Int, angle-idx: Int) :
   port a
   port b
 
   var previous-pin = a
-  for idx in 1 through n do :
-    inst r : chip-resistor(to-double(idx) * 1.0e3)
+  val angle = switch(angle-idx) :
+    0 : 0.0
+    1 : 45.0
+    2 : -45.0
+    else : 0.0
+  for idx in 0 to n do :
+    inst r : gen-res-cmp(to-double(idx) * 1.0e3, idx)
+    val x = 2.0 * (to-double(idx) - to-double(n) / 2.0)
+    val side = Bottom when idx >= (n / 2) else Top
+    place(r) at loc(x, 0.0, angle) on side
     net (previous-pin r.p[1])
 
     previous-pin = r.p[2]
@@ -37,8 +108,9 @@ pcb-module grid-resistors (s-count: Int, p-count: Int) :
   port a
   port b
 
-  for _ in 0 to p-count do :
-    inst s : series-resistors(s-count)
+  for idx in 0 to p-count do :
+    inst s : series-resistors(s-count, idx)
+    place(s) at loc(0.0, to-double(idx - 1) * to-double(s-count) / 2.0) on Top
     net (a s.a)
     net (b s.b)
 
@@ -46,7 +118,11 @@ defn run-design (circuit: Instantiable) :
   set-current-design("output-grid-resistors")
   make-default-board(circuit, 2, board-shape)
 
+  set-export-backend(`odb)
+  enable-spy()
   view-board()
   view-schematic()
+  enable-spy()
+  export-cad()
 
-run-design(grid-resistors(3, 4))
+run-design(grid-resistors(6, 3))
